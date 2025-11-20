@@ -33,11 +33,16 @@ const pipeline = new TMPipeline<User>()
   .project({
     userId: 1,
     email: 1,
-    fullName: { $concat: ["$profile.firstName", " ", "$profile.lastName"] },
+    firstName: "$profile.firstName",
+    lastName: "$profile.lastName",
   });
 
 type Output = InferOutputType<typeof pipeline>;
-// Output is correctly inferred: { userId: string; email: string; fullName: string; }
+// Output is correctly inferred: { userId: string; email: string; firstName: string; lastName: string; }
+
+// Get the MongoDB aggregation pipeline JSON
+const pipelineJson = pipeline.getPipeline();
+// Returns: [{ $match: { "metadata.isActive": true } }, { $project: { userId: 1, email: 1, firstName: "$profile.firstName", lastName: "$profile.lastName" } }]
 ```
 
 ## Features
@@ -45,6 +50,7 @@ type Output = InferOutputType<typeof pipeline>;
 - **Type-safe field references** - Field paths are validated against your document types
 - **Automatic output inference** - Each pipeline stage correctly types its output
 - **Supported stages** - `match`, `project`, `set`, `unset`, `group`, `lookup`, `replaceRoot`, `unionWith`, `out`
+- **Expression operators** - Supports `$concatArrays`, `$size`, `$add`, `$subtract`, `$multiply`, `$divide`, `$mod`, `$dateToString` (more coming soon)
 - **Collection-aware lookups** - Type-safe joins with automatic type inference
 - **Full TypeScript support** - Leverages TypeScript's type system for maximum safety
 
