@@ -135,6 +135,31 @@ export type DateExpression<Schema extends Document> =
   DateToStringExpression<Schema>;
 
 /**
+ * String expression operands - strings and field references to strings only
+ * Note: Does not support nested expressions to keep it simple
+ */
+type StringOperand<Schema extends Document> =
+  | string
+  | FieldReferencesThatInferTo<Schema, string>;
+
+/**
+ * $concat expression - concatenates strings together
+ * Syntax: { $concat: [expr1, expr2, ...] }
+ * Accepts: array of strings and field references to strings only
+ * Returns: string
+ */
+export type ConcatExpression<Schema extends Document> = {
+  $concat: StringOperand<Schema>[];
+};
+
+/**
+ * Union of all string expressions
+ * Extend this as we add more string operators
+ */
+export type StringExpression<Schema extends Document> =
+  ConcatExpression<Schema>;
+
+/**
  * Union of all arithmetic expressions
  * Extend this as we add more arithmetic operators
  */
@@ -152,7 +177,8 @@ export type ArithmeticExpression<Schema extends Document> =
 export type Expression<Schema extends Document> =
   | ArrayExpression<Schema>
   | DateExpression<Schema>
-  | ArithmeticExpression<Schema>;
+  | ArithmeticExpression<Schema>
+  | StringExpression<Schema>;
 
 /**
  * Helper to get union of all array element types
@@ -201,10 +227,15 @@ export type InferDateExpression<_Schema extends Document, Expr> =
   Expr extends { $dateToString: unknown } ? string : never;
 
 /**
+ * Infer the result type of a string expression
+ * All string operators return string
+ */
+export type InferStringExpression<_Schema extends Document, Expr> =
+  Expr extends { $concat: unknown } ? string : never;
+
+/**
  * Infer the result type of an arithmetic expression
  * All arithmetic operators return number
- * Note: We don't need to recursively infer nested expressions here because
- * InferNestedFieldReference will handle that when processing the operands
  */
 export type InferArithmeticExpression<_Schema extends Document, Expr> =
   Expr extends (
@@ -233,4 +264,5 @@ export type InferExpression<Schema extends Document, Expr> =
     InferArithmeticExpression<Schema, Expr>
   : Expr extends { $concatArrays: unknown } | { $size: unknown } ?
     InferArrayExpression<Schema, Expr>
+  : Expr extends { $concat: unknown } ? InferStringExpression<Schema, Expr>
   : never;

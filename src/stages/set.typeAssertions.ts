@@ -382,10 +382,37 @@ type ModExpected = {
 type ModTest = Assert<Equal<ModResult, ModExpected>>;
 
 // ============================================================================
+// Test 7: String expressions
+// ============================================================================
+type StringSchema = {
+  firstName: string;
+  lastName: string;
+  prefix: string;
+  suffix: string;
+};
+
+// Test 7a: $concat expression
+type ConcatSet = {
+  fullName: { $concat: ["$firstName", " ", "$lastName"] };
+};
+
+type ConcatResult = ResolveSetOutput<ConcatSet, StringSchema>;
+
+type ConcatExpected = {
+  firstName: string;
+  lastName: string;
+  prefix: string;
+  suffix: string;
+  fullName: string;
+};
+
+export type ConcatTest = Assert<Equal<ConcatResult, ConcatExpected>>;
+
+// ============================================================================
 // $$REMOVE Tests
 // ============================================================================
 
-// Test 6: Removing a simple field with $$REMOVE
+// Test 8: Removing a simple field with $$REMOVE
 type RemoveSimpleFieldSchema = {
   a: string;
   b: number;
@@ -410,7 +437,7 @@ type RemoveSimpleFieldTest = Assert<
   Equal<RemoveSimpleFieldResult, RemoveSimpleFieldExpected>
 >;
 
-// Test 7: Removing nested fields with $$REMOVE
+// Test 9: Removing nested fields with $$REMOVE
 type RemoveNestedFieldSchema = {
   user: {
     name: string;
@@ -439,7 +466,7 @@ type RemoveNestedFieldTest = Assert<
   Equal<RemoveNestedFieldResult, RemoveNestedFieldExpected>
 >;
 
-// Test 8: Removing optional fields with $$REMOVE
+// Test 10: Removing optional fields with $$REMOVE
 type RemoveOptionalFieldSchema = {
   required: string;
   optional?: string;
@@ -472,7 +499,7 @@ type RemoveOptionalFieldTest = Assert<
   Equal<RemoveOptionalFieldResult, RemoveOptionalFieldExpected>
 >;
 
-// Test 9: Mixed operations - setting some fields and removing others
+// Test 11: Mixed operations - setting some fields and removing others
 type MixedOperationsSchema = {
   keep: string;
   update: number;
@@ -509,7 +536,7 @@ type MixedOperationsTest = Assert<
   Equal<MixedOperationsResult, MixedOperationsExpected>
 >;
 
-// Test 10: Removing entire nested object
+// Test 12: Removing entire nested object
 type RemoveEntireObjectSchema = {
   id: string;
   metadata?: {
@@ -542,7 +569,7 @@ type RemoveEntireObjectTest = Assert<
   Equal<RemoveEntireObjectResult, RemoveEntireObjectExpected>
 >;
 
-// Test 11: Complex nested removal with preservation
+// Test 13: Complex nested removal with preservation
 type ComplexRemovalSchema = {
   config: {
     database: {
