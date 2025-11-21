@@ -99,29 +99,27 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Check package.json version consistency
+      - name: Check package.json version has not changed
         run: |
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
+
+          # Get base version
+          git show $BASE_SHA:package.json > /tmp/package-base.json
+          BASE_VERSION=$(node -p "require('/tmp/package-base.json').version")
 
           # Get PR version
           PR_VERSION=$(node -p "require('./package.json').version")
 
-          # Verify the version matches what changesets would produce
-          # Overwrite package.json with base version, then run version to see expected result
-          git show $BASE_SHA:package.json > package.json
+          echo "Base version: $BASE_VERSION"
+          echo "PR version: $PR_VERSION"
 
-          # Run version to see what it would produce
-          # Note: This will exit with non-zero if no changesets exist, but that's OK
-          # - we still want to check the version (which won't have changed)
-          bun run version > /dev/null 2>&1 || true
-          EXPECTED_VERSION=$(node -p "require('./package.json').version")
-
-          if [ "$PR_VERSION" != "$EXPECTED_VERSION" ]; then
-            echo "❌ Error: Version mismatch!"
-            echo "Expected version (from changesets): $EXPECTED_VERSION"
+          if [ "$BASE_VERSION" != "$PR_VERSION" ]; then
+            echo "❌ Error: Version should not be changed in PR!"
+            echo "Version changes should be done automatically by the publish workflow after merge."
+            echo "Base version: $BASE_VERSION"
             echo "PR version: $PR_VERSION"
-            echo "Please run 'bun run version' to update the version correctly"
+            echo "Please revert the version change in package.json"
             exit 1
           fi
 
-          echo "✅ Version check passed - version correctly matches expected ($EXPECTED_VERSION)"
+          echo "✅ Version check passed - version unchanged (will be updated by publish workflow)"
