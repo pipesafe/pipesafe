@@ -1,0 +1,74 @@
+name: Publish
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  BUN_VERSION: 1.2.17
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version-changed: ${{ steps.check.outputs.changed }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if version was bumped
+        id: check
+        run: |
+          # Get previous commit's version (or 0.0.0 if this is the first commit)
+          git show HEAD~1:package.json > /tmp/package-prev.json 2>/dev/null || echo '{"version":"0.0.0"}' > /tmp/package-prev.json
+          PREVIOUS_VERSION=$(node -p "require('/tmp/package-prev.json').version")
+
+          # Get current version
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+
+          echo "Previous version: $PREVIOUS_VERSION"
+          echo "Current version: $CURRENT_VERSION"
+
+          if [ "$PREVIOUS_VERSION" != "$CURRENT_VERSION" ]; then
+            echo "✅ Version change detected: $PREVIOUS_VERSION -> $CURRENT_VERSION"
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "ℹ️  No version change detected. Skipping publish workflow."
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+  publish:
+    needs: check-version
+    if: needs.check-version.outputs.version-changed == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
+
+      - name: Publish to npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

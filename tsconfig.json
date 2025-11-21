@@ -1,7 +1,7 @@
 {
   "extends": "./tsconfig.options.json",
   "include": ["**/*.ts"],
-  "exclude": ["benchmarks/**/*"],
+  "exclude": ["benchmarks/**/*", "dist/**/*"],
   "compilerOptions": {
     "outDir": "./dist"
   }

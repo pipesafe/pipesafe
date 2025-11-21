@@ -15,6 +15,9 @@
     "moduleResolution": "bundler",
     "moduleDetection": "force",
     "target": "ES2022",
+    // Declaration files for npm publishing
+    "declaration": true,
+    "declarationMap": true,
     // Strictness
     "strict": true,
     "allowUnreachableCode": false,
