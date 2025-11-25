@@ -55,7 +55,7 @@
   "scripts": {
     "build": "bun run tsc",
     "watch": "bun run tsc --watch",
-    "prepare": "lefthook install",
+    "prepare": "bunx lefthook install",
     "prepublishOnly": "bun run build",
     "changeset": "changeset",
     "changeset:status": "changeset status --since=origin/main",
