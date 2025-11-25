@@ -471,6 +471,33 @@ type SizeMixedExpected = {
 type SizeMixedTest = Assert<Equal<SizeMixedResult, SizeMixedExpected>>;
 
 // ============================================================================
+// Test 13d: $concat expression
+// ============================================================================
+type ConcatProjectSchema = {
+  firstName: string;
+  lastName: string;
+  prefix: string;
+  suffix: string;
+};
+
+type ConcatProject = {
+  fullName: { $concat: ["$firstName", " ", "$lastName"] };
+};
+
+type ConcatProjectResult = ResolveProjectOutput<
+  ConcatProject,
+  ConcatProjectSchema
+>;
+
+type ConcatProjectExpected = {
+  fullName: string;
+};
+
+export type ConcatProjectTest = Assert<
+  Equal<ConcatProjectResult, ConcatProjectExpected>
+>;
+
+// ============================================================================
 // Test 14: Nested field references
 // ============================================================================
 type NestedFieldRefSchema = {
