@@ -5,6 +5,8 @@
  * Provides type-safe MongoDB aggregation pipeline building.
  */
 
+export { tmql } from "./singleton/tmql";
+
 export { TMPipeline } from "./pipeline/TMPipeline";
 export type { InferOutputType } from "./pipeline/TMPipeline";
 

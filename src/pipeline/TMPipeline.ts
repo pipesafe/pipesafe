@@ -1,3 +1,4 @@
+import { tmql } from "../singleton/tmql";
 import { Document } from "../utils/core";
 import { MatchQuery, ResolveMatchOutput } from "../stages/match";
 import { ResolveSetOutput, SetQuery } from "../stages/set";
@@ -16,6 +17,7 @@ import {
   ResolveReplaceRootOutput,
 } from "../stages/replaceRoot";
 import { ResolveUnionWithOutput } from "../stages/unionWith";
+import { AggregationCursor, MongoClient } from "mongodb";
 
 type PLFrom<D extends Document, O extends Document> = (
   p: TMPipeline<D, D>
@@ -24,45 +26,70 @@ export class TMPipeline<
   StartingDocs extends Document = never,
   PreviousStageDocs extends Document = StartingDocs,
 > {
-  private pipeline: unknown[] = [];
-  getPipeline(): PreviousStageDocs extends never ? never : unknown[] {
-    return this.pipeline as PreviousStageDocs extends never ? never : unknown[];
+  private pipeline: Document[] = [];
+  getPipeline(): PreviousStageDocs extends never ? never : Document[] {
+    return this.pipeline as PreviousStageDocs extends never ? never
+    : Document[];
   }
 
-  constructor(pipeline: unknown[] = []) {
-    this.pipeline = pipeline;
+  private client: MongoClient | undefined;
+  private databaseName: string | undefined;
+  private collectionName: string | undefined;
+
+  constructor(
+    args: {
+      pipeline?: Document[] | undefined;
+      client?: MongoClient | undefined;
+      collectionName?: string | undefined;
+      databaseName?: string | undefined;
+    } = {}
+  ) {
+    this.pipeline = args.pipeline ?? [];
+    this.client = args.client;
+    this.collectionName = args.collectionName;
+    this.databaseName = args.databaseName;
   }
 
   // Ability to use any aggregation stage(s) and manually type the output
-  custom<CustomOutput extends Document>(pipelineStages: unknown[]) {
-    return new TMPipeline<CustomOutput>([...this.pipeline, ...pipelineStages]);
+  custom<CustomOutput extends Document>(pipelineStages: Document[]) {
+    return new TMPipeline<CustomOutput>({
+      pipeline: [...this.pipeline, ...pipelineStages],
+      collectionName: this.collectionName,
+      databaseName: this.databaseName,
+    });
   }
 
   // $match step
   match<const M extends MatchQuery<StartingDocs>>(
     $match: M
   ): TMPipeline<ResolveMatchOutput<M, StartingDocs>> {
-    return new TMPipeline<ResolveMatchOutput<M, StartingDocs>>([
-      ...this.pipeline,
-      { $match },
-    ]);
+    return new TMPipeline<ResolveMatchOutput<M, StartingDocs>>({
+      pipeline: [...this.pipeline, { $match }],
+      collectionName: this.collectionName,
+      databaseName: this.databaseName,
+    });
   }
 
   set<const S extends SetQuery<PreviousStageDocs>>(
     $set: S
   ): TMPipeline<StartingDocs, ResolveSetOutput<S, PreviousStageDocs>> {
     return new TMPipeline<StartingDocs, ResolveSetOutput<S, PreviousStageDocs>>(
-      [...this.pipeline, { $set }]
+      {
+        pipeline: [...this.pipeline, { $set }],
+        collectionName: this.collectionName,
+        databaseName: this.databaseName,
+      }
     );
   }
 
   unset<const U extends UnsetQuery<StartingDocs>>(
     $unset: U
   ): TMPipeline<ResolveUnsetOutput<U, StartingDocs>> {
-    return new TMPipeline<ResolveUnsetOutput<U, StartingDocs>>([
-      ...this.pipeline,
-      { $unset },
-    ]);
+    return new TMPipeline<ResolveUnsetOutput<U, StartingDocs>>({
+      pipeline: [...this.pipeline, { $unset }],
+      collectionName: this.collectionName,
+      databaseName: this.databaseName,
+    });
   }
 
   // Lookup with function-only pipeline for automatic type inference
@@ -102,32 +129,42 @@ export class TMPipeline<
     const resolvedPipeline =
       pipeline ?
         pipeline(
-          new TMPipeline<InferCollectionType<C>, InferCollectionType<C>>()
+          new TMPipeline<InferCollectionType<C>, InferCollectionType<C>>({
+            collectionName: from.getCollectionName(),
+            // Come back to this
+          })
         )
       : undefined;
 
     return new TMPipeline<
       StartingDocs,
       ResolveLookupOutput<StartingDocs, NewKey, PipelineOutput>
-    >([
-      ...this.pipeline,
-      {
-        $lookup: {
-          from: from.getCollectionName(),
-          ...$lookupRest,
-          ...(resolvedPipeline && { pipeline: resolvedPipeline.getPipeline() }),
+    >({
+      pipeline: [
+        ...this.pipeline,
+        {
+          $lookup: {
+            from: from.getCollectionName(),
+            ...$lookupRest,
+            ...(resolvedPipeline && {
+              pipeline: resolvedPipeline.getPipeline(),
+            }),
+          },
         },
-      },
-    ]);
+      ],
+      collectionName: this.collectionName,
+      databaseName: this.databaseName,
+    });
   }
 
   group<const G extends GroupQuery<StartingDocs>>(
     $group: G
   ): TMPipeline<StartingDocs, ResolveGroupOutput<StartingDocs, G>> {
-    return new TMPipeline<StartingDocs, ResolveGroupOutput<StartingDocs, G>>([
-      ...this.pipeline,
-      { $group },
-    ]);
+    return new TMPipeline<StartingDocs, ResolveGroupOutput<StartingDocs, G>>({
+      pipeline: [...this.pipeline, { $group }],
+      collectionName: this.collectionName,
+      databaseName: this.databaseName,
+    });
   }
 
   project<const P extends ProjectQuery<PreviousStageDocs>>(
@@ -136,7 +173,11 @@ export class TMPipeline<
     return new TMPipeline<
       StartingDocs,
       ResolveProjectOutput<P, PreviousStageDocs>
-    >([...this.pipeline, { $project }]);
+    >({
+      pipeline: [...this.pipeline, { $project }],
+      collectionName: this.collectionName,
+      databaseName: this.databaseName,
+    });
   }
 
   replaceRoot<const R extends ReplaceRootQuery<PreviousStageDocs>>(
@@ -145,7 +186,11 @@ export class TMPipeline<
     return new TMPipeline<
       StartingDocs,
       ResolveReplaceRootOutput<R, PreviousStageDocs>
-    >([...this.pipeline, { $replaceRoot }]);
+    >({
+      pipeline: [...this.pipeline, { $replaceRoot }],
+      collectionName: this.collectionName,
+      databaseName: this.databaseName,
+    });
   }
 
   unionWith<
@@ -178,22 +223,48 @@ export class TMPipeline<
     return new TMPipeline<
       StartingDocs,
       ResolveUnionWithOutput<PreviousStageDocs, PipelineOutput>
-    >([
-      ...this.pipeline,
-      {
-        $unionWith: {
-          coll: coll.getCollectionName(),
-          ...(resolvedPipeline && { pipeline: resolvedPipeline.getPipeline() }),
+    >({
+      pipeline: [
+        ...this.pipeline,
+        {
+          $unionWith: {
+            coll: coll.getCollectionName(),
+            ...(resolvedPipeline && {
+              pipeline: resolvedPipeline.getPipeline(),
+            }),
+          },
         },
-      },
-    ]);
+      ],
+      collectionName: this.collectionName,
+      databaseName: this.databaseName,
+    });
   }
 
   out($out: string) {
-    return new TMPipeline<StartingDocs, never>([...this.pipeline, { $out }]);
+    return new TMPipeline<StartingDocs, never>({
+      pipeline: [...this.pipeline, { $out }],
+      collectionName: this.collectionName,
+      databaseName: this.databaseName,
+    });
   }
 
-  // out(): TMCollection<StartingDocs>
+  execute(
+    args: {
+      client?: MongoClient;
+      databaseName?: string;
+      collectionName?: string;
+    } = {}
+  ): AggregationCursor<StartingDocs> {
+    const client = args.client ?? this.client ?? tmql.client;
+    if (!client) throw new Error("Not connected");
+
+    const db = args.databaseName ?? this.databaseName;
+
+    const collection = args.collectionName ?? this.collectionName;
+    if (!collection) throw new Error("No collection name provided");
+
+    return client.db(db).collection(collection).aggregate(this.getPipeline());
+  }
 }
 
 export type InferOutputType<Pipeline extends TMPipeline<any, any>> =
