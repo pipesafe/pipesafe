@@ -1,6 +1,6 @@
 {
   "name": "tmql",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Typed Mongo Query Language - Fully type-safe MongoDB aggregation builder for TypeScript projects",
   "author": "Ryan Peggs & Tim Vyas",
   "license": "MIT",

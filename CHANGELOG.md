@@ -1,5 +1,11 @@
 # tmql
 
+## 0.2.0
+
+### Minor Changes
+
+- e57735e: Implmented connection concept
+
 ## 0.1.1
 
 ### Patch Changes
