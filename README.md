@@ -155,14 +155,16 @@ const collection = new TMCollection<{ test: string }>({
 });
 const cursor = await collection.aggregate().execute({
   client,
+  databaseName: "my_database",
 });
 const results = await cursor.toArray();
 
 // Option B: TMPipeline executed directly with client
 const pipeline = new TMPipeline<{ test: string }>();
 const cursor2 = await pipeline.execute({
-  collectionName: "my_collection",
   client,
+  databaseName: "my_database",
+  collectionName: "my_collection",
 });
 const results2 = await cursor2.toArray();
 ```
