@@ -51,19 +51,14 @@ jobs:
         uses: changesets/action@v1
         with:
           publish: bun publish
+          createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
           NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Create GitHub Release
-        if: steps.changesets.outputs.published == 'true'
-        env:
-          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+      - name: Debug changesets outputs
         run: |
-          # Parse the published packages JSON to get the version
-          VERSION=$(echo '${{ steps.changesets.outputs.publishedPackages }}' | jq -r '.[0].version')
-
-          # Create the release with auto-generated release notes
-          gh release create "v${VERSION}" \
-            --title "v${VERSION}" \
-            --generate-notes
+          echo "outputs: '${{ steps.changesets.outputs }}'"
+          echo ".published: '${{ steps.changesets.outputs.published }}'"
+          echo ".publishedPackages: '${{ steps.changesets.outputs.publishedPackages }}'"
+          echo ".hasChangesets: '${{ steps.changesets.outputs.hasChangesets }}'"
