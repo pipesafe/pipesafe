@@ -50,11 +50,11 @@ jobs:
         id: changesets
         uses: changesets/action@v1
         with:
-          publish: bun publish
+          publish: bun run changeset publish
           createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
-          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Debug changesets outputs
         run: |
