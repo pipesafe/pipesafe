@@ -62,7 +62,7 @@ jobs:
         run: |
           # Parse the published packages JSON to get the version
           VERSION=$(echo '${{ steps.changesets.outputs.publishedPackages }}' | jq -r '.[0].version')
-          
+
           # Create the release with auto-generated release notes
           gh release create "v${VERSION}" \
             --title "v${VERSION}" \
