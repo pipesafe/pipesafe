@@ -93,8 +93,9 @@ describe("Connections", async () => {
     it("TMPipeline can be executed directly", async () => {
       const pipeline = new TMPipeline<{ test: string }>();
       const cursor = await pipeline.execute({
-        collectionName: CollectionName,
         client,
+        databaseName: DBName,
+        collectionName: CollectionName,
       });
       const results = await cursor.toArray();
       expect(results).toEqual(exampleDocs);
