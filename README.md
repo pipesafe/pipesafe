@@ -169,6 +169,71 @@ const cursor2 = await pipeline.execute({
 const results2 = await cursor2.toArray();
 ```
 
+## Collection Commands
+
+`TMCollection` provides type-safe passthrough methods to all standard MongoDB collection operations:
+
+```typescript
+import { tmql } from "tmql";
+
+tmql.connect("mongodb://localhost:27017");
+
+type User = {
+  _id: ObjectId;
+  name: string;
+  email: string;
+  age: number;
+};
+
+const users = tmql.db("mydb").collection<User>("users");
+
+// Query
+const cursor = users.find({ age: { $gte: 18 } });
+const user = await users.findOne({ email: "test@example.com" });
+
+// Insert
+await users.insertOne({ name: "Alice", email: "alice@example.com", age: 30 });
+await users.insertMany([
+  { name: "Bob", email: "bob@example.com", age: 25 },
+  { name: "Charlie", email: "charlie@example.com", age: 35 },
+]);
+
+// Update
+await users.updateOne({ email: "alice@example.com" }, { $set: { age: 31 } });
+await users.updateMany({ age: { $lt: 18 } }, { $set: { status: "minor" } });
+
+// Delete
+await users.deleteOne({ email: "old@example.com" });
+await users.deleteMany({ status: "inactive" });
+
+// Find and Modify (atomic operations)
+const updated = await users.findOneAndUpdate(
+  { email: "alice@example.com" },
+  { $inc: { age: 1 } },
+  { returnDocument: "after" }
+);
+
+// Count and Distinct
+const count = await users.countDocuments({ age: { $gte: 18 } });
+const emails = await users.distinct("email");
+
+// Index Management
+await users.createIndex({ email: 1 }, { unique: true });
+await users.createIndexes([{ key: { name: 1 } }, { key: { age: -1 } }]);
+const indexes = await users.indexes();
+
+// Bulk Operations
+await users.bulkWrite([
+  {
+    insertOne: { document: { name: "New", email: "new@example.com", age: 20 } },
+  },
+  { updateOne: { filter: { name: "Bob" }, update: { $set: { age: 26 } } } },
+  { deleteOne: { filter: { name: "Charlie" } } },
+]);
+```
+
+All methods use MongoDB driver types for parameters and return values, providing full type safety while maintaining familiar MongoDB semantics.
+
 ## Status
 
 tmql is actively under development. We're continuously working on improving type safety, adding new features, and enhancing the developer experience. Contributions, feedback, and suggestions are welcome!
