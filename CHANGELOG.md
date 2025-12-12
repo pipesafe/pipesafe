@@ -1,5 +1,11 @@
 # tmql
 
+## 0.3.0
+
+### Minor Changes
+
+- cde9e7e: Add collection methods passthrough to mongodb node driver
+
 ## 0.2.0
 
 ### Minor Changes
