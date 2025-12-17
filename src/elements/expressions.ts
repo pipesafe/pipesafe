@@ -1,6 +1,6 @@
 import { Document } from "../utils/core";
 import {
-  FieldReference, // Used in InferArrayExpression
+  FieldReference,
   InferFieldReference,
   FieldReferencesThatInferTo,
 } from "./fieldReference";
