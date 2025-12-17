@@ -409,6 +409,118 @@ type ConcatExpected = {
 export type ConcatTest = Assert<Equal<ConcatResult, ConcatExpected>>;
 
 // ============================================================================
+// Date Expression Tests ($dateTrunc, $dateAdd, $dateSubtract)
+// ============================================================================
+
+type DateSchema = {
+  _id: string;
+  createdAt: Date;
+  updatedAt: Date;
+  count: number;
+};
+
+// Test 7b: $dateTrunc expression - truncates date to specified unit
+type DateTruncSet = {
+  eventDate: { $dateTrunc: { date: "$createdAt"; unit: "day" } };
+};
+
+type DateTruncResult = ResolveSetOutput<DateTruncSet, DateSchema>;
+
+type DateTruncExpected = {
+  _id: string;
+  createdAt: Date;
+  updatedAt: Date;
+  count: number;
+  eventDate: Date; // $dateTrunc returns Date
+};
+
+type DateTruncTest = Assert<Equal<DateTruncResult, DateTruncExpected>>;
+
+// Test 7c: $dateTrunc with all options
+type DateTruncFullSet = {
+  weekStart: {
+    $dateTrunc: {
+      date: "$createdAt";
+      unit: "week";
+      binSize: 1;
+      timezone: "America/New_York";
+      startOfWeek: "monday";
+    };
+  };
+};
+
+type DateTruncFullResult = ResolveSetOutput<DateTruncFullSet, DateSchema>;
+
+type DateTruncFullExpected = {
+  _id: string;
+  createdAt: Date;
+  updatedAt: Date;
+  count: number;
+  weekStart: Date;
+};
+
+type DateTruncFullTest = Assert<
+  Equal<DateTruncFullResult, DateTruncFullExpected>
+>;
+
+// Test 7d: $dateAdd expression - adds time to a date
+type DateAddSet = {
+  expiresAt: { $dateAdd: { startDate: "$createdAt"; unit: "day"; amount: 30 } };
+};
+
+type DateAddResult = ResolveSetOutput<DateAddSet, DateSchema>;
+
+type DateAddExpected = {
+  _id: string;
+  createdAt: Date;
+  updatedAt: Date;
+  count: number;
+  expiresAt: Date; // $dateAdd returns Date
+};
+
+type DateAddTest = Assert<Equal<DateAddResult, DateAddExpected>>;
+
+// Test 7e: $dateAdd with field reference for amount
+type DateAddDynamicSet = {
+  futureDate: {
+    $dateAdd: { startDate: "$createdAt"; unit: "hour"; amount: "$count" };
+  };
+};
+
+type DateAddDynamicResult = ResolveSetOutput<DateAddDynamicSet, DateSchema>;
+
+type DateAddDynamicExpected = {
+  _id: string;
+  createdAt: Date;
+  updatedAt: Date;
+  count: number;
+  futureDate: Date;
+};
+
+type DateAddDynamicTest = Assert<
+  Equal<DateAddDynamicResult, DateAddDynamicExpected>
+>;
+
+// Test 7f: $dateSubtract expression - subtracts time from a date
+type DateSubtractSet = {
+  oneWeekAgo: {
+    $dateSubtract: { startDate: "$updatedAt"; unit: "week"; amount: 1 };
+  };
+};
+
+type DateSubtractResult = ResolveSetOutput<DateSubtractSet, DateSchema>;
+
+type DateSubtractExpected = {
+  _id: string;
+  createdAt: Date;
+  updatedAt: Date;
+  count: number;
+  oneWeekAgo: Date; // $dateSubtract returns Date
+};
+
+type DateSubtractTest = Assert<Equal<DateSubtractResult, DateSubtractExpected>>;
+
+// ============================================================================
 // $$REMOVE Tests
 // ============================================================================
 
@@ -631,6 +743,11 @@ export type {
   MultiplyTest,
   SubtractTest,
   ModTest,
+  DateTruncTest,
+  DateTruncFullTest,
+  DateAddTest,
+  DateAddDynamicTest,
+  DateSubtractTest,
   RemoveSimpleFieldTest,
   RemoveNestedFieldTest,
   RemoveOptionalFieldTest,

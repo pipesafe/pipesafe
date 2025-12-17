@@ -656,6 +656,81 @@ type DateToStringMixedTest = Assert<
 >;
 
 // ============================================================================
+// Test 15d: $dateTrunc expression operator (returns Date)
+// ============================================================================
+type DateTruncProjectSchema = {
+  _id: string;
+  timestamp: Date;
+  createdAt: Date;
+};
+
+type DateTruncProject = {
+  _id: 0;
+  eventDay: {
+    $dateTrunc: {
+      date: "$timestamp";
+      unit: "day";
+    };
+  };
+  createdWeek: {
+    $dateTrunc: {
+      date: "$createdAt";
+      unit: "week";
+      startOfWeek: "monday";
+    };
+  };
+};
+
+type DateTruncProjectResult = ResolveProjectOutput<
+  DateTruncProject,
+  DateTruncProjectSchema
+>;
+
+type DateTruncProjectExpected = {
+  eventDay: Date;
+  createdWeek: Date;
+};
+
+type DateTruncProjectTest = Assert<
+  Equal<DateTruncProjectResult, DateTruncProjectExpected>
+>;
+
+// ============================================================================
+// Test 15e: $dateAdd and $dateSubtract expressions (return Date)
+// ============================================================================
+type DateAddSubtractProject = {
+  _id: 0;
+  expiresAt: {
+    $dateAdd: {
+      startDate: "$timestamp";
+      unit: "day";
+      amount: 30;
+    };
+  };
+  startedAt: {
+    $dateSubtract: {
+      startDate: "$createdAt";
+      unit: "hour";
+      amount: 24;
+    };
+  };
+};
+
+type DateAddSubtractProjectResult = ResolveProjectOutput<
+  DateAddSubtractProject,
+  DateTruncProjectSchema
+>;
+
+type DateAddSubtractProjectExpected = {
+  expiresAt: Date;
+  startedAt: Date;
+};
+
+type DateAddSubtractProjectTest = Assert<
+  Equal<DateAddSubtractProjectResult, DateAddSubtractProjectExpected>
+>;
+
+// ============================================================================
 // Test 16: Arithmetic expressions
 // ============================================================================
 type ArithmeticProjectSchema = {
@@ -750,6 +825,8 @@ export type {
   DateToStringTest,
   DateToStringNestedTest,
   DateToStringMixedTest,
+  DateTruncProjectTest,
+  DateAddSubtractProjectTest,
   AddProjectTest,
   DivideNestedProjectTest,
   MultipleArithmeticProjectTest,
