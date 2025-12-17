@@ -108,7 +108,7 @@ export type ExpectedValue<Schema, QueryKey extends string, QueryValue> =
 // Simplified union member matching - checks if all query fields match the document
 // We check each key in the query and ensure it matches in the document
 
-export type FieldMatchingInterim<Doc, Query> = {
+export type FieldMatchingInterim<Doc extends Document, Query> = {
   [K in keyof Query]: K extends FieldSelector<Doc> ?
     ExpectedValue<Doc, K, Query[K]> extends GetFieldType<Doc, K> ?
       true
@@ -118,12 +118,12 @@ export type FieldMatchingInterim<Doc, Query> = {
   : false; // If key doesn't exist in Doc, skip it (not a field selector)
 };
 
-export type DocumentMatchesQuery<Doc, Query> =
+export type DocumentMatchesQuery<Doc extends Document, Query> =
   FieldMatchingInterim<Doc, Query>[keyof Query] extends true ? true : false;
 
 // Filter union types to keep only members that match the query
-export type FilterUnion<Union, Query> =
-  Union extends any ?
+export type FilterUnion<Union extends Document, Query> =
+  Union extends Document ?
     DocumentMatchesQuery<Union, Query> extends true ?
       Union
     : never

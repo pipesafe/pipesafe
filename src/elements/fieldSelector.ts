@@ -1,5 +1,4 @@
-import { Document } from "./document";
-import { IndexStr, Join, NonExpandableTypes } from "../utils/core";
+import { Document, IndexStr, Join, NonExpandableTypes } from "../utils/core";
 
 // Types related to field selectors
 // These are used in $match stages as KEYS of documents
