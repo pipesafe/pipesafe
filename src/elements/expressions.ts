@@ -1,4 +1,4 @@
-import { Document } from "./document";
+import { Document } from "../utils/core";
 import {
   FieldReference, // Used in InferArrayExpression
   InferFieldReference,

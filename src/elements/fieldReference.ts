@@ -1,5 +1,5 @@
-import { Document } from "./document";
 import {
+  Document,
   Join,
   DollarPrefixed,
   NonExpandableTypes,
@@ -47,7 +47,10 @@ export type InferFieldReference<
   Ref extends FieldReference<Schema>,
 > = GetFieldTypeWithoutArrays<Schema, WithoutDollar<Ref>>;
 
-export type FieldPathsThatInferToForLookup<Schema, DesiredType> =
+export type FieldPathsThatInferToForLookup<
+  Schema extends Document,
+  DesiredType,
+> =
   FieldReferencesThatInferToForLookup<Schema, DesiredType> extends never ? never
   : FieldReferencesThatInferToForLookup<Schema, DesiredType> extends (
     `$${infer Path}`
@@ -80,7 +83,7 @@ export type FieldReferencesThatInferTo<Schema extends Document, DesiredType> =
     }[FieldReference<Schema>]
   : never;
 
-export type ElementResolvingToType<Schema, Type> =
+export type ElementResolvingToType<Schema extends Document, Type> =
   Type extends string ?
     FieldReferencesThatInferTo<Schema, string> | NoDollarString
   : Type extends object ?
@@ -96,12 +99,12 @@ export type ElementResolvingToType<Schema, Type> =
   : Type | FieldReferencesThatInferTo<Schema, Type>;
 
 // Perhaps should be ArrayResolvingToSameType<Schema>
-export type ArrayResolvingToType<Schema, Type> = ElementResolvingToType<
-  Schema,
-  Type
->[];
+export type ArrayResolvingToType<
+  Schema extends Document,
+  Type,
+> = ElementResolvingToType<Schema, Type>[];
 
-export type MatcherThatOnlyDoesEquals<Schema> =
+export type MatcherThatOnlyDoesEquals<Schema extends Document> =
   | {
       [K in FieldSelector<Schema>]: InferFieldSelector<Schema, K>;
     }
