@@ -1,6 +1,6 @@
 import { Document } from "../utils/core";
 import {
-  FieldReference, // Used in InferArrayExpression
+  FieldReference,
   InferFieldReference,
   FieldReferencesThatInferTo,
 } from "./fieldReference";
@@ -20,9 +20,9 @@ import { AnyLiteral } from "./literals";
  */
 export type ConcatArraysExpression<Schema extends Document> = {
   $concatArrays: (
-    | AnyLiteral<Schema>[] // Array literal containing any literal values
     | FieldReferencesThatInferTo<Schema, unknown[]>
-  )[]; // Field reference that resolves to any array type
+    | AnyLiteral<Schema>[]
+  )[];
 };
 
 /**
@@ -34,9 +34,7 @@ export type ConcatArraysExpression<Schema extends Document> = {
  * Returns: number (the length of the array)
  */
 export type SizeExpression<Schema extends Document> = {
-  $size:
-    | FieldReferencesThatInferTo<Schema, unknown[]> // Field reference that resolves to an array
-    | AnyLiteral<Schema>[]; // Array literal
+  $size: FieldReferencesThatInferTo<Schema, unknown[]> | AnyLiteral<Schema>[];
 };
 
 /**
@@ -52,9 +50,7 @@ export type SizeExpression<Schema extends Document> = {
 export type DateToStringExpression<Schema extends Document> = {
   $dateToString: {
     format: string;
-    date:
-      | FieldReferencesThatInferTo<Schema, Date> // Field reference that resolves to Date
-      | Date; // Date literal
+    date: FieldReferencesThatInferTo<Schema, Date> | Date;
     timezone?: string;
     onNull?: unknown;
   };
@@ -87,9 +83,7 @@ export type DateUnit =
  */
 export type DateTruncExpression<Schema extends Document> = {
   $dateTrunc: {
-    date:
-      | FieldReferencesThatInferTo<Schema, Date> // Field reference that resolves to Date
-      | Date; // Date literal
+    date: FieldReferencesThatInferTo<Schema, Date> | Date;
     unit: DateUnit;
     binSize?: number;
     timezone?: string;
@@ -116,9 +110,7 @@ export type DateTruncExpression<Schema extends Document> = {
  */
 export type DateAddExpression<Schema extends Document> = {
   $dateAdd: {
-    startDate:
-      | FieldReferencesThatInferTo<Schema, Date> // Field reference that resolves to Date
-      | Date; // Date literal
+    startDate: FieldReferencesThatInferTo<Schema, Date> | Date;
     unit: DateUnit;
     amount: number | FieldReferencesThatInferTo<Schema, number>;
     timezone?: string;
@@ -137,9 +129,7 @@ export type DateAddExpression<Schema extends Document> = {
  */
 export type DateSubtractExpression<Schema extends Document> = {
   $dateSubtract: {
-    startDate:
-      | FieldReferencesThatInferTo<Schema, Date> // Field reference that resolves to Date
-      | Date; // Date literal
+    startDate: FieldReferencesThatInferTo<Schema, Date> | Date;
     unit: DateUnit;
     amount: number | FieldReferencesThatInferTo<Schema, number>;
     timezone?: string;
@@ -161,7 +151,7 @@ export type ArrayExpression<Schema extends Document> =
 type ArithmeticOperand<Schema extends Document> =
   | number
   | FieldReferencesThatInferTo<Schema, number>
-  | Expression<Schema>; // Allow nested expressions
+  | Expression<Schema>;
 
 /**
  * $add expression - adds numbers together

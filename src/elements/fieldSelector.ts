@@ -71,3 +71,11 @@ export type FieldSelectorsThatInferTo<Schema extends Document, DesiredType> = {
     K
   : never;
 }[FieldSelector<Schema>];
+
+// ============================================================================
+// Top-Level Fields (excludes dotted paths)
+// ============================================================================
+
+/** Excludes any string containing a dot (nested path) */
+export type TopLevelField<T extends string> =
+  T extends `${string}.${string}` ? never : T;

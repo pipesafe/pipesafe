@@ -7,7 +7,7 @@ import {
   FieldPath,
   FieldPathsThatInferToForLookup,
 } from "../elements/fieldReference";
-import { InferCollectionType, TMCollection } from "../collection/TMCollection";
+import { TMCollection } from "../collection/TMCollection";
 import { ResolveLookupOutput } from "../stages/lookup";
 import { GetFieldType } from "../elements/fieldSelector";
 import { GroupQuery, ResolveGroupOutput } from "../stages/group";
@@ -18,13 +18,39 @@ import {
 } from "../stages/replaceRoot";
 import { ResolveUnionWithOutput } from "../stages/unionWith";
 import { AggregationCursor, MongoClient } from "mongodb";
+import {
+  type TMSource,
+  type InferSourceType,
+  getSourceCollectionName,
+} from "../source/TMSource";
 
-type PLFrom<D extends Document, O extends Document> = (
-  p: TMPipeline<D, D>
-) => TMPipeline<D, O>;
+// ============================================================================
+// Lookup Mode - Controls what sources can be used in lookup/unionWith
+// ============================================================================
+
+/**
+ * Pipeline lookup mode:
+ * - "runtime": Only TMCollection allowed in lookup/unionWith (default, for app code)
+ * - "model": TMCollection OR TMModel allowed (for DAG/DW pipelines inside TMModel)
+ */
+export type LookupMode = "runtime" | "model";
+
+type AllowedSource<Mode extends LookupMode, T extends Document> =
+  Mode extends "model" ? TMSource<T> : TMCollection<T>;
+
+/**
+ * Helper to create pipeline functions with proper typing.
+ */
+type TMPipelineBuilder<
+  D extends Document,
+  O extends Document,
+  Mode extends LookupMode = "runtime",
+> = (p: TMPipeline<D, D, Mode>) => TMPipeline<D, O, Mode>;
+
 export class TMPipeline<
   StartingDocs extends Document = never,
   PreviousStageDocs extends Document = StartingDocs,
+  Mode extends LookupMode = "runtime",
 > {
   private pipeline: Document[] = [];
   getPipeline(): PreviousStageDocs extends never ? never : Document[] {
@@ -52,7 +78,7 @@ export class TMPipeline<
 
   // Ability to use any aggregation stage(s) and manually type the output
   custom<CustomOutput extends Document>(pipelineStages: Document[]) {
-    return new TMPipeline<CustomOutput>({
+    return new TMPipeline<CustomOutput, CustomOutput, Mode>({
       pipeline: [...this.pipeline, ...pipelineStages],
       collectionName: this.collectionName,
       databaseName: this.databaseName,
@@ -62,8 +88,16 @@ export class TMPipeline<
   // $match step
   match<const M extends MatchQuery<StartingDocs>>(
     $match: M
-  ): TMPipeline<ResolveMatchOutput<M, StartingDocs>> {
-    return new TMPipeline<ResolveMatchOutput<M, StartingDocs>>({
+  ): TMPipeline<
+    ResolveMatchOutput<M, StartingDocs>,
+    ResolveMatchOutput<M, StartingDocs>,
+    Mode
+  > {
+    return new TMPipeline<
+      ResolveMatchOutput<M, StartingDocs>,
+      ResolveMatchOutput<M, StartingDocs>,
+      Mode
+    >({
       pipeline: [...this.pipeline, { $match }],
       collectionName: this.collectionName,
       databaseName: this.databaseName,
@@ -72,20 +106,30 @@ export class TMPipeline<
 
   set<const S extends SetQuery<PreviousStageDocs>>(
     $set: S
-  ): TMPipeline<StartingDocs, ResolveSetOutput<S, PreviousStageDocs>> {
-    return new TMPipeline<StartingDocs, ResolveSetOutput<S, PreviousStageDocs>>(
-      {
-        pipeline: [...this.pipeline, { $set }],
-        collectionName: this.collectionName,
-        databaseName: this.databaseName,
-      }
-    );
+  ): TMPipeline<StartingDocs, ResolveSetOutput<S, PreviousStageDocs>, Mode> {
+    return new TMPipeline<
+      StartingDocs,
+      ResolveSetOutput<S, PreviousStageDocs>,
+      Mode
+    >({
+      pipeline: [...this.pipeline, { $set }],
+      collectionName: this.collectionName,
+      databaseName: this.databaseName,
+    });
   }
 
   unset<const U extends UnsetQuery<StartingDocs>>(
     $unset: U
-  ): TMPipeline<ResolveUnsetOutput<U, StartingDocs>> {
-    return new TMPipeline<ResolveUnsetOutput<U, StartingDocs>>({
+  ): TMPipeline<
+    ResolveUnsetOutput<U, StartingDocs>,
+    ResolveUnsetOutput<U, StartingDocs>,
+    Mode
+  > {
+    return new TMPipeline<
+      ResolveUnsetOutput<U, StartingDocs>,
+      ResolveUnsetOutput<U, StartingDocs>,
+      Mode
+    >({
       pipeline: [...this.pipeline, { $unset }],
       collectionName: this.collectionName,
       databaseName: this.databaseName,
@@ -93,18 +137,20 @@ export class TMPipeline<
   }
 
   // Lookup with function-only pipeline for automatic type inference
+  // In "runtime" mode: only TMCollection allowed
+  // In "model" mode: TMCollection OR TMModel allowed
   lookup<
-    C extends TMCollection<any>,
+    C extends AllowedSource<Mode, any>,
     LocalField extends FieldPath<StartingDocs>,
     LocalFieldType extends GetFieldType<StartingDocs, LocalField>,
     ForeignField extends
       | FieldPathsThatInferToForLookup<
-          InferCollectionType<C>,
+          InferSourceType<C>,
           LocalFieldType extends string ? string : LocalFieldType
         >
-      | FieldPathsThatInferToForLookup<InferCollectionType<C>, LocalFieldType>,
+      | FieldPathsThatInferToForLookup<InferSourceType<C>, LocalFieldType>,
     NewKey extends string,
-    PipelineOutput extends Document = InferCollectionType<C>,
+    PipelineOutput extends Document = InferSourceType<C>,
   >(
     $lookup:
       | {
@@ -112,39 +158,46 @@ export class TMPipeline<
           localField: LocalField;
           foreignField: ForeignField;
           as: NewKey;
-          pipeline?: PLFrom<InferCollectionType<C>, PipelineOutput>;
+          pipeline?: TMPipelineBuilder<
+            InferSourceType<C>,
+            PipelineOutput,
+            Mode
+          >;
         }
       | {
           from: C;
           as: NewKey;
-          pipeline: PLFrom<InferCollectionType<C>, PipelineOutput>;
+          pipeline: TMPipelineBuilder<InferSourceType<C>, PipelineOutput, Mode>;
         }
   ): TMPipeline<
     StartingDocs,
-    ResolveLookupOutput<StartingDocs, NewKey, PipelineOutput>
+    ResolveLookupOutput<StartingDocs, NewKey, PipelineOutput>,
+    Mode
   > {
     const { from, pipeline, ...$lookupRest } = $lookup;
 
-    // Call the pipeline function with a properly typed pipeline
+    // Get collection name (throws if ephemeral model)
+    const collectionName = getSourceCollectionName(from as TMSource<any>);
+
     const resolvedPipeline =
       pipeline ?
         pipeline(
-          new TMPipeline<InferCollectionType<C>, InferCollectionType<C>>({
-            collectionName: from.getCollectionName(),
-            // Come back to this
+          new TMPipeline<InferSourceType<C>, InferSourceType<C>, Mode>({
+            collectionName,
           })
         )
       : undefined;
 
     return new TMPipeline<
       StartingDocs,
-      ResolveLookupOutput<StartingDocs, NewKey, PipelineOutput>
+      ResolveLookupOutput<StartingDocs, NewKey, PipelineOutput>,
+      Mode
     >({
       pipeline: [
         ...this.pipeline,
         {
           $lookup: {
-            from: from.getCollectionName(),
+            from: collectionName,
             ...$lookupRest,
             ...(resolvedPipeline && {
               pipeline: resolvedPipeline.getPipeline(),
@@ -159,8 +212,12 @@ export class TMPipeline<
 
   group<const G extends GroupQuery<StartingDocs>>(
     $group: G
-  ): TMPipeline<StartingDocs, ResolveGroupOutput<StartingDocs, G>> {
-    return new TMPipeline<StartingDocs, ResolveGroupOutput<StartingDocs, G>>({
+  ): TMPipeline<StartingDocs, ResolveGroupOutput<StartingDocs, G>, Mode> {
+    return new TMPipeline<
+      StartingDocs,
+      ResolveGroupOutput<StartingDocs, G>,
+      Mode
+    >({
       pipeline: [...this.pipeline, { $group }],
       collectionName: this.collectionName,
       databaseName: this.databaseName,
@@ -169,10 +226,15 @@ export class TMPipeline<
 
   project<const P extends ProjectQuery<PreviousStageDocs>>(
     $project: P
-  ): TMPipeline<StartingDocs, ResolveProjectOutput<P, PreviousStageDocs>> {
+  ): TMPipeline<
+    StartingDocs,
+    ResolveProjectOutput<P, PreviousStageDocs>,
+    Mode
+  > {
     return new TMPipeline<
       StartingDocs,
-      ResolveProjectOutput<P, PreviousStageDocs>
+      ResolveProjectOutput<P, PreviousStageDocs>,
+      Mode
     >({
       pipeline: [...this.pipeline, { $project }],
       collectionName: this.collectionName,
@@ -182,10 +244,15 @@ export class TMPipeline<
 
   replaceRoot<const R extends ReplaceRootQuery<PreviousStageDocs>>(
     $replaceRoot: R
-  ): TMPipeline<StartingDocs, ResolveReplaceRootOutput<R, PreviousStageDocs>> {
+  ): TMPipeline<
+    StartingDocs,
+    ResolveReplaceRootOutput<R, PreviousStageDocs>,
+    Mode
+  > {
     return new TMPipeline<
       StartingDocs,
-      ResolveReplaceRootOutput<R, PreviousStageDocs>
+      ResolveReplaceRootOutput<R, PreviousStageDocs>,
+      Mode
     >({
       pipeline: [...this.pipeline, { $replaceRoot }],
       collectionName: this.collectionName,
@@ -193,42 +260,51 @@ export class TMPipeline<
     });
   }
 
+  // UnionWith
+  // In "runtime" mode: only TMCollection allowed
+  // In "model" mode: TMCollection OR TMModel allowed
   unionWith<
-    C extends TMCollection<any>,
-    PipelineOutput extends Document = InferCollectionType<C>,
+    C extends AllowedSource<Mode, any>,
+    PipelineOutput extends Document = InferSourceType<C>,
   >(
     $unionWith:
       | {
           coll: C;
-          pipeline?: PLFrom<InferCollectionType<C>, PipelineOutput>;
+          pipeline?: TMPipelineBuilder<
+            InferSourceType<C>,
+            PipelineOutput,
+            Mode
+          >;
         }
       | {
           coll: C;
-          pipeline: PLFrom<InferCollectionType<C>, PipelineOutput>;
+          pipeline: TMPipelineBuilder<InferSourceType<C>, PipelineOutput, Mode>;
         }
   ): TMPipeline<
     StartingDocs,
-    ResolveUnionWithOutput<PreviousStageDocs, PipelineOutput>
+    ResolveUnionWithOutput<PreviousStageDocs, PipelineOutput>,
+    Mode
   > {
     const { coll, pipeline } = $unionWith;
 
-    // Call the pipeline function with a properly typed pipeline
+    // Get collection name (throws if ephemeral model)
+    const collectionName = getSourceCollectionName(coll as TMSource<any>);
+
     const resolvedPipeline =
       pipeline ?
-        pipeline(
-          new TMPipeline<InferCollectionType<C>, InferCollectionType<C>>()
-        )
+        pipeline(new TMPipeline<InferSourceType<C>, InferSourceType<C>, Mode>())
       : undefined;
 
     return new TMPipeline<
       StartingDocs,
-      ResolveUnionWithOutput<PreviousStageDocs, PipelineOutput>
+      ResolveUnionWithOutput<PreviousStageDocs, PipelineOutput>,
+      Mode
     >({
       pipeline: [
         ...this.pipeline,
         {
           $unionWith: {
-            coll: coll.getCollectionName(),
+            coll: collectionName,
             ...(resolvedPipeline && {
               pipeline: resolvedPipeline.getPipeline(),
             }),
