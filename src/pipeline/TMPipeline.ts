@@ -54,8 +54,8 @@ export class TMPipeline<
     : Document[];
   }
 
-  /** Tracks sources used in lookup/unionWith stages */
-  private _lookupSources: TMSource<any>[] = [];
+  /** Tracks sources used in lookup/unionWith stages (populated by lookup/unionWith methods) */
+  private readonly _lookupSources: TMSource<any>[] = [];
 
   /** Get all sources referenced in lookup/unionWith stages */
   getLookupSources(): TMSource<any>[] {
@@ -72,24 +72,35 @@ export class TMPipeline<
       client?: MongoClient | undefined;
       collectionName?: string | undefined;
       databaseName?: string | undefined;
-      lookupSources?: TMSource<any>[] | undefined;
     } = {}
   ) {
     this.pipeline = args.pipeline ?? [];
     this.client = args.client;
     this.collectionName = args.collectionName;
     this.databaseName = args.databaseName;
-    this._lookupSources = args.lookupSources ?? [];
+  }
+
+  /** Create a chained pipeline that carries forward lookup sources */
+  private _chain<S extends Document, P extends Document>(
+    pipeline: Document[],
+    additionalSources: TMSource<any>[] = []
+  ): TMPipeline<S, P, Mode> {
+    const next = new TMPipeline<S, P, Mode>({
+      pipeline,
+      collectionName: this.collectionName,
+      databaseName: this.databaseName,
+    });
+    // Carry forward existing sources + any new ones
+    next._lookupSources.push(...this._lookupSources, ...additionalSources);
+    return next;
   }
 
   // Ability to use any aggregation stage(s) and manually type the output
   custom<CustomOutput extends Document>(pipelineStages: Document[]) {
-    return new TMPipeline<CustomOutput, CustomOutput, Mode>({
-      pipeline: [...this.pipeline, ...pipelineStages],
-      collectionName: this.collectionName,
-      databaseName: this.databaseName,
-      lookupSources: this._lookupSources,
-    });
+    return this._chain<CustomOutput, CustomOutput>([
+      ...this.pipeline,
+      ...pipelineStages,
+    ]);
   }
 
   // $match step
@@ -100,31 +111,19 @@ export class TMPipeline<
     ResolveMatchOutput<M, StartingDocs>,
     Mode
   > {
-    return new TMPipeline<
+    return this._chain<
       ResolveMatchOutput<M, StartingDocs>,
-      ResolveMatchOutput<M, StartingDocs>,
-      Mode
-    >({
-      pipeline: [...this.pipeline, { $match }],
-      collectionName: this.collectionName,
-      databaseName: this.databaseName,
-      lookupSources: this._lookupSources,
-    });
+      ResolveMatchOutput<M, StartingDocs>
+    >([...this.pipeline, { $match }]);
   }
 
   set<const S extends SetQuery<PreviousStageDocs>>(
     $set: S
   ): TMPipeline<StartingDocs, ResolveSetOutput<S, PreviousStageDocs>, Mode> {
-    return new TMPipeline<
-      StartingDocs,
-      ResolveSetOutput<S, PreviousStageDocs>,
-      Mode
-    >({
-      pipeline: [...this.pipeline, { $set }],
-      collectionName: this.collectionName,
-      databaseName: this.databaseName,
-      lookupSources: this._lookupSources,
-    });
+    return this._chain<StartingDocs, ResolveSetOutput<S, PreviousStageDocs>>([
+      ...this.pipeline,
+      { $set },
+    ]);
   }
 
   unset<const U extends UnsetQuery<StartingDocs>>(
@@ -134,16 +133,10 @@ export class TMPipeline<
     ResolveUnsetOutput<U, StartingDocs>,
     Mode
   > {
-    return new TMPipeline<
+    return this._chain<
       ResolveUnsetOutput<U, StartingDocs>,
-      ResolveUnsetOutput<U, StartingDocs>,
-      Mode
-    >({
-      pipeline: [...this.pipeline, { $unset }],
-      collectionName: this.collectionName,
-      databaseName: this.databaseName,
-      lookupSources: this._lookupSources,
-    });
+      ResolveUnsetOutput<U, StartingDocs>
+    >([...this.pipeline, { $unset }]);
   }
 
   // Lookup with function-only pipeline for automatic type inference
@@ -198,12 +191,11 @@ export class TMPipeline<
         )
       : undefined;
 
-    return new TMPipeline<
+    return this._chain<
       StartingDocs,
-      ResolveLookupOutput<StartingDocs, NewKey, PipelineOutput>,
-      Mode
-    >({
-      pipeline: [
+      ResolveLookupOutput<StartingDocs, NewKey, PipelineOutput>
+    >(
+      [
         ...this.pipeline,
         {
           $lookup: {
@@ -215,26 +207,17 @@ export class TMPipeline<
           },
         },
       ],
-      collectionName: this.collectionName,
-      databaseName: this.databaseName,
-      // Track the lookup source
-      lookupSources: [...this._lookupSources, from as TMSource<any>],
-    });
+      [from as TMSource<any>]
+    );
   }
 
   group<const G extends GroupQuery<StartingDocs>>(
     $group: G
   ): TMPipeline<StartingDocs, ResolveGroupOutput<StartingDocs, G>, Mode> {
-    return new TMPipeline<
-      StartingDocs,
-      ResolveGroupOutput<StartingDocs, G>,
-      Mode
-    >({
-      pipeline: [...this.pipeline, { $group }],
-      collectionName: this.collectionName,
-      databaseName: this.databaseName,
-      lookupSources: this._lookupSources,
-    });
+    return this._chain<StartingDocs, ResolveGroupOutput<StartingDocs, G>>([
+      ...this.pipeline,
+      { $group },
+    ]);
   }
 
   project<const P extends ProjectQuery<PreviousStageDocs>>(
@@ -244,16 +227,10 @@ export class TMPipeline<
     ResolveProjectOutput<P, PreviousStageDocs>,
     Mode
   > {
-    return new TMPipeline<
+    return this._chain<
       StartingDocs,
-      ResolveProjectOutput<P, PreviousStageDocs>,
-      Mode
-    >({
-      pipeline: [...this.pipeline, { $project }],
-      collectionName: this.collectionName,
-      databaseName: this.databaseName,
-      lookupSources: this._lookupSources,
-    });
+      ResolveProjectOutput<P, PreviousStageDocs>
+    >([...this.pipeline, { $project }]);
   }
 
   replaceRoot<const R extends ReplaceRootQuery<PreviousStageDocs>>(
@@ -263,16 +240,10 @@ export class TMPipeline<
     ResolveReplaceRootOutput<R, PreviousStageDocs>,
     Mode
   > {
-    return new TMPipeline<
+    return this._chain<
       StartingDocs,
-      ResolveReplaceRootOutput<R, PreviousStageDocs>,
-      Mode
-    >({
-      pipeline: [...this.pipeline, { $replaceRoot }],
-      collectionName: this.collectionName,
-      databaseName: this.databaseName,
-      lookupSources: this._lookupSources,
-    });
+      ResolveReplaceRootOutput<R, PreviousStageDocs>
+    >([...this.pipeline, { $replaceRoot }]);
   }
 
   // UnionWith
@@ -310,12 +281,11 @@ export class TMPipeline<
         pipeline(new TMPipeline<InferSourceType<C>, InferSourceType<C>, Mode>())
       : undefined;
 
-    return new TMPipeline<
+    return this._chain<
       StartingDocs,
-      ResolveUnionWithOutput<PreviousStageDocs, PipelineOutput>,
-      Mode
-    >({
-      pipeline: [
+      ResolveUnionWithOutput<PreviousStageDocs, PipelineOutput>
+    >(
+      [
         ...this.pipeline,
         {
           $unionWith: {
@@ -326,20 +296,12 @@ export class TMPipeline<
           },
         },
       ],
-      collectionName: this.collectionName,
-      databaseName: this.databaseName,
-      // Track the unionWith source
-      lookupSources: [...this._lookupSources, coll as TMSource<any>],
-    });
+      [coll as TMSource<any>]
+    );
   }
 
   out($out: string) {
-    return new TMPipeline<StartingDocs, never>({
-      pipeline: [...this.pipeline, { $out }],
-      collectionName: this.collectionName,
-      databaseName: this.databaseName,
-      lookupSources: this._lookupSources,
-    });
+    return this._chain<StartingDocs, never>([...this.pipeline, { $out }]);
   }
 
   execute(
