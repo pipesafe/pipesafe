@@ -32,7 +32,6 @@ import { tmql } from "../singleton/tmql";
 import { TMSource } from "../source/TMSource";
 
 export class TMCollection<Docs extends Document> implements TMSource<Docs> {
-  /** Discriminator for runtime type checking */
   readonly sourceType = "collection" as const;
 
   /** @internal Phantom type for inference */
@@ -58,7 +57,6 @@ export class TMCollection<Docs extends Document> implements TMSource<Docs> {
     return this.collectionName;
   }
 
-  // TMSource implementation
   getOutputCollectionName(): string {
     return this.collectionName;
   }
