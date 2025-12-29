@@ -66,7 +66,7 @@ describe("TMProject.run()", async () => {
 
   const simpleProject = new TMProject({
     name: "simple_project",
-    models: [aggregateModel], // Only specify leaf - deps are auto-discovered
+    models: [aggregateModel],
   });
 
   // ==========================================================================
@@ -124,7 +124,6 @@ describe("TMProject.run()", async () => {
 
   const complexProject = new TMProject({
     name: "complex_project",
-    // Only specify leaf - entire DAG is auto-discovered including lookup dependencies
     models: [orderSummary],
   });
 

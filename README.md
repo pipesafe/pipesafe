@@ -277,12 +277,13 @@ const dailyMetrics = new TMModel({
 
 ### Creating a Project
 
-Projects orchestrate model execution with dependency resolution:
+Projects orchestrate model execution with automatic dependency discovery. Just specify your leaf models - all upstream dependencies (via `from`) and lookup dependencies (via `lookup`/`unionWith`) are automatically included:
 
 ```typescript
 const analyticsProject = new TMProject({
   name: "analytics",
-  models: [stgEvents, dailyMetrics],
+  // Only specify leaf models - stgEvents is auto-discovered as a dependency
+  models: [dailyMetrics],
 });
 
 // View execution plan

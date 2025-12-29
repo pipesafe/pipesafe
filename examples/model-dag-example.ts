@@ -152,9 +152,13 @@ const enrichedUserActivity = new TMModel({
 // Create Project with Models
 // ============================================================================
 
+// Only specify leaf models - all dependencies are auto-discovered:
+// - stgEvents is discovered via dailyMetrics.from and userActivity.from
+// - userActivity is discovered via enrichedUserActivity.from
+// - UsersCollection is discovered via enrichedUserActivity's lookup stage
 const analyticsProject = new TMProject({
   name: "analytics",
-  models: [stgEvents, dailyMetrics, userActivity, enrichedUserActivity],
+  models: [dailyMetrics, enrichedUserActivity],
 });
 
 // ============================================================================
