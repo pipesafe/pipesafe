@@ -113,37 +113,9 @@ export type ModelConfig<
 export type InferModelOutput<T> =
   T extends TMModel<any, any, infer O, any> ? O : never;
 
-// ============================================================================
-// TMModel Class
-// ============================================================================
-
 /**
- * TMModel - A named, materializable pipeline with typed input/output.
- *
- * Models form a DAG through their `from` property. When `from` is another
- * model, that creates a dependency edge.
- *
- * @example
- * ```typescript
- * const stgEvents = new TMModel({
- *   name: "stg_events",
- *   from: RawEventsCollection,
- *   pipeline: (p) => p.match({ _deleted: { $ne: true } }),
- *   materialize: { type: "collection", mode: TMModel.Mode.Replace },
- * });
- *
- * const dailyMetrics = new TMModel({
- *   name: "daily_metrics",
- *   from: stgEvents, // DAG edge!
- *   pipeline: (p) => p.group({ _id: "$date", count: { $count: {} } }),
- *   materialize: { type: "collection", mode: TMModel.Mode.Upsert },
- * });
- *
- * const project = new TMProject({
- *   name: "analytics",
- *   models: [stgEvents, dailyMetrics],
- * });
- * ```
+ * A named, materializable pipeline with typed input/output.
+ * Models form a DAG through their `from` property.
  */
 export class TMModel<
   TName extends string = string,
@@ -201,15 +173,12 @@ export class TMModel<
   }
 
   /**
-   * Check if the source is a model (vs a collection).
+   * Type predicate to check if the source is a model (vs a collection).
    */
-  isSourceModel(): boolean {
-    return (
-      typeof this._from === "object" &&
-      this._from !== null &&
-      "type" in this._from &&
-      (this._from as any).type === "model"
-    );
+  isSourceModel(): this is TMModel<TName, TInput, TOutput, TMat> & {
+    getSource(): TMModel<string, any, TInput, any>;
+  } {
+    return this._from.sourceType === "model";
   }
 
   /**
