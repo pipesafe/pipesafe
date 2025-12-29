@@ -149,9 +149,6 @@ export class TMModel<
     },
   } as const;
 
-  /** Runtime type identifier - survives minification */
-  readonly type = "model" as const;
-
   /** TMSource discriminator */
   readonly sourceType = "model" as const;
 
