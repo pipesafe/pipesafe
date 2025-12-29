@@ -6,7 +6,7 @@
  */
 
 import { MongoClient } from "mongodb";
-import { TMModel } from "../model/TMModel";
+import { TMModel, isTMModel } from "../model/TMModel";
 import { tmql } from "../singleton/tmql";
 
 // ============================================================================
@@ -122,8 +122,8 @@ export class TMProject {
       if (upstream) {
         addModelWithDeps(upstream);
       }
-      // Then add ancestors from lookup/unionWith stages
-      for (const ancestor of model.getAncestorsFromStages()) {
+      // Then add ancestors from lookup/unionWith stages (filter to models only)
+      for (const ancestor of model.getAncestorsFromStages().filter(isTMModel)) {
         addModelWithDeps(ancestor);
       }
       // Finally add this model

@@ -234,17 +234,11 @@ export class TMModel<
   }
 
   /**
-   * Get ancestor models from lookup/unionWith stages.
-   * These are models referenced in the pipeline but not via the `from` property.
+   * Get ancestor sources from lookup/unionWith stages.
+   * These are sources referenced in the pipeline but not via the `from` property.
    */
-  getAncestorsFromStages(): TMModel<string, any, any, any>[] {
-    const pipeline = this._buildPipeline();
-    return pipeline.getAncestorsFromStages().filter(isTMModel) as TMModel<
-      string,
-      any,
-      any,
-      any
-    >[];
+  getAncestorsFromStages(): TMSource<any>[] {
+    return this._buildPipeline().getAncestorsFromStages();
   }
 
   /**

@@ -81,16 +81,15 @@ export class TMPipeline<
   }
 
   /** Create a chained pipeline that carries forward ancestor sources */
-  private _chain<S extends Document, P extends Document>(
+  private _chain<NewOutput extends Document>(
     newStages: Document[],
     additionalAncestors: TMSource<any>[] = []
-  ): TMPipeline<S, P, Mode> {
-    const next = new TMPipeline<S, P, Mode>({
+  ): TMPipeline<StartingDocs, NewOutput, Mode> {
+    const next = new TMPipeline<StartingDocs, NewOutput, Mode>({
       pipeline: [...this.pipeline, ...newStages],
       collectionName: this.collectionName,
       databaseName: this.databaseName,
     });
-    // Carry forward existing ancestors + any new ones
     next._ancestorsFromStages.push(
       ...this._ancestorsFromStages,
       ...additionalAncestors
@@ -100,42 +99,26 @@ export class TMPipeline<
 
   // Ability to use any aggregation stage(s) and manually type the output
   custom<CustomOutput extends Document>(pipelineStages: Document[]) {
-    return this._chain<CustomOutput, CustomOutput>(pipelineStages);
+    return this._chain<CustomOutput>(pipelineStages);
   }
 
   // $match step
   match<const M extends MatchQuery<StartingDocs>>(
     $match: M
-  ): TMPipeline<
-    ResolveMatchOutput<M, StartingDocs>,
-    ResolveMatchOutput<M, StartingDocs>,
-    Mode
-  > {
-    return this._chain<
-      ResolveMatchOutput<M, StartingDocs>,
-      ResolveMatchOutput<M, StartingDocs>
-    >([{ $match }]);
+  ): TMPipeline<StartingDocs, ResolveMatchOutput<M, StartingDocs>, Mode> {
+    return this._chain<ResolveMatchOutput<M, StartingDocs>>([{ $match }]);
   }
 
   set<const S extends SetQuery<PreviousStageDocs>>(
     $set: S
   ): TMPipeline<StartingDocs, ResolveSetOutput<S, PreviousStageDocs>, Mode> {
-    return this._chain<StartingDocs, ResolveSetOutput<S, PreviousStageDocs>>([
-      { $set },
-    ]);
+    return this._chain<ResolveSetOutput<S, PreviousStageDocs>>([{ $set }]);
   }
 
   unset<const U extends UnsetQuery<StartingDocs>>(
     $unset: U
-  ): TMPipeline<
-    ResolveUnsetOutput<U, StartingDocs>,
-    ResolveUnsetOutput<U, StartingDocs>,
-    Mode
-  > {
-    return this._chain<
-      ResolveUnsetOutput<U, StartingDocs>,
-      ResolveUnsetOutput<U, StartingDocs>
-    >([{ $unset }]);
+  ): TMPipeline<StartingDocs, ResolveUnsetOutput<U, StartingDocs>, Mode> {
+    return this._chain<ResolveUnsetOutput<U, StartingDocs>>([{ $unset }]);
   }
 
   lookup<
@@ -194,7 +177,6 @@ export class TMPipeline<
     }
 
     return this._chain<
-      StartingDocs,
       ResolveLookupOutput<StartingDocs, NewKey, PipelineOutput>
     >(
       [
@@ -215,9 +197,7 @@ export class TMPipeline<
   group<const G extends GroupQuery<StartingDocs>>(
     $group: G
   ): TMPipeline<StartingDocs, ResolveGroupOutput<StartingDocs, G>, Mode> {
-    return this._chain<StartingDocs, ResolveGroupOutput<StartingDocs, G>>([
-      { $group },
-    ]);
+    return this._chain<ResolveGroupOutput<StartingDocs, G>>([{ $group }]);
   }
 
   project<const P extends ProjectQuery<PreviousStageDocs>>(
@@ -227,10 +207,9 @@ export class TMPipeline<
     ResolveProjectOutput<P, PreviousStageDocs>,
     Mode
   > {
-    return this._chain<
-      StartingDocs,
-      ResolveProjectOutput<P, PreviousStageDocs>
-    >([{ $project }]);
+    return this._chain<ResolveProjectOutput<P, PreviousStageDocs>>([
+      { $project },
+    ]);
   }
 
   replaceRoot<const R extends ReplaceRootQuery<PreviousStageDocs>>(
@@ -240,10 +219,9 @@ export class TMPipeline<
     ResolveReplaceRootOutput<R, PreviousStageDocs>,
     Mode
   > {
-    return this._chain<
-      StartingDocs,
-      ResolveReplaceRootOutput<R, PreviousStageDocs>
-    >([{ $replaceRoot }]);
+    return this._chain<ResolveReplaceRootOutput<R, PreviousStageDocs>>([
+      { $replaceRoot },
+    ]);
   }
 
   unionWith<
@@ -285,7 +263,6 @@ export class TMPipeline<
     }
 
     return this._chain<
-      StartingDocs,
       ResolveUnionWithOutput<PreviousStageDocs, PipelineOutput>
     >(
       [
@@ -303,7 +280,7 @@ export class TMPipeline<
   }
 
   out($out: string) {
-    return this._chain<StartingDocs, never>([{ $out }]);
+    return this._chain<never>([{ $out }]);
   }
 
   execute(
