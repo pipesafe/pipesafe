@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { TMCollection, TMModel, TMProject } from "../src";
+import { TMCollection } from "../collection/TMCollection";
+import { TMModel } from "../model/TMModel";
+import { TMProject } from "./TMProject";
 
 type Doc = { _id: string; value: number };
 

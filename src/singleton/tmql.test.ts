@@ -1,7 +1,9 @@
-import { TMCollection, TMPipeline, tmql } from "../src";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { useMemoryMongoDb } from "./useMemoryDb";
-import { TMDatabase } from "../src/database/TMDatabase";
+import { useMemoryMongo } from "../utils/useMemoryMongo";
+import { TMCollection } from "../collection/TMCollection";
+import { TMPipeline } from "../pipeline/TMPipeline";
+import { TMDatabase } from "../database/TMDatabase";
+import { tmql } from "./tmql";
 
 const exampleDocs = [
   {
@@ -13,7 +15,7 @@ const exampleDocs = [
 ];
 
 describe("Connections", async () => {
-  const { memoryReplSetUri, client } = await useMemoryMongoDb();
+  const { memoryReplSetUri, client } = await useMemoryMongo();
   const DBName = await client.db().databaseName;
   const CollectionName = "my_collection";
 

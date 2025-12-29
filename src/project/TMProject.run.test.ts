@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { useMemoryMongoDb } from "./useMemoryDb";
-import { TMCollection, TMModel, TMProject } from "../src";
+import { useMemoryMongo } from "../utils/useMemoryMongo";
+import { TMCollection } from "../collection/TMCollection";
+import { TMModel } from "../model/TMModel";
+import { TMProject } from "./TMProject";
 
 type RawDoc = { _id: string; value: number; active?: boolean };
 
@@ -11,7 +13,7 @@ const sampleDocs: RawDoc[] = [
 ];
 
 describe("TMProject.run()", async () => {
-  const { client } = await useMemoryMongoDb();
+  const { client } = await useMemoryMongo();
 
   const sourceCollection = new TMCollection<RawDoc>({
     collectionName: "raw_docs",

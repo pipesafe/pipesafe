@@ -2,7 +2,7 @@ import { MongoMemoryReplSet } from "mongodb-memory-server";
 import { MongoClient } from "mongodb";
 import { afterAll, afterEach, beforeAll } from "vitest";
 
-export const useMemoryMongoDb = async () => {
+export const useMemoryMongo = async () => {
   // Create a new in-memory MongoDB instance
   const memoryReplSet = await MongoMemoryReplSet.create({
     replSet: {

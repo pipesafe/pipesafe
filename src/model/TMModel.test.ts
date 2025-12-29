@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { useMemoryMongoDb } from "./useMemoryDb";
-import { TMCollection, TMModel, TMProject } from "../src";
+import { useMemoryMongo } from "../utils/useMemoryMongo";
+import { TMCollection } from "../collection/TMCollection";
+import { TMModel } from "./TMModel";
+import { TMProject } from "../project/TMProject";
 
 // ============================================================================
 // Schema Types
@@ -181,7 +183,7 @@ describe("TMModel", () => {
 });
 
 describe("TMModel Integration", async () => {
-  const { client } = await useMemoryMongoDb();
+  const { client } = await useMemoryMongo();
 
   it("should run all models and materialize output", async () => {
     const db = client.db();
