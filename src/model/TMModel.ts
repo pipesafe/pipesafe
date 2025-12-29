@@ -112,6 +112,18 @@ export type InferModelOutput<T> =
   T extends TMModel<any, any, infer O, any> ? O : never;
 
 /**
+ * Type predicate to check if a value is a TMModel.
+ */
+export function isTMModel(value: unknown): value is TMModel {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "sourceType" in value &&
+    (value as { sourceType: unknown }).sourceType === "model"
+  );
+}
+
+/**
  * A named, materializable pipeline with typed input/output.
  * Models form a DAG through their `from` property.
  */
@@ -174,24 +186,17 @@ export class TMModel<
   }
 
   /**
-   * Type predicate to check if the source is a model (vs a collection).
+   * Check if the source is a model (vs a collection).
    */
-  isSourceModel(): this is TMModel<
-    TName,
-    TInput,
-    TOutput,
-    TMaterializeConfig
-  > & {
-    getSource(): TMModel<string, any, TInput, any>;
-  } {
-    return this._from.sourceType === "model";
+  sourceIsModel(): boolean {
+    return isTMModel(this._from);
   }
 
   /**
    * Get the upstream model if source is a model, otherwise undefined.
    */
   getUpstreamModel(): TMModel<string, any, TInput, any> | undefined {
-    if (this.isSourceModel()) {
+    if (this.sourceIsModel()) {
       return this._from as TMModel<string, any, TInput, any>;
     }
     return undefined;

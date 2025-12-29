@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TMCollection } from "../collection/TMCollection";
-import { TMModel } from "./TMModel";
+import { TMModel, isTMModel } from "./TMModel";
 
 type RawEvent = {
   _id: string;
@@ -66,8 +66,8 @@ describe("TMModel", () => {
     });
 
     it("should identify source model vs collection", () => {
-      expect(stgEvents.isSourceModel()).toBe(false);
-      expect(dailyMetrics.isSourceModel()).toBe(true);
+      expect(stgEvents.sourceIsModel()).toBe(false);
+      expect(dailyMetrics.sourceIsModel()).toBe(true);
     });
 
     it("should get upstream model when source is a model", () => {
@@ -101,6 +101,34 @@ describe("TMModel", () => {
     it("should have correct sourceType discriminator", () => {
       expect(stgEvents.sourceType).toBe("model");
       expect(dailyMetrics.sourceType).toBe("model");
+    });
+  });
+
+  describe("isTMModel predicate", () => {
+    it("should return true for TMModel instances", () => {
+      expect(isTMModel(stgEvents)).toBe(true);
+      expect(isTMModel(dailyMetrics)).toBe(true);
+    });
+
+    it("should return false for TMCollection instances", () => {
+      expect(isTMModel(RawEventsCollection)).toBe(false);
+    });
+
+    it("should return false for non-objects", () => {
+      expect(isTMModel(null)).toBe(false);
+      expect(isTMModel(undefined)).toBe(false);
+      expect(isTMModel("string")).toBe(false);
+      expect(isTMModel(123)).toBe(false);
+    });
+
+    it("should return false for objects without sourceType", () => {
+      expect(isTMModel({})).toBe(false);
+      expect(isTMModel({ name: "test" })).toBe(false);
+    });
+
+    it("should return false for objects with wrong sourceType", () => {
+      expect(isTMModel({ sourceType: "collection" })).toBe(false);
+      expect(isTMModel({ sourceType: "other" })).toBe(false);
     });
   });
 

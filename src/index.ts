@@ -11,7 +11,7 @@ export { TMPipeline } from "./pipeline/TMPipeline";
 export { TMCollection } from "./collection/TMCollection";
 
 // DAG Composition
-export { TMModel } from "./model/TMModel";
+export { TMModel, isTMModel } from "./model/TMModel";
 export { TMProject } from "./project/TMProject";
 
 // Type inference helpers

@@ -185,7 +185,7 @@ console.log();
 
 console.log("Model: dailyMetrics");
 console.log("  Output collection:", dailyMetrics.getOutputCollectionName());
-console.log("  Depends on model:", dailyMetrics.isSourceModel());
+console.log("  Depends on model:", dailyMetrics.sourceIsModel());
 console.log(
   "  Full pipeline:",
   JSON.stringify(dailyMetrics.buildPipeline(), null, 2)
@@ -197,7 +197,7 @@ console.log(
   "  Output collection:",
   enrichedUserActivity.getOutputCollectionName()
 );
-console.log("  Depends on model:", enrichedUserActivity.isSourceModel());
+console.log("  Depends on model:", enrichedUserActivity.sourceIsModel());
 console.log(
   "  Pipeline with lookup:",
   JSON.stringify(enrichedUserActivity.buildPipeline(), null, 2)
