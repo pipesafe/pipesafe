@@ -30,6 +30,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `TOutput`: Output document type after pipeline
   - `TMat`: Materialization config type
 
+  Static presets for materialization modes:
+  - `TMModel.Mode.Replace` - Uses `$out` to replace entire collection
+  - `TMModel.Mode.Upsert` - Uses `$merge` with `on: "_id"`, upsert semantics
+  - `TMModel.Mode.Append` - Uses `$merge` with `whenMatched: "fail"`, insert only
+
 - **TMProject**: Located in `src/project/TMProject.ts`. DAG orchestrator that manages models, resolves dependencies, validates the graph, and executes models in topological order. Models are provided at construction time and validated immediately (immutable after creation).
 
 - **TMSource**: Located in `src/source/TMSource.ts`. Unified interface that both `TMCollection` and `TMModel` implement, allowing them to be used interchangeably as pipeline sources.
