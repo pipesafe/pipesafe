@@ -54,6 +54,14 @@ export class TMPipeline<
     : Document[];
   }
 
+  /** Tracks sources used in lookup/unionWith stages */
+  private _lookupSources: TMSource<any>[] = [];
+
+  /** Get all sources referenced in lookup/unionWith stages */
+  getLookupSources(): TMSource<any>[] {
+    return this._lookupSources;
+  }
+
   private client: MongoClient | undefined;
   private databaseName: string | undefined;
   private collectionName: string | undefined;
@@ -64,12 +72,14 @@ export class TMPipeline<
       client?: MongoClient | undefined;
       collectionName?: string | undefined;
       databaseName?: string | undefined;
+      lookupSources?: TMSource<any>[] | undefined;
     } = {}
   ) {
     this.pipeline = args.pipeline ?? [];
     this.client = args.client;
     this.collectionName = args.collectionName;
     this.databaseName = args.databaseName;
+    this._lookupSources = args.lookupSources ?? [];
   }
 
   // Ability to use any aggregation stage(s) and manually type the output
@@ -78,6 +88,7 @@ export class TMPipeline<
       pipeline: [...this.pipeline, ...pipelineStages],
       collectionName: this.collectionName,
       databaseName: this.databaseName,
+      lookupSources: this._lookupSources,
     });
   }
 
@@ -97,6 +108,7 @@ export class TMPipeline<
       pipeline: [...this.pipeline, { $match }],
       collectionName: this.collectionName,
       databaseName: this.databaseName,
+      lookupSources: this._lookupSources,
     });
   }
 
@@ -111,6 +123,7 @@ export class TMPipeline<
       pipeline: [...this.pipeline, { $set }],
       collectionName: this.collectionName,
       databaseName: this.databaseName,
+      lookupSources: this._lookupSources,
     });
   }
 
@@ -129,6 +142,7 @@ export class TMPipeline<
       pipeline: [...this.pipeline, { $unset }],
       collectionName: this.collectionName,
       databaseName: this.databaseName,
+      lookupSources: this._lookupSources,
     });
   }
 
@@ -203,6 +217,8 @@ export class TMPipeline<
       ],
       collectionName: this.collectionName,
       databaseName: this.databaseName,
+      // Track the lookup source
+      lookupSources: [...this._lookupSources, from as TMSource<any>],
     });
   }
 
@@ -217,6 +233,7 @@ export class TMPipeline<
       pipeline: [...this.pipeline, { $group }],
       collectionName: this.collectionName,
       databaseName: this.databaseName,
+      lookupSources: this._lookupSources,
     });
   }
 
@@ -235,6 +252,7 @@ export class TMPipeline<
       pipeline: [...this.pipeline, { $project }],
       collectionName: this.collectionName,
       databaseName: this.databaseName,
+      lookupSources: this._lookupSources,
     });
   }
 
@@ -253,6 +271,7 @@ export class TMPipeline<
       pipeline: [...this.pipeline, { $replaceRoot }],
       collectionName: this.collectionName,
       databaseName: this.databaseName,
+      lookupSources: this._lookupSources,
     });
   }
 
@@ -309,6 +328,8 @@ export class TMPipeline<
       ],
       collectionName: this.collectionName,
       databaseName: this.databaseName,
+      // Track the unionWith source
+      lookupSources: [...this._lookupSources, coll as TMSource<any>],
     });
   }
 
@@ -317,6 +338,7 @@ export class TMPipeline<
       pipeline: [...this.pipeline, { $out }],
       collectionName: this.collectionName,
       databaseName: this.databaseName,
+      lookupSources: this._lookupSources,
     });
   }
 

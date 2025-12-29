@@ -124,9 +124,8 @@ describe("TMProject.run()", async () => {
 
   const complexProject = new TMProject({
     name: "complex_project",
-    // Note: stgUsers must be explicitly included because it's a lookup dependency
-    // (not a `from` dependency). Auto-discovery only tracks `from` dependencies.
-    models: [orderSummary, stgUsers],
+    // Only specify leaf - entire DAG is auto-discovered including lookup dependencies
+    models: [orderSummary],
   });
 
   describe("successful execution", () => {

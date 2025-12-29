@@ -113,16 +113,20 @@ export class TMProject {
     this.defaultDatabase =
       config.defaultDatabase !== undefined ? config.defaultDatabase : undefined;
 
-    // Build models map, auto-discovering upstream dependencies
+    // Build models map, auto-discovering all dependencies (upstream and lookup)
     this.models = new Map();
     const addModelWithDeps = (model: TMModel<any, any, any, any>) => {
       if (this.models.has(model.name)) return;
-      // First add upstream dependencies
+      // First add upstream dependency (from property)
       const upstream = model.getUpstreamModel();
       if (upstream) {
         addModelWithDeps(upstream);
       }
-      // Then add this model
+      // Then add lookup/unionWith dependencies
+      for (const lookupDep of model.getLookupDependencies()) {
+        addModelWithDeps(lookupDep);
+      }
+      // Finally add this model
       this.models.set(model.name, model);
     };
 

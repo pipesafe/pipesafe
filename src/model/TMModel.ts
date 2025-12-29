@@ -230,14 +230,34 @@ export class TMModel<
    * Build the pipeline stages for this model.
    */
   getPipelineStages(): Document[] {
+    return this._buildPipeline().getPipeline();
+  }
+
+  /**
+   * Get model dependencies from lookup/unionWith stages.
+   * These are models referenced in the pipeline but not via the `from` property.
+   */
+  getLookupDependencies(): TMModel<string, any, any, any>[] {
+    const pipeline = this._buildPipeline();
+    return pipeline.getLookupSources().filter(isTMModel) as TMModel<
+      string,
+      any,
+      any,
+      any
+    >[];
+  }
+
+  /**
+   * Internal: build the pipeline and return the TMPipeline instance.
+   */
+  private _buildPipeline(): TMPipeline<TInput, TOutput, "model"> {
     // Start with an empty "model" mode pipeline (allows lookup from other models)
     const startPipeline = new TMPipeline<TInput, TInput, "model">({
       pipeline: [],
     });
 
     // Execute pipeline function
-    const result = this._pipelineFn(startPipeline);
-    return result.getPipeline();
+    return this._pipelineFn(startPipeline);
   }
 
   /**
