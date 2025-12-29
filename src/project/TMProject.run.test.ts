@@ -97,15 +97,37 @@ describe("TMProject.run()", async () => {
     materialize: { type: "collection", mode: TMModel.Mode.Replace },
   });
 
+  // User groups for testing chained lookup dependencies
+  const userGroupsSource = new TMCollection<{ _id: string; groupName: string }>(
+    {
+      collectionName: "user_groups",
+    }
+  );
+
+  const stgUserGroups = new TMModel({
+    name: "stg_user_groups",
+    from: userGroupsSource,
+    pipeline: (p) => p,
+    materialize: { type: "collection", mode: TMModel.Mode.Replace },
+  });
+
   const enrichedOrders = new TMModel({
     name: "enriched_orders",
     from: stgOrders,
     pipeline: (p) =>
       p.lookup({
-        from: stgUsers, // Lookup to another model!
+        from: stgUsers,
         localField: "userId",
         foreignField: "_id",
         as: "user",
+        // Sub-pipeline with its own lookup - tests chained dependency discovery
+        pipeline: (userPipeline) =>
+          userPipeline.lookup({
+            from: stgUserGroups,
+            localField: "_id",
+            foreignField: "_id",
+            as: "groups",
+          }),
       }),
     materialize: { type: "collection", mode: TMModel.Mode.Replace },
   });
@@ -166,10 +188,11 @@ describe("TMProject.run()", async () => {
       });
 
       expect(result.success).toBe(true);
-      // All 4 models should run in correct order
-      expect(result.modelsRun).toHaveLength(4);
+      // All 5 models should run (includes stg_user_groups from chained lookup)
+      expect(result.modelsRun).toHaveLength(5);
       expect(result.modelsRun).toContain("stg_orders");
       expect(result.modelsRun).toContain("stg_users");
+      expect(result.modelsRun).toContain("stg_user_groups");
       expect(result.modelsRun).toContain("enriched_orders");
       expect(result.modelsRun).toContain("order_summary");
 
@@ -177,6 +200,10 @@ describe("TMProject.run()", async () => {
       const stgUsersIdx = result.modelsRun.indexOf("stg_users");
       const enrichedIdx = result.modelsRun.indexOf("enriched_orders");
       expect(stgUsersIdx).toBeLessThan(enrichedIdx);
+
+      // stg_user_groups must run before enriched_orders (chained lookup dependency)
+      const stgUserGroupsIdx = result.modelsRun.indexOf("stg_user_groups");
+      expect(stgUserGroupsIdx).toBeLessThan(enrichedIdx);
 
       // Verify enriched orders have user data
       const enriched = await db.collection("enriched_orders").find().toArray();

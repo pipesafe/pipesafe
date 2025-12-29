@@ -54,12 +54,12 @@ export class TMPipeline<
     : Document[];
   }
 
-  /** Tracks sources used in lookup/unionWith stages (populated by lookup/unionWith methods) */
-  private readonly _lookupSources: TMSource<any>[] = [];
+  /** Tracks ancestor sources from lookup/unionWith stages */
+  private readonly _ancestorsFromStages: TMSource<any>[] = [];
 
-  /** Get all sources referenced in lookup/unionWith stages */
-  getLookupSources(): TMSource<any>[] {
-    return this._lookupSources;
+  /** Get all ancestor sources referenced in lookup/unionWith stages */
+  getAncestorsFromStages(): TMSource<any>[] {
+    return this._ancestorsFromStages;
   }
 
   private client: MongoClient | undefined;
@@ -80,27 +80,27 @@ export class TMPipeline<
     this.databaseName = args.databaseName;
   }
 
-  /** Create a chained pipeline that carries forward lookup sources */
+  /** Create a chained pipeline that carries forward ancestor sources */
   private _chain<S extends Document, P extends Document>(
-    pipeline: Document[],
-    additionalSources: TMSource<any>[] = []
+    newStages: Document[],
+    additionalAncestors: TMSource<any>[] = []
   ): TMPipeline<S, P, Mode> {
     const next = new TMPipeline<S, P, Mode>({
-      pipeline,
+      pipeline: [...this.pipeline, ...newStages],
       collectionName: this.collectionName,
       databaseName: this.databaseName,
     });
-    // Carry forward existing sources + any new ones
-    next._lookupSources.push(...this._lookupSources, ...additionalSources);
+    // Carry forward existing ancestors + any new ones
+    next._ancestorsFromStages.push(
+      ...this._ancestorsFromStages,
+      ...additionalAncestors
+    );
     return next;
   }
 
   // Ability to use any aggregation stage(s) and manually type the output
   custom<CustomOutput extends Document>(pipelineStages: Document[]) {
-    return this._chain<CustomOutput, CustomOutput>([
-      ...this.pipeline,
-      ...pipelineStages,
-    ]);
+    return this._chain<CustomOutput, CustomOutput>(pipelineStages);
   }
 
   // $match step
@@ -114,14 +114,13 @@ export class TMPipeline<
     return this._chain<
       ResolveMatchOutput<M, StartingDocs>,
       ResolveMatchOutput<M, StartingDocs>
-    >([...this.pipeline, { $match }]);
+    >([{ $match }]);
   }
 
   set<const S extends SetQuery<PreviousStageDocs>>(
     $set: S
   ): TMPipeline<StartingDocs, ResolveSetOutput<S, PreviousStageDocs>, Mode> {
     return this._chain<StartingDocs, ResolveSetOutput<S, PreviousStageDocs>>([
-      ...this.pipeline,
       { $set },
     ]);
   }
@@ -136,7 +135,7 @@ export class TMPipeline<
     return this._chain<
       ResolveUnsetOutput<U, StartingDocs>,
       ResolveUnsetOutput<U, StartingDocs>
-    >([...this.pipeline, { $unset }]);
+    >([{ $unset }]);
   }
 
   // Lookup with function-only pipeline for automatic type inference
@@ -191,12 +190,17 @@ export class TMPipeline<
         )
       : undefined;
 
+    // Include the lookup source + any ancestors from the sub-pipeline
+    const ancestors: TMSource<any>[] = [from as TMSource<any>];
+    if (resolvedPipeline) {
+      ancestors.push(...resolvedPipeline.getAncestorsFromStages());
+    }
+
     return this._chain<
       StartingDocs,
       ResolveLookupOutput<StartingDocs, NewKey, PipelineOutput>
     >(
       [
-        ...this.pipeline,
         {
           $lookup: {
             from: collectionName,
@@ -207,7 +211,7 @@ export class TMPipeline<
           },
         },
       ],
-      [from as TMSource<any>]
+      ancestors
     );
   }
 
@@ -215,7 +219,6 @@ export class TMPipeline<
     $group: G
   ): TMPipeline<StartingDocs, ResolveGroupOutput<StartingDocs, G>, Mode> {
     return this._chain<StartingDocs, ResolveGroupOutput<StartingDocs, G>>([
-      ...this.pipeline,
       { $group },
     ]);
   }
@@ -230,7 +233,7 @@ export class TMPipeline<
     return this._chain<
       StartingDocs,
       ResolveProjectOutput<P, PreviousStageDocs>
-    >([...this.pipeline, { $project }]);
+    >([{ $project }]);
   }
 
   replaceRoot<const R extends ReplaceRootQuery<PreviousStageDocs>>(
@@ -243,7 +246,7 @@ export class TMPipeline<
     return this._chain<
       StartingDocs,
       ResolveReplaceRootOutput<R, PreviousStageDocs>
-    >([...this.pipeline, { $replaceRoot }]);
+    >([{ $replaceRoot }]);
   }
 
   // UnionWith
@@ -281,12 +284,17 @@ export class TMPipeline<
         pipeline(new TMPipeline<InferSourceType<C>, InferSourceType<C>, Mode>())
       : undefined;
 
+    // Include the unionWith source + any ancestors from the sub-pipeline
+    const ancestors: TMSource<any>[] = [coll as TMSource<any>];
+    if (resolvedPipeline) {
+      ancestors.push(...resolvedPipeline.getAncestorsFromStages());
+    }
+
     return this._chain<
       StartingDocs,
       ResolveUnionWithOutput<PreviousStageDocs, PipelineOutput>
     >(
       [
-        ...this.pipeline,
         {
           $unionWith: {
             coll: collectionName,
@@ -296,12 +304,12 @@ export class TMPipeline<
           },
         },
       ],
-      [coll as TMSource<any>]
+      ancestors
     );
   }
 
   out($out: string) {
-    return this._chain<StartingDocs, never>([...this.pipeline, { $out }]);
+    return this._chain<StartingDocs, never>([{ $out }]);
   }
 
   execute(
