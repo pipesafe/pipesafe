@@ -32,7 +32,7 @@ const RawEventsCollection = new TMCollection<RawEvent>({
 
 /**
  * Staging model - filters out deleted events and adds eventDate.
- * Uses 'collection' materialization with 'replace' mode.
+ * Uses 'collection' materialization with $out (replace).
  */
 const stgEvents = new TMModel({
   name: "stg_events",
@@ -54,7 +54,7 @@ const stgEvents = new TMModel({
       }),
   materialize: {
     type: "collection",
-    mode: "replace",
+    mode: TMModel.Mode.Replace,
   },
 });
 
@@ -74,13 +74,7 @@ const dailyMetrics = new TMModel({
     }),
   materialize: {
     type: "collection",
-    mode: {
-      $merge: {
-        on: "_id",
-        whenMatched: "replace",
-        whenNotMatched: "insert",
-      },
-    },
+    mode: TMModel.Mode.Upsert,
   },
 });
 
@@ -99,7 +93,7 @@ const userActivity = new TMModel({
     }),
   materialize: {
     type: "collection",
-    mode: "replace",
+    mode: TMModel.Mode.Replace,
   },
 });
 

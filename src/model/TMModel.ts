@@ -54,9 +54,7 @@ export type MergeOptions<TOutput extends Document> = {
 };
 
 export type CollectionMode<TOutput extends Document> =
-  | "replace"
-  | "append"
-  | "upsert"
+  | { $out: Record<string, never> }
   | { $merge: MergeOptions<TOutput> };
 
 // ============================================================================
@@ -127,20 +125,23 @@ export type InferModelOutput<T> =
  *
  * @example
  * ```typescript
- * const project = new TMProject({ name: "analytics" });
- *
- * const stgEvents = project.model({
+ * const stgEvents = new TMModel({
  *   name: "stg_events",
  *   from: RawEventsCollection,
  *   pipeline: (p) => p.match({ _deleted: { $ne: true } }),
- *   materialize: { type: "collection", mode: "replace" },
+ *   materialize: { type: "collection", mode: TMModel.Mode.Replace },
  * });
  *
- * const dailyMetrics = project.model({
+ * const dailyMetrics = new TMModel({
  *   name: "daily_metrics",
  *   from: stgEvents, // DAG edge!
  *   pipeline: (p) => p.group({ _id: "$date", count: { $count: {} } }),
- *   materialize: { type: "collection", mode: "replace" },
+ *   materialize: { type: "collection", mode: TMModel.Mode.Upsert },
+ * });
+ *
+ * const project = new TMProject({
+ *   name: "analytics",
+ *   models: [stgEvents, dailyMetrics],
  * });
  * ```
  */
@@ -151,6 +152,20 @@ export class TMModel<
   TMat extends MaterializeConfig<TOutput> = MaterializeConfig<TOutput>,
 > implements TMSource<TOutput>
 {
+  /** Preset modes for common materialization patterns */
+  static readonly Mode = {
+    /** Replace entire collection using $out */
+    Replace: { $out: {} },
+    /** Upsert by _id using $merge */
+    Upsert: {
+      $merge: { on: "_id", whenMatched: "replace", whenNotMatched: "insert" },
+    },
+    /** Append only (fail on match) using $merge */
+    Append: {
+      $merge: { on: "_id", whenMatched: "fail", whenNotMatched: "insert" },
+    },
+  } as const;
+
   /** Runtime type identifier - survives minification */
   readonly type = "model" as const;
 
@@ -286,43 +301,21 @@ export class TMModel<
     if (this.materialize.type === "collection") {
       const mode = this.materialize.mode;
 
-      if (mode === "replace") {
-        // Use $out for full replacement
+      if ("$out" in mode) {
         return outputDb ?
             { $out: { db: outputDb, coll: outputCollection } }
           : { $out: outputCollection };
       }
 
-      // All other modes use $merge
-      const mergeInto =
-        outputDb ? { db: outputDb, coll: outputCollection } : outputCollection;
+      if ("$merge" in mode) {
+        const into =
+          outputDb ?
+            { db: outputDb, coll: outputCollection }
+          : outputCollection;
 
-      if (mode === "append") {
         return {
           $merge: {
-            into: mergeInto,
-            whenMatched: "fail",
-            whenNotMatched: "insert",
-          },
-        };
-      }
-
-      if (mode === "upsert") {
-        return {
-          $merge: {
-            into: mergeInto,
-            on: "_id",
-            whenMatched: "replace",
-            whenNotMatched: "insert",
-          },
-        };
-      }
-
-      // Full $merge options
-      if (typeof mode === "object" && "$merge" in mode) {
-        return {
-          $merge: {
-            into: mergeInto,
+            into,
             on: mode.$merge.on,
             whenMatched: mode.$merge.whenMatched ?? "replace",
             whenNotMatched: mode.$merge.whenNotMatched ?? "insert",

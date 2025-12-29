@@ -258,7 +258,7 @@ const stgEvents = new TMModel({
     p
       .match({ _deleted: { $ne: true } })
       .set({ eventDate: { $dateTrunc: { date: "$timestamp", unit: "day" } } }),
-  materialize: { type: "collection", mode: "replace" },
+  materialize: { type: "collection", mode: TMModel.Mode.Replace },
 });
 
 // Downstream model - depends on stgEvents (type-safe!)
@@ -271,12 +271,7 @@ const dailyMetrics = new TMModel({
       totalEvents: { $count: {} },
       uniqueUsers: { $addToSet: "$userId" },
     }),
-  materialize: {
-    type: "collection",
-    mode: {
-      $merge: { on: "_id", whenMatched: "replace", whenNotMatched: "insert" },
-    },
-  },
+  materialize: { type: "collection", mode: TMModel.Mode.Upsert },
 });
 ```
 
@@ -308,11 +303,11 @@ await analyticsProject.run({
 ### Materialization Strategies
 
 - **view** - Creates a MongoDB view
-- **collection** with modes:
-  - `"replace"` - Drop and recreate collection
-  - `"append"` - Insert new documents
-  - `"upsert"` - Update or insert based on `_id`
-  - `{ $merge: { ... } }` - Fine-grained merge control
+- **collection** with preset modes:
+  - `TMModel.Mode.Replace` - Replace entire collection using `$out`
+  - `TMModel.Mode.Upsert` - Upsert by `_id` using `$merge`
+  - `TMModel.Mode.Append` - Insert only, fail on match
+  - `{ $merge: { on, whenMatched, whenNotMatched } }` - Custom merge options
 
 ## Status
 

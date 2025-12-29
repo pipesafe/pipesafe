@@ -104,7 +104,7 @@ const stgEvents = new TMModel({
       }),
   materialize: {
     type: "collection",
-    mode: "replace",
+    mode: TMModel.Mode.Replace,
   },
 });
 
@@ -120,13 +120,7 @@ const dailyMetrics = new TMModel({
     }),
   materialize: {
     type: "collection",
-    mode: {
-      $merge: {
-        on: "_id",
-        whenMatched: "replace",
-        whenNotMatched: "insert",
-      },
-    },
+    mode: TMModel.Mode.Upsert,
   },
 });
 
@@ -142,7 +136,7 @@ const userActivity = new TMModel({
     }),
   materialize: {
     type: "collection",
-    mode: "replace",
+    mode: TMModel.Mode.Replace,
   },
 });
 
