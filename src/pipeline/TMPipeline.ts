@@ -339,5 +339,5 @@ export class TMPipeline<
   }
 }
 
-export type InferPipelineOutput<Pipeline extends TMPipeline<any, any>> =
+export type InferOutputType<Pipeline extends TMPipeline<any, any>> =
   Pipeline extends TMPipeline<any, infer Output> ? Output : never;

@@ -1,4 +1,4 @@
-import { TMPipeline, InferPipelineOutput } from "./TMPipeline";
+import { TMPipeline, InferOutputType } from "./TMPipeline";
 
 type Person = {
   name: string;
@@ -43,7 +43,7 @@ const _pipeline = new TMPipeline<Speaker | Attendee>()
     },
   });
 
-export type OutputType = InferPipelineOutput<typeof _pipeline>;
+export type OutputType = InferOutputType<typeof _pipeline>;
 console.log(_pipeline.getPipeline());
 
 // ==============================================================================
@@ -77,7 +77,7 @@ const concatPipeline = new TMPipeline<TestDoc>()
     },
   });
 
-export type ConcatOutputType = InferPipelineOutput<typeof concatPipeline>;
+export type ConcatOutputType = InferOutputType<typeof concatPipeline>;
 // Should be: { items: string[], numbers: number[], tags: ("a" | "b" | "c")[], name: string }
 
 // Type validation test: This should cause a type error (uncomment to verify)

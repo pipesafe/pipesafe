@@ -15,7 +15,7 @@ export { TMModel } from "./model/TMModel";
 export { TMProject } from "./project/TMProject";
 
 // Type inference helpers
-export type { InferPipelineOutput } from "./pipeline/TMPipeline";
+export type { InferOutputType } from "./pipeline/TMPipeline";
 export type { InferCollectionType } from "./collection/TMCollection";
 export type { InferModelOutput } from "./model/TMModel";
 export type { TMSource, InferSourceType } from "./source/TMSource";

@@ -8,7 +8,7 @@
  * - User activity analysis
  */
 
-import { TMPipeline, InferPipelineOutput } from "../src/pipeline/TMPipeline";
+import { TMPipeline, InferOutputType } from "../src/pipeline/TMPipeline";
 
 // ============================================================================
 // Schema Definitions
@@ -86,7 +86,7 @@ const publicUserProfilePipeline = new TMPipeline<UserSchema>()
     tags: 1,
   });
 
-type PublicUserProfile = InferPipelineOutput<typeof publicUserProfilePipeline>;
+type PublicUserProfile = InferOutputType<typeof publicUserProfilePipeline>;
 
 // ============================================================================
 // Example 2: User List with Activity Summary
@@ -135,7 +135,7 @@ const userListWithActivityPipeline = new TMPipeline<UserSchema>()
     lastLoginAt: 1,
   });
 
-type UserListWithActivity = InferPipelineOutput<
+type UserListWithActivity = InferOutputType<
   typeof userListWithActivityPipeline
 >;
 
@@ -175,7 +175,7 @@ const adminUserManagementPipeline = new TMPipeline<UserSchema>()
     internalNotes: 1,
   });
 
-type AdminUserView = InferPipelineOutput<typeof adminUserManagementPipeline>;
+type AdminUserView = InferOutputType<typeof adminUserManagementPipeline>;
 
 // ============================================================================
 // Example 4: User Activity Analysis
@@ -204,7 +204,7 @@ const userActivityAnalysisPipeline = new TMPipeline<ActivitySchema>()
     count: 1,
   });
 
-type UserActivityAnalysis = InferPipelineOutput<
+type UserActivityAnalysis = InferOutputType<
   typeof userActivityAnalysisPipeline
 >;
 
@@ -227,7 +227,7 @@ const cleanUserDataPipeline = new TMPipeline<UserSchema>()
     tags: 1,
   });
 
-type CleanUserData = InferPipelineOutput<typeof cleanUserDataPipeline>;
+type CleanUserData = InferOutputType<typeof cleanUserDataPipeline>;
 
 // ============================================================================
 // Export types for use in application
