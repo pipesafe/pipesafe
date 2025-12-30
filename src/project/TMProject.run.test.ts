@@ -3,6 +3,44 @@ import { useMemoryMongo } from "../utils/useMemoryMongo";
 import { TMCollection } from "../collection/TMCollection";
 import { TMModel } from "../model/TMModel";
 import { TMProject } from "./TMProject";
+import { Document } from "../utils/core";
+
+// ============================================================================
+// Schema Validation Helpers
+// ============================================================================
+
+type TypeCheck = (value: unknown) => boolean;
+
+/**
+ * Validates that every document in the array matches the expected schema.
+ * Checks for exact keys (no missing, no extra) and correct runtime types.
+ */
+function assertDocumentsMatchSchema(
+  docs: Document[],
+  schema: Record<string, TypeCheck>
+) {
+  const expectedKeys = Object.keys(schema).sort();
+
+  for (const doc of docs) {
+    // Verify exact keys - no more, no less
+    expect(Object.keys(doc).sort()).toEqual(expectedKeys);
+
+    // Verify each field's type
+    for (const [key, typeCheck] of Object.entries(schema)) {
+      expect(
+        typeCheck(doc[key]),
+        `Field "${key}" failed type check. Value: ${JSON.stringify(doc[key])}`
+      ).toBe(true);
+    }
+  }
+}
+
+// Type check helpers
+const isString = (v: unknown): boolean => typeof v === "string";
+const isNumber = (v: unknown): boolean => typeof v === "number";
+const isBoolean = (v: unknown): boolean => typeof v === "boolean";
+const isNull = (v: unknown): boolean => v === null;
+const isArray = (v: unknown): boolean => Array.isArray(v);
 
 // ============================================================================
 // Simple DAG Test Data
@@ -315,6 +353,90 @@ describe("TMProject.run()", async () => {
       expect(result.success).toBe(true);
       expect(result.modelsRun).toContain("staging");
       expect(result.modelsRun).not.toContain("aggregate");
+    });
+  });
+
+  describe("output schema validation", () => {
+    it("stagingModel output has exact expected schema", async () => {
+      const db = client.db();
+      await db.collection<RawDoc>("raw_docs").insertMany(sampleDocs);
+
+      await simpleProject.run({
+        client,
+        databaseName: db.databaseName,
+      });
+
+      const stagingDocs = await db.collection("staging").find().toArray();
+
+      // Verify every document matches expected schema
+      assertDocumentsMatchSchema(stagingDocs, {
+        _id: isString,
+        value: isNumber,
+        active: isBoolean,
+      });
+    });
+
+    it("aggregateModel output has exact expected schema", async () => {
+      const db = client.db();
+      await db.collection<RawDoc>("raw_docs").insertMany(sampleDocs);
+
+      await simpleProject.run({
+        client,
+        databaseName: db.databaseName,
+      });
+
+      const aggregateDocs = await db.collection("aggregate").find().toArray();
+
+      // Verify every document matches expected schema
+      assertDocumentsMatchSchema(aggregateDocs, {
+        _id: isNull,
+        total: isNumber,
+        count: isNumber,
+      });
+    });
+
+    it("enrichedOrders output has exact expected schema", async () => {
+      const db = client.db();
+      await db.collection<Order>("orders").insertMany(sampleOrders);
+      await db.collection<User>("users").insertMany(sampleUsers);
+
+      await complexProject.run({
+        client,
+        databaseName: db.databaseName,
+      });
+
+      const enrichedDocs = await db
+        .collection("enriched_orders")
+        .find()
+        .toArray();
+
+      // Verify every document matches expected schema
+      assertDocumentsMatchSchema(enrichedDocs, {
+        _id: isString,
+        userId: isString,
+        amount: isNumber,
+        user: isArray,
+      });
+    });
+
+    it("orderSummary output has exact expected schema", async () => {
+      const db = client.db();
+      await db.collection<Order>("orders").insertMany(sampleOrders);
+      await db.collection<User>("users").insertMany(sampleUsers);
+
+      await complexProject.run({
+        client,
+        databaseName: db.databaseName,
+      });
+
+      const summaryDocs = await db.collection("order_summary").find().toArray();
+
+      // Verify every document matches expected schema
+      assertDocumentsMatchSchema(summaryDocs, {
+        _id: isNull,
+        totalOrders: isNumber,
+        totalAmount: isNumber,
+      });
     });
   });
 });
