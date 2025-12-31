@@ -1,5 +1,11 @@
 # tmql
 
+## 0.4.1
+
+### Patch Changes
+
+- d1ce198: Change license from MIT to Elastic License 2.0 (ELv2)
+
 ## 0.4.0
 
 ### Minor Changes
