@@ -3,7 +3,7 @@
   "version": "0.4.0",
   "description": "Typed Mongo Query Language - Fully type-safe MongoDB aggregation builder for TypeScript projects",
   "author": "Ryan Peggs & Tim Vyas",
-  "license": "MIT",
+  "license": "Elastic-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/covahltd/tmql.git"
