@@ -7,9 +7,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Build**: `bun run build` - Compiles TypeScript to JavaScript in `dist/`
 - **Watch**: `bun run watch` - Runs TypeScript compiler in watch mode
 - **Lint**: `bun run lint` - Run ESLint
-- **Lint**: `bun run format` - Run Prettier
-- **Type Inspection**: `bun run tsx .claude/inspect-types.ts <variableName> [fileName]` - Debug complex TypeScript types
+- **Format**: `bun run format` - Run Prettier
+- **Type Inspection**: `bun run tsx .claude/inspect-types.ts <variableName> [fileName]` - Debug and see actual inferred types
 - **Local MongoDB Testing**: `bun run tsx .claude/local-mongodb.ts` - Start in-memory MongoDB with test data and run example pipelines
+
+## Changesets
+
+This project uses [changesets](https://github.com/changesets/changesets) for versioning. When adding features or fixes that affect the public API:
+
+1. Create a changeset file in `.changeset/` with format:
+
+   ```markdown
+   ---
+   "tmql": minor # or patch/major
+   ---
+
+   Brief description of the change
+   ```
+
+2. Use semantic versioning:
+   - **patch**: Bug fixes, internal refactoring
+   - **minor**: New features, new operators, backward-compatible changes
+   - **major**: Breaking changes
+
+3. The changeset will be included in the PR and automatically consumed during release.
+
+Note: The interactive `bun run changeset` command doesn't work in non-TTY environments. Create the file manually following the format above.
 
 ## Architecture Overview
 
@@ -109,33 +132,56 @@ TODO: Document the rest of the stages
 
 When debugging complex type inference issues in this project, these approaches are most effective:
 
-### ts-morph for Runtime Type Inspection
+### IDE LSP for Instant Type Feedback
 
-**Efficient Token Usage**: Use the dedicated `inspect-types.ts` file for type inspection:
+**For iterative type-checking work**, use the IDE's TypeScript LSP instead of repeatedly running the build. This provides instant feedback without compilation overhead:
+
+```bash
+# In Claude Code, use getDiagnostics to check types instantly
+# Much faster than: bun run build
+```
+
+**When to use LSP diagnostics:**
+
+- Fixing type assertions and test expectations
+- Debugging type inference issues in `*.typeAssertions.ts` files
+- Iteratively refining type definitions
+- Any TypeScript-heavy work with frequent changes
+
+**When to use full build (`bun run build`):**
+
+- Final verification before committing
+- Ensuring nothing breaks in full project context
+- CI/CD validation
+
+This is especially effective for work like adding type tests where you need tight feedback loops.
+
+### Type Inspection with ts-morph
+
+While the LSP tells you when types don't match, you need to **see the actual inferred type** to fix test expectations. Use the dedicated `inspect-types.ts` tool:
 
 ```bash
 # Run type inspection for variables/types/functions
 bun run tsx .claude/inspect-types.ts <variableName> [fileName]
 
 # Examples:
-bun run tsx .claude/inspect-types.ts _pipeline exampleFile.ts
-bun run tsx .claude/inspect-types.ts OutputType exampleFile.ts
+bun run tsx .claude/inspect-types.ts IfNullStringResult src/stages/set.typeAssertions.ts
+bun run tsx .claude/inspect-types.ts CondMixedTypesResult src/stages/set.typeAssertions.ts
 ```
 
-The `.claude/inspect-types.ts` file is a CLI tool that:
+**Typical workflow for fixing type assertions:**
+
+1. LSP shows: "Type 'false' does not satisfy the constraint 'true'" (type mismatch detected)
+2. Run `inspect-types.ts` to see the actual inferred type
+3. Update the expected type in the test to match
+4. LSP confirms the types now match
+
+The `.claude/inspect-types.ts` file:
 
 - Loads the project with proper tsconfig.json configuration
-- Inspects variable, type alias, and function declarations
-- Shows resolved TypeScript types with pretty formatting
-- Displays pipeline method return types (like `.getPipeline()`)
+- Shows resolved TypeScript types in readable format
 - Reports TypeScript diagnostics and errors
-- Lists available declarations when target not found
-
-**Key ts-morph patterns for this project**:
-
-- Use `node.getType().getText()` to see resolved types
-- Use `typeChecker.getTypeAtLocation()` for specific positions
-- Use `project.getPreEmitDiagnostics()` to catch type errors programmatically
+- Essential for understanding what complex generic types actually resolve to
 
 ### Debugging Complex Generic Types
 
