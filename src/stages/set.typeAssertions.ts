@@ -520,6 +520,288 @@ type DateSubtractExpected = {
 
 type DateSubtractTest = Assert<Equal<DateSubtractResult, DateSubtractExpected>>;
 
+// Test 7g: $toDate expression - converts numeric timestamp to Date
+type DateSchemaWithTimestamp = {
+  _id: string;
+  createdAt: Date;
+  timestamp: number; // Unix timestamp in milliseconds
+  count: number;
+};
+
+type ToDateSet = {
+  dateFromTimestamp: { $toDate: "$timestamp" };
+};
+
+type ToDateResult = ResolveSetOutput<ToDateSet, DateSchemaWithTimestamp>;
+
+type ToDateExpected = {
+  _id: string;
+  createdAt: Date;
+  timestamp: number;
+  count: number;
+  dateFromTimestamp: Date; // $toDate returns Date
+};
+
+type ToDateTest = Assert<Equal<ToDateResult, ToDateExpected>>;
+
+// Test 7h: $toDate with nested arithmetic expression
+type ToDateNestedSet = {
+  convertedDate: {
+    $toDate: { $multiply: ["$timestamp", 1] };
+  };
+};
+
+type ToDateNestedResult = ResolveSetOutput<
+  ToDateNestedSet,
+  DateSchemaWithTimestamp
+>;
+
+type ToDateNestedExpected = {
+  _id: string;
+  createdAt: Date;
+  timestamp: number;
+  count: number;
+  convertedDate: Date;
+};
+
+type ToDateNestedTest = Assert<Equal<ToDateNestedResult, ToDateNestedExpected>>;
+
+// ============================================================================
+// Test 8: Conditional expressions ($ifNull)
+// ============================================================================
+
+type ConditionalSchema = {
+  _id: string;
+  name?: string;
+  email: string;
+  age?: number;
+  status: string;
+};
+
+// Test 8a: $ifNull with field reference and string default
+type IfNullStringSet = {
+  displayName: { $ifNull: ["$name", "Anonymous"] };
+};
+
+type IfNullStringResult = ResolveSetOutput<IfNullStringSet, ConditionalSchema>;
+
+type IfNullStringExpected = {
+  _id: string;
+  name?: string;
+  email: string;
+  age?: number;
+  status: string;
+  displayName: "Anonymous" | string; // Returns type of default value
+};
+
+type IfNullStringTest = Assert<Equal<IfNullStringResult, IfNullStringExpected>>;
+
+// Test 8b: $ifNull with field reference and numeric default
+type IfNullNumberSet = {
+  yearsOld: { $ifNull: ["$age", 18] };
+};
+
+type IfNullNumberResult = ResolveSetOutput<IfNullNumberSet, ConditionalSchema>;
+
+type IfNullNumberExpected = {
+  _id: string;
+  name?: string;
+  email: string;
+  age?: number;
+  status: string;
+  yearsOld: 18 | number;
+};
+
+type IfNullNumberTest = Assert<Equal<IfNullNumberResult, IfNullNumberExpected>>;
+
+// Test 8c: $ifNull with two field references
+type IfNullTwoFieldsSet = {
+  nameOrStatus: { $ifNull: ["$name", "$status"] };
+};
+
+type IfNullTwoFieldsResult = ResolveSetOutput<
+  IfNullTwoFieldsSet,
+  ConditionalSchema
+>;
+
+type IfNullTwoFieldsExpected = {
+  _id: string;
+  name?: string;
+  email: string;
+  age?: number;
+  status: string;
+  nameOrStatus: string; // Returns type of second expression
+};
+
+type IfNullTwoFieldsTest = Assert<
+  Equal<IfNullTwoFieldsResult, IfNullTwoFieldsExpected>
+>;
+
+// Test 8d: $ifNull with nested expression
+type IfNullNestedSet = {
+  adjustedAge: {
+    $ifNull: ["$age", { $add: [18, 5] }];
+  };
+};
+
+type IfNullNestedResult = ResolveSetOutput<IfNullNestedSet, ConditionalSchema>;
+
+type IfNullNestedExpected = {
+  _id: string;
+  name?: string;
+  email: string;
+  age?: number;
+  status: string;
+  adjustedAge: number; // Returns type of $add expression (number)
+};
+
+type IfNullNestedTest = Assert<Equal<IfNullNestedResult, IfNullNestedExpected>>;
+
+// Test 8e: $ifNull with multiple nulls then a field reference
+type IfNullMultipleSet = {
+  fallbackStatus: { $ifNull: [null, null, "$status"] };
+};
+
+type IfNullMultipleResult = ResolveSetOutput<
+  IfNullMultipleSet,
+  ConditionalSchema
+>;
+
+type IfNullMultipleExpected = {
+  _id: string;
+  name?: string;
+  email: string;
+  age?: number;
+  status: string;
+  fallbackStatus: string; // Returns type of the last field reference
+};
+
+type IfNullMultipleTest = Assert<
+  Equal<IfNullMultipleResult, IfNullMultipleExpected>
+>;
+
+// Test 8f: $ifNull with 4+ arguments (fallback chain)
+type IfNullManyArgsSet = {
+  priority: { $ifNull: [null, null, "$name", "default"] };
+};
+
+type IfNullManyArgsResult = ResolveSetOutput<
+  IfNullManyArgsSet,
+  ConditionalSchema
+>;
+
+type IfNullManyArgsExpected = {
+  _id: string;
+  name?: string;
+  email: string;
+  age?: number;
+  status: string;
+  priority: string; // Union of name type | "default" = string
+};
+
+type IfNullManyArgsTest = Assert<
+  Equal<IfNullManyArgsResult, IfNullManyArgsExpected>
+>;
+
+// Test 9a: Basic $cond with field references
+type CondBasicSet = {
+  displayName: {
+    $cond: [true, "$name", "$email"];
+  };
+};
+
+type CondBasicResult = ResolveSetOutput<CondBasicSet, ConditionalSchema>;
+
+type CondBasicExpected = {
+  _id: string;
+  name?: string;
+  email: string;
+  age?: number;
+  status: string;
+  displayName: string; // Both branches are string fields
+};
+
+type CondBasicTest = Assert<Equal<CondBasicResult, CondBasicExpected>>;
+
+// Test 9c: $cond with expressions in true and false branches
+type CondWithExpressionsSet = {
+  result: {
+    $cond: [
+      true,
+      { $add: [10, 20] }, // expression in true branch
+      { $add: [5, 5] }, // expression in false branch
+    ];
+  };
+};
+
+type CondWithExpressionsResult = ResolveSetOutput<
+  CondWithExpressionsSet,
+  ConditionalSchema
+>;
+
+type CondWithExpressionsExpected = {
+  _id: string;
+  name?: string;
+  email: string;
+  age?: number;
+  status: string;
+  result: number; // Both branches return number
+};
+
+type CondWithExpressionsTest = Assert<
+  Equal<CondWithExpressionsResult, CondWithExpressionsExpected>
+>;
+
+// Test 9d: $cond returning different types (mixed union)
+type CondMixedTypesSet = {
+  mixed: {
+    $cond: [true, "text", 42];
+  };
+};
+
+type CondMixedTypesResult = ResolveSetOutput<
+  CondMixedTypesSet,
+  ConditionalSchema
+>;
+
+type CondMixedTypesExpected = {
+  _id: string;
+  name?: string;
+  email: string;
+  age?: number;
+  status: string;
+  mixed: "text" | 42; // Union of literal types
+};
+
+type CondMixedTypesTest = Assert<
+  Equal<CondMixedTypesResult, CondMixedTypesExpected>
+>;
+
+// Test 9e: Deeply nested $cond inside $ifNull
+type DeepNestedSet = {
+  deepValue: {
+    $ifNull: [
+      null,
+      {
+        $cond: [true, "nested_true", "nested_false"];
+      },
+    ];
+  };
+};
+
+type DeepNestedResult = ResolveSetOutput<DeepNestedSet, ConditionalSchema>;
+
+type DeepNestedExpected = {
+  _id: string;
+  name?: string;
+  email: string;
+  age?: number;
+  status: string;
+  deepValue: "nested_true" | "nested_false"; // Union of string literals from $cond
+};
+
+type DeepNestedTest = Assert<Equal<DeepNestedResult, DeepNestedExpected>>;
+
 // ============================================================================
 // $$REMOVE Tests
 // ============================================================================
@@ -748,6 +1030,18 @@ export type {
   DateAddTest,
   DateAddDynamicTest,
   DateSubtractTest,
+  ToDateTest,
+  ToDateNestedTest,
+  IfNullStringTest,
+  IfNullNumberTest,
+  IfNullTwoFieldsTest,
+  IfNullNestedTest,
+  IfNullMultipleTest,
+  IfNullManyArgsTest,
+  CondBasicTest,
+  CondWithExpressionsTest,
+  CondMixedTypesTest,
+  DeepNestedTest,
   RemoveSimpleFieldTest,
   RemoveNestedFieldTest,
   RemoveOptionalFieldTest,
