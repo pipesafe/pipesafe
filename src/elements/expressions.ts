@@ -150,12 +150,43 @@ export type ToDateExpression<Schema extends Document> = {
 };
 
 /**
+ * $arrayElemAt expression - returns the element at a specified array index
+ * Syntax: { $arrayElemAt: [<array>, <index>] }
+ * Accepts:
+ * - First element: array field reference or array literal
+ * - Second element: numeric index (0-based, negative counts from end)
+ * Returns: The element type of the array (or unknown for dynamic arrays)
+ */
+export type ArrayElemAtExpression<Schema extends Document> = {
+  $arrayElemAt: [
+    FieldReferencesThatInferTo<Schema, unknown[]> | AnyLiteral<Schema>[],
+    number | FieldReferencesThatInferTo<Schema, number>,
+  ];
+};
+
+/**
+ * $filter expression - filters an array based on a condition
+ * Syntax: { $filter: { input: <array>, as: <string>, cond: <expression> } }
+ * Returns: Filtered array
+ */
+export type FilterExpression<Schema extends Document> = {
+  $filter: {
+    input: FieldReferencesThatInferTo<Schema, unknown[]> | unknown[];
+    as: string;
+    cond: unknown; // Condition expression (uses $$var references)
+    limit?: number;
+  };
+};
+
+/**
  * Union of all array expressions
  * Extend this as we add more array operators
  */
 export type ArrayExpression<Schema extends Document> =
   | ConcatArraysExpression<Schema>
-  | SizeExpression<Schema>;
+  | SizeExpression<Schema>
+  | ArrayElemAtExpression<Schema>
+  | FilterExpression<Schema>;
 
 /**
  * Arithmetic expression operands - numbers, field references to numbers, or nested expressions
@@ -314,6 +345,126 @@ export type ConditionalExpression<Schema extends Document> =
   | IfNullExpression<Schema>
   | CondExpression<Schema>;
 
+// ============================================================================
+// Variable Binding Expression Operators
+// ============================================================================
+
+/**
+ * $let expression - binds variables for use in a sub-expression
+ * Syntax: { $let: { vars: { <var1>: <expr1>, ... }, in: <expression> } }
+ * Accepts:
+ * - vars: Object mapping variable names to expressions
+ * - in: Expression that can use $$var1, $$var2, etc.
+ * Returns: The result of the `in` expression (unknown since vars are dynamic)
+ */
+export type LetExpression<_Schema extends Document> = {
+  $let: {
+    vars: Record<string, unknown>;
+    in: unknown; // The expression result - uses $$var references
+  };
+};
+
+/**
+ * Union of all variable binding expressions
+ */
+export type VariableExpression<_Schema extends Document> =
+  LetExpression<_Schema>;
+
+// ============================================================================
+// Comparison Expression Operators (return boolean)
+// ============================================================================
+
+/**
+ * Comparison operand - values that can be compared
+ * Note: Excludes ComparisonExpression to avoid circular reference
+ */
+type ComparisonOperand<Schema extends Document> =
+  | null
+  | AnyLiteral<Schema>
+  | FieldReference<Schema>
+  | ArrayExpression<Schema>
+  | DateExpression<Schema>
+  | ArithmeticExpression<Schema>
+  | StringExpression<Schema>
+  | ConditionalExpression<Schema>;
+
+/**
+ * $in expression (aggregation) - checks if a value is in an array
+ * Syntax: { $in: [<expression>, <array expression>] }
+ * Note: This is different from $in in $match queries
+ * Returns: boolean
+ */
+export type InAggExpression<Schema extends Document> = {
+  $in: [ComparisonOperand<Schema>, ComparisonOperand<Schema>];
+};
+
+/**
+ * $eq expression - checks if two values are equal
+ * Syntax: { $eq: [expr1, expr2] }
+ * Returns: boolean
+ */
+export type EqExpression<Schema extends Document> = {
+  $eq: [ComparisonOperand<Schema>, ComparisonOperand<Schema>];
+};
+
+/**
+ * $ne expression - checks if two values are not equal
+ * Syntax: { $ne: [expr1, expr2] }
+ * Returns: boolean
+ */
+export type NeExpression<Schema extends Document> = {
+  $ne: [ComparisonOperand<Schema>, ComparisonOperand<Schema>];
+};
+
+/**
+ * $gt expression - checks if first value is greater than second
+ * Syntax: { $gt: [expr1, expr2] }
+ * Returns: boolean
+ */
+export type GtExpression<Schema extends Document> = {
+  $gt: [ComparisonOperand<Schema>, ComparisonOperand<Schema>];
+};
+
+/**
+ * $gte expression - checks if first value is greater than or equal to second
+ * Syntax: { $gte: [expr1, expr2] }
+ * Returns: boolean
+ */
+export type GteExpression<Schema extends Document> = {
+  $gte: [ComparisonOperand<Schema>, ComparisonOperand<Schema>];
+};
+
+/**
+ * $lt expression - checks if first value is less than second
+ * Syntax: { $lt: [expr1, expr2] }
+ * Returns: boolean
+ */
+export type LtExpression<Schema extends Document> = {
+  $lt: [ComparisonOperand<Schema>, ComparisonOperand<Schema>];
+};
+
+/**
+ * $lte expression - checks if first value is less than or equal to second
+ * Syntax: { $lte: [expr1, expr2] }
+ * Returns: boolean
+ */
+export type LteExpression<Schema extends Document> = {
+  $lte: [ComparisonOperand<Schema>, ComparisonOperand<Schema>];
+};
+
+/**
+ * Union of all comparison expressions
+ * All return boolean
+ */
+export type ComparisonExpression<Schema extends Document> =
+  | InAggExpression<Schema>
+  | EqExpression<Schema>
+  | NeExpression<Schema>
+  | GtExpression<Schema>
+  | GteExpression<Schema>
+  | LtExpression<Schema>
+  | LteExpression<Schema>;
+
 /**
  * Union of all expression operators
  * Extend this as we add more expression categories
@@ -323,7 +474,9 @@ export type Expression<Schema extends Document> =
   | DateExpression<Schema>
   | ArithmeticExpression<Schema>
   | StringExpression<Schema>
-  | ConditionalExpression<Schema>;
+  | ConditionalExpression<Schema>
+  | VariableExpression<Schema>
+  | ComparisonExpression<Schema>;
 
 /**
  * Helper to get union of all array element types
@@ -348,9 +501,24 @@ type GetArrayElement<Schema extends Document, Item> =
   : never;
 
 /**
+ * Helper to extract element type from an array source (field ref or literal)
+ */
+type InferArrayElementType<Schema extends Document, ArraySource> =
+  // Array literal - extract element type
+  ArraySource extends (infer E)[] ? E
+  : // Field reference to array - get element type
+  ArraySource extends FieldReference<Schema> ?
+    InferFieldReference<Schema, ArraySource> extends (infer T)[] ?
+      T
+    : unknown
+  : unknown;
+
+/**
  * Infer the result type of an array expression
  * For $concatArrays: Union of all array element types
  * For $size: always returns number
+ * For $arrayElemAt: returns the array element type
+ * For $filter: returns array of the input element type
  */
 export type InferArrayExpression<Schema extends Document, Expr> =
   Expr extends (
@@ -362,6 +530,10 @@ export type InferArrayExpression<Schema extends Document, Expr> =
       UnionArrayElements<Schema, Arrays>[]
     : never
   : Expr extends { $size: unknown } ? number
+  : Expr extends { $arrayElemAt: [infer ArraySource, unknown] } ?
+    InferArrayElementType<Schema, ArraySource>
+  : Expr extends { $filter: { input: infer ArraySource } } ?
+    InferArrayElementType<Schema, ArraySource>[]
   : never;
 
 /**
@@ -425,6 +597,25 @@ type InferExpressionType<_Schema extends Document, Expr> =
     Arrays extends unknown[] ?
       (Arrays[number] extends (infer E)[] ? E : never)[]
     : never
+  : // Array element access - infer from array source
+  Expr extends { $arrayElemAt: [infer Arr, unknown] } ?
+    Arr extends (infer E)[] ?
+      E
+    : unknown
+  : Expr extends { $filter: { input: infer Arr } } ?
+    Arr extends (infer E)[] ?
+      E[]
+    : unknown[]
+  : // Variable binding - returns unknown (result depends on `in` expression)
+  Expr extends { $let: unknown } ? unknown
+  : // Comparison expressions return boolean
+  Expr extends { $in: unknown } ? boolean
+  : Expr extends { $eq: unknown } ? boolean
+  : Expr extends { $ne: unknown } ? boolean
+  : Expr extends { $gt: unknown } ? boolean
+  : Expr extends { $gte: unknown } ? boolean
+  : Expr extends { $lt: unknown } ? boolean
+  : Expr extends { $lte: unknown } ? boolean
   : never;
 
 /**
@@ -490,12 +681,30 @@ export type InferExpression<Schema extends Document, Expr> =
     | { $mod: unknown }
   ) ?
     InferArithmeticExpression<Schema, Expr>
-  : // Array expressions
-  Expr extends { $concatArrays: unknown } | { $size: unknown } ?
+  : // Array expressions (including $arrayElemAt, $filter)
+  Expr extends (
+    | { $concatArrays: unknown }
+    | { $size: unknown }
+    | { $arrayElemAt: unknown }
+    | { $filter: unknown }
+  ) ?
     InferArrayExpression<Schema, Expr>
   : // String expressions
   Expr extends { $concat: unknown } ? InferStringExpression<Schema, Expr>
   : // Conditional expressions
   Expr extends { $ifNull: unknown } | { $cond: unknown } ?
     InferConditionalExpression<Schema, Expr>
+  : // Variable binding expressions (return unknown)
+  Expr extends { $let: unknown } ? unknown
+  : // Comparison expressions (all return boolean)
+  Expr extends (
+    | { $in: unknown }
+    | { $eq: unknown }
+    | { $ne: unknown }
+    | { $gt: unknown }
+    | { $gte: unknown }
+    | { $lt: unknown }
+    | { $lte: unknown }
+  ) ?
+    boolean
   : never;

@@ -48,7 +48,7 @@ export type ComparatorMatchers<T extends unknown> = MergeUnion<
       | { [m in ArrayOnlyMatcher]?: U[] }
       | { [m in ElementMatcher]?: U }
     : {}) &
-    /* String */ (T extends string ? RegExp | { $regex?: unknown } : {})
+    /* String */ (T extends string ? { $regex?: unknown } : {})
 >;
 
 export type RawMatchersForType<T extends unknown> =
@@ -62,7 +62,8 @@ export type MatchersForType<T extends unknown> =
   | T
   | RawMatchersForType<T>
   | Notted<RawMatchersForType<T>>
-  | (T extends (infer U)[] ? U : T);
+  | (T extends (infer U)[] ? U : T)
+  | (T extends string ? RegExp : never);
 
 export type RawMatchQuery<Schema extends Document> = {
   [selector in FieldSelector<Schema>]?: MatchersForType<
