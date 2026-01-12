@@ -353,3 +353,77 @@ type _InvalidField5 = InferFieldReference<ErrorSchema, "$array.nonexistent">;
 
 // @ts-expect-error - completely invalid path
 type _InvalidField6 = InferFieldReference<ErrorSchema, "$a.b.c.d.e.f">;
+
+// =============================================================================
+// Test 9: Nullable and optional field references in FieldReferencesThatInferTo
+// This tests the NonNullable fix - field references to nullable/optional fields
+// should match their non-null base type for type filtering purposes
+// =============================================================================
+
+type NullableSchema = {
+  id: string;
+  customer: string | null; // Nullable string
+  email?: string; // Optional string
+  amount: number;
+  refundAmount: number | null; // Nullable number
+  discount?: number; // Optional number
+  status: "active" | "inactive";
+  category: "a" | "b" | null; // Nullable union
+};
+
+// Nullable string field should be included when looking for string field refs
+type NullableStringRefs = FieldReferencesThatInferTo<NullableSchema, string>;
+assertTypeEqual(
+  {} as NullableStringRefs,
+  {} as "$id" | "$customer" | "$email" | "$status" | "$category"
+);
+
+// Nullable number field should be included when looking for number field refs
+type NullableNumberRefs = FieldReferencesThatInferTo<NullableSchema, number>;
+assertTypeEqual(
+  {} as NullableNumberRefs,
+  {} as "$amount" | "$refundAmount" | "$discount"
+);
+
+// Test with nested nullable fields
+type NestedNullableSchema = {
+  user: {
+    name: string;
+    nickname: string | null;
+    age?: number;
+  };
+  order: {
+    total: number;
+    discount: number | null;
+  } | null;
+};
+
+type NestedNullableStringRefs = FieldReferencesThatInferTo<
+  NestedNullableSchema,
+  string
+>;
+assertTypeEqual(
+  {} as NestedNullableStringRefs,
+  {} as "$user.name" | "$user.nickname"
+);
+
+// When parent is nullable, nested fields are still accessible
+// NonNullable strips the null from the parent, making nested fields available
+type NestedNullableNumberRefs = FieldReferencesThatInferTo<
+  NestedNullableSchema,
+  number
+>;
+assertTypeEqual(
+  {} as NestedNullableNumberRefs,
+  {} as "$user.age" | "$order.total" | "$order.discount"
+);
+
+// Inference should still preserve the nullable type
+type NullableCustomerType = InferFieldReference<NullableSchema, "$customer">;
+assertTypeEqual({} as NullableCustomerType, {} as string | null);
+
+type OptionalEmailType = InferFieldReference<NullableSchema, "$email">;
+assertTypeEqual({} as OptionalEmailType, {} as string | undefined);
+
+type NullableRefundType = InferFieldReference<NullableSchema, "$refundAmount">;
+assertTypeEqual({} as NullableRefundType, {} as number | null);
