@@ -78,7 +78,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Type check
-        run: bun run tsc --noEmit --project .
+        run: bun run typecheck
 
   changeset:
     runs-on: ubuntu-latest
@@ -122,7 +122,7 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Check package.json version has not changed
+      - name: Check package versions have not changed
         run: |
           if [ "${{ github.event.pull_request.head.ref }}" = "changeset-release/main" ]; then
             echo "Skipping version check for release PR"
@@ -130,24 +130,40 @@ jobs:
           fi
 
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HAS_ERROR=0
 
-          # Get base version
-          git show $BASE_SHA:package.json > /tmp/package-base.json
-          BASE_VERSION=$(node -p "require('/tmp/package-base.json').version")
+          # Check each publishable package
+          for PKG in packages/tmql packages/tmql-orchestration; do
+            PKG_NAME=$(basename $PKG)
+            PKG_JSON="$PKG/package.json"
 
-          # Get PR version
-          PR_VERSION=$(node -p "require('./package.json').version")
+            # Get base version
+            git show $BASE_SHA:$PKG_JSON > /tmp/package-base.json 2>/dev/null || {
+              echo "⚠️  Package $PKG_NAME is new (not in base branch)"
+              continue
+            }
+            BASE_VERSION=$(node -p "require('/tmp/package-base.json').version")
 
-          echo "Base version: $BASE_VERSION"
-          echo "PR version: $PR_VERSION"
+            # Get PR version
+            PR_VERSION=$(node -p "require('./$PKG_JSON').version")
 
-          if [ "$BASE_VERSION" != "$PR_VERSION" ]; then
-            echo "❌ Error: Version should not be changed in PR!"
+            echo "Package: $PKG_NAME"
+            echo "  Base version: $BASE_VERSION"
+            echo "  PR version: $PR_VERSION"
+
+            if [ "$BASE_VERSION" != "$PR_VERSION" ]; then
+              echo "❌ Error: Version should not be changed in PR for $PKG_NAME!"
+              HAS_ERROR=1
+            else
+              echo "  ✅ Version unchanged"
+            fi
+            echo ""
+          done
+
+          if [ "$HAS_ERROR" = "1" ]; then
             echo "Version changes should be done automatically by the publish workflow after merge."
-            echo "Base version: $BASE_VERSION"
-            echo "PR version: $PR_VERSION"
-            echo "Please revert the version change in package.json"
+            echo "Please revert the version change(s) in the package.json file(s)"
             exit 1
           fi
 
-          echo "✅ Version check passed - version unchanged (will be updated by publish workflow)"
+          echo "✅ All version checks passed"
