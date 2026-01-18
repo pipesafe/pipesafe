@@ -54,4 +54,4 @@ The **licensor** is the entity offering these terms, and the **software** is the
 
 ---
 
-Copyright (c) 2025 Ryan Peggs & Tim Vyas. All rights reserved.
+Copyright (c) 2026 Ryan Peggs & Tim Vyas. All rights reserved.
