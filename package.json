@@ -34,7 +34,7 @@
   },
   "scripts": {
     "build": "bun run build:packages",
-    "build:packages": "tsc --build packages/tmql packages/tmql-orchestration",
+    "build:packages": "tsc --build packages/tmql && tsc --build packages/tmql-orchestration",
     "build:watch": "tsc --build --watch packages/tmql packages/tmql-orchestration",
     "clean": "rm -rf packages/*/dist",
     "prepare": "bunx lefthook install",
