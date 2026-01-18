@@ -3,7 +3,12 @@
   "compilerOptions": {
     "rootDir": "./src",
     "outDir": "./dist",
-    "composite": true
+    "composite": true,
+    "checkJs": false,
+    "baseUrl": ".",
+    "paths": {
+      "tmql": ["../tmql/dist/index.d.ts"]
+    }
   },
   "include": ["src/**/*.ts"],
   "exclude": ["dist", "**/*.test.ts"],

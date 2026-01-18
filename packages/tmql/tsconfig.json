@@ -3,7 +3,8 @@
   "compilerOptions": {
     "rootDir": "./src",
     "outDir": "./dist",
-    "composite": true
+    "composite": true,
+    "checkJs": false
   },
   "include": ["src/**/*.ts"],
   "exclude": ["dist", "**/*.test.ts", "**/*.typeAssertions.ts"]
