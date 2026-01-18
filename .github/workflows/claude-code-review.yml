@@ -12,26 +12,43 @@ on:
 
 jobs:
   claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
-
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: read
       id-token: write
 
     steps:
+      - name: Check if user is allowed
+        id: check-user
+        run: |
+          if [ "${{ github.event.sender.login }}" = "${{ github.repository_owner }}" ]; then
+            echo "allowed=true" >> $GITHUB_OUTPUT
+          else
+            echo "allowed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Post not allowed message
+        if: steps.check-user.outputs.allowed == 'false' && github.event.action == 'opened'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: `Automatic Claude Code review is only enabled for PRs from the repository owner. A maintainer can still request a review by commenting \`@claude\` on this PR.`
+            });
+
       - name: Checkout repository
+        if: steps.check-user.outputs.allowed == 'true'
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
       - name: Run Claude Code Review
+        if: steps.check-user.outputs.allowed == 'true'
         id: claude-review
         uses: anthropics/claude-code-action@v1
         with:
