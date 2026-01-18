@@ -28,6 +28,3 @@ export type {
   ValidationError,
   ValidationWarning,
 } from "./project/TMProject";
-
-// Re-export core types that users need when using orchestration
-export type { TMSource, InferSourceType, Document } from "tmql";
