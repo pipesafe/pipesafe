@@ -417,7 +417,9 @@ export class TMProject {
     }
 
     // Execute aggregation
-    const db = client.db(outputDb);
+    // Use source database for reading, output stage handles writing to correct db
+    const sourceDb = model.getSourceDatabase() ?? dbName;
+    const db = client.db(sourceDb);
     const collection = db.collection(sourceCollection);
 
     const cursor = collection.aggregate(pipeline);

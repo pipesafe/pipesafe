@@ -44,9 +44,9 @@
     "lefthook": "^2.0.4",
     "mongodb-memory-server": "^10.2.3",
     "prettier": "^3.6.2",
-    "ts-morph": "^26.0.0",
+    "ts-morph": "27.0.2",
     "tsx": "^4.20.3",
-    "typescript": "^5.8.3",
+    "typescript": "5.9.3",
     "typescript-eslint": "^8.35.1",
     "vitest": "^4.0.15"
   },

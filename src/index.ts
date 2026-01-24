@@ -19,4 +19,14 @@ export type { InferOutputType } from "./pipeline/TMPipeline";
 export type { InferCollectionType } from "./collection/TMCollection";
 export type { InferModelOutput } from "./model/TMModel";
 export type { TMSource, InferSourceType } from "./source/TMSource";
-export type { Document } from "./utils/core";
+export type { Document, Prettify } from "./utils/core";
+
+// Type assertion utilities (for testing type inference)
+export type {
+  Assert,
+  Equal,
+  IsAssignable,
+  NotImplemented,
+  ExpectAssertFailure,
+} from "./utils/tests";
+export { expectType, assertTypeEqual } from "./utils/tests";

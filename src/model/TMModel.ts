@@ -207,6 +207,13 @@ export class TMModel<
   }
 
   /**
+   * Get the source database name.
+   */
+  getSourceDatabase(): string | undefined {
+    return this._from.getOutputDatabase();
+  }
+
+  /**
    * Get the output collection name (where this model materializes).
    */
   getOutputCollectionName(): string {

@@ -7,9 +7,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Build**: `bun run build` - Compiles TypeScript to JavaScript in `dist/`
 - **Watch**: `bun run watch` - Runs TypeScript compiler in watch mode
 - **Lint**: `bun run lint` - Run ESLint
-- **Lint**: `bun run format` - Run Prettier
-- **Type Inspection**: `bun run tsx .claude/inspect-types.ts <variableName> [fileName]` - Debug complex TypeScript types
+- **Format**: `bun run format` - Run Prettier
+- **Type Inspection**: `bun run tsx .claude/inspect-types.ts <variableName> [fileName]` - Debug and see actual inferred types
 - **Local MongoDB Testing**: `bun run tsx .claude/local-mongodb.ts` - Start in-memory MongoDB with test data and run example pipelines
+
+## Changesets
+
+This project uses [changesets](https://github.com/changesets/changesets) for versioning. When adding features or fixes that affect the public API:
+
+1. Create a changeset file in `.changeset/` with format:
+
+   ```markdown
+   ---
+   "tmql": minor # or patch/major
+   ---
+
+   Brief description of the change
+   ```
+
+2. Use semantic versioning:
+   - **patch**: Bug fixes, internal refactoring
+   - **minor**: New features, new operators, backward-compatible changes
+   - **major**: Breaking changes
+
+3. The changeset will be included in the PR and automatically consumed during release.
+
+Note: The interactive `bun run changeset` command doesn't work in non-TTY environments. Create the file manually following the format above.
 
 ## Architecture Overview
 
@@ -109,33 +132,56 @@ TODO: Document the rest of the stages
 
 When debugging complex type inference issues in this project, these approaches are most effective:
 
-### ts-morph for Runtime Type Inspection
+### IDE LSP for Instant Type Feedback
 
-**Efficient Token Usage**: Use the dedicated `inspect-types.ts` file for type inspection:
+**For iterative type-checking work**, use the IDE's TypeScript LSP instead of repeatedly running the build. This provides instant feedback without compilation overhead:
+
+```bash
+# In Claude Code, use getDiagnostics to check types instantly
+# Much faster than: bun run build
+```
+
+**When to use LSP diagnostics:**
+
+- Fixing type assertions and test expectations
+- Debugging type inference issues in `*.typeAssertions.ts` files
+- Iteratively refining type definitions
+- Any TypeScript-heavy work with frequent changes
+
+**When to use full build (`bun run build`):**
+
+- Final verification before committing
+- Ensuring nothing breaks in full project context
+- CI/CD validation
+
+This is especially effective for work like adding type tests where you need tight feedback loops.
+
+### Type Inspection with ts-morph
+
+While the LSP tells you when types don't match, you need to **see the actual inferred type** to fix test expectations. Use the dedicated `inspect-types.ts` tool:
 
 ```bash
 # Run type inspection for variables/types/functions
 bun run tsx .claude/inspect-types.ts <variableName> [fileName]
 
 # Examples:
-bun run tsx .claude/inspect-types.ts _pipeline exampleFile.ts
-bun run tsx .claude/inspect-types.ts OutputType exampleFile.ts
+bun run tsx .claude/inspect-types.ts IfNullStringResult src/stages/set.typeAssertions.ts
+bun run tsx .claude/inspect-types.ts CondMixedTypesResult src/stages/set.typeAssertions.ts
 ```
 
-The `.claude/inspect-types.ts` file is a CLI tool that:
+**Typical workflow for fixing type assertions:**
+
+1. LSP shows: "Type 'false' does not satisfy the constraint 'true'" (type mismatch detected)
+2. Run `inspect-types.ts` to see the actual inferred type
+3. Update the expected type in the test to match
+4. LSP confirms the types now match
+
+The `.claude/inspect-types.ts` file:
 
 - Loads the project with proper tsconfig.json configuration
-- Inspects variable, type alias, and function declarations
-- Shows resolved TypeScript types with pretty formatting
-- Displays pipeline method return types (like `.getPipeline()`)
+- Shows resolved TypeScript types in readable format
 - Reports TypeScript diagnostics and errors
-- Lists available declarations when target not found
-
-**Key ts-morph patterns for this project**:
-
-- Use `node.getType().getText()` to see resolved types
-- Use `typeChecker.getTypeAtLocation()` for specific positions
-- Use `project.getPreEmitDiagnostics()` to catch type errors programmatically
+- Essential for understanding what complex generic types actually resolve to
 
 ### Debugging Complex Generic Types
 
@@ -231,3 +277,85 @@ The IDE (VS Code) automatically uses the project's tsconfig.json, which is why i
 ## Type Assertion Tests
 
 When the type assertion tests in `*.typeAssertions.ts` files show no errors in the IDE but fail when running `tsc` directly on the file, it means the types are actually correct but the test methodology was wrong. Always use the project build to verify type assertions.
+
+## Claude Code Workflow: Pre-Commit Validation Pattern
+
+When working in GitHub Actions workflows (e.g., as a Claude Code agent), follow this pre-commit validation pattern to match the local development workflow and enable self-healing before committing changes.
+
+### The Pattern
+
+**Before committing any changes, always run these commands in order:**
+
+```bash
+# 1. Type check (catches type errors)
+bun run build
+
+# 2. Auto-fix linting issues
+bun run lint:fix
+
+# 3. Auto-fix formatting issues
+bun run format:fix
+
+# 4. Run tests
+bun run test:ci
+
+# 5. Stage any auto-fixes that were applied
+git add -A
+
+# 6. Then commit with descriptive message
+git commit -m "feat: your change description"
+
+# 7. Push to remote
+git push origin HEAD
+```
+
+### Why This Matters
+
+This validation sequence mirrors the local `.lefthook.yml` pre-commit hooks and provides several benefits:
+
+1. **Catches errors before commit**: Type errors and test failures are detected before creating the commit, not after pushing to CI
+2. **Self-healing**: Auto-fix commands (`lint:fix`, `format:fix`) automatically repair style issues and include fixes in the same commit
+3. **Single clean commit**: All changes and fixes are bundled together, avoiding noisy follow-up "fix linting" commits
+4. **Consistent with local development**: Developers with lefthook installed get the same validation locally
+
+### Commands Explained
+
+- `bun run build`: Runs TypeScript compiler with project's strict tsconfig.json settings - this is your primary type check
+- `bun run lint:fix`: Runs ESLint with auto-fix enabled - repairs code style issues
+- `bun run format:fix`: Runs Prettier with write mode - ensures consistent formatting
+- `bun run test:ci`: Runs the full test suite in CI mode - validates functionality
+- `git add -A`: Stages any files that were auto-fixed by lint:fix or format:fix
+
+### Example Workflow
+
+```bash
+# Make your code changes
+# ... edit files ...
+
+# Validate before committing
+bun run build          # ✅ Type check passes
+bun run lint:fix       # ✅ Auto-fixed 3 linting issues
+bun run format:fix     # ✅ Auto-formatted 2 files
+bun run test:ci        # ✅ All 100 tests pass
+
+# Stage everything (including auto-fixes)
+git add -A
+
+# Commit with co-author if triggered by a user
+git commit -m "feat: add new expression operators
+
+Co-authored-by: Tim Vyas <timvyas@users.noreply.github.com>"
+
+# Push to remote
+git push origin HEAD
+```
+
+### What Happens If Validation Fails
+
+If any validation step fails:
+
+1. **Type check fails** (`bun run build`): Fix type errors before committing
+2. **Tests fail** (`bun run test:ci`): Fix failing tests before committing
+3. **Lint/format**: These auto-fix, so just stage the fixes with `git add -A`
+
+Do NOT commit until all validation passes. This prevents pushing broken code and matches the local development experience where commits are blocked until hooks pass.

@@ -61,6 +61,10 @@ export class TMCollection<Docs extends Document> implements TMSource<Docs> {
     return this.collectionName;
   }
 
+  getOutputDatabase(): string | undefined {
+    return this.databaseName;
+  }
+
   private getClient() {
     const client = this.client ?? tmql.client;
     if (!client) {

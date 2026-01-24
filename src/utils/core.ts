@@ -491,7 +491,11 @@ type MergedUpdateValue<BaseValue, UpdateValue> = MaybeAddUndefined<
 >;
 
 type MergeSetValue<BaseValue, UpdateValue> =
-  PlainObjectOrNever<ExcludeUndefined<UpdateValue>> extends infer UpdateObject ?
+  // If BaseValue is never (new field), preserve UpdateValue as-is including optionality
+  [BaseValue] extends [never] ? UpdateValue
+  : PlainObjectOrNever<ExcludeUndefined<UpdateValue>> extends (
+    infer UpdateObject
+  ) ?
     [UpdateObject] extends [never] ? UpdateValue
     : UpdateObject extends Document ?
       MergeSetPlainObjects<BaseValue, UpdateObject> // Pass BaseValue with undefined

@@ -106,10 +106,10 @@ export class TMPipeline<
   }
 
   // $match step
-  match<const M extends MatchQuery<StartingDocs>>(
+  match<const M extends MatchQuery<PreviousStageDocs>>(
     $match: M
-  ): TMPipeline<StartingDocs, ResolveMatchOutput<M, StartingDocs>, Mode> {
-    return this._chain<ResolveMatchOutput<M, StartingDocs>>([{ $match }]);
+  ): TMPipeline<StartingDocs, ResolveMatchOutput<M, PreviousStageDocs>, Mode> {
+    return this._chain<ResolveMatchOutput<M, PreviousStageDocs>>([{ $match }]);
   }
 
   set<const S extends SetQuery<PreviousStageDocs>>(
@@ -118,16 +118,16 @@ export class TMPipeline<
     return this._chain<ResolveSetOutput<S, PreviousStageDocs>>([{ $set }]);
   }
 
-  unset<const U extends UnsetQuery<StartingDocs>>(
+  unset<const U extends UnsetQuery<PreviousStageDocs>>(
     $unset: U
-  ): TMPipeline<StartingDocs, ResolveUnsetOutput<U, StartingDocs>, Mode> {
-    return this._chain<ResolveUnsetOutput<U, StartingDocs>>([{ $unset }]);
+  ): TMPipeline<StartingDocs, ResolveUnsetOutput<U, PreviousStageDocs>, Mode> {
+    return this._chain<ResolveUnsetOutput<U, PreviousStageDocs>>([{ $unset }]);
   }
 
   lookup<
     C extends AllowedSource<Mode, any>,
-    LocalField extends FieldPath<StartingDocs>,
-    LocalFieldType extends GetFieldType<StartingDocs, LocalField>,
+    LocalField extends FieldPath<PreviousStageDocs>,
+    LocalFieldType extends GetFieldType<PreviousStageDocs, LocalField>,
     ForeignField extends
       | FieldPathsThatInferToForLookup<
           InferSourceType<C>,
@@ -156,7 +156,7 @@ export class TMPipeline<
         }
   ): TMPipeline<
     StartingDocs,
-    ResolveLookupOutput<StartingDocs, NewKey, PipelineOutput>,
+    ResolveLookupOutput<PreviousStageDocs, NewKey, PipelineOutput>,
     Mode
   > {
     const { from, pipeline, ...$lookupRest } = $lookup;
@@ -180,7 +180,7 @@ export class TMPipeline<
     }
 
     return this._chain<
-      ResolveLookupOutput<StartingDocs, NewKey, PipelineOutput>
+      ResolveLookupOutput<PreviousStageDocs, NewKey, PipelineOutput>
     >(
       [
         {
@@ -197,10 +197,10 @@ export class TMPipeline<
     );
   }
 
-  group<const G extends GroupQuery<StartingDocs>>(
+  group<const G extends GroupQuery<PreviousStageDocs>>(
     $group: G
-  ): TMPipeline<StartingDocs, ResolveGroupOutput<StartingDocs, G>, Mode> {
-    return this._chain<ResolveGroupOutput<StartingDocs, G>>([{ $group }]);
+  ): TMPipeline<StartingDocs, ResolveGroupOutput<PreviousStageDocs, G>, Mode> {
+    return this._chain<ResolveGroupOutput<PreviousStageDocs, G>>([{ $group }]);
   }
 
   project<const P extends ProjectQuery<PreviousStageDocs>>(
@@ -343,7 +343,7 @@ export class TMPipeline<
       databaseName?: string;
       collectionName?: string;
     } = {}
-  ): AggregationCursor<StartingDocs> {
+  ): AggregationCursor<PreviousStageDocs> {
     const client = args.client ?? this.client ?? tmql.client;
     if (!client) throw new Error("Not connected");
 

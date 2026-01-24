@@ -75,9 +75,9 @@ export type FieldReferencesThatInferToForLookup<
 export type FieldReferencesThatInferTo<Schema extends Document, DesiredType> =
   Schema extends unknown ?
     {
-      [K in FieldReference<Schema>]: InferFieldReference<Schema, K> extends (
-        DesiredType
-      ) ?
+      [K in FieldReference<Schema>]: NonNullable<
+        InferFieldReference<Schema, K>
+      > extends DesiredType ?
         K
       : never;
     }[FieldReference<Schema>]
