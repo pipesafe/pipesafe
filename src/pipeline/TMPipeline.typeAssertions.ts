@@ -117,7 +117,7 @@ const _projectThenMatch = _p
     computedName: { $literal: "computed" },
   })
   .match({ _id: { $exists: true } }) // Match works on projected output
-  .match({ computedName: { $ne: "" } }); // Can match on computed field from project
+  .match({ computedName: { $exists: true } }); // Can match on computed field from project
 
 export {
   _setThenSet,
