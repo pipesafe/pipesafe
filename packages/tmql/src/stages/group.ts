@@ -3,40 +3,67 @@ import {
   AnyLiteral,
   LiteralOrFieldReferenceInferringTo,
 } from "../elements/literals";
-import { Expression } from "../elements/expressions";
+import {
+  Expression,
+  ConditionalExpression,
+  ArithmeticExpression,
+} from "../elements/expressions";
 import { Document, Prettify } from "../utils/core";
+
+/**
+ * Numeric operand for aggregators like $sum, $avg
+ * Accepts: numbers, field references to numbers, arithmetic expressions, conditional expressions
+ */
+type NumericAggregatorOperand<Schema extends Document> =
+  | LiteralOrFieldReferenceInferringTo<Schema, number>
+  | ArithmeticExpression<Schema>
+  | ConditionalExpression<Schema>;
+
+/**
+ * Operand for $min/$max that can be numbers or dates
+ * Accepts: numbers/dates, field references, arithmetic expressions, conditional expressions
+ */
+type MinMaxAggregatorOperand<Schema extends Document> =
+  | LiteralOrFieldReferenceInferringTo<Schema, number>
+  | LiteralOrFieldReferenceInferringTo<Schema, Date>
+  | ArithmeticExpression<Schema>
+  | ConditionalExpression<Schema>;
+
+/**
+ * Flexible operand for aggregators like $push, $first, $last
+ * Accepts: any literal, field reference, or expression
+ */
+type FlexibleAggregatorOperand<Schema extends Document> =
+  | LiteralOrFieldReferenceInferringTo<Schema, any>
+  | Expression<Schema>;
 
 export type AggregatorFunction<Schema extends Document> =
   | {
-      $sum: LiteralOrFieldReferenceInferringTo<Schema, number>;
+      $sum: NumericAggregatorOperand<Schema>;
     }
   | {
-      $avg: LiteralOrFieldReferenceInferringTo<Schema, number>;
+      $avg: NumericAggregatorOperand<Schema>;
     }
   | {
-      $min:
-        | LiteralOrFieldReferenceInferringTo<Schema, number>
-        | LiteralOrFieldReferenceInferringTo<Schema, Date>;
+      $min: MinMaxAggregatorOperand<Schema>;
     }
   | {
-      $max:
-        | LiteralOrFieldReferenceInferringTo<Schema, number>
-        | LiteralOrFieldReferenceInferringTo<Schema, Date>;
+      $max: MinMaxAggregatorOperand<Schema>;
     }
   | {
       $count: {};
     }
   | {
-      $push: LiteralOrFieldReferenceInferringTo<Schema, any>;
+      $push: FlexibleAggregatorOperand<Schema>;
     }
   | {
-      $addToSet: LiteralOrFieldReferenceInferringTo<Schema, any>;
+      $addToSet: FlexibleAggregatorOperand<Schema>;
     }
   | {
-      $first: LiteralOrFieldReferenceInferringTo<Schema, any>;
+      $first: FlexibleAggregatorOperand<Schema>;
     }
   | {
-      $last: LiteralOrFieldReferenceInferringTo<Schema, any>;
+      $last: FlexibleAggregatorOperand<Schema>;
     };
 
 export type ResolveAggregatorFunction<Schema extends Document, Aggregator> =

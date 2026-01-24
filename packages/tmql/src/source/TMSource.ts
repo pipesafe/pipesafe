@@ -20,6 +20,13 @@ export interface TMSource<T = unknown> {
    */
   getOutputCollectionName(): string;
 
+  /**
+   * Get the database name for this source.
+   * - For collections: returns the configured database name (or undefined for default)
+   * - For models: returns the output database (or undefined for default)
+   */
+  getOutputDatabase(): string | undefined;
+
   /** @internal Phantom type for inference - do not use directly */
   readonly __outputType: T;
 }

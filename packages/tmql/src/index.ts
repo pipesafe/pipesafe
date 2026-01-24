@@ -14,7 +14,7 @@ export { TMCollection } from "./collection/TMCollection";
 export type { InferOutputType, LookupMode } from "./pipeline/TMPipeline";
 export type { InferCollectionType } from "./collection/TMCollection";
 export type { TMSource, InferSourceType } from "./source/TMSource";
-export type { Document } from "./utils/core";
+export type { Document, Prettify } from "./utils/core";
 
 // Re-export commonly used types from elements for advanced usage
 export type {
@@ -29,3 +29,13 @@ export type {
   FieldPath,
   InferFieldReference,
 } from "./elements/fieldReference";
+
+// Type assertion utilities (for testing type inference)
+export type {
+  Assert,
+  Equal,
+  IsAssignable,
+  NotImplemented,
+  ExpectAssertFailure,
+} from "./utils/tests";
+export { expectType, assertTypeEqual } from "./utils/tests";
