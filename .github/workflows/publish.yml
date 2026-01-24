@@ -49,7 +49,7 @@ jobs:
         id: changesets
         uses: changesets/action@v1
         with:
-          version: bash -c "bun run version && bun install"
+          version: bun run version:ci
           publish: bun run changeset publish
           createGithubReleases: true
         env:
