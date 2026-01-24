@@ -3,12 +3,9 @@
   "changelog": "@changesets/cli/changelog",
   "commit": false,
   "fixed": [],
-  "linked": [],
+  "linked": [["tmql", "tmql-orchestration"]],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": [],
-  "___dependencies___": {
-    "comment": "tmql-orchestration has tmql as a peer dependency. When tmql gets a minor/major bump, tmql-orchestration's peer dep range should be updated to include the new version."
-  }
+  "ignore": []
 }
