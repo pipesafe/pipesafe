@@ -1,6 +1,6 @@
 {
   "name": "tmql-orchestration",
-  "version": "0.4.1",
+  "version": "0.5.1",
   "description": "DAG composition and orchestration layer for tmql - Build data pipelines with TMModel and TMProject",
   "author": "Ryan Peggs & Tim Vyas",
   "license": "Elastic-2.0",
