@@ -1,6 +1,5 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "tmql",
@@ -28,7 +27,7 @@
         "mongodb": "^6.17.0",
       },
       "devDependencies": {
-        "typescript": "^5.8.3",
+        "typescript": "^5.9.3",
       },
     },
     "packages/tmql-orchestration": {
@@ -39,7 +38,7 @@
       },
       "devDependencies": {
         "tmql": "workspace:*",
-        "typescript": "^5.8.3",
+        "typescript": "^5.9.3",
       },
       "peerDependencies": {
         "tmql": "^0.4.1",
