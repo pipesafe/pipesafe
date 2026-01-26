@@ -196,10 +196,13 @@ function animateCompileTime() {
 
   // Show success message and fix button after all errors
   animationTimeouts.push(
-    setTimeout(() => {
-      DOM.compileSuccess.classList.add("visible");
-      DOM.fixBtn.classList.add("visible");
-    }, ANIMATION_CONFIG.COMPILE_START + 5 * ANIMATION_CONFIG.COMPILE_STAGGER)
+    setTimeout(
+      () => {
+        DOM.compileSuccess.classList.add("visible");
+        DOM.fixBtn.classList.add("visible");
+      },
+      ANIMATION_CONFIG.COMPILE_START + 5 * ANIMATION_CONFIG.COMPILE_STAGGER
+    )
   );
 }
 
@@ -220,10 +223,13 @@ function animateRuntime() {
 
   // Mark deploy done, show "Running..." indicator
   animationTimeouts.push(
-    setTimeout(() => {
-      DOM.deployingIndicator.classList.add("done");
-      DOM.runningIndicator.classList.add("visible");
-    }, ANIMATION_CONFIG.DEPLOY_START + ANIMATION_CONFIG.DEPLOY_DURATION)
+    setTimeout(
+      () => {
+        DOM.deployingIndicator.classList.add("done");
+        DOM.runningIndicator.classList.add("visible");
+      },
+      ANIMATION_CONFIG.DEPLOY_START + ANIMATION_CONFIG.DEPLOY_DURATION
+    )
   );
 
   // Mark running as failed, show error
