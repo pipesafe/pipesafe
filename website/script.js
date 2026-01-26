@@ -228,23 +228,25 @@ function animateRuntime() {
 
   // Mark running as failed, show error
   animationTimeouts.push(
-    setTimeout(() => {
-      DOM.runningIndicator.classList.add("done");
-
-      setTimeout(() => {
-        DOM.runtimeErrors.classList.add("visible");
-        DOM.runtimeErrorMsg.classList.add("visible");
+    setTimeout(
+      () => {
+        DOM.runningIndicator.classList.add("done");
 
         setTimeout(() => {
-          DOM.runtimeErrorNote.classList.add("visible");
-          // Show replay button after all animations complete
-          setTimeout(showReplayButton, 500);
-        }, 300);
-      }, ANIMATION_CONFIG.ERROR_DELAY);
-    },
-    ANIMATION_CONFIG.DEPLOY_START +
-      ANIMATION_CONFIG.DEPLOY_DURATION +
-      ANIMATION_CONFIG.RUN_DURATION)
+          DOM.runtimeErrors.classList.add("visible");
+          DOM.runtimeErrorMsg.classList.add("visible");
+
+          setTimeout(() => {
+            DOM.runtimeErrorNote.classList.add("visible");
+            // Show replay button after all animations complete
+            setTimeout(showReplayButton, 500);
+          }, 300);
+        }, ANIMATION_CONFIG.ERROR_DELAY);
+      },
+      ANIMATION_CONFIG.DEPLOY_START +
+        ANIMATION_CONFIG.DEPLOY_DURATION +
+        ANIMATION_CONFIG.RUN_DURATION
+    )
   );
 }
 
