@@ -1,0 +1,1047 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PipeSafe - Type-safe MongoDB Aggregations</title>
+    <meta
+      name="description"
+      content="Type-safe MongoDB aggregation pipeline builder for TypeScript. Catch errors at compile time, not runtime."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        overflow-x: hidden;
+      }
+
+      body {
+        background-color: #001e2b;
+        color: #e3fcf7;
+        font-family: "JetBrains Mono", monospace;
+        min-height: 100vh;
+        padding: 2rem;
+        line-height: 1.6;
+      }
+
+      .container {
+        max-width: 900px;
+        margin: 0 auto;
+        overflow-x: hidden;
+      }
+
+      .terminal {
+        background-color: #0d2c3a;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+        overflow: hidden;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+        max-width: 100%;
+      }
+
+      .terminal-header {
+        background-color: #112733;
+        padding: 0.75rem 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .terminal-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+      }
+
+      .terminal-dot.red {
+        background-color: #ff5f56;
+      }
+      .terminal-dot.yellow {
+        background-color: #ffbd2e;
+      }
+      .terminal-dot.green {
+        background-color: #27c93f;
+      }
+
+      .terminal-title {
+        margin-left: 0.75rem;
+        font-size: 0.85rem;
+        color: #889ba7;
+      }
+
+      .terminal-body {
+        padding: 1.5rem;
+        font-size: 0.85rem;
+        overflow-x: auto;
+      }
+
+      .code {
+        white-space: pre;
+        max-width: 100%;
+      }
+
+      pre {
+        max-width: 100%;
+      }
+
+      .comment {
+        color: #5c6d75;
+      }
+      .keyword {
+        color: #00ed64;
+      }
+      .string {
+        color: #00ed64;
+      }
+      .field {
+        color: #e3fcf7;
+      }
+      .operator {
+        color: #b8c4ce;
+      }
+      .error {
+        color: #ff6f61;
+      }
+      .error-underline {
+        color: #ff6f61;
+        text-decoration: wavy underline #ff6f61;
+        text-underline-offset: 3px;
+      }
+
+      .error-sections {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid #1a3a4a;
+      }
+
+      .error-section {
+        flex: 1;
+        padding: 1rem;
+        background-color: #001e2b;
+        border-radius: 6px;
+      }
+
+      .error-section-title {
+        font-size: 0.75rem;
+        color: #889ba7;
+        margin-bottom: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .error-section-title.compile {
+        color: #00ed64;
+      }
+      .error-section-title.runtime {
+        color: #ff6f61;
+      }
+
+      .error-none {
+        color: #5c6d75;
+        font-style: italic;
+      }
+
+      .error-success {
+        color: #00ed64;
+      }
+
+      .error-line {
+        color: #ff6f61;
+        margin-bottom: 0.25rem;
+        font-size: 0.8rem;
+      }
+
+      .error-detail {
+        color: #889ba7;
+        margin-left: 1rem;
+        margin-bottom: 0.75rem;
+        font-size: 0.75rem;
+      }
+
+      .runtime-error-msg {
+        color: #ff6f61;
+        font-size: 0.8rem;
+        margin-bottom: 0.5rem;
+      }
+
+      .runtime-error-note {
+        color: #5c6d75;
+        font-size: 0.75rem;
+      }
+
+      @media (max-width: 700px) {
+        .error-sections {
+          flex-direction: column;
+        }
+      }
+
+      .divider {
+        text-align: center;
+        color: #3d5a6c;
+        margin: 3rem 0;
+        font-size: 0.9rem;
+        overflow: hidden;
+      }
+
+      .hero {
+        text-align: center;
+        padding: 3rem 0;
+      }
+
+      .hero h1 {
+        font-size: 2.5rem;
+        color: #00ed64;
+        margin-bottom: 0.5rem;
+        letter-spacing: 0.1em;
+      }
+
+      .hero .tagline {
+        color: #889ba7;
+        font-size: 1.1rem;
+        margin-bottom: 2rem;
+      }
+
+      .install-box {
+        display: inline-block;
+        background-color: #0d2c3a;
+        padding: 1rem 2rem;
+        border-radius: 8px;
+        border: 1px solid #1a3a4a;
+      }
+
+      .install-box .prompt {
+        color: #00ed64;
+      }
+
+      .install-box .command {
+        color: #e3fcf7;
+      }
+
+      .status {
+        margin-top: 2rem;
+        color: #889ba7;
+        font-size: 0.85rem;
+      }
+
+      .status a {
+        color: #00ed64;
+        text-decoration: none;
+      }
+
+      .status a:hover {
+        text-decoration: underline;
+      }
+
+      .social-links {
+        display: flex;
+        gap: 0.75rem;
+        justify-content: center;
+        margin-top: 1.25rem;
+      }
+
+      .social-link {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        background: #0d2c3a;
+        border: 1px solid #1a3a4a;
+        border-radius: 8px;
+        color: #889ba7;
+        transition: all 0.2s ease;
+      }
+
+      .social-link:hover {
+        border-color: #00ed64;
+        color: #00ed64;
+        transform: translateY(-2px);
+      }
+
+      @media (max-width: 600px) {
+        body {
+          padding: 0.75rem;
+        }
+
+        .terminal-body {
+          padding: 1rem;
+          font-size: 0.75rem;
+        }
+
+        .terminal-title {
+          font-size: 0.75rem;
+        }
+
+        .code {
+          font-size: 0.7rem;
+        }
+
+        .error-section-title {
+          font-size: 0.7rem;
+        }
+
+        .error-line {
+          font-size: 0.7rem;
+        }
+
+        .error-detail {
+          font-size: 0.65rem;
+          margin-left: 0.5rem;
+        }
+
+        .error-none,
+        .error-success {
+          font-size: 0.7rem;
+        }
+
+        .step-indicator {
+          font-size: 0.7rem;
+        }
+
+        .runtime-error-msg {
+          font-size: 0.7rem;
+        }
+
+        .runtime-error-note {
+          font-size: 0.65rem;
+        }
+
+        .hero h1 {
+          font-size: 1.75rem;
+        }
+
+        .hero .tagline {
+          font-size: 0.95rem;
+        }
+
+        .install-box {
+          padding: 0.75rem 1.25rem;
+          font-size: 0.85rem;
+        }
+
+        .status {
+          font-size: 0.75rem;
+        }
+      }
+
+      /* Animation styles */
+      .error-sections {
+        opacity: 0;
+        transition: opacity 0.3s ease-in;
+      }
+
+      .error-sections.visible {
+        opacity: 1;
+      }
+
+      .error-underline {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .error-underline.active {
+        color: #ff6f61;
+        text-decoration: wavy underline #ff6f61;
+        text-underline-offset: 3px;
+      }
+
+      .error-line,
+      .error-detail {
+        opacity: 0;
+        transform: translateX(-10px);
+        transition:
+          opacity 0.2s ease-out,
+          transform 0.2s ease-out;
+      }
+
+      .error-line.visible,
+      .error-detail.visible {
+        opacity: 1;
+        transform: translateX(0);
+      }
+
+      .runtime-error-msg,
+      .runtime-error-note {
+        opacity: 0;
+        transition: opacity 0.3s ease-in;
+      }
+
+      .runtime-error-msg.visible,
+      .runtime-error-note.visible {
+        opacity: 1;
+      }
+
+      .error-success {
+        opacity: 0;
+        transition: opacity 0.3s ease-in;
+      }
+
+      .error-success.visible {
+        opacity: 1;
+      }
+
+      .step-indicator {
+        font-size: 0.8rem;
+        opacity: 0;
+        transition: opacity 0.2s ease-in;
+        margin-bottom: 0.25rem;
+      }
+
+      .step-indicator.visible {
+        opacity: 1;
+      }
+
+      .step-indicator .step-running {
+        color: #ffbd2e;
+      }
+
+      .step-indicator .step-done {
+        display: none;
+        color: #00ed64;
+      }
+
+      .step-indicator .step-done.step-failed {
+        color: #ff6f61;
+      }
+
+      .step-indicator.done .step-running {
+        display: none;
+      }
+
+      .step-indicator.done .step-done {
+        display: inline;
+      }
+
+      .step-indicator .dots::after {
+        content: "";
+        animation: dots 1.5s steps(4, end) infinite;
+      }
+
+      @keyframes dots {
+        0%,
+        20% {
+          content: "";
+        }
+        40% {
+          content: ".";
+        }
+        60% {
+          content: "..";
+        }
+        80%,
+        100% {
+          content: "...";
+        }
+      }
+
+      .replay-container {
+        text-align: center;
+        margin-bottom: 1rem;
+        opacity: 0;
+        transition: opacity 0.3s ease-in;
+      }
+
+      .replay-container.visible {
+        opacity: 1;
+      }
+
+      .replay-btn {
+        background: transparent;
+        border: 1px solid #3d5a6c;
+        color: #889ba7;
+        padding: 0.4rem 0.8rem;
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 0.75rem;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .replay-btn:hover {
+        border-color: #00ed64;
+        color: #00ed64;
+      }
+
+      /* Fix animation styles */
+      .code-cursor {
+        display: inline-block;
+        width: 2px;
+        height: 1.1em;
+        background-color: #00ed64;
+        margin-left: 1px;
+        vertical-align: text-bottom;
+        opacity: 0;
+      }
+
+      .code-cursor.visible {
+        animation: cursor-blink 0.8s step-end infinite;
+      }
+
+      @keyframes cursor-blink {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0;
+        }
+      }
+
+      .fixable-code {
+        display: inline;
+      }
+
+      .fixable-code .broken {
+        transition: opacity 0.15s ease-out;
+      }
+
+      .fixable-code .fixed {
+        display: none;
+        opacity: 0;
+      }
+
+      .fixable-code.is-fixed .broken {
+        display: none;
+      }
+
+      .fixable-code.is-fixed .fixed {
+        display: inline;
+        opacity: 1;
+        transition: opacity 0.15s ease-in;
+      }
+
+      .error-line.fade-out,
+      .error-detail.fade-out {
+        opacity: 0 !important;
+        transform: translateX(-10px) !important;
+      }
+
+      .all-clear {
+        color: #00ed64;
+        opacity: 0;
+        transition: opacity 0.3s ease-in;
+      }
+
+      .all-clear.visible {
+        opacity: 1;
+      }
+
+      .fix-btn {
+        background: #252526;
+        border: 1px solid #3c3c3c;
+        color: #cccccc;
+        padding: 0.35rem 0.6rem;
+        border-radius: 3px;
+        font-family: inherit;
+        font-size: 0.75rem;
+        cursor: pointer;
+        margin-top: 0.75rem;
+        opacity: 0;
+        transition: all 0.15s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+      }
+
+      .fix-btn .lightbulb {
+        color: #ffcc00;
+      }
+
+      .fix-btn.visible {
+        opacity: 1;
+        animation: pulse-glow 2s ease-in-out infinite;
+      }
+
+      @keyframes pulse-glow {
+        0%,
+        100% {
+          box-shadow: 0 0 0 0 rgba(0, 122, 204, 0);
+        }
+        50% {
+          box-shadow: 0 0 8px 2px rgba(0, 122, 204, 0.4);
+        }
+      }
+
+      .fix-btn:hover {
+        background: #094771;
+        border-color: #007acc;
+        color: #ffffff;
+      }
+
+      .fix-btn.hidden {
+        display: none;
+      }
+
+      /* Shrink error section when all errors fixed */
+      #compile-section {
+        transition: all 0.3s ease-out;
+        overflow: hidden;
+      }
+
+      #compile-section.shrunk .error-line,
+      #compile-section.shrunk .error-detail {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="terminal" id="runtime-terminal">
+        <div class="terminal-header">
+          <div class="terminal-dot red"></div>
+          <div class="terminal-dot yellow"></div>
+          <div class="terminal-dot green"></div>
+          <span class="terminal-title">WITHOUT PIPESAFE</span>
+        </div>
+        <div class="terminal-body">
+          <pre
+            class="code"
+          ><span class="field">db</span>.<span class="field">orders</span>.<span class="keyword">aggregate</span>([
+  { <span class="string">$lookup</span>: {
+    <span class="field">from</span>: <span class="string">"users"</span>,
+    <span class="field">localField</span>: <span class="string">"userId"</span>
+    <span class="comment">// missing foreignField and as</span>
+  }},
+  { <span class="string">$match</span>: { <span class="field">total</span>: { <span class="operator">$gt</span>: <span class="string">"100"</span> } }},
+  { <span class="string">$set</span>: {
+    <span class="field">withTax</span>: { <span class="operator">$multiply</span>: [<span class="string">"$totl"</span>, <span class="field">1.2</span>] },
+    <span class="field">fullName</span>: { <span class="operator">$concat</span>: [
+      <span class="string">"$firstName"</span>,
+      <span class="field">123</span>
+    ]}
+  }},
+  { <span class="string">$project</span>: { <span class="field">withTax</span>: <span class="field">1</span>, <span class="field">fullName</span>: <span class="field">1</span> }}
+])</pre>
+          <div class="step-indicator" id="deploying-indicator">
+            <span class="step-running"
+              >> Deploying to staging<span class="dots"></span
+            ></span>
+            <span class="step-done">✓ Deployed to staging</span>
+          </div>
+          <div class="step-indicator" id="running-indicator">
+            <span class="step-running"
+              >> Running pipeline<span class="dots"></span
+            ></span>
+            <span class="step-done step-failed">✗ Pipeline failed</span>
+          </div>
+          <div class="error-sections" id="runtime-errors">
+            <div class="error-section">
+              <div class="error-section-title compile">
+                Errors detected at compile time
+              </div>
+              <div class="error-none">None</div>
+            </div>
+            <div class="error-section">
+              <div class="error-section-title runtime">
+                Errors detected at runtime
+              </div>
+              <div class="runtime-error-msg" id="runtime-error-msg">
+                > MongoServerError: must specify 'as' field for a $lookup
+              </div>
+              <div class="runtime-error-note" id="runtime-error-note">
+                The other 3 bugs? No error. Wrong results. Good luck.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="terminal" id="compile-terminal">
+        <div class="terminal-header">
+          <div class="terminal-dot red"></div>
+          <div class="terminal-dot yellow"></div>
+          <div class="terminal-dot green"></div>
+          <span class="terminal-title">WITH PIPESAFE</span>
+        </div>
+        <div class="terminal-body">
+          <pre
+            class="code"
+          ><span class="field">db</span>.<span class="field">orders</span>.<span class="keyword">aggregate</span>&lt;<span class="keyword">Order</span>&gt;()
+  .<span class="error-underline" data-error="1">lookup</span>({
+    <span class="field">from</span>: <span class="string">"users"</span>,
+    <span class="field">localField</span>: <span class="string">"userId"</span><span class="fixable-code" data-fix="1"><span class="broken"></span><span class="fixed">,
+    <span class="field">foreignField</span>: <span class="string">"_id"</span>,
+    <span class="field">as</span>: <span class="string">"user"</span></span></span>
+  })<span class="code-cursor" data-cursor="1"></span>
+  .<span class="keyword">match</span>({ <span class="field">total</span>: { <span class="operator">$gt</span>: <span class="fixable-code" data-fix="2"><span class="broken error-underline" data-error="2">"100"</span><span class="fixed field">100</span></span><span class="code-cursor" data-cursor="2"></span> } })
+  .<span class="keyword">set</span>({
+    <span class="field">withTax</span>: { <span class="operator">$multiply</span>: [<span class="fixable-code" data-fix="3"><span class="broken error-underline" data-error="3">"$totl"</span><span class="fixed string">"$total"</span></span><span class="code-cursor" data-cursor="3"></span>, <span class="field">1.2</span>] },
+    <span class="field">fullName</span>: { <span class="operator">$concat</span>: [
+      <span class="string">"$firstName"</span>,
+      <span class="fixable-code" data-fix="4"><span class="broken error-underline" data-error="4">123</span><span class="fixed"><span class="string">" "</span>,
+      <span class="string">"$lastName"</span></span></span><span class="code-cursor" data-cursor="4"></span>
+    ]}
+  })
+  .<span class="keyword">project</span>({ <span class="field">withTax</span>: <span class="field">1</span>, <span class="field">fullName</span>: <span class="field">1</span> })</pre>
+          <div class="error-sections" id="compile-errors">
+            <div class="error-section" id="compile-section">
+              <div class="error-section-title compile">
+                Errors detected at compile time
+              </div>
+              <div class="error-line" data-error="1">
+                &#10007; $lookup missing required fields
+              </div>
+              <div class="error-detail" data-error="1">
+                Required: "foreignField", "as"
+              </div>
+              <div class="error-line" data-error="2">
+                &#10007; Type 'string' not assignable to 'number'
+              </div>
+              <div class="error-detail" data-error="2">
+                $gt on number field requires number
+              </div>
+              <div class="error-line" data-error="3">
+                &#10007; "$totl" does not exist on Order
+              </div>
+              <div class="error-detail" data-error="3">
+                Did you mean "$total"?
+              </div>
+              <div class="error-line" data-error="4">
+                &#10007; Type 'number' not assignable to 'string'
+              </div>
+              <div class="error-detail" data-error="4">
+                $concat operands must be strings
+              </div>
+              <button
+                class="fix-btn"
+                id="fix-btn"
+                onclick="startFixAnimation()"
+              >
+                <span class="lightbulb">💡</span> Quick Fix with AI
+              </button>
+              <div class="all-clear" id="all-clear">&#10003; No errors</div>
+            </div>
+            <div class="error-section">
+              <div class="error-section-title runtime">
+                Errors detected at runtime
+              </div>
+              <div class="error-success" id="compile-success">
+                None — caught before hitting production
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="replay-container" id="replay-container">
+        <button class="replay-btn" onclick="replayAnimations()">Replay</button>
+      </div>
+
+      <div class="divider">
+        ─────────────────────────────────────────────────────
+      </div>
+
+      <div class="hero">
+        <h1>PIPESAFE</h1>
+        <p class="tagline">Type-safe MongoDB aggregations.</p>
+        <div class="install-box">
+          <span class="prompt">$</span>
+          <span class="command">npm install pipesafe</span>
+        </div>
+        <div class="social-links">
+          <a
+            href="https://github.com/covahltd/tmql"
+            class="social-link"
+            title="GitHub"
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <path
+                d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"
+              />
+            </svg>
+          </a>
+          <a
+            href="https://www.npmjs.com/package/tmql"
+            class="social-link"
+            title="npm"
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <path
+                d="M0 7.334v8h6.666v1.332H12v-1.332h12v-8H0zm6.666 6.664H5.334v-4H3.999v4H1.335V8.667h5.331v5.331zm4 0v1.336H8.001V8.667h5.334v5.332h-2.669v-.001zm12.001 0h-1.33v-4h-1.336v4h-1.335v-4h-1.33v4h-2.671V8.667h8.002v5.331z"
+              />
+            </svg>
+          </a>
+        </div>
+        <p class="status">
+          Coming soon. Currently available as
+          <a href="https://www.npmjs.com/package/tmql">tmql</a> on NPM.
+        </p>
+      </div>
+    </div>
+
+    <script>
+      // Animation timings (in ms)
+      const COMPILE_START = 400; // LSP response time (realistic)
+      const COMPILE_STAGGER = 120; // Time between each error appearing
+      const DEPLOY_START = 100; // Start showing "Deploying..." almost immediately
+      const DEPLOY_DURATION = 2500; // CI/CD pipeline simulation
+      const RUN_DURATION = 400; // Actual query is ~2ms, but show briefly
+      const ERROR_DELAY = 150; // Brief pause before error appears
+      const FIX_DELAY = 10000; // 10 seconds after errors appear
+      const FIX_CURSOR_DURATION = 600; // How long cursor blinks before fix
+      const FIX_STAGGER = 1200; // Time between each fix
+
+      let animationTimeouts = [];
+
+      function clearAnimations() {
+        animationTimeouts.forEach((t) => clearTimeout(t));
+        animationTimeouts = [];
+      }
+
+      function resetState() {
+        // Hide replay button
+        document.getElementById("replay-container").classList.remove("visible");
+
+        // Reset runtime terminal
+        document
+          .getElementById("deploying-indicator")
+          .classList.remove("visible", "done");
+        document
+          .getElementById("running-indicator")
+          .classList.remove("visible", "done");
+        document.getElementById("runtime-errors").classList.remove("visible");
+        document
+          .getElementById("runtime-error-msg")
+          .classList.remove("visible");
+        document
+          .getElementById("runtime-error-note")
+          .classList.remove("visible");
+
+        // Reset compile terminal
+        document.getElementById("compile-errors").classList.remove("visible");
+        document.getElementById("compile-success").classList.remove("visible");
+        document.getElementById("all-clear").classList.remove("visible");
+        document.getElementById("compile-section").classList.remove("shrunk");
+        document
+          .getElementById("fix-btn")
+          .classList.remove("visible", "hidden");
+
+        // Reset error underlines
+        document.querySelectorAll(".error-underline").forEach((el) => {
+          el.classList.remove("active");
+        });
+
+        // Reset error lines
+        document
+          .querySelectorAll(".error-line, .error-detail")
+          .forEach((el) => {
+            el.classList.remove("visible");
+            el.classList.remove("fade-out");
+          });
+
+        // Reset fixable code
+        document.querySelectorAll(".fixable-code").forEach((el) => {
+          el.classList.remove("is-fixed");
+        });
+
+        // Reset cursors
+        document.querySelectorAll(".code-cursor").forEach((el) => {
+          el.classList.remove("visible");
+        });
+      }
+
+      function showReplayButton() {
+        document.getElementById("replay-container").classList.add("visible");
+      }
+
+      function animateFixing(startTime) {
+        const fixes = [1, 2, 3, 4];
+
+        fixes.forEach((fixNum, index) => {
+          const fixTime = startTime + index * FIX_STAGGER;
+
+          // Show cursor
+          animationTimeouts.push(
+            setTimeout(() => {
+              // Hide previous cursor if any
+              document
+                .querySelectorAll(".code-cursor")
+                .forEach((c) => c.classList.remove("visible"));
+
+              const cursor = document.querySelector(
+                `.code-cursor[data-cursor="${fixNum}"]`
+              );
+              if (cursor) cursor.classList.add("visible");
+            }, fixTime)
+          );
+
+          // Apply fix
+          animationTimeouts.push(
+            setTimeout(() => {
+              // Fix the code
+              const fixable = document.querySelector(
+                `.fixable-code[data-fix="${fixNum}"]`
+              );
+              if (fixable) fixable.classList.add("is-fixed");
+
+              // Remove the underline
+              const underline = document.querySelector(
+                `.error-underline[data-error="${fixNum}"]`
+              );
+              if (underline) underline.classList.remove("active");
+
+              // Fade out the error
+              const errorLine = document.querySelector(
+                `.error-line[data-error="${fixNum}"]`
+              );
+              const errorDetail = document.querySelector(
+                `.error-detail[data-error="${fixNum}"]`
+              );
+              if (errorLine) errorLine.classList.add("fade-out");
+              if (errorDetail) errorDetail.classList.add("fade-out");
+            }, fixTime + FIX_CURSOR_DURATION)
+          );
+        });
+
+        // After all fixes, show "No errors", hide cursor, and shrink section
+        const allFixedTime =
+          startTime + fixes.length * FIX_STAGGER + FIX_CURSOR_DURATION + 300;
+        animationTimeouts.push(
+          setTimeout(() => {
+            document
+              .querySelectorAll(".code-cursor")
+              .forEach((c) => c.classList.remove("visible"));
+            document.getElementById("compile-section").classList.add("shrunk");
+            document.getElementById("all-clear").classList.add("visible");
+          }, allFixedTime)
+        );
+      }
+
+      function animateCompileTime() {
+        const errors = document.getElementById("compile-errors");
+        const success = document.getElementById("compile-success");
+
+        // Show error sections container
+        animationTimeouts.push(
+          setTimeout(() => {
+            errors.classList.add("visible");
+          }, COMPILE_START)
+        );
+
+        // Animate each error appearing with its underline
+        for (let i = 1; i <= 4; i++) {
+          const delay = COMPILE_START + i * COMPILE_STAGGER;
+
+          animationTimeouts.push(
+            setTimeout(() => {
+              // Show underline in code
+              const underline = document.querySelector(
+                `.error-underline[data-error="${i}"]`
+              );
+              if (underline) underline.classList.add("active");
+
+              // Show error line and detail
+              const errorLine = document.querySelector(
+                `.error-line[data-error="${i}"]`
+              );
+              const errorDetail = document.querySelector(
+                `.error-detail[data-error="${i}"]`
+              );
+              if (errorLine) errorLine.classList.add("visible");
+              if (errorDetail) {
+                setTimeout(() => errorDetail.classList.add("visible"), 50);
+              }
+            }, delay)
+          );
+        }
+
+        // Show success message and fix button after all errors
+        animationTimeouts.push(
+          setTimeout(
+            () => {
+              success.classList.add("visible");
+              document.getElementById("fix-btn").classList.add("visible");
+            },
+            COMPILE_START + 5 * COMPILE_STAGGER
+          )
+        );
+      }
+
+      function startFixAnimation() {
+        // Hide the button
+        document.getElementById("fix-btn").classList.add("hidden");
+        // Start fix animation immediately
+        animateFixing(0);
+      }
+
+      function animateRuntime() {
+        const deploying = document.getElementById("deploying-indicator");
+        const running = document.getElementById("running-indicator");
+        const errors = document.getElementById("runtime-errors");
+        const errorMsg = document.getElementById("runtime-error-msg");
+        const errorNote = document.getElementById("runtime-error-note");
+
+        // Show "Deploying..." indicator
+        animationTimeouts.push(
+          setTimeout(() => {
+            deploying.classList.add("visible");
+          }, DEPLOY_START)
+        );
+
+        // Mark deploy done, show "Running..." indicator
+        animationTimeouts.push(
+          setTimeout(() => {
+            deploying.classList.add("done");
+            running.classList.add("visible");
+          }, DEPLOY_START + DEPLOY_DURATION)
+        );
+
+        // Mark running as failed, show error
+        animationTimeouts.push(
+          setTimeout(
+            () => {
+              running.classList.add("done");
+
+              setTimeout(() => {
+                errors.classList.add("visible");
+                errorMsg.classList.add("visible");
+
+                setTimeout(() => {
+                  errorNote.classList.add("visible");
+                  // Show replay button after all animations complete
+                  setTimeout(showReplayButton, 500);
+                }, 300);
+              }, ERROR_DELAY);
+            },
+            DEPLOY_START + DEPLOY_DURATION + RUN_DURATION
+          )
+        );
+      }
+
+      function replayAnimations() {
+        clearAnimations();
+        resetState();
+
+        // Small delay before starting
+        animationTimeouts.push(
+          setTimeout(() => {
+            animateCompileTime();
+            animateRuntime();
+          }, 100)
+        );
+      }
+
+      // Start animations on page load
+      document.addEventListener("DOMContentLoaded", () => {
+        // Initial delay to let the page settle
+        setTimeout(() => {
+          animateCompileTime();
+          animateRuntime();
+        }, 500);
+      });
+    </script>
+  </body>
+</html>
