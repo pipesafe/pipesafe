@@ -7,26 +7,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a **bun workspaces monorepo** with two packages under different licenses:
 
 ```
-tmql/
+pipesafe/
 ├── packages/
-│   ├── tmql/                    # Core library (Apache 2.0 - OSI-approved)
+│   ├── core/                    # Core library (Apache 2.0 - OSI-approved)
 │   │   ├── src/
-│   │   │   ├── pipeline/        # TMPipeline - aggregation builder
+│   │   │   ├── pipeline/        # Pipeline - aggregation builder
 │   │   │   ├── stages/          # Pipeline stage implementations
 │   │   │   ├── elements/        # Type system building blocks
-│   │   │   ├── collection/      # TMCollection wrapper
-│   │   │   ├── source/          # TMSource interface
+│   │   │   ├── collection/      # Collection wrapper
+│   │   │   ├── source/          # Source interface
 │   │   │   ├── utils/           # Type utilities
-│   │   │   ├── singleton/       # Global tmql instance
-│   │   │   └── database/        # TMDatabase utilities
+│   │   │   ├── singleton/       # Global pipesafe instance
+│   │   │   └── database/        # Database utilities
 │   │   ├── examples/            # Pipeline usage examples
 │   │   ├── benchmarking/        # TypeScript performance benchmarks
 │   │   └── LICENSE              # Apache License 2.0
 │   │
-│   └── tmql-orchestration/      # DAG orchestration (ELv2 - commercial)
+│   └── manifold/                # DAG orchestration (ELv2 - commercial)
 │       ├── src/
-│       │   ├── model/           # TMModel - materializable pipelines
-│       │   └── project/         # TMProject - DAG orchestrator
+│       │   ├── model/           # Model - materializable pipelines
+│       │   └── project/         # Project - DAG orchestrator
 │       ├── examples/            # DAG usage examples
 │       └── LICENSE              # Elastic License 2.0
 │
@@ -35,12 +35,12 @@ tmql/
 
 ### Licensing Rationale
 
-- **tmql (Apache 2.0)**: Core pipeline builder. Fully OSI-approved, can be used anywhere.
-- **tmql-orchestration (ELv2)**: DAG execution and materialization features. Commercial-friendly but not OSI-approved.
+- **@pipesafe/core (Apache 2.0)**: Core pipeline builder. Fully OSI-approved, can be used anywhere.
+- **@pipesafe/manifold (ELv2)**: DAG execution and materialization features. Commercial-friendly but not OSI-approved.
 
 ### Package Dependencies
 
-- `tmql-orchestration` has `tmql` as a **peer dependency** (`^0.4.1`)
+- `@pipesafe/manifold` has `@pipesafe/core` as a **peer dependency** (`>=0.5.0 <1.0.0`)
 - During development, `workspace:*` links them locally
 - Users install both packages explicitly
 
@@ -63,7 +63,7 @@ This project uses [changesets](https://github.com/changesets/changesets) for ver
 
    ```markdown
    ---
-   "tmql": minor # or patch/major
+   "@pipesafe/core": minor # or patch/major
    ---
 
    Brief description of the change
@@ -80,37 +80,37 @@ Note: The interactive `bun run changeset` command doesn't work in non-TTY enviro
 
 ## Architecture Overview
 
-**tmql** (Typed Mongo Query Language) is a TypeScript MongoDB aggregation pipeline builder that provides full type safety.
+**PipeSafe** is a TypeScript MongoDB aggregation pipeline builder that provides full type safety.
 
 ### Core Classes
 
-- **TMPipeline**: The main aggregation pipeline builder class located in `packages/tmql/src/pipeline/TMPipeline.ts` with three generic types:
+- **Pipeline**: The main aggregation pipeline builder class located in `packages/core/src/pipeline/Pipeline.ts` with three generic types:
   - `StartingDocs`: The original document schema (union types supported)
   - `PreviousStageDocs`: The current document schema after previous pipeline stages (defaults to StartingDocs)
   - `Mode`: Lookup mode - `"runtime"` (default) or `"model"` for DAG pipelines
 
-  Each pipeline method returns a new `TMPipeline` instance with updated types to maintain type safety throughout the chain.
+  Each pipeline method returns a new `Pipeline` instance with updated types to maintain type safety throughout the chain.
 
-- **TMModel**: Located in `packages/tmql-orchestration/src/model/TMModel.ts`. A named, materializable pipeline with typed input/output. Models can depend on collections or other models, forming a DAG. Generic parameters:
+- **Model**: Located in `packages/manifold/src/model/Model.ts`. A named, materializable pipeline with typed input/output. Models can depend on collections or other models, forming a DAG. Generic parameters:
   - `TName`: Model name literal (e.g., `"stg_events"`)
   - `TInput`: Input document type from source
   - `TOutput`: Output document type after pipeline
   - `TMat`: Materialization config type
 
   Static presets for materialization modes:
-  - `TMModel.Mode.Replace` - Uses `$out` to replace entire collection
-  - `TMModel.Mode.Upsert` - Uses `$merge` with `on: "_id"`, upsert semantics
-  - `TMModel.Mode.Append` - Uses `$merge` with `whenMatched: "fail"`, insert only
+  - `Model.Mode.Replace` - Uses `$out` to replace entire collection
+  - `Model.Mode.Upsert` - Uses `$merge` with `on: "_id"`, upsert semantics
+  - `Model.Mode.Append` - Uses `$merge` with `whenMatched: "fail"`, insert only
 
-- **TMProject**: Located in `packages/tmql-orchestration/src/project/TMProject.ts`. DAG orchestrator that manages models, resolves dependencies, validates the graph, and executes models in topological order. Models are provided at construction time and validated immediately (immutable after creation). Auto-discovers all dependencies (upstream via `from` and lookup via `lookup`/`unionWith` stages) - just specify leaf models.
+- **Project**: Located in `packages/manifold/src/project/Project.ts`. DAG orchestrator that manages models, resolves dependencies, validates the graph, and executes models in topological order. Models are provided at construction time and validated immediately (immutable after creation). Auto-discovers all dependencies (upstream via `from` and lookup via `lookup`/`unionWith` stages) - just specify leaf models.
 
-- **TMSource**: Located in `packages/tmql/src/source/TMSource.ts`. Unified interface that both `TMCollection` and `TMModel` implement, allowing them to be used interchangeably as pipeline sources.
+- **Source**: Located in `packages/core/src/source/Source.ts`. Unified interface that both `Collection` and `Model` implement, allowing them to be used interchangeably as pipeline sources.
 
 ### Type System Architecture
 
-The type system is organized into modular building blocks located in `packages/tmql/src/elements/`:
+The type system is organized into modular building blocks located in `packages/core/src/elements/`:
 
-#### Core Type Modules (`packages/tmql/src/elements/`)
+#### Core Type Modules (`packages/core/src/elements/`)
 
 - **document.ts**: Base `Document` type (`Record<string, any>`)
 
@@ -133,7 +133,7 @@ The type system is organized into modular building blocks located in `packages/t
 
 - **arrayOperator.ts**: Array operation type utilities
 
-#### Utility Types (`packages/tmql/src/utils/core.ts`)
+#### Utility Types (`packages/core/src/utils/core.ts`)
 
 - **Type Utilities**:
   - `DollarPrefixed<T>` / `WithoutDollar<T>`: Dollar prefix manipulation
@@ -145,7 +145,7 @@ The type system is organized into modular building blocks located in `packages/t
 
 ### Pipeline Stages
 
-Located in `packages/tmql/src/stages/`:
+Located in `packages/core/src/stages/`:
 
 - **match.ts**: `$match` filtering with comprehensive type narrowing
   - **Query Types**: `MatchQuery<Schema>` with support for field selectors
@@ -167,9 +167,9 @@ TODO: Document the rest of the stages
 
 - Use `bun` as the package manager (specified in package.json)
 - TypeScript strict mode is enabled
-- Modular architecture: type utilities separated into `packages/tmql/src/elements/` for reusability
+- Modular architecture: type utilities separated into `packages/core/src/elements/` for reusability
 - Examples in `examples/*.ts` demonstrate example pipeline use cases
-- Assertions in `packages/tmql/src/*/*.typeAssertions.ts` are used as tests for type functionality
+- Assertions in `packages/core/src/*/*.typeAssertions.ts` are used as tests for type functionality
 - The `custom()` method allows escape hatches for unsupported aggregation stages while maintaining type flow
 
 ## Type Debugging Tools
@@ -201,8 +201,8 @@ Uses `mongodb-memory-server` for isolated testing with pre-seeded test data.
 ### Common Type Issues
 
 - **`never` type in pipeline stages**: Usually indicates impossible type conditions in match operations
-- **Union type filtering**: Check `FilterUnion` in `packages/tmql/src/stages/match.ts`
-- **Dotted field inference**: Use `FlattenDotSet` from `packages/tmql/src/utils/core.ts`
+- **Union type filtering**: Check `FilterUnion` in `packages/core/src/stages/match.ts`
+- **Dotted field inference**: Use `FlattenDotSet` from `packages/core/src/utils/core.ts`
 
 ### TypeScript Config
 

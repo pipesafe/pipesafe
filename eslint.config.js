@@ -34,7 +34,7 @@ export default defineConfig([
             {
               group: ["**/packages/**"],
               message:
-                'Use package imports (e.g., "tmql") instead of relative cross-package imports',
+                'Use package imports (e.g., "@pipesafe/core") instead of relative cross-package imports',
             },
           ],
         },

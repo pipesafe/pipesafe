@@ -1,0 +1,46 @@
+{
+  "name": "@pipesafe/core",
+  "version": "0.5.1",
+  "description": "PipeSafe Core - Fully type-safe MongoDB aggregation pipeline builder for TypeScript projects",
+  "author": "Ryan Peggs & Tim Vyas",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pipesafe/pipesafe.git",
+    "directory": "packages/core"
+  },
+  "keywords": [
+    "mongodb",
+    "aggregation",
+    "typescript",
+    "builder",
+    "type-safe",
+    "mongo",
+    "pipeline",
+    "pipesafe"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "mongodb": "^6.17.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

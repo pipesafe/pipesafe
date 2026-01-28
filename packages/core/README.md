@@ -1,24 +1,14 @@
-# PipeSafe
+# @pipesafe/core
 
-**PipeSafe** - A fully type-safe MongoDB aggregation pipeline builder for TypeScript projects.
+**PipeSafe Core** - A fully type-safe MongoDB aggregation pipeline builder for TypeScript projects.
 
-## Packages
+[![npm version](https://img.shields.io/npm/v/@pipesafe/core.svg)](https://www.npmjs.com/package/@pipesafe/core)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-This monorepo contains two packages with different licenses:
-
-| Package                                     | Description                        | License                               |
-| ------------------------------------------- | ---------------------------------- | ------------------------------------- |
-| [`@pipesafe/core`](./packages/core)         | Core pipeline builder              | [Apache 2.0](./packages/core/LICENSE) |
-| [`@pipesafe/manifold`](./packages/manifold) | DAG orchestration (Model, Project) | [ELv2](./packages/manifold/LICENSE)   |
-
-### Installation
+## Installation
 
 ```bash
-# Core library only
 npm install @pipesafe/core
-
-# With DAG orchestration
-npm install @pipesafe/core @pipesafe/manifold
 ```
 
 ## Purpose
@@ -48,7 +38,7 @@ type User = {
 
 const pipeline = new Pipeline<User>()
   .match({
-    "metadata.isActive": true, // ✅ Type-checked field paths
+    "metadata.isActive": true, // Type-checked field paths
   })
   .project({
     userId: 1,
@@ -77,20 +67,11 @@ const pipelineJson = pipeline.getPipeline();
 
 ## Connections
 
-PipeSafe supports three flexible connection patterns, each offering different advantages and use cases. The **Singleton Pattern** is most similar to Mongoose's `mongoose.connect()` approach, making it familiar for developers coming from Mongoose.
-
-> **Note:** We intend to make the types stricter for each option so that errors are specific to the connection pattern in use.
+PipeSafe supports three flexible connection patterns, each offering different advantages and use cases. The **Singleton Pattern** is most similar to Mongoose's `mongoose.connect()` approach.
 
 ### Pattern 1: Singleton Pattern (Similar to Mongoose)
 
-Connect once using `pipesafe.connect(uri)` and access databases/collections through the singleton instance. This pattern is ideal for applications with a single database connection.
-
-**Advantages:**
-
-- Simple and familiar to Mongoose users
-- Less boilerplate - connect once, use everywhere
-- Ideal for applications with a single database connection
-- Collections created without explicit client automatically use singleton connection
+Connect once using `pipesafe.connect(uri)` and access databases/collections through the singleton instance.
 
 ```typescript
 import { pipesafe, Collection } from "@pipesafe/core";
@@ -116,14 +97,7 @@ const cursor2 = await anotherCollection.aggregate().execute();
 
 ### Pattern 2: Chained Pattern
 
-Create `Database` or `Collection` instances directly with a client. This pattern provides explicit connection management and is better suited for multi-database scenarios.
-
-**Advantages:**
-
-- Explicit connection management - you know exactly which client/database you're using
-- Better for multi-database scenarios
-- Dependency injection friendly - easy to pass mock clients for testing
-- More testable - each instance has its own connection context
+Create `Database` or `Collection` instances directly with a client.
 
 ```typescript
 import { MongoClient } from "mongodb";
@@ -152,14 +126,7 @@ const results2 = await cursor2.toArray();
 
 ### Pattern 3: On Execution Pattern
 
-Pass the client directly to the `execute()` method. This provides maximum flexibility for ad-hoc queries or when you need to override the connection per query.
-
-**Advantages:**
-
-- Maximum flexibility - can override connection per query
-- Useful for ad-hoc queries or one-off operations
-- Allows using different connections for different operations
-- Good for testing individual queries without setting up full connection context
+Pass the client directly to the `execute()` method.
 
 ```typescript
 import { MongoClient } from "mongodb";
@@ -251,94 +218,14 @@ await users.bulkWrite([
 ]);
 ```
 
-All methods use MongoDB driver types for parameters and return values, providing full type safety while maintaining familiar MongoDB semantics.
+## DAG Orchestration
 
-## DAG Model Composition
-
-> **Note:** DAG features require the `@pipesafe/manifold` package.
-
-PipeSafe supports composing pipelines into a Directed Acyclic Graph (DAG) with typed dependencies and configurable materialization strategies, inspired by dbt's approach but tailored for MongoDB.
-
-### Defining Models
-
-Models are standalone pipeline definitions with typed input/output:
-
-```typescript
-import { Collection } from "@pipesafe/core";
-import { Model, Project } from "@pipesafe/manifold";
-
-// Source collection
-const RawEventsCollection = new Collection<RawEvent>({
-  collectionName: "raw_events",
-});
-
-// Staging model - filters and transforms raw data
-const stgEvents = new Model({
-  name: "stg_events",
-  from: RawEventsCollection,
-  pipeline: (p) =>
-    p
-      .match({ _deleted: { $ne: true } })
-      .set({ eventDate: { $dateTrunc: { date: "$timestamp", unit: "day" } } }),
-  materialize: { type: "collection", mode: Model.Mode.Replace },
-});
-
-// Downstream model - depends on stgEvents (type-safe!)
-const dailyMetrics = new Model({
-  name: "daily_metrics",
-  from: stgEvents,
-  pipeline: (p) =>
-    p.group({
-      _id: "$eventDate",
-      totalEvents: { $count: {} },
-      uniqueUsers: { $addToSet: "$userId" },
-    }),
-  materialize: { type: "collection", mode: Model.Mode.Upsert },
-});
-```
-
-### Creating a Project
-
-Projects orchestrate model execution with automatic dependency discovery. Just specify your leaf models - all upstream dependencies (via `from`) and lookup dependencies (via `lookup`/`unionWith`) are automatically included:
-
-```typescript
-const analyticsProject = new Project({
-  name: "analytics",
-  // Only specify leaf models - stgEvents is auto-discovered as a dependency
-  models: [dailyMetrics],
-});
-
-// View execution plan
-console.log(analyticsProject.plan().toString());
-// Stage 1: stg_events
-// Stage 2: daily_metrics
-
-// View as Mermaid diagram
-console.log(analyticsProject.toMermaid());
-
-// Run all models in dependency order
-await analyticsProject.run({
-  client: mongoClient,
-  databaseName: "analytics_db",
-});
-```
-
-### Materialization Strategies
-
-- **view** - Creates a MongoDB view
-- **collection** with preset modes:
-  - `Model.Mode.Replace` - Replace entire collection using `$out`
-  - `Model.Mode.Upsert` - Upsert by `_id` using `$merge`
-  - `Model.Mode.Append` - Insert only, fail on match
-  - `{ $merge: { on, whenMatched, whenNotMatched } }` - Custom merge options
+For DAG model composition and orchestration features (Model, Project), see the companion package [`@pipesafe/manifold`](https://www.npmjs.com/package/@pipesafe/manifold).
 
 ## Status
 
-PipeSafe is actively under development. We're continuously working on improving type safety, adding new features, and enhancing the developer experience. Contributions, feedback, and suggestions are welcome!
+PipeSafe is actively under development. Contributions, feedback, and suggestions are welcome!
 
 ## License
 
-This project uses dual licensing:
-
-- **`@pipesafe/core`** - [Apache License 2.0](./packages/core/LICENSE) (OSI-approved). Core pipeline builder.
-- **`@pipesafe/manifold`** - [Elastic License 2.0](./packages/manifold/LICENSE). DAG execution and materialization features.
+[Apache License 2.0](https://opensource.org/licenses/Apache-2.0)

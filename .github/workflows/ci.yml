@@ -139,7 +139,7 @@ jobs:
           HAS_ERROR=0
 
           # Check each publishable package
-          for PKG in packages/tmql packages/tmql-orchestration; do
+          for PKG in packages/core packages/manifold; do
             PKG_NAME=$(basename $PKG)
             PKG_JSON="$PKG/package.json"
 

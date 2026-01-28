@@ -1,12 +1,12 @@
 {
-  "name": "tmql-monorepo",
+  "name": "pipesafe-monorepo",
   "version": "0.0.0",
   "private": true,
-  "description": "Typed Mongo Query Language - Monorepo for tmql packages",
+  "description": "PipeSafe - Fully type-safe MongoDB aggregation builder for TypeScript projects",
   "author": "Ryan Peggs & Tim Vyas",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/covahltd/tmql.git"
+    "url": "git+https://github.com/pipesafe/pipesafe.git"
   },
   "type": "module",
   "workspaces": [
@@ -35,7 +35,7 @@
   "scripts": {
     "build": "bun run build:packages",
     "build:packages": "tsc --build --force",
-    "build:watch": "tsc --build --watch packages/tmql packages/tmql-orchestration",
+    "build:watch": "tsc --build --watch packages/core packages/manifold",
     "clean": "rm -rf packages/*/dist",
     "prepare": "bunx lefthook install",
     "changeset": "changeset",

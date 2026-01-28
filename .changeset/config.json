@@ -3,7 +3,7 @@
   "changelog": "@changesets/cli/changelog",
   "commit": false,
   "fixed": [],
-  "linked": [["tmql", "tmql-orchestration"]],
+  "linked": [["@pipesafe/core", "@pipesafe/manifold"]],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",

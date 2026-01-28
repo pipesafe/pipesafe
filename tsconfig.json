@@ -6,13 +6,13 @@
   },
   "include": [
     ".claude/**/*.ts",
-    "packages/tmql/examples/**/*.ts",
-    "packages/tmql/benchmarking/**/*.ts",
-    "packages/tmql-orchestration/examples/**/*.ts"
+    "packages/core/examples/**/*.ts",
+    "packages/core/benchmarking/**/*.ts",
+    "packages/manifold/examples/**/*.ts"
   ],
   "exclude": ["dist/**/*", "**/node_modules/**"],
   "references": [
-    { "path": "./packages/tmql" },
-    { "path": "./packages/tmql-orchestration" }
+    { "path": "./packages/core" },
+    { "path": "./packages/manifold" }
   ]
 }

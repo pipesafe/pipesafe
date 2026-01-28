@@ -1,0 +1,49 @@
+{
+  "name": "@pipesafe/manifold",
+  "version": "0.5.1",
+  "description": "PipeSafe Manifold - DAG composition and orchestration layer for @pipesafe/core",
+  "author": "Ryan Peggs & Tim Vyas",
+  "license": "Elastic-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pipesafe/pipesafe.git",
+    "directory": "packages/manifold"
+  },
+  "keywords": [
+    "mongodb",
+    "dag",
+    "orchestration",
+    "data-pipeline",
+    "etl",
+    "pipesafe",
+    "materialization"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@pipesafe/core": ">=0.5.0 <1.0.0"
+  },
+  "dependencies": {
+    "mongodb": "^6.17.0"
+  },
+  "devDependencies": {
+    "@pipesafe/core": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}
