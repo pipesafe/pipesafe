@@ -13,6 +13,8 @@ const ANIMATION_CONFIG = {
 
 // Animation State Management
 let animationTimeouts = [];
+let hasAnimatedRuntime = false;
+let hasAnimatedCompile = false;
 
 function clearAnimations() {
   animationTimeouts.forEach((timeout) => clearTimeout(timeout));
@@ -257,9 +259,15 @@ function replayAnimations() {
   clearAnimations();
   resetState();
 
-  // Small delay before starting
+  // Reset animation tracking
+  hasAnimatedRuntime = false;
+  hasAnimatedCompile = false;
+
+  // Small delay before starting both animations
   animationTimeouts.push(
     setTimeout(() => {
+      hasAnimatedRuntime = true;
+      hasAnimatedCompile = true;
       animateCompileTime();
       animateRuntime();
     }, 100)
@@ -271,11 +279,37 @@ document.addEventListener("DOMContentLoaded", () => {
   // Cache DOM elements once
   initDOMCache();
 
-  // Initial delay to let the page settle
-  setTimeout(() => {
-    animateCompileTime();
-    animateRuntime();
-  }, 500);
+  // Set up Intersection Observer for scroll-triggered animations
+  const observerOptions = {
+    root: null,
+    rootMargin: "0px",
+    threshold: 0.3, // Trigger when 30% of the terminal is visible
+  };
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+
+        if (id === "runtime-terminal" && !hasAnimatedRuntime) {
+          hasAnimatedRuntime = true;
+          setTimeout(animateRuntime, 100);
+        }
+
+        if (id === "compile-terminal" && !hasAnimatedCompile) {
+          hasAnimatedCompile = true;
+          setTimeout(animateCompileTime, 100);
+        }
+      }
+    });
+  }, observerOptions);
+
+  // Observe both terminal sections
+  const runtimeTerminal = document.getElementById("runtime-terminal");
+  const compileTerminal = document.getElementById("compile-terminal");
+
+  if (runtimeTerminal) observer.observe(runtimeTerminal);
+  if (compileTerminal) observer.observe(compileTerminal);
 });
 
 // Make functions globally accessible for inline onclick
