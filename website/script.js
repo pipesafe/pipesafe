@@ -13,6 +13,8 @@ const ANIMATION_CONFIG = {
 
 // Animation State Management
 let animationTimeouts = [];
+let hasAnimatedRuntime = false;
+let hasAnimatedCompile = false;
 
 function clearAnimations() {
   animationTimeouts.forEach((timeout) => clearTimeout(timeout));
@@ -253,15 +255,41 @@ function animateRuntime() {
   );
 }
 
+function isInView(element) {
+  const rect = element.getBoundingClientRect();
+  const windowHeight =
+    window.innerHeight || document.documentElement.clientHeight;
+  return (
+    rect.top < windowHeight &&
+    rect.bottom > 0 &&
+    rect.height * 0.5 <
+      Math.min(rect.bottom, windowHeight) - Math.max(rect.top, 0)
+  );
+}
+
 function replayAnimations() {
   clearAnimations();
   resetState();
 
-  // Small delay before starting
+  // Reset animation tracking
+  hasAnimatedRuntime = false;
+  hasAnimatedCompile = false;
+
+  const runtimeTerminal = document.getElementById("runtime-terminal");
+  const compileTerminal = document.getElementById("compile-terminal");
+
+  // Only start animations for terminals currently in view
+  // Others will trigger via Intersection Observer when scrolled to
   animationTimeouts.push(
     setTimeout(() => {
-      animateCompileTime();
-      animateRuntime();
+      if (runtimeTerminal && isInView(runtimeTerminal)) {
+        hasAnimatedRuntime = true;
+        animateRuntime();
+      }
+      if (compileTerminal && isInView(compileTerminal)) {
+        hasAnimatedCompile = true;
+        animateCompileTime();
+      }
     }, 100)
   );
 }
@@ -271,13 +299,49 @@ document.addEventListener("DOMContentLoaded", () => {
   // Cache DOM elements once
   initDOMCache();
 
-  // Initial delay to let the page settle
-  setTimeout(() => {
-    animateCompileTime();
-    animateRuntime();
-  }, 500);
+  // Set up Intersection Observer for scroll-triggered animations
+  const observerOptions = {
+    root: null,
+    rootMargin: "0px",
+    threshold: 0.5, // Trigger when 50% of the terminal is visible
+  };
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+
+        if (id === "runtime-terminal" && !hasAnimatedRuntime) {
+          hasAnimatedRuntime = true;
+          setTimeout(animateRuntime, 100);
+        }
+
+        if (id === "compile-terminal" && !hasAnimatedCompile) {
+          hasAnimatedCompile = true;
+          setTimeout(animateCompileTime, 100);
+        }
+      }
+    });
+  }, observerOptions);
+
+  // Observe both terminal sections
+  const runtimeTerminal = document.getElementById("runtime-terminal");
+  const compileTerminal = document.getElementById("compile-terminal");
+
+  if (runtimeTerminal) observer.observe(runtimeTerminal);
+  if (compileTerminal) observer.observe(compileTerminal);
 });
+
+// Copy command to clipboard
+function copyCommand() {
+  navigator.clipboard.writeText("npm install pipesafe").then(() => {
+    const feedback = document.getElementById("copy-feedback");
+    feedback.classList.add("visible");
+    setTimeout(() => feedback.classList.remove("visible"), 1500);
+  });
+}
 
 // Make functions globally accessible for inline onclick
 window.startFixAnimation = startFixAnimation;
 window.replayAnimations = replayAnimations;
+window.copyCommand = copyCommand;
