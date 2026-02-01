@@ -1,0 +1,14 @@
+version = 1
+
+[merge]
+method = "squash"
+prioritize_ready_to_merge = true
+priority_merge_label = "fast-track"
+notify_on_conflict = false
+
+[merge.message]
+title = "pull_request_title"
+body = "github_default"
+
+[approve]
+auto_approve_usernames = ["dependabot"]
