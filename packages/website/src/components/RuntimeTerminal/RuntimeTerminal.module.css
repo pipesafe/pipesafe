@@ -1,0 +1,175 @@
+.code {
+  white-space: pre;
+  max-width: 100%;
+  margin: 0;
+  font-family: inherit;
+}
+
+.comment {
+  color: var(--color-text-comment);
+}
+
+.keyword,
+.string {
+  color: var(--color-primary);
+}
+
+.field {
+  color: var(--color-text);
+}
+
+.operator {
+  color: #b8c4ce;
+}
+
+/* Step Indicators */
+.stepIndicator {
+  font-size: var(--font-size-md);
+  opacity: 0;
+  transition: opacity 0.2s ease-in;
+  margin-bottom: var(--spacing-xs);
+}
+
+.stepIndicator.visible {
+  opacity: 1;
+}
+
+.stepRunning {
+  color: var(--color-warning);
+}
+
+.stepDone {
+  display: none;
+  color: var(--color-primary);
+}
+
+.stepFailed {
+  color: var(--color-error);
+}
+
+.stepIndicator.done .stepRunning {
+  display: none;
+}
+
+.stepIndicator.done .stepDone {
+  display: inline;
+}
+
+.dots::after {
+  content: "";
+  animation: dots 1.5s steps(4, end) infinite;
+}
+
+@keyframes dots {
+  0%,
+  20% {
+    content: "";
+  }
+  40% {
+    content: ".";
+  }
+  60% {
+    content: "..";
+  }
+  80%,
+  100% {
+    content: "...";
+  }
+}
+
+/* Error Sections */
+.errorSections {
+  display: flex;
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-xl);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-border);
+  opacity: 0;
+  transition: opacity 0.3s ease-in;
+}
+
+.errorSections.visible {
+  opacity: 1;
+}
+
+.errorSection {
+  flex: 1;
+  padding: var(--spacing-lg);
+  background-color: var(--color-bg-section);
+  border-radius: var(--radius-md);
+}
+
+.errorSectionTitle {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin-bottom: var(--spacing-md);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.errorSectionTitle.compile {
+  color: var(--color-primary);
+}
+
+.errorSectionTitle.runtime {
+  color: var(--color-error);
+}
+
+.errorNone {
+  color: var(--color-text-comment);
+  font-style: italic;
+}
+
+.runtimeErrorMsg,
+.runtimeErrorNote {
+  opacity: 0;
+  transition: opacity 0.3s ease-in;
+}
+
+.runtimeErrorMsg {
+  color: var(--color-error);
+  font-size: var(--font-size-md);
+  margin-bottom: var(--spacing-sm);
+}
+
+.runtimeErrorNote {
+  color: var(--color-text-comment);
+  font-size: var(--font-size-sm);
+}
+
+.runtimeErrorMsg.visible,
+.runtimeErrorNote.visible {
+  opacity: 1;
+}
+
+@media (max-width: 700px) {
+  .errorSections {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 600px) {
+  .code {
+    font-size: 0.7rem;
+  }
+
+  .stepIndicator {
+    font-size: 0.7rem;
+  }
+
+  .runtimeErrorMsg {
+    font-size: 0.7rem;
+  }
+
+  .runtimeErrorNote {
+    font-size: var(--font-size-xs);
+  }
+
+  .errorSectionTitle {
+    font-size: 0.7rem;
+  }
+
+  .errorNone {
+    font-size: 0.7rem;
+  }
+}
