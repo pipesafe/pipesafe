@@ -1,5 +1,11 @@
 # @pipesafe/core
 
+## 0.6.1
+
+### Patch Changes
+
+- 4fd4b30: Add default export condition to package.json exports for broader bundler compatibility
+
 ## 0.6.0
 
 ### Minor Changes
