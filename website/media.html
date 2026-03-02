@@ -1,0 +1,1044 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PipeSafe — Media Assets</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        margin: 0;
+        padding: 2rem;
+        background: #1a1a1a;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2.5rem;
+        font-family: "JetBrains Mono", monospace;
+        color: #ccc;
+      }
+
+      .instructions {
+        max-width: 1200px;
+        text-align: center;
+        font-size: 0.85rem;
+        line-height: 1.7;
+        font-family: sans-serif;
+      }
+
+      .instructions strong {
+        color: #00ed64;
+        font-size: 1rem;
+      }
+
+      .instructions .meta {
+        margin-top: 0.5rem;
+        color: #889ba7;
+        font-size: 0.8rem;
+        font-style: italic;
+      }
+
+      hr.divider {
+        width: 100%;
+        max-width: 1584px;
+        border: none;
+        border-top: 1px solid #1a3a4a;
+        margin: 0.5rem 0;
+      }
+
+      /* ─── Shared card base ─── */
+      .card {
+        background-color: #001e2b;
+        position: relative;
+        overflow: hidden;
+        font-family: "JetBrains Mono", monospace;
+      }
+
+      .card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(0, 237, 100, 0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(0, 237, 100, 0.03) 1px, transparent 1px);
+        background-size: 40px 40px;
+        pointer-events: none;
+      }
+
+      .corner {
+        position: absolute;
+        width: 48px;
+        height: 48px;
+        border-color: rgba(0, 237, 100, 0.15);
+        border-style: solid;
+        border-width: 0;
+      }
+
+      .corner.tl {
+        top: 20px;
+        left: 20px;
+        border-top-width: 2px;
+        border-left-width: 2px;
+      }
+      .corner.tr {
+        top: 20px;
+        right: 20px;
+        border-top-width: 2px;
+        border-right-width: 2px;
+      }
+      .corner.bl {
+        bottom: 20px;
+        left: 20px;
+        border-bottom-width: 2px;
+        border-left-width: 2px;
+      }
+      .corner.br {
+        bottom: 20px;
+        right: 20px;
+        border-bottom-width: 2px;
+        border-right-width: 2px;
+      }
+
+      /* ─── 1. LinkedIn Banner (1584 x 396) ─── */
+      .banner {
+        width: 1584px;
+        height: 396px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .banner .glow {
+        position: absolute;
+        width: 600px;
+        height: 200px;
+        background: radial-gradient(
+          ellipse,
+          rgba(0, 237, 100, 0.08) 0%,
+          transparent 70%
+        );
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
+
+      .banner-content {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      .banner-content .logo {
+        font-size: 4rem;
+        font-weight: 600;
+        color: #00ed64;
+        letter-spacing: 0.1em;
+      }
+
+      .banner-content .tagline {
+        font-size: 1.15rem;
+        color: #889ba7;
+        letter-spacing: 0.02em;
+      }
+
+      .install {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background-color: #0d2c3a;
+        padding: 0.6rem 1.4rem;
+        border-radius: 6px;
+        border: 1px solid #1a3a4a;
+        font-size: 0.95rem;
+        margin-top: 0.25rem;
+      }
+
+      .install .prompt {
+        color: #00ed64;
+      }
+      .install .command {
+        color: #e3fcf7;
+      }
+
+      /* ─── 2. Code Showcase (1200 x 627) ─── */
+      .code-showcase {
+        width: 1200px;
+        height: 627px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 2.5rem;
+      }
+
+      .code-showcase-inner {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        width: 100%;
+      }
+
+      .code-showcase .glow {
+        position: absolute;
+        width: 500px;
+        height: 300px;
+        background: radial-gradient(
+          ellipse,
+          rgba(0, 237, 100, 0.06) 0%,
+          transparent 70%
+        );
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
+
+      .code-side {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .code-side .label {
+        font-size: 0.55rem;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        margin-bottom: 0.5rem;
+        white-space: nowrap;
+      }
+
+      .code-side.bad .label {
+        color: #ff6f61;
+      }
+      .code-side.errors .label {
+        color: #ffbd2e;
+      }
+      .code-side.good .label {
+        color: #00ed64;
+      }
+
+      .terminal {
+        background: #0d2c3a;
+        border: 1px solid #1a3a4a;
+        border-radius: 6px;
+        overflow: hidden;
+      }
+
+      .terminal-bar {
+        background: #112733;
+        padding: 0.35rem 0.6rem;
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+      }
+
+      .terminal-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+
+      .terminal-dot.red {
+        background: #ff5f56;
+      }
+      .terminal-dot.yellow {
+        background: #ffbd2e;
+      }
+      .terminal-dot.green {
+        background: #27c93f;
+      }
+
+      .terminal-title {
+        color: #5c6d75;
+        font-size: 0.5rem;
+        margin-left: 0.4rem;
+      }
+
+      .terminal pre {
+        margin: 0;
+        padding: 0.6rem 0.75rem;
+        font-size: 0.55rem;
+        line-height: 1.55;
+        color: #e3fcf7;
+        font-family: "JetBrains Mono", monospace;
+        overflow: hidden;
+      }
+
+      /* syntax colors */
+      .kw {
+        color: #00ed64;
+      }
+      .str {
+        color: #00ed64;
+      }
+      .num {
+        color: #ffbd2e;
+      }
+      .cm {
+        color: #5c6d75;
+      }
+      .op {
+        color: #b8c4ce;
+      }
+      .field {
+        color: #e3fcf7;
+      }
+      .err,
+      err {
+        color: #ff6f61;
+        text-decoration: underline #ff6f61;
+        text-decoration-thickness: 2px;
+        text-underline-offset: 2px;
+      }
+      .type {
+        color: #889ba7;
+      }
+
+      .vs-text {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        align-self: center;
+        gap: 0.25rem;
+        flex-shrink: 0;
+        padding-top: 1.5rem;
+      }
+
+      .vs-text .arrow {
+        color: #3d5a6c;
+        font-size: 1.2rem;
+      }
+
+      .result-annotation {
+        margin-top: 0.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+      }
+
+      .result-type {
+        font-size: 0.5rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-family: "JetBrains Mono", monospace;
+        display: inline-block;
+      }
+
+      .result-type.any {
+        background: rgba(255, 111, 97, 0.08);
+        border: 1px solid rgba(255, 111, 97, 0.2);
+        color: #ff6f61;
+      }
+
+      .result-type.never {
+        background: rgba(255, 189, 46, 0.08);
+        border: 1px solid rgba(255, 189, 46, 0.2);
+        color: #ffbd2e;
+      }
+
+      .result-type.typed {
+        background: rgba(0, 237, 100, 0.08);
+        border: 1px solid rgba(0, 237, 100, 0.2);
+        color: #00ed64;
+      }
+
+      .error-summary {
+        font-size: 0.48rem;
+        color: #5c6d75;
+        letter-spacing: 0.02em;
+      }
+
+      .error-summary .count {
+        font-weight: 600;
+      }
+      .error-summary .count.bad {
+        color: #ff6f61;
+      }
+      .error-summary .count.good {
+        color: #00ed64;
+      }
+
+      .error-list {
+        margin-top: 0.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+      }
+
+      .error-list .err-line {
+        font-size: 0.45rem;
+        color: #ff6f61;
+        font-family: "JetBrains Mono", monospace;
+        line-height: 1.4;
+      }
+
+      .error-list .err-detail {
+        font-size: 0.4rem;
+        color: #5c6d75;
+        font-family: "JetBrains Mono", monospace;
+        margin-left: 0.75rem;
+        line-height: 1.4;
+      }
+
+      /* ─── 3. Feature Card (1200 x 627) ─── */
+      .feature-card {
+        width: 1200px;
+        height: 627px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 3rem 4rem;
+      }
+
+      .feature-card .glow {
+        position: absolute;
+        width: 600px;
+        height: 250px;
+        background: radial-gradient(
+          ellipse,
+          rgba(0, 237, 100, 0.06) 0%,
+          transparent 70%
+        );
+        top: 35%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
+
+      .feature-header {
+        position: relative;
+        z-index: 1;
+        text-align: center;
+        margin-bottom: 2.5rem;
+      }
+
+      .feature-header .logo {
+        font-size: 2.5rem;
+        font-weight: 600;
+        color: #00ed64;
+        letter-spacing: 0.08em;
+      }
+
+      .feature-header .subtitle {
+        font-size: 0.95rem;
+        color: #889ba7;
+        margin-top: 0.5rem;
+      }
+
+      .features-grid {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.25rem 3rem;
+        width: 100%;
+        max-width: 900px;
+      }
+
+      .feature-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+      }
+
+      .feature-icon {
+        color: #00ed64;
+        font-size: 1.1rem;
+        flex-shrink: 0;
+        margin-top: 0.15rem;
+      }
+
+      .feature-item h3 {
+        margin: 0;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #e3fcf7;
+      }
+
+      .feature-item p {
+        margin: 0.25rem 0 0 0;
+        font-size: 0.7rem;
+        color: #889ba7;
+        line-height: 1.5;
+      }
+
+      .feature-footer {
+        position: relative;
+        z-index: 1;
+        margin-top: 2.5rem;
+        display: flex;
+        align-items: center;
+        gap: 2rem;
+        font-size: 0.75rem;
+        color: #5c6d75;
+      }
+
+      .feature-footer .badge {
+        background: #0d2c3a;
+        border: 1px solid #1a3a4a;
+        border-radius: 4px;
+        padding: 0.35rem 0.75rem;
+        color: #889ba7;
+      }
+
+      /* ─── 4. Ecosystem Card (1200 x 627) ─── */
+      .ecosystem-card {
+        width: 1200px;
+        height: 627px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 3rem 4rem;
+      }
+
+      .ecosystem-card .glow {
+        position: absolute;
+        width: 700px;
+        height: 300px;
+        background: radial-gradient(
+          ellipse,
+          rgba(0, 237, 100, 0.05) 0%,
+          transparent 70%
+        );
+        top: 45%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
+
+      .eco-header {
+        position: relative;
+        z-index: 1;
+        text-align: center;
+        margin-bottom: 2.5rem;
+      }
+
+      .eco-header .logo {
+        font-size: 2rem;
+        font-weight: 600;
+        color: #00ed64;
+        letter-spacing: 0.08em;
+      }
+
+      .eco-header .subtitle {
+        font-size: 0.85rem;
+        color: #889ba7;
+        margin-top: 0.4rem;
+      }
+
+      .eco-packages {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: stretch;
+        gap: 2rem;
+        width: 100%;
+        max-width: 900px;
+      }
+
+      .eco-package {
+        flex: 1;
+        background: #0d2c3a;
+        border: 1px solid #1a3a4a;
+        border-radius: 8px;
+        padding: 1.75rem;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .eco-package .pkg-name {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #00ed64;
+        margin-bottom: 0.25rem;
+      }
+
+      .eco-package .pkg-version {
+        font-size: 0.65rem;
+        color: #5c6d75;
+        margin-bottom: 1rem;
+      }
+
+      .eco-package .pkg-desc {
+        font-size: 0.75rem;
+        color: #e3fcf7;
+        line-height: 1.6;
+        margin-bottom: 1.25rem;
+      }
+
+      .eco-package .pkg-features {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        flex: 1;
+      }
+
+      .eco-package .pkg-features li {
+        font-size: 0.7rem;
+        color: #889ba7;
+        line-height: 1.5;
+        padding: 0.3rem 0;
+        border-top: 1px solid rgba(26, 58, 74, 0.6);
+      }
+
+      .eco-package .pkg-features li:first-child {
+        border-top: none;
+      }
+
+      .eco-package .pkg-features li::before {
+        content: ">";
+        color: #00ed64;
+        margin-right: 0.5rem;
+        font-weight: 600;
+      }
+
+      .eco-package .pkg-license {
+        margin-top: 1rem;
+        font-size: 0.6rem;
+        color: #5c6d75;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+      }
+
+      .eco-connector {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #3d5a6c;
+        font-size: 0.7rem;
+        gap: 0.25rem;
+      }
+
+      .eco-connector .plus {
+        font-size: 1.5rem;
+        color: #00ed64;
+      }
+
+      .eco-footer {
+        position: relative;
+        z-index: 1;
+        margin-top: 2rem;
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+      }
+
+      .eco-footer .link {
+        font-size: 0.75rem;
+        color: #889ba7;
+        background: #0d2c3a;
+        border: 1px solid #1a3a4a;
+        border-radius: 4px;
+        padding: 0.4rem 0.8rem;
+      }
+
+      .eco-footer .link span {
+        color: #00ed64;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ════════════════════════════════════════════════════════════════
+       ASSET 1: Profile Banner (1584 x 396)
+       ════════════════════════════════════════════════════════════════ -->
+
+    <div class="instructions">
+      <strong>1. Profile Banner</strong> — 1584 x 396px<br />
+      Use as a profile background/cover image.
+      <div class="meta">
+        DevTools → select the element → right-click → "Capture node screenshot"
+        (Chrome)
+      </div>
+    </div>
+
+    <div class="card banner">
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+      <div class="glow"></div>
+
+      <div class="banner-content">
+        <div class="logo">PipeSafe</div>
+        <div class="tagline">Type-safe MongoDB aggregations.</div>
+        <div class="install">
+          <span class="prompt">$</span>
+          <span class="command">npm install @pipesafe/core</span>
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- ════════════════════════════════════════════════════════════════
+       ASSET 2: Code Showcase (1200 x 627)
+       Title: "PipeSafe — Catch MongoDB bugs at compile time"
+       Description: "PipeSafe validates field references, operator types,
+       and pipeline stage arguments at compile time. No more runtime
+       surprises in production. Published on NPM as @pipesafe/core."
+       ════════════════════════════════════════════════════════════════ -->
+
+    <div class="instructions">
+      <strong>2. Code Showcase</strong> — 1200 x 627px<br />
+      Side-by-side comparison. Great for social posts and featured sections.
+      <div class="meta">
+        <b>Title:</b> PipeSafe — Catch MongoDB bugs at compile time<br />
+        <b>Description:</b> PipeSafe validates field references, operator types,
+        and pipeline stage arguments at compile time. No more runtime surprises
+        in production. Published on NPM as @pipesafe/core.
+      </div>
+    </div>
+
+    <div class="card code-showcase">
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+      <div class="glow"></div>
+
+      <div class="code-showcase-inner">
+        <!-- Column 1: Without PipeSafe -->
+        <div class="code-side bad">
+          <div class="label">Without PipeSafe</div>
+          <div class="terminal">
+            <div class="terminal-bar">
+              <div class="terminal-dot red"></div>
+              <div class="terminal-dot yellow"></div>
+              <div class="terminal-dot green"></div>
+              <div class="terminal-title">aggregation.ts</div>
+            </div>
+            <pre><kw>const</kw> orders =
+  db.<kw>collection</kw>&lt;<type>Order</type>&gt;(<str>'orders'</str>)
+
+<kw>const</kw> largeOrderData = orders.<kw>aggregate</kw>([
+  { <kw>$lookup</kw>: {
+    <field>from</field>: <str>"users"</str>,
+    <field>localField</field>: <str>"userId"</str>
+  }},
+  { <kw>$match</kw>: {
+    <field>total</field>: { <kw>$gt</kw>: <str>"100"</str> }
+  }},
+  { <kw>$set</kw>: {
+    <field>orderTotalWithTax</field>: {
+      <kw>$multiply</kw>: [<str>"$totl"</str>, <num>1.2</num>]
+    },
+    <field>fullName</field>: {
+      <kw>$concat</kw>: [<str>"$firstName"</str>, <num>123</num>]
+    }
+  }}
+])</pre>
+          </div>
+          <div class="result-annotation">
+            <div class="result-type any">largeOrderData: any</div>
+            <div class="error-summary">
+              <span class="count bad">4 bugs</span> · 0 caught
+            </div>
+          </div>
+        </div>
+
+        <div class="vs-text">
+          <span class="arrow">→</span>
+        </div>
+
+        <!-- Column 2: With PipeSafe — compile errors -->
+        <div class="code-side errors">
+          <div class="label">With PipeSafe — compile errors</div>
+          <div class="terminal">
+            <div class="terminal-bar">
+              <div class="terminal-dot red"></div>
+              <div class="terminal-dot yellow"></div>
+              <div class="terminal-dot green"></div>
+              <div class="terminal-title">pipeline.ts — 4 errors</div>
+            </div>
+            <pre><kw>const</kw> orders =
+  db.<kw>collection</kw>&lt;<type>Order</type>&gt;(<str>'orders'</str>)
+
+<kw>const</kw> largeOrderData = orders.<kw>aggregate</kw>()
+  .<err>lookup</err>({
+    <field>from</field>: <str>"users"</str>,
+    <field>localField</field>: <str>"userId"</str>
+  })
+  .<kw>match</kw>({
+    <field>total</field>: { <kw>$gt</kw>: <err>"100"</err> }
+  })
+  .<kw>set</kw>({
+    <field>orderTotalWithTax</field>: {
+      <kw>$multiply</kw>: [<err>"$totl"</err>, <num>1.2</num>]
+    },
+    <field>fullName</field>: {
+      <kw>$concat</kw>: [<str>"$firstName"</str>, <err>123</err>]
+    }
+  })</pre>
+          </div>
+          <div class="result-annotation">
+            <div class="result-type never">largeOrderData: never</div>
+          </div>
+          <div class="error-list">
+            <div class="err-line">✗ $lookup missing required fields</div>
+            <div class="err-detail">Required: "foreignField", "as"</div>
+            <div class="err-line">
+              ✗ Type 'string' not assignable to 'number'
+            </div>
+            <div class="err-detail">$gt on number field requires number</div>
+            <div class="err-line">✗ "$totl" does not exist on Order</div>
+            <div class="err-detail">Did you mean "$total"?</div>
+            <div class="err-line">
+              ✗ Type 'number' not assignable to 'string'
+            </div>
+            <div class="err-detail">$concat operands must be strings</div>
+          </div>
+        </div>
+
+        <div class="vs-text">
+          <span class="arrow">→</span>
+        </div>
+
+        <!-- Column 3: With PipeSafe — fixed -->
+        <div class="code-side good">
+          <div class="label">With PipeSafe — all fixed ✓</div>
+          <div class="terminal">
+            <div class="terminal-bar">
+              <div class="terminal-dot red"></div>
+              <div class="terminal-dot yellow"></div>
+              <div class="terminal-dot green"></div>
+              <div class="terminal-title">pipeline.ts — 0 errors</div>
+            </div>
+            <pre><kw>const</kw> orders =
+  db.<kw>collection</kw>&lt;<type>Order</type>&gt;(<str>'orders'</str>)
+
+<kw>const</kw> largeOrderData = orders.<kw>aggregate</kw>()
+  .<kw>lookup</kw>({
+    <field>from</field>: <str>"users"</str>,
+    <field>localField</field>: <str>"userId"</str>,
+    <field>foreignField</field>: <str>"_id"</str>,
+    <field>as</field>: <str>"user"</str>
+  })
+  .<kw>match</kw>({
+    <field>total</field>: { <kw>$gt</kw>: <num>100</num> }
+  })
+  .<kw>set</kw>({
+    <field>orderTotalWithTax</field>: {
+      <kw>$multiply</kw>: [<str>"$total"</str>, <num>1.2</num>]
+    },
+    <field>fullName</field>: {
+      <kw>$concat</kw>: [<str>"$firstName"</str>, <str>" "</str>]
+    }
+  })</pre>
+          </div>
+          <div class="result-annotation">
+            <div class="result-type typed">
+              largeOrderData: { orderTotalWithTax: number; fullName: string }
+            </div>
+            <div class="error-summary">
+              <span class="count good">4 errors caught</span> at compile time
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- ════════════════════════════════════════════════════════════════
+       ASSET 3: Feature Card (1200 x 627)
+       Title: "Why PipeSafe?"
+       Description: "Type-safe MongoDB aggregation pipeline builder for
+       TypeScript. Validates stages, field references, and operator types
+       at compile time. Developed with input from the MongoDB Developer
+       Experience team. Available on NPM."
+       ════════════════════════════════════════════════════════════════ -->
+
+    <div class="instructions">
+      <strong>3. Feature Overview</strong> — 1200 x 627px<br />
+      Key selling points at a glance. Great for social sharing.
+      <div class="meta">
+        <b>Title:</b> Why PipeSafe?<br />
+        <b>Description:</b> Type-safe MongoDB aggregation pipeline builder for
+        TypeScript. Validates stages, field references, and operator types at
+        compile time. Developed with input from the MongoDB Developer Experience
+        team. Available on NPM.
+      </div>
+    </div>
+
+    <div class="card feature-card">
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+      <div class="glow"></div>
+
+      <div class="feature-header">
+        <div class="logo">PipeSafe</div>
+        <div class="subtitle">
+          Type-safe MongoDB aggregation pipeline builder for TypeScript
+        </div>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-item">
+          <span class="feature-icon">></span>
+          <div>
+            <h3>Compile-Time Validation</h3>
+            <p>
+              Catch missing fields, type mismatches, and invalid operators
+              before your code runs — not after deployment.
+            </p>
+          </div>
+        </div>
+        <div class="feature-item">
+          <span class="feature-icon">></span>
+          <div>
+            <h3>Type-Safe Field References</h3>
+            <p>
+              Field paths are validated against your document schema. Typos like
+              "$totl" are caught instantly.
+            </p>
+          </div>
+        </div>
+        <div class="feature-item">
+          <span class="feature-icon">></span>
+          <div>
+            <h3>Automatic Output Inference</h3>
+            <p>
+              Each pipeline stage correctly types its output. InferOutputType
+              gives you the final shape.
+            </p>
+          </div>
+        </div>
+        <div class="feature-item">
+          <span class="feature-icon">></span>
+          <div>
+            <h3>13 Pipeline Stages</h3>
+            <p>
+              $match, $project, $set, $group, $lookup, $unwind, $sort, $limit,
+              $skip, $unset, $replaceRoot, $unionWith, $out.
+            </p>
+          </div>
+        </div>
+        <div class="feature-item">
+          <span class="feature-icon">></span>
+          <div>
+            <h3>DAG Orchestration</h3>
+            <p>
+              @pipesafe/manifold composes pipelines into typed DAGs with
+              configurable materialization strategies.
+            </p>
+          </div>
+        </div>
+        <div class="feature-item">
+          <span class="feature-icon">></span>
+          <div>
+            <h3>MongoDB DevEx Input</h3>
+            <p>
+              Developed with input from the MongoDB Developer Experience team,
+              with an open funding application to the NLNet NGI Zero Commons
+              Fund.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="feature-footer">
+        <span class="badge">v0.6.0</span>
+        <span class="badge">@pipesafe/core</span>
+        <span class="badge">Apache 2.0</span>
+        <span>pipesafe.co.uk</span>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- ════════════════════════════════════════════════════════════════
+       ASSET 4: Ecosystem Card (1200 x 627)
+       Title: "The PipeSafe Ecosystem"
+       Description: "Two packages, one mission: make MongoDB aggregations
+       type-safe in TypeScript. @pipesafe/core for pipeline building,
+       @pipesafe/manifold for DAG orchestration and materialization."
+       ════════════════════════════════════════════════════════════════ -->
+
+    <div class="instructions">
+      <strong>4. Ecosystem Overview</strong> — 1200 x 627px<br />
+      Shows both packages side by side. Good for project pages and technical
+      posts.
+      <div class="meta">
+        <b>Title:</b> The PipeSafe Ecosystem<br />
+        <b>Description:</b> Two packages, one mission: make MongoDB aggregations
+        type-safe in TypeScript. @pipesafe/core for pipeline building,
+        @pipesafe/manifold for DAG orchestration and materialization.
+      </div>
+    </div>
+
+    <div class="card ecosystem-card">
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+      <div class="glow"></div>
+
+      <div class="eco-header">
+        <div class="logo">PipeSafe</div>
+        <div class="subtitle">Two packages. One type-safe ecosystem.</div>
+      </div>
+
+      <div class="eco-packages">
+        <div class="eco-package">
+          <div class="pkg-name">@pipesafe/core</div>
+          <div class="pkg-version">v0.6.0 — Published on NPM</div>
+          <div class="pkg-desc">
+            Type-safe MongoDB aggregation pipeline builder. Validates everything
+            at compile time.
+          </div>
+          <ul class="pkg-features">
+            <li>13 fully typed pipeline stages</li>
+            <li>Type-safe field path references</li>
+            <li>Expression operators ($concat, $multiply, etc.)</li>
+            <li>Collection-aware $lookup inference</li>
+            <li>Automatic output type inference</li>
+            <li>Flexible connection patterns</li>
+          </ul>
+          <div class="pkg-license">Apache 2.0 — Open Source</div>
+        </div>
+
+        <div class="eco-connector">
+          <span class="plus">+</span>
+        </div>
+
+        <div class="eco-package">
+          <div class="pkg-name">@pipesafe/manifold</div>
+          <div class="pkg-version">DAG Orchestration</div>
+          <div class="pkg-desc">
+            Compose pipelines into typed dependency graphs with materialization
+            strategies.
+          </div>
+          <ul class="pkg-features">
+            <li>dbt-inspired model composition</li>
+            <li>Typed pipeline dependencies</li>
+            <li>Materialization: view, replace, upsert, append</li>
+            <li>Topological execution ordering</li>
+            <li>Built for MongoDB-native workflows</li>
+            <li>SaaS hosted version planned</li>
+          </ul>
+          <div class="pkg-license">ELv2 — Commercial</div>
+        </div>
+      </div>
+
+      <div class="eco-footer">
+        <div class="link"><span>$</span> npm install @pipesafe/core</div>
+        <div class="link">github.com/pipesafe/pipesafe</div>
+        <div class="link">pipesafe.co.uk</div>
+      </div>
+    </div>
+  </body>
+</html>

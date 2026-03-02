@@ -38,6 +38,7 @@ function resetState() {
   DOM.allClear.classList.remove("visible");
   DOM.compileSection.classList.remove("shrunk");
   DOM.fixBtn.classList.remove("visible", "hidden");
+  if (DOM.typeResult) DOM.typeResult.classList.remove("visible");
 
   // Reset error underlines
   document.querySelectorAll(".error-underline").forEach((el) => {
@@ -73,6 +74,7 @@ const DOM = {
   allClear: null,
   compileSection: null,
   fixBtn: null,
+  typeResult: null,
 };
 
 function initDOMCache() {
@@ -87,6 +89,7 @@ function initDOMCache() {
   DOM.allClear = document.getElementById("all-clear");
   DOM.compileSection = document.getElementById("compile-section");
   DOM.fixBtn = document.getElementById("fix-btn");
+  DOM.typeResult = document.getElementById("type-result");
 }
 
 // Animation Functions
@@ -156,6 +159,7 @@ function animateFixing(startTime) {
         .forEach((c) => c.classList.remove("visible"));
       DOM.compileSection.classList.add("shrunk");
       DOM.allClear.classList.add("visible");
+      if (DOM.typeResult) DOM.typeResult.classList.add("visible");
     }, allFixedTime)
   );
 }
