@@ -1,4 +1,5 @@
 import Terminal from "../Terminal";
+import TypeTooltip from "../TypeTooltip";
 import { useIntersectionObserver, useTerminalAnimation } from "../../hooks";
 import styles from "./RuntimeTerminal.module.css";
 
@@ -24,8 +25,20 @@ export default function RuntimeTerminal({
   return (
     <Terminal title="WITHOUT PIPESAFE" terminalRef={ref}>
       <pre className={styles.code}>
-        <span className={styles.field}>db</span>.
-        <span className={styles.field}>orders</span>.
+        <span className={styles.keyword}>const</span>{" "}
+        <TypeTooltip content="const orders: Collection<Order>">
+          <span className={styles.field}>orders</span>
+        </TypeTooltip>{" "}
+        = <span className={styles.field}>db</span>.
+        <span className={styles.keyword}>collection</span>&lt;
+        <span className={styles.keyword}>Order</span>&gt;(
+        <span className={styles.string}>'orders'</span>){"\n"}
+        {"\n"}
+        <span className={styles.keyword}>const</span>{" "}
+        <TypeTooltip content="const largeOrderData: any">
+          <span className={styles.field}>largeOrderData</span>
+        </TypeTooltip>{" "}
+        = <span className={styles.field}>orders</span>.
         <span className={styles.keyword}>aggregate</span>([{"\n"}
         {"  "}
         {"{"} <span className={styles.string}>$lookup</span>: {"{"}
@@ -53,10 +66,10 @@ export default function RuntimeTerminal({
         {"{"} <span className={styles.string}>$set</span>: {"{"}
         {"\n"}
         {"    "}
-        <span className={styles.field}>withTax</span>: {"{"}{" "}
+        <span className={styles.field}>orderTotalWithTax</span>: {"{"}{" "}
         <span className={styles.operator}>$multiply</span>: [
         <span className={styles.string}>"$totl"</span>,{" "}
-        <span className={styles.field}>1.2</span>] {"},"},{"\n"}
+        <span className={styles.field}>1.2</span>] {"}"},{"\n"}
         {"    "}
         <span className={styles.field}>fullName</span>: {"{"}{" "}
         <span className={styles.operator}>$concat</span>: [{"\n"}
@@ -71,7 +84,7 @@ export default function RuntimeTerminal({
         {"}}"},{"\n"}
         {"  "}
         {"{"} <span className={styles.string}>$project</span>: {"{"}{" "}
-        <span className={styles.field}>withTax</span>:{" "}
+        <span className={styles.field}>orderTotalWithTax</span>:{" "}
         <span className={styles.field}>1</span>,{" "}
         <span className={styles.field}>fullName</span>:{" "}
         <span className={styles.field}>1</span> {"}"} {"}"}

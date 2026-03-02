@@ -13,7 +13,7 @@ export default function Terminal({
   terminalRef,
 }: TerminalProps) {
   return (
-    <div className={styles.terminal} ref={terminalRef}>
+    <div className={styles.terminal} ref={terminalRef} data-terminal>
       <div className={styles.header}>
         <div className={`${styles.dot} ${styles.red}`} />
         <div className={`${styles.dot} ${styles.yellow}`} />

@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import Terminal from "../Terminal";
+import TypeTooltip, {
+  OrderTypeContent,
+  ErrorTooltipContent,
+} from "../TypeTooltip";
 import { useIntersectionObserver, useFixAnimation } from "../../hooks";
 import { ANIMATION_CONFIG } from "../../constants/animation";
 import styles from "./CompileTerminal.module.css";
@@ -111,16 +115,51 @@ export default function CompileTerminal() {
   return (
     <Terminal title="WITH PIPESAFE" terminalRef={ref}>
       <pre className={styles.code}>
-        <span className={styles.field}>db</span>.
-        <span className={styles.field}>orders</span>.
-        <span className={styles.keyword}>aggregate</span>&lt;
-        <span className={styles.keyword}>Order</span>&gt;(){"\n"}
-        {"  "}.
-        <span
-          className={`${styles.errorUnderline} ${activeUnderlines.has(1) ? styles.active : ""}`}
+        <span className={styles.keyword}>const</span>{" "}
+        <TypeTooltip content="const orders: Collection<Order>">
+          <span className={styles.field}>orders</span>
+        </TypeTooltip>{" "}
+        = <span className={styles.field}>db</span>.
+        <span className={styles.keyword}>collection</span>&lt;
+        <TypeTooltip content={<OrderTypeContent />}>
+          <span className={styles.keyword}>Order</span>
+        </TypeTooltip>
+        &gt;(
+        <span className={styles.string}>'orders'</span>){"\n"}
+        {"\n"}
+        <span className={styles.keyword}>const</span>{" "}
+        <TypeTooltip
+          content={
+            allFixed ?
+              <OrderTypeContent
+                declaration="largeOrderData"
+                properties={[
+                  { name: "orderTotalWithTax", type: "number" },
+                  { name: "fullName", type: "string" },
+                ]}
+              />
+            : "const largeOrderData: never"
+          }
         >
-          lookup
-        </span>
+          <span className={styles.field}>largeOrderData</span>
+        </TypeTooltip>{" "}
+        = <span className={styles.field}>orders</span>.
+        <span className={styles.keyword}>aggregate</span>(){"\n"}
+        {"  "}.
+        <TypeTooltip
+          content={
+            <ErrorTooltipContent
+              message="$lookup missing required fields"
+              detail='Required: "foreignField", "as"'
+            />
+          }
+        >
+          <span
+            className={`${styles.errorUnderline} ${activeUnderlines.has(1) ? styles.active : ""}`}
+          >
+            lookup
+          </span>
+        </TypeTooltip>
         ({"{"}
         {"\n"}
         {"    "}
@@ -156,11 +195,20 @@ export default function CompileTerminal() {
         <span
           className={`${styles.fixableCode} ${isErrorFixed(2) ? styles.isFixed : ""}`}
         >
-          <span
-            className={`${styles.broken} ${styles.errorUnderline} ${activeUnderlines.has(2) ? styles.active : ""}`}
+          <TypeTooltip
+            content={
+              <ErrorTooltipContent
+                message="Type 'string' not assignable to 'number'"
+                detail="$gt on number field requires number"
+              />
+            }
           >
-            "100"
-          </span>
+            <span
+              className={`${styles.broken} ${styles.errorUnderline} ${activeUnderlines.has(2) ? styles.active : ""}`}
+            >
+              "100"
+            </span>
+          </TypeTooltip>
           <span className={`${styles.fixed} ${styles.field}`}>100</span>
         </span>
         <span
@@ -170,22 +218,31 @@ export default function CompileTerminal() {
         {"  "}.<span className={styles.keyword}>set</span>({"{"}
         {"\n"}
         {"    "}
-        <span className={styles.field}>withTax</span>: {"{"}{" "}
+        <span className={styles.field}>orderTotalWithTax</span>: {"{"}{" "}
         <span className={styles.operator}>$multiply</span>: [
         <span
           className={`${styles.fixableCode} ${isErrorFixed(3) ? styles.isFixed : ""}`}
         >
-          <span
-            className={`${styles.broken} ${styles.errorUnderline} ${activeUnderlines.has(3) ? styles.active : ""}`}
+          <TypeTooltip
+            content={
+              <ErrorTooltipContent
+                message='"$totl" does not exist on Order'
+                detail='Did you mean "$total"?'
+              />
+            }
           >
-            "$totl"
-          </span>
+            <span
+              className={`${styles.broken} ${styles.errorUnderline} ${activeUnderlines.has(3) ? styles.active : ""}`}
+            >
+              "$totl"
+            </span>
+          </TypeTooltip>
           <span className={`${styles.fixed} ${styles.string}`}>"$total"</span>
         </span>
         <span
           className={`${styles.codeCursor} ${activeCursor === 3 ? styles.visible : ""}`}
         ></span>
-        , <span className={styles.field}>1.2</span>] {"},"},{"\n"}
+        , <span className={styles.field}>1.2</span>] {"}"},{"\n"}
         {"    "}
         <span className={styles.field}>fullName</span>: {"{"}{" "}
         <span className={styles.operator}>$concat</span>: [{"\n"}
@@ -195,11 +252,20 @@ export default function CompileTerminal() {
         <span
           className={`${styles.fixableCode} ${isErrorFixed(4) ? styles.isFixed : ""}`}
         >
-          <span
-            className={`${styles.broken} ${styles.errorUnderline} ${activeUnderlines.has(4) ? styles.active : ""}`}
+          <TypeTooltip
+            content={
+              <ErrorTooltipContent
+                message="Type 'number' not assignable to 'string'"
+                detail="$concat operands must be strings"
+              />
+            }
           >
-            123
-          </span>
+            <span
+              className={`${styles.broken} ${styles.errorUnderline} ${activeUnderlines.has(4) ? styles.active : ""}`}
+            >
+              123
+            </span>
+          </TypeTooltip>
           <span className={styles.fixed}>
             <span className={styles.string}>" "</span>,{"\n"}
             {"      "}
@@ -215,7 +281,7 @@ export default function CompileTerminal() {
         {"  "}
         {"})"}){"\n"}
         {"  "}.<span className={styles.keyword}>project</span>({"{"}{" "}
-        <span className={styles.field}>withTax</span>:{" "}
+        <span className={styles.field}>orderTotalWithTax</span>:{" "}
         <span className={styles.field}>1</span>,{" "}
         <span className={styles.field}>fullName</span>:{" "}
         <span className={styles.field}>1</span> {"}"})
