@@ -7,9 +7,12 @@ import {
   FieldPath,
   FieldPathsThatInferToForLookup,
   FieldReferencesThatInferTo,
+  GetFieldTypeWithoutArrays,
 } from "../elements/fieldReference";
+import { Expression, InferExpression } from "../elements/expressions";
 import { Collection } from "../collection/Collection";
 import { ResolveLookupOutput } from "../stages/lookup";
+import { ResolveGraphLookupOutput } from "../stages/graphLookup";
 import { GetFieldType } from "../elements/fieldSelector";
 import { GroupQuery, ResolveGroupOutput } from "../stages/group";
 import { ProjectQuery, ResolveProjectOutput } from "../stages/project";
@@ -190,6 +193,78 @@ export class Pipeline<
         },
       ],
       ancestors
+    );
+  }
+
+  graphLookup<
+    C extends AllowedSource<Mode, any>,
+    ConnectToField extends FieldPath<InferSourceType<C>>,
+    ConnectToFieldType extends GetFieldTypeWithoutArrays<
+      InferSourceType<C>,
+      ConnectToField
+    >,
+    ConnectFromField extends
+      | FieldPathsThatInferToForLookup<
+          InferSourceType<C>,
+          ConnectToFieldType extends string ? string : ConnectToFieldType
+        >
+      | FieldPathsThatInferToForLookup<InferSourceType<C>, ConnectToFieldType>
+      | FieldPathsThatInferToForLookup<
+          InferSourceType<C>,
+          ConnectToFieldType[]
+        >,
+    StartWith extends
+      | FieldReferencesThatInferTo<PreviousStageDocs, ConnectToFieldType>
+      | FieldReferencesThatInferTo<PreviousStageDocs, ConnectToFieldType[]>
+      | ConnectToFieldType
+      | (Expression<PreviousStageDocs> &
+          (InferExpression<PreviousStageDocs, StartWith> extends (
+            ConnectToFieldType
+          ) ?
+            unknown
+          : never)),
+    NewKey extends string,
+    DepthField extends string = never,
+  >($graphLookup: {
+    from: C;
+    startWith: StartWith;
+    connectFromField: ConnectFromField;
+    connectToField: ConnectToField;
+    as: NewKey;
+    maxDepth?: number;
+    depthField?: DepthField;
+    restrictSearchWithMatch?: MatchQuery<InferSourceType<C>>;
+  }): Pipeline<
+    StartingDocs,
+    ResolveGraphLookupOutput<
+      PreviousStageDocs,
+      NewKey,
+      InferSourceType<C>,
+      DepthField
+    >,
+    Mode
+  > {
+    const { from, ...rest } = $graphLookup;
+
+    const collectionName = (from as Source<any>).getOutputCollectionName();
+
+    return this._chain<
+      ResolveGraphLookupOutput<
+        PreviousStageDocs,
+        NewKey,
+        InferSourceType<C>,
+        DepthField
+      >
+    >(
+      [
+        {
+          $graphLookup: {
+            from: collectionName,
+            ...rest,
+          },
+        },
+      ],
+      [from as Source<any>]
     );
   }
 
