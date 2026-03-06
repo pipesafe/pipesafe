@@ -8,7 +8,7 @@
  * - Product performance metrics
  */
 
-import { Pipeline } from "@pipesafe/core";
+import { Pipeline, Collection } from "@pipesafe/core";
 import type { InferOutputType } from "@pipesafe/core";
 
 // ============================================================================
@@ -160,6 +160,60 @@ const geographicSalesPipeline = new Pipeline<OrderSchema>()
 type GeographicSalesResult = InferOutputType<typeof geographicSalesPipeline>;
 
 // ============================================================================
+// Example 5: Order with Product Category Hierarchy ($lookup + nested $graphLookup)
+// ============================================================================
+
+type CategorySchema = {
+  _id: string;
+  name: string;
+  parentId: string | null;
+};
+
+type ProductSchema = {
+  _id: string;
+  name: string;
+  categoryId: string;
+  price: number;
+};
+
+const products = new Collection<ProductSchema>({
+  collectionName: "products",
+});
+const categories = new Collection<CategorySchema>({
+  collectionName: "categories",
+});
+
+// For each order, lookup all products and within each product
+// use $graphLookup to find the full category ancestry chain.
+// e.g. "iPhone 15" → category "Phones" → ["Phones", "Electronics", "All Products"]
+const orderWithCategoryHierarchyPipeline = new Pipeline<OrderSchema>()
+  .match({ status: "delivered" })
+  .lookup({
+    from: products,
+    as: "productDetails",
+    pipeline: (p) =>
+      p.graphLookup({
+        from: categories,
+        startWith: "$categoryId",
+        connectFromField: "parentId",
+        connectToField: "_id",
+        as: "categoryPath",
+        depthField: "depth",
+      }),
+  })
+  .project({
+    _id: 0,
+    orderId: 1,
+    customerId: 1,
+    totalAmount: 1,
+    productDetails: 1,
+  });
+
+type OrderWithCategoryHierarchy = InferOutputType<
+  typeof orderWithCategoryHierarchyPipeline
+>;
+
+// ============================================================================
 // Export types for use in application
 // ============================================================================
 
@@ -168,6 +222,7 @@ export type {
   CustomerPurchaseResult,
   ProductPerformanceResult,
   GeographicSalesResult,
+  OrderWithCategoryHierarchy,
 };
 
 export {
@@ -175,4 +230,5 @@ export {
   customerPurchaseAnalysisPipeline,
   productPerformancePipeline,
   geographicSalesPipeline,
+  orderWithCategoryHierarchyPipeline,
 };
