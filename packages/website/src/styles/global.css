@@ -1,0 +1,125 @@
+/* Reset and Base Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  overflow-x: hidden;
+}
+
+body {
+  background-color: #001e2b;
+  color: #e3fcf7;
+  font-family: "JetBrains Mono", monospace;
+  min-height: 100vh;
+  padding: 2rem;
+  line-height: 1.6;
+}
+
+/* CSS Custom Properties */
+:root {
+  /* Colors */
+  --color-bg: #001e2b;
+  --color-bg-terminal: #0d2c3a;
+  --color-bg-header: #112733;
+  --color-bg-section: #001e2b;
+  --color-text: #e3fcf7;
+  --color-text-muted: #889ba7;
+  --color-text-comment: #5c6d75;
+  --color-primary: #00ed64;
+  --color-error: #ff6f61;
+  --color-warning: #ffbd2e;
+  --color-border: #1a3a4a;
+  --color-border-hover: #3d5a6c;
+
+  /* Terminal dots */
+  --color-dot-red: #ff5f56;
+  --color-dot-yellow: #ffbd2e;
+  --color-dot-green: #27c93f;
+
+  /* Fix button */
+  --color-fix-bg: #252526;
+  --color-fix-border: #3c3c3c;
+  --color-fix-text: #cccccc;
+  --color-fix-hover-bg: #094771;
+  --color-fix-hover-border: #007acc;
+
+  /* Spacing */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 0.75rem;
+  --spacing-lg: 1rem;
+  --spacing-xl: 1.5rem;
+  --spacing-2xl: 2rem;
+  --spacing-3xl: 3rem;
+
+  /* Font sizes */
+  --font-size-xs: 0.65rem;
+  --font-size-sm: 0.75rem;
+  --font-size-md: 0.8rem;
+  --font-size-base: 0.85rem;
+  --font-size-lg: 1.1rem;
+  --font-size-xl: 2.5rem;
+
+  /* Border radius */
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+
+/* Animations */
+@keyframes dots {
+  0%,
+  20% {
+    content: "";
+  }
+  40% {
+    content: ".";
+  }
+  60% {
+    content: "..";
+  }
+  80%,
+  100% {
+    content: "...";
+  }
+}
+
+@keyframes cursor-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 122, 204, 0);
+  }
+  50% {
+    box-shadow: 0 0 8px 2px rgba(0, 122, 204, 0.4);
+  }
+}
+
+/* Mobile Responsive */
+@media (max-width: 600px) {
+  body {
+    padding: 0.75rem;
+  }
+
+  :root {
+    --font-size-xl: 1.75rem;
+    --font-size-lg: 0.95rem;
+    --font-size-base: 0.75rem;
+    --font-size-md: 0.7rem;
+    --font-size-sm: 0.7rem;
+    --font-size-xs: 0.65rem;
+  }
+}

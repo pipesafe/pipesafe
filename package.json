@@ -49,6 +49,9 @@
     "test:ci": "vitest run",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
-    "typecheck": "tsc --noEmit --project tsconfig.json"
+    "typecheck": "tsc --noEmit --project tsconfig.json",
+    "website:dev": "bun run --cwd packages/website dev",
+    "website:build": "bun run --cwd packages/website build",
+    "website:preview": "bun run --cwd packages/website preview"
   }
 }
