@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+- **Website**: pipesafe.co.uk
+
 ## Monorepo Structure
 
 This is a **bun workspaces monorepo** with two packages under different licenses:
