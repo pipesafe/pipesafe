@@ -2,7 +2,7 @@ import styles from "./TypeTooltip.module.css";
 
 interface Property {
   name: string;
-  type: string;
+  type: string | Property[];
 }
 
 interface OrderTypeContentProps {
@@ -17,7 +17,12 @@ const ORDER_PROPERTIES: Property[] = [
   { name: "total", type: "number" },
   {
     name: "items",
-    type: "{ productId: string; name: string; quantity: number; price: number }[]",
+    type: [
+      { name: "productId", type: "string" },
+      { name: "name", type: "string" },
+      { name: "quantity", type: "number" },
+      { name: "price", type: "number" },
+    ],
   },
   { name: "createdAt", type: "Date" },
 ];
@@ -50,7 +55,26 @@ export default function OrderTypeContent({
           {"  "}
           <span className={styles.property}>{prop.name}</span>
           <span className={styles.punctuation}>:</span>{" "}
-          <span className={styles.propertyType}>{prop.type}</span>
+          {Array.isArray(prop.type) ?
+            <>
+              <span className={styles.punctuation}>{"{"}</span>
+              {prop.type.map((nested) => (
+                <span key={nested.name}>
+                  {"\n"}
+                  {"    "}
+                  <span className={styles.property}>{nested.name}</span>
+                  <span className={styles.punctuation}>:</span>{" "}
+                  <span className={styles.propertyType}>
+                    {nested.type as string}
+                  </span>
+                  <span className={styles.punctuation}>;</span>
+                </span>
+              ))}
+              {"\n"}
+              {"  "}
+              <span className={styles.punctuation}>{"}"}[]</span>
+            </>
+          : <span className={styles.propertyType}>{prop.type}</span>}
           <span className={styles.punctuation}>;</span>
         </span>
       ))}
