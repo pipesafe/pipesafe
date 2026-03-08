@@ -214,6 +214,44 @@ type OrderWithCategoryHierarchy = InferOutputType<
 >;
 
 // ============================================================================
+// Example 6: Multi-Facet Product Analysis ($facet)
+// ============================================================================
+
+type ProductAnalyticsSchema = {
+  _id: string;
+  name: string;
+  category: string;
+  price: number;
+  soldCount: number;
+};
+
+const productAnalysisPipeline = new Pipeline<ProductAnalyticsSchema>()
+  // Run three independent analyses in parallel
+  .facet({
+    // Price distribution buckets
+    priceBuckets: (p) =>
+      p.group({
+        _id: null,
+        avgPrice: { $avg: "$price" },
+        minPrice: { $min: "$price" },
+        maxPrice: { $max: "$price" },
+      }),
+    // Top 5 best sellers
+    topSellers: (p) => p.sort({ soldCount: -1 }).limit(5),
+    // Category summary
+    categorySummary: (p) =>
+      p
+        .group({
+          _id: "$category",
+          totalProducts: { $count: {} },
+          totalRevenue: { $sum: "$price" },
+        })
+        .sort({ totalRevenue: -1 }),
+  });
+
+type ProductAnalysisResult = InferOutputType<typeof productAnalysisPipeline>;
+
+// ============================================================================
 // Export types for use in application
 // ============================================================================
 
@@ -223,6 +261,7 @@ export type {
   ProductPerformanceResult,
   GeographicSalesResult,
   OrderWithCategoryHierarchy,
+  ProductAnalysisResult,
 };
 
 export {
@@ -231,4 +270,5 @@ export {
   productPerformancePipeline,
   geographicSalesPipeline,
   orderWithCategoryHierarchyPipeline,
+  productAnalysisPipeline,
 };
