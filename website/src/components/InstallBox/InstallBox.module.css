@@ -1,0 +1,46 @@
+.installBox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  background-color: var(--color-bg-terminal);
+  padding: var(--spacing-lg) var(--spacing-2xl);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.installBox:hover {
+  border-color: var(--color-primary);
+  background-color: var(--color-bg-header);
+}
+
+.prompt {
+  color: var(--color-primary);
+  user-select: none;
+}
+
+.command {
+  color: var(--color-text);
+}
+
+.feedback {
+  position: absolute;
+  right: -70px;
+  color: var(--color-primary);
+  font-size: var(--font-size-md);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.visible {
+  opacity: 1;
+}
+
+@media (max-width: 600px) {
+  .installBox {
+    padding: var(--spacing-md) 1.25rem;
+    font-size: var(--font-size-base);
+  }
+}

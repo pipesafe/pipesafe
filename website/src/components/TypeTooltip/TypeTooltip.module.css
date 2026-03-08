@@ -1,0 +1,127 @@
+.trigger {
+  position: relative;
+  display: inline;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 10000;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease-in-out;
+  white-space: nowrap;
+}
+
+.tooltip.above {
+  transform: translateY(-100%);
+}
+
+.tooltip.below {
+  /* No transform needed - positioned from top-left */
+}
+
+.tooltip.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.content {
+  background: #1e1e1e;
+  border: 1px solid #454545;
+  border-radius: 3px;
+  padding: 8px 12px;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.4),
+    0 0 1px rgba(0, 0, 0, 0.2);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  max-width: 400px;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+/* Arrow for above position - left aligned */
+.tooltip.above .content::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 12px;
+  border: 6px solid transparent;
+  border-top-color: #454545;
+}
+
+.tooltip.above .content::before {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 13px;
+  border: 5px solid transparent;
+  border-top-color: #1e1e1e;
+  margin-top: -1px;
+}
+
+/* Arrow for below position - left aligned */
+.tooltip.below .content::after {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  left: 12px;
+  border: 6px solid transparent;
+  border-bottom-color: #454545;
+}
+
+.tooltip.below .content::before {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  left: 13px;
+  border: 5px solid transparent;
+  border-bottom-color: #1e1e1e;
+  margin-bottom: -1px;
+}
+
+/* Type definition styling */
+.typeKeyword {
+  color: #569cd6;
+}
+
+.typeName {
+  color: #4ec9b0;
+}
+
+.property {
+  color: #9cdcfe;
+}
+
+.propertyType {
+  color: #4ec9b0;
+}
+
+.punctuation {
+  color: #d4d4d4;
+}
+
+.comment {
+  color: #6a9955;
+}
+
+/* Error tooltip styling */
+.errorTooltip {
+  white-space: pre-wrap;
+}
+
+.errorMessage {
+  color: #f14c4c;
+}
+
+.errorDetail {
+  color: #ccc;
+}
+
+@media (max-width: 600px) {
+  .content {
+    font-size: 0.7rem;
+    padding: 6px 10px;
+    max-width: 280px;
+  }
+}

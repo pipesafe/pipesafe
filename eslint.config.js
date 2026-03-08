@@ -7,6 +7,7 @@ const ignorePatterns = [
   ".claude/**/*",
   "dist/**/*",
   "packages/*/dist/**/*",
+  "website/dist/**/*",
   "benchmarks/**/*",
 ];
 
