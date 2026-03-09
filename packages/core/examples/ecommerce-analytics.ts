@@ -252,6 +252,57 @@ const productAnalysisPipeline = new Pipeline<ProductAnalyticsSchema>()
 type ProductAnalysisResult = InferOutputType<typeof productAnalysisPipeline>;
 
 // ============================================================================
+// Example 7: Combined Inventory View ($unionWith)
+// ============================================================================
+
+// Warehouse and store inventories live in separate collections but share the
+// same product catalog. Use $unionWith to merge both sources into a single
+// view, then summarise total stock per product.
+
+type WarehouseInventory = {
+  _id: string;
+  productId: string;
+  quantity: number;
+  location: "warehouse";
+};
+
+type StoreInventory = {
+  _id: string;
+  productId: string;
+  quantity: number;
+  location: "store";
+};
+
+const storeInventory = new Collection<StoreInventory>({
+  collectionName: "storeInventory",
+});
+
+const combinedInventoryPipeline = new Pipeline<WarehouseInventory>()
+  // Merge store inventory into the warehouse stream, keeping only the
+  // fields both collections share
+  .unionWith({
+    coll: storeInventory,
+    pipeline: (p) =>
+      p.project({
+        _id: 0,
+        productId: 1,
+        quantity: 1,
+        location: 1,
+      }),
+  })
+  // Summarise total stock per product across both sources
+  .group({
+    _id: "$productId",
+    totalQuantity: { $sum: "$quantity" },
+    sourceCount: { $count: {} },
+  })
+  .sort({ totalQuantity: -1 });
+
+type CombinedInventoryResult = InferOutputType<
+  typeof combinedInventoryPipeline
+>;
+
+// ============================================================================
 // Export types for use in application
 // ============================================================================
 
@@ -262,6 +313,7 @@ export type {
   GeographicSalesResult,
   OrderWithCategoryHierarchy,
   ProductAnalysisResult,
+  CombinedInventoryResult,
 };
 
 export {
@@ -271,4 +323,5 @@ export {
   geographicSalesPipeline,
   orderWithCategoryHierarchyPipeline,
   productAnalysisPipeline,
+  combinedInventoryPipeline,
 };
