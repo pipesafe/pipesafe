@@ -10,7 +10,8 @@
   },
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "website"
   ],
   "packageManager": "bun@1.2.17",
   "engines": {
@@ -49,6 +50,9 @@
     "test:ci": "vitest run",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
-    "typecheck": "tsc --noEmit --project tsconfig.json"
+    "typecheck": "tsc --noEmit --project tsconfig.json",
+    "website:dev": "bun run --filter @pipesafe/website dev",
+    "website:build": "bun run --filter @pipesafe/website build",
+    "website:preview": "bun run --filter @pipesafe/website preview"
   }
 }

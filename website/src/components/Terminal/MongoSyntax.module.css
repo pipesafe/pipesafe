@@ -1,0 +1,16 @@
+.keyword,
+.string {
+  color: var(--color-primary);
+}
+
+.field {
+  color: var(--color-text);
+}
+
+.operator {
+  color: #b8c4ce;
+}
+
+.comment {
+  color: var(--color-text-comment);
+}

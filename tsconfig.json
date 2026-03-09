@@ -10,7 +10,7 @@
     "packages/core/benchmarking/**/*.ts",
     "packages/manifold/examples/**/*.ts"
   ],
-  "exclude": ["dist/**/*", "**/node_modules/**"],
+  "exclude": ["**/dist/**/*", "**/node_modules/**", ".claude/worktrees/**"],
   "references": [
     { "path": "./packages/core" },
     { "path": "./packages/manifold" }

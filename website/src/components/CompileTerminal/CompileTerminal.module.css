@@ -1,0 +1,253 @@
+.code {
+  white-space: pre;
+  max-width: 100%;
+  margin: 0;
+  font-family: inherit;
+}
+
+/* Error underlines */
+.errorUnderline {
+  color: inherit;
+  text-decoration: none;
+  will-change: color, text-decoration;
+}
+
+.errorUnderline.active {
+  color: var(--color-error);
+  text-decoration: wavy underline var(--color-error);
+  text-underline-offset: 3px;
+}
+
+/* Code cursor */
+.codeCursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  background-color: var(--color-primary);
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  opacity: 0;
+}
+
+.codeCursor.visible {
+  animation: cursor-blink 0.8s step-end infinite;
+}
+
+@keyframes cursor-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Fixable code */
+.fixableCode {
+  display: inline;
+}
+
+.fixableCode .broken {
+  transition: opacity 0.15s ease-out;
+}
+
+.fixableCode .fixed {
+  display: none;
+  opacity: 0;
+}
+
+.fixableCode.isFixed .broken {
+  display: none;
+}
+
+.fixableCode.isFixed .fixed {
+  display: inline;
+  opacity: 1;
+  transition: opacity 0.15s ease-in;
+}
+
+/* Error Sections */
+.errorSections {
+  display: flex;
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-xl);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-border);
+  opacity: 0;
+  transition: opacity 0.3s ease-in;
+}
+
+.errorSections.visible {
+  opacity: 1;
+}
+
+.errorSection {
+  flex: 1;
+  padding: var(--spacing-lg);
+  background-color: var(--color-bg-section);
+  border-radius: var(--radius-md);
+  transition: all 0.3s ease-out;
+  overflow: hidden;
+}
+
+.errorSectionTitle {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin-bottom: var(--spacing-md);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.errorSectionTitle.compile {
+  color: var(--color-primary);
+}
+
+.errorSectionTitle.runtime {
+  color: var(--color-error);
+}
+
+.errorLine,
+.errorDetail {
+  opacity: 0;
+  transform: translateX(-10px);
+  transition:
+    opacity 0.2s ease-out,
+    transform 0.2s ease-out,
+    max-height 0.3s ease-out,
+    margin-bottom 0.3s ease-out,
+    padding 0.3s ease-out;
+  will-change: opacity, transform, max-height;
+  overflow: hidden;
+}
+
+.errorLine {
+  color: var(--color-error);
+  margin-bottom: var(--spacing-xs);
+  font-size: var(--font-size-md);
+  max-height: 2em;
+}
+
+.errorDetail {
+  color: var(--color-text-muted);
+  margin-left: var(--spacing-lg);
+  margin-bottom: var(--spacing-md);
+  font-size: var(--font-size-sm);
+  max-height: 2em;
+}
+
+.errorLine.visible,
+.errorDetail.visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.errorLine.fadeOut,
+.errorDetail.fadeOut {
+  opacity: 0 !important;
+  transform: translateX(-10px) !important;
+  max-height: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.errorSuccess {
+  color: var(--color-primary);
+  opacity: 0;
+  transition: opacity 0.3s ease-in;
+}
+
+.errorSuccess.visible {
+  opacity: 1;
+}
+
+.allClear {
+  color: var(--color-primary);
+  opacity: 0;
+  transition: opacity 0.3s ease-in;
+}
+
+.allClear.visible {
+  opacity: 1;
+}
+
+/* Fix Button */
+.fixBtn {
+  background: var(--color-fix-bg);
+  border: 1px solid var(--color-fix-border);
+  color: var(--color-fix-text);
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  margin-top: var(--spacing-md);
+  opacity: 0;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.fixBtn .lightbulb {
+  color: #ffcc00;
+}
+
+.fixBtn.visible {
+  opacity: 1;
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 122, 204, 0);
+  }
+  50% {
+    box-shadow: 0 0 8px 2px rgba(0, 122, 204, 0.4);
+  }
+}
+
+.fixBtn:hover {
+  background: var(--color-fix-hover-bg);
+  border-color: var(--color-fix-hover-border);
+  color: #ffffff;
+}
+
+.fixBtn.hidden {
+  display: none;
+}
+
+/* Shrunk section when all fixed */
+.errorSection.shrunk .errorLine,
+.errorSection.shrunk .errorDetail {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .errorSections {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 600px) {
+  .code {
+    font-size: 0.7rem;
+  }
+
+  .errorSectionTitle {
+    font-size: 0.7rem;
+  }
+
+  .errorLine {
+    font-size: 0.7rem;
+  }
+
+  .errorDetail {
+    font-size: var(--font-size-xs);
+    margin-left: var(--spacing-sm);
+  }
+
+  .errorSuccess {
+    font-size: 0.7rem;
+  }
+}
