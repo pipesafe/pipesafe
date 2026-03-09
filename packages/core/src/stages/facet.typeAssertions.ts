@@ -1,6 +1,10 @@
 import { Assert, Equal } from "../utils/tests";
 import { ResolveFacetOutput } from "./facet";
-import type { PipelineBuilder, Pipeline } from "../pipeline/Pipeline";
+import type {
+  PipelineBuilder,
+  Pipeline,
+  FacetAllowedStages,
+} from "../pipeline/Pipeline";
 
 /**
  * Type Resolution Behaviors for $facet Stage:
@@ -31,13 +35,20 @@ type Product = {
   soldCount: number;
 };
 
+type FacetBuilder<O> = PipelineBuilder<
+  Product,
+  O,
+  "runtime",
+  FacetAllowedStages
+>;
+
 // ============================================================================
 // Test 1: Basic two-facet with different output shapes
 // ============================================================================
 
 type BasicFacet = {
-  priceSummary: PipelineBuilder<Product, { _id: null; avgPrice: number }>;
-  topItems: PipelineBuilder<Product, Product>;
+  priceSummary: FacetBuilder<{ _id: null; avgPrice: number }>;
+  topItems: FacetBuilder<Product>;
 };
 
 type BasicResult = ResolveFacetOutput<Product, BasicFacet>;
@@ -54,7 +65,7 @@ type BasicTest = Assert<Equal<BasicResult, BasicExpected>>;
 // ============================================================================
 
 type ProjectedFacet = {
-  names: PipelineBuilder<Product, { name: string; category: string }>;
+  names: FacetBuilder<{ name: string; category: string }>;
 };
 
 type ProjectedResult = ResolveFacetOutput<Product, ProjectedFacet>;
@@ -70,7 +81,7 @@ type ProjectedTest = Assert<Equal<ProjectedResult, ProjectedExpected>>;
 // ============================================================================
 
 type SingleFieldFacet = {
-  counts: PipelineBuilder<Product, { _id: string; count: number }>;
+  counts: FacetBuilder<{ _id: string; count: number }>;
 };
 
 type SingleFieldResult = ResolveFacetOutput<Product, SingleFieldFacet>;
@@ -85,9 +96,9 @@ type ArrayCheckTest = Assert<
 // ============================================================================
 
 type ThreeFacet = {
-  a: PipelineBuilder<Product, { x: number }>;
-  b: PipelineBuilder<Product, { y: string }>;
-  c: PipelineBuilder<Product, { z: boolean }>;
+  a: FacetBuilder<{ x: number }>;
+  b: FacetBuilder<{ y: string }>;
+  c: FacetBuilder<{ z: boolean }>;
 };
 
 type ThreeResult = ResolveFacetOutput<Product, ThreeFacet>;
@@ -105,11 +116,12 @@ type ThreeTest = Assert<Equal<ThreeResult, ThreeExpected>>;
 // ============================================================================
 
 type ChainedFacet = {
-  summary: PipelineBuilder<
-    Product,
-    { _id: string; totalRevenue: number; avgPrice: number }
-  >;
-  recent: PipelineBuilder<Product, { name: string; price: number }>;
+  summary: FacetBuilder<{
+    _id: string;
+    totalRevenue: number;
+    avgPrice: number;
+  }>;
+  recent: FacetBuilder<{ name: string; price: number }>;
 };
 
 type ChainedResult = ResolveFacetOutput<Product, ChainedFacet>;
@@ -130,8 +142,13 @@ type OrderItem =
   | { type: "digital"; downloadUrl: string; name: string };
 
 type UnionFacet = {
-  all: PipelineBuilder<OrderItem, OrderItem>;
-  counts: PipelineBuilder<OrderItem, { _id: string; count: number }>;
+  all: PipelineBuilder<OrderItem, OrderItem, "runtime", FacetAllowedStages>;
+  counts: PipelineBuilder<
+    OrderItem,
+    { _id: string; count: number },
+    "runtime",
+    FacetAllowedStages
+  >;
 };
 
 type UnionResult = ResolveFacetOutput<OrderItem, UnionFacet>;
@@ -144,17 +161,47 @@ type UnionExpected = {
 type UnionTest = Assert<Equal<UnionResult, UnionExpected>>;
 
 // ============================================================================
-// Test 7: Sub-pipeline restrictions — $out and $facet disallowed
+// Test 7: $out blocked in facet sub-pipelines (used stages check)
 // ============================================================================
 
-// @ts-expect-error - $out not allowed in sub-pipelines
-const _subOut: PipelineBuilder<Product, never> = (p) => p.out("test");
+// A builder that uses $out has UsedStages including "$out".
+// "$out" is not in FacetAllowedStages, so assigning it errors.
+// @ts-expect-error - $out not allowed in facet sub-pipelines
+const _facetSubOut: FacetBuilder<never> = (p) => p.out("test");
 
-const _subFacetHelper = (p: Pipeline<Product, Product, "runtime", "sub">) =>
-  // @ts-expect-error - $facet not allowed in sub-pipelines
+// ============================================================================
+// Test 8: $facet blocked inside $facet, allowed inside $lookup
+// ============================================================================
+
+// $facet inside $lookup sub-pipeline — allowed (facet IS in LookupAllowedStages)
+const _lookupSubFacet = (p: Pipeline<Product, Product, "runtime", never>) =>
   p.facet({
-    x: (q: Pipeline<Product, Product, "runtime", "sub">) => q.limit(1),
+    x: (q) => q.limit(1),
   });
+
+// $facet inside $facet sub-pipeline — blocked ("$facet" not in FacetAllowedStages)
+// @ts-expect-error - $facet not allowed in facet sub-pipelines
+const _facetSubFacet: FacetBuilder<any> = (p) =>
+  p.facet({
+    x: (q: Pipeline<Product, Product, "runtime", never>) => q.limit(1),
+  });
+
+// ============================================================================
+// Test 9: Standalone builder reuse across contexts
+// ============================================================================
+
+// A standalone builder that only uses $match — should work in any context
+const _reusableBuilder = (p: Pipeline<Product, Product, "runtime", never>) =>
+  p.match({ price: { $gte: 100 } });
+
+// Works as a facet sub-pipeline (UsedStages = "$match" extends FacetAllowedStages)
+const _reusableInFacet: FacetBuilder<{
+  _id: string;
+  name: string;
+  category: string;
+  price: number;
+  soldCount: number;
+}> = _reusableBuilder;
 
 // Satisfy linting by exporting all test types
 export type {
@@ -167,5 +214,8 @@ export type {
 };
 
 // Satisfy linting for runtime values
-void _subOut;
-void _subFacetHelper;
+void _facetSubOut;
+void _lookupSubFacet;
+void _facetSubFacet;
+void _reusableBuilder;
+void _reusableInFacet;

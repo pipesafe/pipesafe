@@ -15,7 +15,9 @@ export type {
   InferOutputType,
   LookupMode,
   PipelineBuilder,
-  PipelineScope,
+  LookupAllowedStages,
+  UnionWithAllowedStages,
+  FacetAllowedStages,
 } from "./pipeline/Pipeline";
 export type { InferCollectionType } from "./collection/Collection";
 export type { Source, InferSourceType } from "./source/Source";
