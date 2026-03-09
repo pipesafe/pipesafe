@@ -22,6 +22,8 @@ export function useTerminalAnimation(
   const [showErrors, setShowErrors] = useState(false);
   const [showErrorNote, setShowErrorNote] = useState(false);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
 
   const clearTimeouts = useCallback(() => {
     timeoutsRef.current.forEach((t) => clearTimeout(t));
@@ -33,50 +35,52 @@ export function useTerminalAnimation(
 
     clearTimeouts();
 
+    const deployEnd =
+      ANIMATION_CONFIG.DEPLOY_START + ANIMATION_CONFIG.DEPLOY_DURATION;
+    const failTime = deployEnd + ANIMATION_CONFIG.RUN_DURATION;
+
     // Start deploying
     timeoutsRef.current.push(
-      setTimeout(() => {
-        setPhase("deploying");
-      }, ANIMATION_CONFIG.DEPLOY_START)
+      setTimeout(() => setPhase("deploying"), ANIMATION_CONFIG.DEPLOY_START)
     );
 
-    // Mark as deployed, start running
+    // Mark as deployed
+    timeoutsRef.current.push(setTimeout(() => setPhase("deployed"), deployEnd));
+
+    // Start running
     timeoutsRef.current.push(
-      setTimeout(() => {
-        setPhase("deployed");
-        setTimeout(() => setPhase("running"), 50);
-      }, ANIMATION_CONFIG.DEPLOY_START + ANIMATION_CONFIG.DEPLOY_DURATION)
+      setTimeout(() => setPhase("running"), deployEnd + 50)
     );
 
     // Mark as failed
+    timeoutsRef.current.push(setTimeout(() => setPhase("failed"), failTime));
+
+    // Show error message
     timeoutsRef.current.push(
       setTimeout(
-        () => {
-          setPhase("failed");
+        () => setShowErrors(true),
+        failTime + ANIMATION_CONFIG.ERROR_DELAY
+      )
+    );
 
-          // Show error message
-          setTimeout(() => {
-            setShowErrors(true);
+    // Show error note
+    timeoutsRef.current.push(
+      setTimeout(
+        () => setShowErrorNote(true),
+        failTime + ANIMATION_CONFIG.ERROR_DELAY + 300
+      )
+    );
 
-            // Show error note
-            setTimeout(() => {
-              setShowErrorNote(true);
-
-              // Trigger completion callback
-              setTimeout(() => {
-                onComplete?.();
-              }, 500);
-            }, 300);
-          }, ANIMATION_CONFIG.ERROR_DELAY);
-        },
-        ANIMATION_CONFIG.DEPLOY_START +
-          ANIMATION_CONFIG.DEPLOY_DURATION +
-          ANIMATION_CONFIG.RUN_DURATION
+    // Trigger completion callback
+    timeoutsRef.current.push(
+      setTimeout(
+        () => onCompleteRef.current?.(),
+        failTime + ANIMATION_CONFIG.ERROR_DELAY + 800
       )
     );
 
     return clearTimeouts;
-  }, [isVisible, onComplete, clearTimeouts]);
+  }, [isVisible, clearTimeouts]);
 
   return { phase, showErrors, showErrorNote };
 }

@@ -15,6 +15,7 @@ export default function InstallBox() {
       className={styles.installBox}
       onClick={handleClick}
       title="Click to copy"
+      aria-label="Copy install command"
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {

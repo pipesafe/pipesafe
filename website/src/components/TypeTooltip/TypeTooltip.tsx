@@ -110,7 +110,7 @@ export default function TypeTooltip({ children, content }: TypeTooltipProps) {
       onMouseLeave={handleMouseLeave}
     >
       {children}
-      {typeof document !== "undefined" && createPortal(tooltip, document.body)}
+      {createPortal(tooltip, document.body)}
     </span>
   );
 }

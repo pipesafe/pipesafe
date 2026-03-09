@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { ANIMATION_CONFIG } from "../constants/animation";
 
 interface UseFixAnimationResult {
@@ -13,6 +13,13 @@ export function useFixAnimation(errorCount = 4): UseFixAnimationResult {
   const [fixedErrors, setFixedErrors] = useState<Set<number>>(new Set());
   const [allFixed, setAllFixed] = useState(false);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  // Clean up timeouts on unmount
+  useEffect(() => {
+    return () => {
+      timeoutsRef.current.forEach((t) => clearTimeout(t));
+    };
+  }, []);
 
   const startFixing = useCallback(() => {
     // Clear any existing timeouts
@@ -34,7 +41,7 @@ export function useFixAnimation(errorCount = 4): UseFixAnimationResult {
       // Apply fix
       timeoutsRef.current.push(
         setTimeout(() => {
-          setFixedErrors((prev) => new Set([...prev, fixNum]));
+          setFixedErrors((prev) => new Set(prev).add(fixNum));
         }, fixTime + ANIMATION_CONFIG.FIX_CURSOR_DURATION)
       );
     });

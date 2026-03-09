@@ -5,23 +5,6 @@
   font-family: inherit;
 }
 
-.comment {
-  color: var(--color-text-comment);
-}
-
-.keyword,
-.string {
-  color: var(--color-primary);
-}
-
-.field {
-  color: var(--color-text);
-}
-
-.operator {
-  color: #b8c4ce;
-}
-
 /* Step Indicators */
 .stepIndicator {
   font-size: var(--font-size-md);

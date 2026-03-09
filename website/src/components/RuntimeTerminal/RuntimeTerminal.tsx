@@ -1,5 +1,12 @@
 import Terminal from "../Terminal";
 import TypeTooltip, { OrderTypeContent } from "../TypeTooltip";
+import {
+  MongoKeyword,
+  MongoField,
+  MongoOperator,
+  MongoString,
+  MongoComment,
+} from "../Terminal/MongoSyntax";
 import { useIntersectionObserver, useTerminalAnimation } from "../../hooks";
 import styles from "./RuntimeTerminal.module.css";
 
@@ -25,72 +32,66 @@ export default function RuntimeTerminal({
   return (
     <Terminal title="WITHOUT PIPESAFE" terminalRef={ref}>
       <pre className={styles.code}>
-        <span className={styles.keyword}>const</span>{" "}
+        <MongoKeyword>const</MongoKeyword>{" "}
         <TypeTooltip content="const orders: Collection<Order>">
-          <span className={styles.field}>orders</span>
+          <MongoField>orders</MongoField>
         </TypeTooltip>{" "}
-        = <span className={styles.field}>db</span>.
-        <span className={styles.keyword}>collection</span>&lt;
+        = <MongoField>db</MongoField>.<MongoKeyword>collection</MongoKeyword>
+        &lt;
         <TypeTooltip content={<OrderTypeContent />}>
-          <span className={styles.keyword}>Order</span>
+          <MongoKeyword>Order</MongoKeyword>
         </TypeTooltip>
         &gt;(
-        <span className={styles.string}>'orders'</span>){"\n"}
+        <MongoString>'orders'</MongoString>){"\n"}
         {"\n"}
-        <span className={styles.keyword}>const</span>{" "}
+        <MongoKeyword>const</MongoKeyword>{" "}
         <TypeTooltip content="const largeOrderData: any">
-          <span className={styles.field}>largeOrderData</span>
+          <MongoField>largeOrderData</MongoField>
         </TypeTooltip>{" "}
-        = <span className={styles.field}>orders</span>.
-        <span className={styles.keyword}>aggregate</span>([{"\n"}
+        = <MongoField>orders</MongoField>.<MongoKeyword>aggregate</MongoKeyword>
+        ([{"\n"}
         {"  "}
-        {"{"} <span className={styles.string}>$lookup</span>: {"{"}
+        {"{"} <MongoString>$lookup</MongoString>: {"{"}
         {"\n"}
         {"    "}
-        <span className={styles.field}>from</span>:{" "}
-        <span className={styles.string}>"users"</span>,{"\n"}
+        <MongoField>from</MongoField>: <MongoString>"users"</MongoString>,{"\n"}
         {"    "}
-        <span className={styles.field}>localField</span>:{" "}
-        <span className={styles.string}>"userId"</span>
+        <MongoField>localField</MongoField>: <MongoString>"userId"</MongoString>
         {"\n"}
         {"    "}
-        <span className={styles.comment}>
-          {"// missing foreignField and as"}
-        </span>
+        <MongoComment>{"// missing foreignField and as"}</MongoComment>
         {"\n"}
         {"  "}
         {"}}"},{"\n"}
         {"  "}
-        {"{"} <span className={styles.string}>$match</span>: {"{"}{" "}
-        <span className={styles.field}>total</span>: {"{"}{" "}
-        <span className={styles.operator}>$gt</span>:{" "}
-        <span className={styles.string}>"100"</span> {"}"} {"}}"},{"\n"}
+        {"{"} <MongoString>$match</MongoString>: {"{"}{" "}
+        <MongoField>total</MongoField>: {"{"} <MongoOperator>$gt</MongoOperator>
+        : <MongoString>"100"</MongoString> {"}"} {"}}"},{"\n"}
         {"  "}
-        {"{"} <span className={styles.string}>$set</span>: {"{"}
+        {"{"} <MongoString>$set</MongoString>: {"{"}
         {"\n"}
         {"    "}
-        <span className={styles.field}>orderTotalWithTax</span>: {"{"}{" "}
-        <span className={styles.operator}>$multiply</span>: [
-        <span className={styles.string}>"$totl"</span>,{" "}
-        <span className={styles.field}>1.2</span>] {"}"},{"\n"}
+        <MongoField>orderTotalWithTax</MongoField>: {"{"}{" "}
+        <MongoOperator>$multiply</MongoOperator>: [
+        <MongoString>"$totl"</MongoString>, <MongoField>1.2</MongoField>] {"}"},
+        {"\n"}
         {"    "}
-        <span className={styles.field}>fullName</span>: {"{"}{" "}
-        <span className={styles.operator}>$concat</span>: [{"\n"}
+        <MongoField>fullName</MongoField>: {"{"}{" "}
+        <MongoOperator>$concat</MongoOperator>: [{"\n"}
         {"      "}
-        <span className={styles.string}>"$firstName"</span>,{"\n"}
+        <MongoString>"$firstName"</MongoString>,{"\n"}
         {"      "}
-        <span className={styles.field}>123</span>
+        <MongoField>123</MongoField>
         {"\n"}
         {"    "}]{"}"}
         {"\n"}
         {"  "}
         {"}}"},{"\n"}
         {"  "}
-        {"{"} <span className={styles.string}>$project</span>: {"{"}{" "}
-        <span className={styles.field}>orderTotalWithTax</span>:{" "}
-        <span className={styles.field}>1</span>,{" "}
-        <span className={styles.field}>fullName</span>:{" "}
-        <span className={styles.field}>1</span> {"}"} {"}"}
+        {"{"} <MongoString>$project</MongoString>: {"{"}{" "}
+        <MongoField>orderTotalWithTax</MongoField>: <MongoField>1</MongoField>,{" "}
+        <MongoField>fullName</MongoField>: <MongoField>1</MongoField> {"}"}{" "}
+        {"}"}
         {"\n"}])
       </pre>
 

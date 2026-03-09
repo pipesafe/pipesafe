@@ -3,3 +3,4 @@ export { useCopyToClipboard } from "./useCopyToClipboard";
 export { useTerminalAnimation } from "./useTerminalAnimation";
 export type { RuntimePhase } from "./useTerminalAnimation";
 export { useFixAnimation } from "./useFixAnimation";
+export { useCompileAnimation } from "./useCompileAnimation";
