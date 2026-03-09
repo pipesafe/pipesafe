@@ -9,6 +9,9 @@ node_modules
 # claude local settings
 .claude/settings.local.json
 
+# claude worktrees
+.claude/worktrees/
+
 # build output
 dist
 *.tsbuildinfo
