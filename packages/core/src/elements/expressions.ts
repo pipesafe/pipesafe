@@ -587,21 +587,17 @@ type InferArrayElementType<Schema extends Document, ArraySource> =
  * For $sum: returns number (sum of array elements)
  */
 export type InferArrayExpression<Schema extends Document, Expr> =
-  Expr extends (
-    {
-      $concatArrays: infer Arrays;
-    }
-  ) ?
+  Expr extends { $concatArrays: infer Arrays } ?
     Arrays extends unknown[] ?
       UnionArrayElements<Schema, Arrays>[]
     : never
-  : Expr extends { $size: unknown } ? number
+  : Expr extends SizeExpression<Schema> ? number
   : Expr extends { $arrayElemAt: [infer ArraySource, unknown] } ?
     InferArrayElementType<Schema, ArraySource>
   : Expr extends { $filter: { input: infer ArraySource } } ?
     InferArrayElementType<Schema, ArraySource>[]
-  : Expr extends { $map: unknown } ? unknown[]
-  : Expr extends { $sum: unknown } ? number
+  : Expr extends MapExpression<Schema> ? unknown[]
+  : Expr extends SumExpression<Schema> ? number
   : never;
 
 /**
@@ -609,35 +605,27 @@ export type InferArrayExpression<Schema extends Document, Expr> =
  * - $dateToString: returns string
  * - $dateTrunc, $dateAdd, $dateSubtract, $toDate: return Date
  */
-export type InferDateExpression<_Schema extends Document, Expr> =
-  Expr extends { $dateToString: unknown } ? string
-  : Expr extends { $dateTrunc: unknown } ? Date
-  : Expr extends { $dateAdd: unknown } ? Date
-  : Expr extends { $dateSubtract: unknown } ? Date
-  : Expr extends { $toDate: unknown } ? Date
+export type InferDateExpression<Schema extends Document, Expr> =
+  Expr extends DateToStringExpression<Schema> ? string
+  : Expr extends DateTruncExpression<Schema> ? Date
+  : Expr extends DateAddExpression<Schema> ? Date
+  : Expr extends DateSubtractExpression<Schema> ? Date
+  : Expr extends ToDateExpression<Schema> ? Date
   : never;
 
 /**
  * Infer the result type of a string expression
  * All string operators return string
  */
-export type InferStringExpression<_Schema extends Document, Expr> =
-  Expr extends { $concat: unknown } ? string : never;
+export type InferStringExpression<Schema extends Document, Expr> =
+  Expr extends StringExpression<Schema> ? string : never;
 
 /**
  * Infer the result type of an arithmetic expression
  * All arithmetic operators return number
  */
-export type InferArithmeticExpression<_Schema extends Document, Expr> =
-  Expr extends (
-    | { $add: unknown }
-    | { $subtract: unknown }
-    | { $multiply: unknown }
-    | { $divide: unknown }
-    | { $mod: unknown }
-  ) ?
-    number
-  : never;
+export type InferArithmeticExpression<Schema extends Document, Expr> =
+  Expr extends ArithmeticExpression<Schema> ? number : never;
 
 /**
  * Helper to exclude null and undefined from a type
@@ -648,25 +636,16 @@ type NonNullable<T> = T extends null | undefined ? never : T;
  * Helper to infer expression result type
  * Centralizes all expression type mappings for reusability
  */
-type InferExpressionType<_Schema extends Document, Expr> =
-  Expr extends { $dateToString: unknown } ? string
-  : Expr extends { $dateTrunc: unknown } ? Date
-  : Expr extends { $dateAdd: unknown } ? Date
-  : Expr extends { $dateSubtract: unknown } ? Date
-  : Expr extends { $toDate: unknown } ? Date
-  : Expr extends { $add: unknown } ? number
-  : Expr extends { $subtract: unknown } ? number
-  : Expr extends { $multiply: unknown } ? number
-  : Expr extends { $divide: unknown } ? number
-  : Expr extends { $mod: unknown } ? number
-  : Expr extends { $concat: unknown } ? string
-  : Expr extends { $size: unknown } ? number
+type InferExpressionType<Schema extends Document, Expr> =
+  Expr extends DateExpression<Schema> ? InferDateExpression<Schema, Expr>
+  : Expr extends ArithmeticExpression<Schema> ? number
+  : Expr extends StringExpression<Schema> ? string
+  : Expr extends SizeExpression<Schema> ? number
   : Expr extends { $concatArrays: infer Arrays } ?
     Arrays extends unknown[] ?
       (Arrays[number] extends (infer E)[] ? E : never)[]
     : never
-  : // Array element access - infer from array source
-  Expr extends { $arrayElemAt: [infer Arr, unknown] } ?
+  : Expr extends { $arrayElemAt: [infer Arr, unknown] } ?
     Arr extends (infer E)[] ?
       E
     : unknown
@@ -674,16 +653,8 @@ type InferExpressionType<_Schema extends Document, Expr> =
     Arr extends (infer E)[] ?
       E[]
     : unknown[]
-  : // Variable binding - returns unknown (result depends on `in` expression)
-  Expr extends { $let: unknown } ? unknown
-  : // Comparison expressions return boolean
-  Expr extends { $in: unknown } ? boolean
-  : Expr extends { $eq: unknown } ? boolean
-  : Expr extends { $ne: unknown } ? boolean
-  : Expr extends { $gt: unknown } ? boolean
-  : Expr extends { $gte: unknown } ? boolean
-  : Expr extends { $lt: unknown } ? boolean
-  : Expr extends { $lte: unknown } ? boolean
+  : Expr extends VariableExpression<Schema> ? unknown
+  : Expr extends ComparisonExpression<Schema> ? boolean
   : never;
 
 /**
@@ -696,7 +667,7 @@ type InferIfNullOperand<Schema extends Document, Operand> =
     NonNullable<InferFieldReference<Schema, Operand>>
   : Operand extends (infer T)[] ?
     T // Array literal
-  : Operand extends { $ifNull: unknown } | { $cond: unknown } ?
+  : Operand extends ConditionalExpression<Schema> ?
     InferConditionalExpression<Schema, Operand> // Conditional expressions
   : InferExpressionType<Schema, Operand> extends never ?
     NonNullable<Operand> // Not an expression, treat as literal
@@ -712,7 +683,7 @@ type InferCondOperand<Schema extends Document, Operand> =
     NonNullable<InferFieldReference<Schema, Operand>>
   : Operand extends (infer T)[] ?
     T // Array literal
-  : Operand extends { $ifNull: unknown } | { $cond: unknown } ?
+  : Operand extends ConditionalExpression<Schema> ?
     InferConditionalExpression<Schema, Operand> // Conditional expressions
   : InferExpressionType<Schema, Operand> extends never ?
     NonNullable<Operand> // Not an expression, treat as literal
@@ -750,51 +721,21 @@ export type InferConditionalExpression<Schema extends Document, Expr> =
  */
 export type InferExpression<Schema extends Document, Expr> =
   // Date expressions
-  Expr extends (
-    | { $dateToString: unknown }
-    | { $dateTrunc: unknown }
-    | { $dateAdd: unknown }
-    | { $dateSubtract: unknown }
-    | { $toDate: unknown }
-  ) ?
-    InferDateExpression<Schema, Expr>
+  Expr extends DateExpression<Schema> ? InferDateExpression<Schema, Expr>
   : // Arithmetic expressions
-  Expr extends (
-    | { $add: unknown }
-    | { $subtract: unknown }
-    | { $multiply: unknown }
-    | { $divide: unknown }
-    | { $mod: unknown }
-  ) ?
+  Expr extends ArithmeticExpression<Schema> ?
     InferArithmeticExpression<Schema, Expr>
   : // Array expressions (including $arrayElemAt, $filter, $map, $sum)
-  Expr extends (
-    | { $concatArrays: unknown }
-    | { $size: unknown }
-    | { $arrayElemAt: unknown }
-    | { $filter: unknown }
-    | { $map: unknown }
-    | { $sum: unknown }
-  ) ?
-    InferArrayExpression<Schema, Expr>
+  Expr extends ArrayExpression<Schema> ? InferArrayExpression<Schema, Expr>
   : // String expressions
-  Expr extends { $concat: unknown } ? InferStringExpression<Schema, Expr>
+  Expr extends StringExpression<Schema> ? InferStringExpression<Schema, Expr>
   : // Conditional expressions
-  Expr extends { $ifNull: unknown } | { $cond: unknown } ?
+  Expr extends ConditionalExpression<Schema> ?
     InferConditionalExpression<Schema, Expr>
   : // Variable binding expressions (return unknown)
-  Expr extends { $let: unknown } ? unknown
+  Expr extends VariableExpression<Schema> ? unknown
   : // Literal expressions (return the literal type)
   Expr extends { $literal: infer Value } ? Value
   : // Comparison expressions (all return boolean)
-  Expr extends (
-    | { $in: unknown }
-    | { $eq: unknown }
-    | { $ne: unknown }
-    | { $gt: unknown }
-    | { $gte: unknown }
-    | { $lt: unknown }
-    | { $lte: unknown }
-  ) ?
-    boolean
+  Expr extends ComparisonExpression<Schema> ? boolean
   : never;
