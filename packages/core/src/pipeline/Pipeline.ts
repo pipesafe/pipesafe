@@ -64,20 +64,34 @@ type AllPipelineStages =
  * Stages allowed inside $lookup sub-pipelines.
  * Blocked: $out, $merge
  */
-export type LookupAllowedStages = Exclude<AllPipelineStages, "$out">;
+export type LookupAllowedStages = Exclude<AllPipelineStages, "$out" | "$merge">;
 
 /**
  * Stages allowed inside $unionWith sub-pipelines.
  * Blocked: $out, $merge
  */
-export type UnionWithAllowedStages = Exclude<AllPipelineStages, "$out">;
+export type UnionWithAllowedStages = Exclude<
+  AllPipelineStages,
+  "$out" | "$merge"
+>;
 
 /**
  * Stages allowed inside $facet sub-pipelines.
- * Blocked: $collStats, $facet, $geoNear, $indexStats, $out, $merge,
- * $planCacheStats, $search, $searchMeta, $vectorSearch
+ * Per MongoDB docs, the following stages cannot be used inside $facet.
  */
-export type FacetAllowedStages = Exclude<AllPipelineStages, "$out" | "$facet">;
+export type FacetAllowedStages = Exclude<
+  AllPipelineStages,
+  | "$collStats"
+  | "$facet"
+  | "$geoNear"
+  | "$indexStats"
+  | "$out"
+  | "$merge"
+  | "$planCacheStats"
+  | "$search"
+  | "$searchMeta"
+  | "$vectorSearch"
+>;
 
 type AllowedSource<Mode extends LookupMode, T extends Document> =
   Mode extends "model" ? Source<T> : Collection<T>;
