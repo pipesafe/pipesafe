@@ -90,6 +90,7 @@ export class Pipeline<
   ): Pipeline<StartingDocs, NewOutput, Mode> {
     const next = new Pipeline<StartingDocs, NewOutput, Mode>({
       pipeline: [...this.pipeline, ...newStages],
+      client: this.client,
       collectionName: this.collectionName,
       databaseName: this.databaseName,
     });
