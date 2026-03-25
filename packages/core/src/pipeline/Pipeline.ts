@@ -161,6 +161,7 @@ export class Pipeline<
       UsedStages | NewStage
     >({
       pipeline: [...this.pipeline, ...newStages],
+      client: this.client,
       collectionName: this.collectionName,
       databaseName: this.databaseName,
     });
