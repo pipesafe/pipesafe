@@ -3,10 +3,8 @@ import { defineConfig } from "tsdown";
 export default defineConfig({
   entry: ["./src/index.ts"],
   format: ["esm", "cjs"],
-  dts: true,
+  dts: { resolver: "tsc" },
   clean: false,
   unbundle: true,
-  deps: {
-    neverBundle: [/^mongodb/, /^bson/, /^vitest/, /^@vitest/],
-  },
+  deps: { skipNodeModulesBundle: true },
 });

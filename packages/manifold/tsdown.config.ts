@@ -6,7 +6,4 @@ export default defineConfig({
   dts: true,
   clean: false,
   unbundle: true,
-  deps: {
-    neverBundle: [/^mongodb/, /^bson/, /^vitest/, /^@vitest/, /^@pipesafe/],
-  },
 });
