@@ -38,9 +38,7 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@pipesafe/core": ">=0.5.0 <1.0.0"
-  },
-  "dependencies": {
+    "@pipesafe/core": ">=0.5.0 <1.0.0",
     "mongodb": "^6.17.0"
   },
   "devDependencies": {

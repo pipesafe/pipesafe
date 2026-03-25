@@ -38,7 +38,7 @@
     "build:watch": "tsc --watch",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
+  "peerDependencies": {
     "mongodb": "^6.17.0"
   },
   "devDependencies": {
