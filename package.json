@@ -28,6 +28,7 @@
     "mongodb-memory-server": "^10.2.3",
     "prettier": "^3.6.2",
     "ts-morph": "27.0.2",
+    "tsdown": "^0.21.5",
     "tsx": "^4.20.3",
     "typescript": "5.9.3",
     "typescript-eslint": "^8.35.1",
@@ -35,8 +36,8 @@
   },
   "scripts": {
     "build": "bun run build:packages",
-    "build:packages": "tsc --build --force",
-    "build:watch": "tsc --build --watch packages/core packages/manifold",
+    "build:packages": "tsdown --workspace",
+    "build:watch": "tsdown --workspace --watch",
     "clean": "rm -rf packages/*/dist",
     "prepare": "bunx lefthook install",
     "changeset": "changeset",

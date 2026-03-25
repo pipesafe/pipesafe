@@ -1,15 +1,15 @@
 pre-commit:
-  parallel: true
-  commands:
-    build:
-      run: bun run build
-      stage_fixed: true
-    lint:
-      run: bun run lint:fix
-      stage_fixed: true
-    format:
-      run: bun run format:fix
-      stage_fixed: true
-    test:
+  jobs:
+    - name: format-lint-build
+      group:
+        parallel: true
+        jobs:
+          - run: bun run build
+            stage_fixed: true
+          - run: bun run lint:fix
+            stage_fixed: true
+          - run: bun run format:fix
+            stage_fixed: true
+    - name: test
       run: bun run test:ci
       stage_fixed: true
