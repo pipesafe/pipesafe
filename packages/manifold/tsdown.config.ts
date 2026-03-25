@@ -5,6 +5,7 @@ export default defineConfig({
   format: ["esm", "cjs"],
   dts: true,
   clean: false,
+  unbundle: true,
   deps: {
     neverBundle: [/^mongodb/, /^bson/, /^vitest/, /^@vitest/, /^@pipesafe/],
   },
