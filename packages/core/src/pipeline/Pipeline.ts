@@ -42,23 +42,17 @@ export type LookupMode = "runtime" | "model";
 // Used Stages - Tracks which pipeline stages have been used
 // ============================================================================
 
-/** All pipeline stages currently implemented by PipeSafe */
+/** Public Pipeline members that are not aggregation stage methods */
+type PipelineNonStageMethods =
+  | "_usedStages"
+  | "getPipeline"
+  | "getAncestorsFromStages"
+  | "custom"
+  | "execute";
+
+/** All pipeline stages currently implemented by PipeSafe, derived from the Pipeline class */
 type AllPipelineStages =
-  | "$match"
-  | "$set"
-  | "$unset"
-  | "$lookup"
-  | "$graphLookup"
-  | "$group"
-  | "$project"
-  | "$replaceRoot"
-  | "$sort"
-  | "$limit"
-  | "$skip"
-  | "$unwind"
-  | "$unionWith"
-  | "$facet"
-  | "$out";
+  `$${Exclude<keyof Pipeline, PipelineNonStageMethods> & string}`;
 
 /**
  * Stages allowed inside $lookup sub-pipelines.
@@ -566,12 +560,7 @@ export class Pipeline<
     return this._chain<ResolveFacetOutput<PreviousStageDocs, F>, "$facet">(
       [{ $facet: facetStage }],
       ancestors
-    ) as Pipeline<
-      StartingDocs,
-      ResolveFacetOutput<PreviousStageDocs, F>,
-      Mode,
-      UsedStages | "$facet"
-    >;
+    );
   }
 
   out($out: string) {

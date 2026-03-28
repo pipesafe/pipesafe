@@ -145,6 +145,72 @@ describe("Project.run()", async () => {
     models: [orderSummary],
   });
 
+  // ==========================================================================
+  // Facet DAG: ordersSource -> facetedOrders
+  // ==========================================================================
+
+  const facetedOrders = new Model({
+    name: "faceted_orders",
+    from: ordersSource,
+    pipeline: (p) =>
+      p.facet({
+        summary: (q) =>
+          q.group({
+            _id: null,
+            totalAmount: { $sum: "$amount" },
+            count: { $count: {} },
+          }),
+        topOrders: (q) => q.sort({ amount: -1 }).limit(2),
+      }),
+    materialize: { type: "collection", mode: Model.Mode.Replace },
+  });
+
+  const facetProject = new Project({
+    name: "facet_project",
+    models: [facetedOrders],
+  });
+
+  // ==========================================================================
+  // GraphLookup DAG: employeesSource -> orgChart
+  // ==========================================================================
+
+  type EmployeeDoc = {
+    _id: string;
+    name: string;
+    managerId: string | null;
+  };
+
+  const employeesSource = new Collection<EmployeeDoc>({
+    collectionName: "employees",
+  });
+
+  const sampleEmployees: EmployeeDoc[] = [
+    { _id: "ceo", name: "Alice", managerId: null },
+    { _id: "vp", name: "Bob", managerId: "ceo" },
+    { _id: "mgr", name: "Carol", managerId: "vp" },
+    { _id: "dev", name: "Dave", managerId: "mgr" },
+  ];
+
+  const orgChart = new Model({
+    name: "org_chart",
+    from: employeesSource,
+    pipeline: (p) =>
+      p.graphLookup({
+        from: employeesSource,
+        startWith: "$managerId",
+        connectFromField: "managerId",
+        connectToField: "_id",
+        as: "reportingChain",
+        depthField: "depth",
+      }),
+    materialize: { type: "collection", mode: Model.Mode.Replace },
+  });
+
+  const graphLookupProject = new Project({
+    name: "graph_lookup_project",
+    models: [orgChart],
+  });
+
   describe("successful execution", () => {
     it("should run simple linear DAG", async () => {
       const db = client.db();
@@ -411,6 +477,71 @@ describe("Project.run()", async () => {
       expect(summaryDocs).toEqual([
         { _id: null, totalOrders: 3, totalAmount: 450 },
       ]);
+    });
+
+    it("facetedOrders output matches exact expected documents", async () => {
+      const db = client.db();
+      await db.collection<Order>("orders").insertMany(sampleOrders);
+
+      await facetProject.run({
+        client,
+        databaseName: db.databaseName,
+      });
+
+      const facetDocs = await db.collection("faceted_orders").find().toArray();
+
+      // $facet always produces a single document with each key as an array
+      expect(facetDocs).toHaveLength(1);
+      expect(facetDocs).toEqual([
+        {
+          _id: expect.anything(),
+          summary: [{ _id: null, totalAmount: 450, count: 3 }],
+          topOrders: [
+            { _id: "order_2", userId: "user_1", amount: 200 },
+            { _id: "order_3", userId: "user_2", amount: 150 },
+          ],
+        },
+      ]);
+    });
+
+    it("orgChart output matches expected graph traversal", async () => {
+      const db = client.db();
+      await db.collection<EmployeeDoc>("employees").insertMany(sampleEmployees);
+
+      await graphLookupProject.run({
+        client,
+        databaseName: db.databaseName,
+      });
+
+      const orgDocs = await db
+        .collection("org_chart")
+        .find()
+        .sort({ _id: 1 })
+        .toArray();
+
+      expect(orgDocs).toHaveLength(4);
+
+      // CEO (index 0 after sort) has no managers above them
+      expect(orgDocs[0]).toEqual({
+        _id: "ceo",
+        name: "Alice",
+        managerId: null,
+        reportingChain: [],
+      });
+
+      // Dev (index 1 after sort) has 3 ancestors: mgr, vp, ceo
+      // $graphLookup result order is not guaranteed, so use arrayContaining
+      expect(orgDocs[1]).toEqual({
+        _id: "dev",
+        name: "Dave",
+        managerId: "mgr",
+        reportingChain: expect.arrayContaining([
+          { _id: "mgr", name: "Carol", managerId: "vp", depth: 0 },
+          { _id: "vp", name: "Bob", managerId: "ceo", depth: 1 },
+          { _id: "ceo", name: "Alice", managerId: null, depth: 2 },
+        ]),
+      });
+      expect(orgDocs[1]!["reportingChain"]).toHaveLength(3);
     });
   });
 });

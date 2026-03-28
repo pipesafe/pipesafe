@@ -219,6 +219,51 @@ type CategoryExpected = {
 
 type CategoryTest = Assert<Equal<CategoryResult, CategoryExpected>>;
 
+// ============================================================================
+// Test 8: Expression-based startWith via Pipeline.graphLookup
+// ============================================================================
+
+// Verifies that the StartWith generic constraint accepts expressions
+// that evaluate to the connectToField type (string in this case).
+import { Pipeline } from "../pipeline/Pipeline";
+import { Collection } from "../collection/Collection";
+
+const employees = new Collection<Employee>({
+  collectionName: "employees",
+});
+
+type DocWithParts = {
+  _id: string;
+  firstName: string;
+  lastName: string;
+  managerId: string | null;
+};
+
+// Expression-based startWith: { $concat: ["$firstName", " ", "$lastName"] } => string
+// This matches connectToField "_id" which is string
+const _expressionStartWith = (
+  p: Pipeline<DocWithParts, DocWithParts, "runtime", never>
+) =>
+  p.graphLookup({
+    from: employees,
+    startWith: { $concat: ["$firstName", " ", "$lastName"] },
+    connectFromField: "managerId",
+    connectToField: "_id",
+    as: "hierarchy",
+  });
+
+const _invalidExpressionStartWith = (
+  p: Pipeline<DocWithParts, DocWithParts, "runtime", never>
+) =>
+  p.graphLookup({
+    from: employees,
+    // @ts-expect-error - Expression evaluating to number should not match string connectToField
+    startWith: { $add: [1, 2] },
+    connectFromField: "managerId",
+    connectToField: "_id",
+    as: "hierarchy",
+  });
+
 // Satisfy linting by exporting all test types
 export type {
   BasicTest,
@@ -229,3 +274,7 @@ export type {
   AirportTest,
   CategoryTest,
 };
+
+// Satisfy linting for runtime values
+void _expressionStartWith;
+void _invalidExpressionStartWith;
