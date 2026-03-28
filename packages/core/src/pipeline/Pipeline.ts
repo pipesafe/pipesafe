@@ -56,7 +56,12 @@ type AllPipelineStages =
 
 /**
  * Stages allowed inside $lookup sub-pipelines.
- * Blocked: $out, $merge
+ *
+ * Note: Currently only blocks `$out` and `$merge`. Per MongoDB docs,
+ * `$lookup` sub-pipelines should also block `$geoNear`, `$changeStream`,
+ * and `$changeStreamSplitLargeEvent`. These aren't implemented yet, so not
+ * an issue now, but when adding these stages in the future, remember to
+ * exclude them here.
  */
 export type LookupAllowedStages = Exclude<AllPipelineStages, "$out" | "$merge">;
 
