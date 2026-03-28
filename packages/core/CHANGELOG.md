@@ -1,5 +1,18 @@
 # @pipesafe/core
 
+## 0.7.0
+
+### Minor Changes
+
+- 1647d74: Switch build tooling from raw tsc to tsdown (powered by Rolldown) with unbundle mode. Produces dual ESM/CJS output preserving source file structure for better tree-shaking. Dependencies auto-externalized from package.json.
+
+### Patch Changes
+
+- 4fd4b30: Add default export condition to package.json exports for broader bundler compatibility
+- 1647d74: Fix Pipeline.\_chain() not forwarding MongoClient, which caused execute() to throw "Not connected" after chained stages
+- 1647d74: Move mongodb from dependencies to peerDependencies to prevent duplicate MongoClient types when consumers link PipeSafe locally or use a different mongodb resolution path
+- 9905152: Tighten InferExpression to use proper expression types instead of loose structural matchers
+
 ## 0.6.0
 
 ### Minor Changes
