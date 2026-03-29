@@ -54,29 +54,31 @@ type PipelineNonStageMethods =
 type AllPipelineStages =
   `$${Exclude<keyof Pipeline, PipelineNonStageMethods> & string}`;
 
+/** Type-safe exclusion: constrains excluded stages to valid stage names */
+type AllPipelineStagesExcept<T extends AllPipelineStages> = Exclude<
+  AllPipelineStages,
+  T
+>;
+
 /**
  * Stages allowed inside $lookup sub-pipelines.
  *
- * Note: Currently only blocks `$out` and `$merge`. Per MongoDB docs,
- * `$lookup` sub-pipelines should also block `$geoNear`, `$changeStream`,
- * and `$changeStreamSplitLargeEvent`. These aren't implemented yet, so not
- * an issue now, but when adding these stages in the future, remember to
- * exclude them here.
+ * Note: Currently only blocks `$out`. When implemented, also add `$merge`,
+ * `$geoNear`, `$changeStream`, and `$changeStreamSplitLargeEvent` here.
  */
-export type LookupAllowedStages = Exclude<AllPipelineStages, "$out" | "$merge">;
+export type LookupAllowedStages = AllPipelineStagesExcept<"$out">;
 
 /**
  * Stages allowed inside $unionWith sub-pipelines.
- * Blocked: $out, $merge
+ * Blocked: $out (add $merge here when implemented)
  */
-export type UnionWithAllowedStages = Exclude<
-  AllPipelineStages,
-  "$out" | "$merge"
->;
+export type UnionWithAllowedStages = AllPipelineStagesExcept<"$out">;
 
 /**
  * Stages allowed inside $facet sub-pipelines.
  * Per MongoDB docs, the following stages cannot be used inside $facet.
+ * Stages not yet implemented by PipeSafe are pre-blocked so they are
+ * automatically restricted when added in the future.
  */
 export type FacetAllowedStages = Exclude<
   AllPipelineStages,
@@ -326,6 +328,7 @@ export class Pipeline<
           : never)),
     NewKey extends string,
     DepthField extends string = never,
+    const RestrictMatch extends MatchQuery<InferSourceType<C>> = never,
   >($graphLookup: {
     from: C;
     startWith: StartWith;
@@ -334,14 +337,15 @@ export class Pipeline<
     as: NewKey;
     maxDepth?: number;
     depthField?: DepthField;
-    restrictSearchWithMatch?: MatchQuery<InferSourceType<C>>;
+    restrictSearchWithMatch?: RestrictMatch;
   }): Pipeline<
     StartingDocs,
     ResolveGraphLookupOutput<
       PreviousStageDocs,
       NewKey,
       InferSourceType<C>,
-      DepthField
+      DepthField,
+      RestrictMatch
     >,
     Mode,
     UsedStages | "$graphLookup"
@@ -355,7 +359,8 @@ export class Pipeline<
         PreviousStageDocs,
         NewKey,
         InferSourceType<C>,
-        DepthField
+        DepthField,
+        RestrictMatch
       >,
       "$graphLookup"
     >(

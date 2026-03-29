@@ -264,6 +264,81 @@ const _invalidExpressionStartWith = (
     as: "hierarchy",
   });
 
+// ============================================================================
+// Test 9: restrictSearchWithMatch narrows union foreign doc type
+// ============================================================================
+
+type MixedNode =
+  | { type: "employee"; _id: string; name: string; managerId: string | null }
+  | { type: "contractor"; _id: string; contractId: string; agency: string };
+
+type NarrowedResult = ResolveGraphLookupOutput<
+  { _id: string; startNode: string },
+  "chain",
+  MixedNode,
+  never,
+  { type: "employee" }
+>;
+
+type NarrowedExpected = {
+  _id: string;
+  startNode: string;
+  chain: {
+    type: "employee";
+    _id: string;
+    name: string;
+    managerId: string | null;
+  }[];
+};
+
+type NarrowedTest = Assert<Equal<NarrowedResult, NarrowedExpected>>;
+
+// ============================================================================
+// Test 10: restrictSearchWithMatch with depthField + narrowing
+// ============================================================================
+
+type NarrowedWithDepthResult = ResolveGraphLookupOutput<
+  { _id: string; startNode: string },
+  "chain",
+  MixedNode,
+  "depth",
+  { type: "employee" }
+>;
+
+type NarrowedWithDepthExpected = {
+  _id: string;
+  startNode: string;
+  chain: {
+    type: "employee";
+    _id: string;
+    name: string;
+    managerId: string | null;
+    depth: number;
+  }[];
+};
+
+type NarrowedWithDepthTest = Assert<
+  Equal<NarrowedWithDepthResult, NarrowedWithDepthExpected>
+>;
+
+// ============================================================================
+// Test 11: no restrictSearchWithMatch preserves full union
+// ============================================================================
+
+type UnnarrowedResult = ResolveGraphLookupOutput<
+  { _id: string; startNode: string },
+  "chain",
+  MixedNode
+>;
+
+type UnnarrowedExpected = {
+  _id: string;
+  startNode: string;
+  chain: MixedNode[];
+};
+
+type UnnarrowedTest = Assert<Equal<UnnarrowedResult, UnnarrowedExpected>>;
+
 // Satisfy linting by exporting all test types
 export type {
   BasicTest,
@@ -273,8 +348,56 @@ export type {
   ReplacementTest,
   AirportTest,
   CategoryTest,
+  NarrowedTest,
+  NarrowedWithDepthTest,
+  UnnarrowedTest,
+  NarrowedPipelineTest,
 };
+
+// ============================================================================
+// Test 12: Pipeline.graphLookup with restrictSearchWithMatch narrows output
+// ============================================================================
+
+type MixedEmployee =
+  | { _id: string; name: string; managerId: string | null; type: "full-time" }
+  | { _id: string; name: string; managerId: string | null; type: "intern" };
+
+const mixedEmployees = new Collection<MixedEmployee>({
+  collectionName: "mixed_employees",
+});
+
+const _narrowedPipeline = new Pipeline<{
+  _id: string;
+  managerId: string | null;
+}>().graphLookup({
+  from: mixedEmployees,
+  startWith: "$managerId",
+  connectFromField: "managerId",
+  connectToField: "_id",
+  as: "chain",
+  restrictSearchWithMatch: { type: "full-time" },
+});
+
+type NarrowedPipelineOutput = import("../pipeline/Pipeline").InferOutputType<
+  typeof _narrowedPipeline
+>;
+
+type NarrowedPipelineExpected = {
+  _id: string;
+  managerId: string | null;
+  chain: {
+    _id: string;
+    name: string;
+    managerId: string | null;
+    type: "full-time";
+  }[];
+};
+
+type NarrowedPipelineTest = Assert<
+  Equal<NarrowedPipelineOutput, NarrowedPipelineExpected>
+>;
 
 // Satisfy linting for runtime values
 void _expressionStartWith;
 void _invalidExpressionStartWith;
+void _narrowedPipeline;
