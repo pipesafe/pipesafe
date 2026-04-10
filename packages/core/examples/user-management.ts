@@ -8,7 +8,7 @@
  * - User activity analysis
  */
 
-import { Pipeline } from "@pipesafe/core";
+import { Pipeline, Collection } from "@pipesafe/core";
 import type { InferOutputType } from "@pipesafe/core";
 
 // ============================================================================
@@ -231,6 +231,62 @@ const cleanUserDataPipeline = new Pipeline<UserSchema>()
 type CleanUserData = InferOutputType<typeof cleanUserDataPipeline>;
 
 // ============================================================================
+// Example 6: Org Chart — Reporting Hierarchy with $graphLookup
+// ============================================================================
+
+type EmployeeSchema = {
+  _id: string;
+  name: string;
+  managerId: string | null;
+  department: string;
+  title: string;
+};
+
+const employeesCollection = new Collection<EmployeeSchema>({
+  collectionName: "employees",
+});
+
+// For each employee, find their full management chain up to the CEO
+const orgChartPipeline = new Pipeline<EmployeeSchema>()
+  .graphLookup({
+    from: employeesCollection,
+    startWith: "$managerId",
+    connectFromField: "managerId",
+    connectToField: "_id",
+    as: "managementChain",
+    depthField: "level",
+    maxDepth: 10,
+  })
+  .set({
+    chainLength: { $size: "$managementChain" },
+  })
+  .project({
+    _id: 0,
+    name: 1,
+    title: 1,
+    department: 1,
+    managementChain: 1,
+    chainLength: 1,
+  });
+
+type OrgChart = InferOutputType<typeof orgChartPipeline>;
+
+// Find all direct and indirect reports for a given manager
+const allReportsPipeline = new Pipeline<EmployeeSchema>()
+  .match({ name: "VP Engineering" })
+  .graphLookup({
+    from: employeesCollection,
+    startWith: "$_id",
+    connectFromField: "_id",
+    connectToField: "managerId",
+    as: "allReports",
+    depthField: "depth",
+    restrictSearchWithMatch: { department: "Engineering" },
+  });
+
+type AllReports = InferOutputType<typeof allReportsPipeline>;
+
+// ============================================================================
 // Export types for use in application
 // ============================================================================
 
@@ -240,6 +296,8 @@ export type {
   AdminUserView,
   UserActivityAnalysis,
   CleanUserData,
+  OrgChart,
+  AllReports,
 };
 
 export {
@@ -248,4 +306,6 @@ export {
   adminUserManagementPipeline,
   userActivityAnalysisPipeline,
   cleanUserDataPipeline,
+  orgChartPipeline,
+  allReportsPipeline,
 };

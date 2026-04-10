@@ -1,5 +1,10 @@
 import { Assert, Equal } from "../utils/tests";
 import { ResolveLookupOutput } from "./lookup";
+import type {
+  Pipeline,
+  PipelineBuilder,
+  LookupAllowedStages,
+} from "../pipeline/Pipeline";
 
 /**
  * Type Resolution Behaviors for $lookup Stage:
@@ -391,6 +396,53 @@ type SequentialLookupExpected = {
 type SequentialLookupTest = Assert<
   Equal<SecondLookup, SequentialLookupExpected>
 >;
+
+// ============================================================================
+// Sub-pipeline stage restrictions (via UsedStages tracking)
+// ============================================================================
+
+// Test 15: $out in sub-pipeline makes it incompatible with LookupAllowedStages
+// A builder that uses $out cannot be assigned to a LookupAllowedStages builder
+const _lookupSubOut: PipelineBuilder<
+  UserSchema,
+  never,
+  "runtime",
+  LookupAllowedStages
+  // @ts-expect-error - "$out" not in LookupAllowedStages
+> = (p) => p.out("test");
+
+// Test 16: $facet IS allowed inside $lookup sub-pipeline
+const _lookupSubFacet: PipelineBuilder<
+  UserSchema,
+  {
+    summary: { _id: null; total: number }[];
+    recent: UserSchema[];
+  },
+  "runtime",
+  LookupAllowedStages
+> = (p) =>
+  p.facet({
+    summary: (q) => q.group({ _id: null, total: { $count: {} } }),
+    recent: (q) => q.sort({ _id: -1 }).limit(5),
+  });
+
+// Test 17: Standalone builder reuse — works in lookup context
+const _standaloneBuilder = (
+  p: Pipeline<UserSchema, UserSchema, "runtime", never>
+) => p.match({ name: "test" });
+
+const _reuseInLookup: PipelineBuilder<
+  UserSchema,
+  UserSchema,
+  "runtime",
+  LookupAllowedStages
+> = _standaloneBuilder;
+
+// Satisfy linting for runtime values
+void _lookupSubOut;
+void _lookupSubFacet;
+void _standaloneBuilder;
+void _reuseInLookup;
 
 // Satisfy linting by exporting all test types
 export type {
