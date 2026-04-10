@@ -1,11 +1,14 @@
 import { MongoClient } from "mongodb";
+import { version } from "../../package.json";
 import { Database } from "../database/Database";
+
+const DRIVER_INFO = { name: "PipeSafe", version };
 
 class PipeSafe {
   client: MongoClient | undefined;
   connect(url: string) {
     if (this.client) throw new Error("Already connected");
-    this.client = new MongoClient(url);
+    this.client = new MongoClient(url, { driverInfo: DRIVER_INFO });
     return this.client;
   }
   async close() {

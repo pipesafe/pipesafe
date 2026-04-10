@@ -301,6 +301,9 @@ export class Project {
         "No MongoDB client available. Either pass one via options.client or call pipesafe.connect() first."
       );
     }
+    if (typeof mongoClient.appendMetadata === "function") {
+      mongoClient.appendMetadata({ name: "PipeSafe" });
+    }
 
     const dbName = databaseName ?? this.defaultDatabase;
 
