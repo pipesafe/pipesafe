@@ -1,11 +1,13 @@
 import { MongoClient } from "mongodb";
 import { Database } from "../database/Database";
+import { DRIVER_INFO, markTagged } from "./tagClient";
 
 class PipeSafe {
   client: MongoClient | undefined;
   connect(url: string) {
     if (this.client) throw new Error("Already connected");
-    this.client = new MongoClient(url);
+    this.client = new MongoClient(url, { driverInfo: DRIVER_INFO });
+    markTagged(this.client);
     return this.client;
   }
   async close() {

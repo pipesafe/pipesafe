@@ -29,6 +29,7 @@ import {
 import { Pipeline } from "../pipeline/Pipeline";
 import { Document } from "../utils/core";
 import { pipesafe } from "../singleton/pipesafe";
+import { tagClient } from "../singleton/tagClient";
 import { Source } from "../source/Source";
 
 export class Collection<Docs extends Document> implements Source<Docs> {
@@ -49,6 +50,7 @@ export class Collection<Docs extends Document> implements Source<Docs> {
     this.client = args.client;
     this.databaseName = args.databaseName;
     this.collectionName = args.collectionName;
+    tagClient(this.client);
   }
 
   // Accessors

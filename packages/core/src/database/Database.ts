@@ -10,6 +10,7 @@ import {
 import { Document } from "../utils/core";
 import { Collection } from "../collection/Collection";
 import { pipesafe } from "../singleton/pipesafe";
+import { tagClient } from "../singleton/tagClient";
 
 export class Database {
   private client: MongoClient | undefined;
@@ -20,6 +21,7 @@ export class Database {
   }) {
     this.client = args.client;
     this.databaseName = args.databaseName;
+    tagClient(this.client);
   }
 
   getDatabaseName(): string {
