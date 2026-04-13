@@ -96,8 +96,13 @@ export type ModelConfig<
   from: TSource;
   /** Pipeline function - receives a "model" mode pipeline that can lookup from other models */
   pipeline: (
-    p: Pipeline<InferSourceType<TSource>, InferSourceType<TSource>, "model">
-  ) => Pipeline<InferSourceType<TSource>, TOutput, "model">;
+    p: Pipeline<
+      InferSourceType<TSource>,
+      InferSourceType<TSource>,
+      "model",
+      never
+    >
+  ) => Pipeline<InferSourceType<TSource>, TOutput, "model", string>;
   /** Materialization configuration - required */
   materialize: TMaterializeConfig;
 };
@@ -161,8 +166,8 @@ export class Model<
 
   private readonly _from: Source<TInput>;
   private readonly _pipelineFn: (
-    p: Pipeline<TInput, TInput, "model">
-  ) => Pipeline<TInput, TOutput, "model">;
+    p: Pipeline<TInput, TInput, "model", never>
+  ) => Pipeline<TInput, TOutput, "model", string>;
 
   constructor(
     config: ModelConfig<TName, Source<TInput>, TOutput, TMaterializeConfig>
@@ -248,9 +253,9 @@ export class Model<
   /**
    * Internal: build the pipeline and return the Pipeline instance.
    */
-  private _buildPipeline(): Pipeline<TInput, TOutput, "model"> {
+  private _buildPipeline(): Pipeline<TInput, TOutput, "model", string> {
     // Start with an empty "model" mode pipeline (allows lookup from other models)
-    const startPipeline = new Pipeline<TInput, TInput, "model">({
+    const startPipeline = new Pipeline<TInput, TInput, "model", never>({
       pipeline: [],
     });
 
