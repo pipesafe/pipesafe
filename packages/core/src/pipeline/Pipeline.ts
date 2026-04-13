@@ -54,34 +54,38 @@ type PipelineNonStageMethods =
 type AllPipelineStages =
   `$${Exclude<keyof Pipeline, PipelineNonStageMethods> & string}`;
 
-/** Type-safe exclusion: constrains excluded stages to valid stage names */
-type AllPipelineStagesExcept<T extends AllPipelineStages> = Exclude<
-  AllPipelineStages,
-  T
+/** MongoDB stages not yet implemented by PipeSafe but needed for sub-pipeline restrictions */
+type KnownUnimplementedStages =
+  | "$changeStream"
+  | "$changeStreamSplitLargeEvent"
+  | "$collStats"
+  | "$geoNear"
+  | "$indexStats"
+  | "$merge"
+  | "$planCacheStats"
+  | "$search"
+  | "$searchMeta"
+  | "$vectorSearch";
+
+/** Type-safe exclusion: constrains excluded stages to implemented or known-unimplemented names */
+type AllPipelineStagesExcept<
+  T extends AllPipelineStages | KnownUnimplementedStages,
+> = Exclude<AllPipelineStages, T>;
+
+/** Stages allowed inside $lookup sub-pipelines (per MongoDB docs) */
+export type LookupAllowedStages = AllPipelineStagesExcept<
+  | "$out"
+  | "$merge"
+  | "$geoNear"
+  | "$changeStream"
+  | "$changeStreamSplitLargeEvent"
 >;
 
-/**
- * Stages allowed inside $lookup sub-pipelines.
- *
- * Note: Currently only blocks `$out`. When implemented, also add `$merge`,
- * `$geoNear`, `$changeStream`, and `$changeStreamSplitLargeEvent` here.
- */
-export type LookupAllowedStages = AllPipelineStagesExcept<"$out">;
+/** Stages allowed inside $unionWith sub-pipelines (per MongoDB docs) */
+export type UnionWithAllowedStages = AllPipelineStagesExcept<"$out" | "$merge">;
 
-/**
- * Stages allowed inside $unionWith sub-pipelines.
- * Blocked: $out (add $merge here when implemented)
- */
-export type UnionWithAllowedStages = AllPipelineStagesExcept<"$out">;
-
-/**
- * Stages allowed inside $facet sub-pipelines.
- * Per MongoDB docs, the following stages cannot be used inside $facet.
- * Stages not yet implemented by PipeSafe are pre-blocked so they are
- * automatically restricted when added in the future.
- */
-export type FacetAllowedStages = Exclude<
-  AllPipelineStages,
+/** Stages allowed inside $facet sub-pipelines (per MongoDB docs) */
+export type FacetAllowedStages = AllPipelineStagesExcept<
   | "$collStats"
   | "$facet"
   | "$geoNear"
