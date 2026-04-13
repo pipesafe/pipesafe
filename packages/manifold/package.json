@@ -1,6 +1,6 @@
 {
   "name": "@pipesafe/manifold",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "PipeSafe Manifold - DAG composition and orchestration layer for @pipesafe/core",
   "author": "Ryan Peggs & Tim Vyas",
   "license": "Elastic-2.0",
