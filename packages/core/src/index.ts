@@ -11,7 +11,14 @@ export { Pipeline } from "./pipeline/Pipeline";
 export { Collection } from "./collection/Collection";
 
 // Type inference helpers
-export type { InferOutputType, LookupMode } from "./pipeline/Pipeline";
+export type {
+  InferOutputType,
+  LookupMode,
+  PipelineBuilder,
+  LookupAllowedStages,
+  UnionWithAllowedStages,
+  FacetAllowedStages,
+} from "./pipeline/Pipeline";
 export type { InferCollectionType } from "./collection/Collection";
 export type { Source, InferSourceType } from "./source/Source";
 export type { Document, Prettify } from "./utils/core";

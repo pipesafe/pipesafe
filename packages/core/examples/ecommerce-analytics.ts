@@ -8,7 +8,7 @@
  * - Product performance metrics
  */
 
-import { Pipeline } from "@pipesafe/core";
+import { Pipeline, Collection } from "@pipesafe/core";
 import type { InferOutputType } from "@pipesafe/core";
 
 // ============================================================================
@@ -160,6 +160,149 @@ const geographicSalesPipeline = new Pipeline<OrderSchema>()
 type GeographicSalesResult = InferOutputType<typeof geographicSalesPipeline>;
 
 // ============================================================================
+// Example 5: Order with Product Category Hierarchy ($lookup + nested $graphLookup)
+// ============================================================================
+
+type CategorySchema = {
+  _id: string;
+  name: string;
+  parentId: string | null;
+};
+
+type ProductSchema = {
+  _id: string;
+  name: string;
+  categoryId: string;
+  price: number;
+};
+
+const products = new Collection<ProductSchema>({
+  collectionName: "products",
+});
+const categories = new Collection<CategorySchema>({
+  collectionName: "categories",
+});
+
+// For each order, lookup all products and within each product
+// use $graphLookup to find the full category ancestry chain.
+// e.g. "iPhone 15" → category "Phones" → ["Phones", "Electronics", "All Products"]
+const orderWithCategoryHierarchyPipeline = new Pipeline<OrderSchema>()
+  .match({ status: "delivered" })
+  .lookup({
+    from: products,
+    as: "productDetails",
+    pipeline: (p) =>
+      p.graphLookup({
+        from: categories,
+        startWith: "$categoryId",
+        connectFromField: "parentId",
+        connectToField: "_id",
+        as: "categoryPath",
+        depthField: "depth",
+      }),
+  })
+  .project({
+    _id: 0,
+    orderId: 1,
+    customerId: 1,
+    totalAmount: 1,
+    productDetails: 1,
+  });
+
+type OrderWithCategoryHierarchy = InferOutputType<
+  typeof orderWithCategoryHierarchyPipeline
+>;
+
+// ============================================================================
+// Example 6: Multi-Facet Product Analysis ($facet)
+// ============================================================================
+
+type ProductAnalyticsSchema = {
+  _id: string;
+  name: string;
+  category: string;
+  price: number;
+  soldCount: number;
+};
+
+const productAnalysisPipeline = new Pipeline<ProductAnalyticsSchema>()
+  // Run three independent analyses in parallel
+  .facet({
+    // Price distribution buckets
+    priceBuckets: (p) =>
+      p.group({
+        _id: null,
+        avgPrice: { $avg: "$price" },
+        minPrice: { $min: "$price" },
+        maxPrice: { $max: "$price" },
+      }),
+    // Top 5 best sellers
+    topSellers: (p) => p.sort({ soldCount: -1 }).limit(5),
+    // Category summary
+    categorySummary: (p) =>
+      p
+        .group({
+          _id: "$category",
+          totalProducts: { $count: {} },
+          totalRevenue: { $sum: "$price" },
+        })
+        .sort({ totalRevenue: -1 }),
+  });
+
+type ProductAnalysisResult = InferOutputType<typeof productAnalysisPipeline>;
+
+// ============================================================================
+// Example 7: Combined Inventory View ($unionWith)
+// ============================================================================
+
+// Warehouse and store inventories live in separate collections but share the
+// same product catalog. Use $unionWith to merge both sources into a single
+// view, then summarise total stock per product.
+
+type WarehouseInventory = {
+  _id: string;
+  productId: string;
+  quantity: number;
+  location: "warehouse";
+};
+
+type StoreInventory = {
+  _id: string;
+  productId: string;
+  quantity: number;
+  location: "store";
+};
+
+const storeInventory = new Collection<StoreInventory>({
+  collectionName: "storeInventory",
+});
+
+const combinedInventoryPipeline = new Pipeline<WarehouseInventory>()
+  // Merge store inventory into the warehouse stream, keeping only the
+  // fields both collections share
+  .unionWith({
+    coll: storeInventory,
+    pipeline: (p) =>
+      p.project({
+        _id: 0,
+        productId: 1,
+        quantity: 1,
+        location: 1,
+      }),
+  })
+  // Summarise total stock per product across both sources
+  .group({
+    _id: "$productId",
+    totalQuantity: { $sum: "$quantity" },
+    sourceCount: { $count: {} },
+  })
+  .sort({ totalQuantity: -1 });
+
+type CombinedInventoryResult = InferOutputType<
+  typeof combinedInventoryPipeline
+>;
+
+// ============================================================================
 // Export types for use in application
 // ============================================================================
 
@@ -168,6 +311,9 @@ export type {
   CustomerPurchaseResult,
   ProductPerformanceResult,
   GeographicSalesResult,
+  OrderWithCategoryHierarchy,
+  ProductAnalysisResult,
+  CombinedInventoryResult,
 };
 
 export {
@@ -175,4 +321,7 @@ export {
   customerPurchaseAnalysisPipeline,
   productPerformancePipeline,
   geographicSalesPipeline,
+  orderWithCategoryHierarchyPipeline,
+  productAnalysisPipeline,
+  combinedInventoryPipeline,
 };

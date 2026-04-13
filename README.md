@@ -70,7 +70,7 @@ const pipelineJson = pipeline.getPipeline();
 - **Type-safe field references** - Field paths are validated against your document types
 - **Automatic output inference** - Each pipeline stage correctly types its output
 - **Flexible connection patterns** - Three connection patterns (Singleton, Chained, On Execution) to suit different use cases
-- **Supported stages** - `match`, `project`, `set`, `unset`, `group`, `lookup`, `replaceRoot`, `unionWith`, `sort`, `limit`, `skip`, `unwind`, `out`
+- **Supported stages** - `match`, `project`, `set`, `unset`, `group`, `lookup`, `graphLookup`, `replaceRoot`, `unionWith`, `facet`, `sort`, `limit`, `skip`, `unwind`, `out`
 - **Expression operators** - Supports `$concatArrays`, `$size`, `$add`, `$subtract`, `$multiply`, `$divide`, `$mod`, `$dateToString`, `$concat` (more coming soon)
 - **Collection-aware lookups** - Type-safe joins with automatic type inference
 - **Full TypeScript support** - Leverages TypeScript's type system for maximum safety

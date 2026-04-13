@@ -8,7 +8,7 @@
  * - Content search and categorization
  */
 
-import { Pipeline } from "@pipesafe/core";
+import { Pipeline, Collection } from "@pipesafe/core";
 import type { InferOutputType } from "@pipesafe/core";
 
 // ============================================================================
@@ -239,6 +239,47 @@ const contentSearchPipeline = new Pipeline<BlogPostSchema>()
 type ContentSearchResults = InferOutputType<typeof contentSearchPipeline>;
 
 // ============================================================================
+// Example 6: Category Hierarchy with $graphLookup
+// ============================================================================
+
+type CategorySchema = {
+  _id: string;
+  name: string;
+  slug: string;
+  parentId: string | null;
+  description?: string;
+};
+
+const categoriesCollection = new Collection<CategorySchema>({
+  collectionName: "categories",
+});
+
+// Find all ancestor categories for each post's category
+// e.g. "React Hooks" → ["React", "Frontend", "Engineering"]
+const postWithCategoryBreadcrumbPipeline = new Pipeline<BlogPostSchema>()
+  .match({ status: "published" })
+  .graphLookup({
+    from: categoriesCollection,
+    startWith: "$category",
+    connectFromField: "parentId",
+    connectToField: "_id",
+    as: "categoryPath",
+    depthField: "depth",
+  })
+  .project({
+    _id: 0,
+    postId: 1,
+    title: 1,
+    slug: 1,
+    category: 1,
+    categoryPath: 1,
+  });
+
+type PostWithCategoryBreadcrumb = InferOutputType<
+  typeof postWithCategoryBreadcrumbPipeline
+>;
+
+// ============================================================================
 // Export types for use in application
 // ============================================================================
 
@@ -248,6 +289,7 @@ export type {
   ContentAnalytics,
   AuthorPerformance,
   ContentSearchResults,
+  PostWithCategoryBreadcrumb,
 };
 
 export {
@@ -256,4 +298,5 @@ export {
   contentAnalyticsPipeline,
   authorPerformancePipeline,
   contentSearchPipeline,
+  postWithCategoryBreadcrumbPipeline,
 };
