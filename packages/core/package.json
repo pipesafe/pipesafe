@@ -1,6 +1,6 @@
 {
   "name": "@pipesafe/core",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "PipeSafe Core - Fully type-safe MongoDB aggregation pipeline builder for TypeScript projects",
   "author": "Ryan Peggs & Tim Vyas",
   "license": "Apache-2.0",

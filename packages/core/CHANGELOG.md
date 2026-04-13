@@ -1,5 +1,13 @@
 # @pipesafe/core
 
+## 0.8.0
+
+### Minor Changes
+
+- 37ddaa0: Add `$facet` stage with type-safe multi-pipeline output inference and `UsedStages` tracking for cross-scope pipeline builder reuse
+- 37ddaa0: Add $graphLookup stage with type-safe recursive graph traversal
+- 079eeec: Tag user-supplied `MongoClient` instances with PipeSafe driver metadata at every entry point (`Collection`, `Database`, `Pipeline`, `Project`), not just the `pipesafe.connect()` singleton. Tagging is idempotent so wrapping the same client in multiple PipeSafe constructs will not duplicate entries in the server-side handshake log.
+
 ## 0.7.0
 
 ### Minor Changes
