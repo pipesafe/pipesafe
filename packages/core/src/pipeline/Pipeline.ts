@@ -1,4 +1,5 @@
 import { pipesafe } from "../singleton/pipesafe";
+import { tagClient } from "../singleton/tagClient";
 import { Document, WithoutDollar } from "../utils/core";
 import { MatchQuery, ResolveMatchOutput } from "../stages/match";
 import { ResolveSetOutput, SetQuery } from "../stages/set";
@@ -152,6 +153,7 @@ export class Pipeline<
     this.client = args.client;
     this.collectionName = args.collectionName;
     this.databaseName = args.databaseName;
+    tagClient(this.client);
   }
 
   /** Create a chained pipeline that carries forward ancestor sources */
@@ -590,6 +592,7 @@ export class Pipeline<
   ): AggregationCursor<PreviousStageDocs> {
     const client = args.client ?? this.client ?? pipesafe.client;
     if (!client) throw new Error("Not connected");
+    tagClient(client);
 
     const db = args.databaseName ?? this.databaseName;
 

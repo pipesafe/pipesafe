@@ -6,7 +6,7 @@
  */
 
 import { MongoClient } from "mongodb";
-import { pipesafe } from "@pipesafe/core";
+import { pipesafe, tagClient } from "@pipesafe/core";
 import { Model, isModel } from "../model/Model";
 
 // ============================================================================
@@ -301,9 +301,7 @@ export class Project {
         "No MongoDB client available. Either pass one via options.client or call pipesafe.connect() first."
       );
     }
-    if (typeof mongoClient.appendMetadata === "function") {
-      mongoClient.appendMetadata({ name: "PipeSafe" });
-    }
+    tagClient(mongoClient);
 
     const dbName = databaseName ?? this.defaultDatabase;
 

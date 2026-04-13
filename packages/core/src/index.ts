@@ -7,6 +7,7 @@
 
 // Core
 export { pipesafe } from "./singleton/pipesafe";
+export { tagClient } from "./singleton/tagClient";
 export { Pipeline } from "./pipeline/Pipeline";
 export { Collection } from "./collection/Collection";
 
