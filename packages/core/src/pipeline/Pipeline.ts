@@ -25,6 +25,10 @@ import {
 import { ResolveUnionWithOutput } from "../stages/unionWith";
 import { SortQuery } from "../stages/sort";
 import { ResolveUnwindOutput } from "../stages/unwind";
+import { ResolveLimitOutput } from "../stages/limit";
+import { ResolveSkipOutput } from "../stages/skip";
+import { ResolveSampleOutput, SampleQuery } from "../stages/sample";
+import { ResolveCountOutput } from "../stages/count";
 import { AggregationCursor, MongoClient } from "mongodb";
 import { type Source, type InferSourceType } from "../source/Source";
 
@@ -437,9 +441,16 @@ export class Pipeline<
    * @example .limit(10)
    */
   limit(
-    count: number
-  ): Pipeline<StartingDocs, PreviousStageDocs, Mode, UsedStages | "$limit"> {
-    return this._chain<PreviousStageDocs, "$limit">([{ $limit: count }]);
+    n: number
+  ): Pipeline<
+    StartingDocs,
+    ResolveLimitOutput<PreviousStageDocs>,
+    Mode,
+    UsedStages | "$limit"
+  > {
+    return this._chain<ResolveLimitOutput<PreviousStageDocs>, "$limit">([
+      { $limit: n },
+    ]);
   }
 
   /**
@@ -447,9 +458,51 @@ export class Pipeline<
    * @example .skip(20).limit(10)
    */
   skip(
-    count: number
-  ): Pipeline<StartingDocs, PreviousStageDocs, Mode, UsedStages | "$skip"> {
-    return this._chain<PreviousStageDocs, "$skip">([{ $skip: count }]);
+    n: number
+  ): Pipeline<
+    StartingDocs,
+    ResolveSkipOutput<PreviousStageDocs>,
+    Mode,
+    UsedStages | "$skip"
+  > {
+    return this._chain<ResolveSkipOutput<PreviousStageDocs>, "$skip">([
+      { $skip: n },
+    ]);
+  }
+
+  /**
+   * Randomly select a fixed-size sample of documents from the pipeline.
+   * @example .sample({ size: 10 })
+   */
+  sample(
+    $sample: SampleQuery
+  ): Pipeline<
+    StartingDocs,
+    ResolveSampleOutput<PreviousStageDocs>,
+    Mode,
+    UsedStages | "$sample"
+  > {
+    return this._chain<ResolveSampleOutput<PreviousStageDocs>, "$sample">([
+      { $sample },
+    ]);
+  }
+
+  /**
+   * Replace the pipeline with a single document containing the document count
+   * under the given field name.
+   * @example .count("total") // → { total: number }
+   */
+  count<F extends string>(
+    fieldName: F
+  ): Pipeline<
+    StartingDocs,
+    ResolveCountOutput<F>,
+    Mode,
+    UsedStages | "$count"
+  > {
+    return this._chain<ResolveCountOutput<F>, "$count">([
+      { $count: fieldName },
+    ]);
   }
 
   /**
