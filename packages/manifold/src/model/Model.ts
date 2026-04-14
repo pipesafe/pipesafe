@@ -14,7 +14,12 @@ import {
   FieldSelector,
   FieldSelectorsThatInferTo,
   TopLevelField,
+  MergeOptions,
 } from "@pipesafe/core";
+
+// Re-export MergeOptions for backwards compatibility.
+// Manifold previously owned this type; it now lives in @pipesafe/core.
+export type { MergeOptions };
 
 // ============================================================================
 // Time-Series Options
@@ -37,26 +42,19 @@ export type TypedTimeSeriesOptions<TDoc extends Document> = Omit<
 };
 
 // ============================================================================
-// Merge Options
+// Collection Mode
 // ============================================================================
 
 /**
- * Type-safe $merge stage options.
+ * Materialization mode for collection-typed models.
+ *
+ * Note: `MergeOptions` here omits `into` because the model owns its output
+ * collection name and database (via `name` and `materialize.db`). The `into`
+ * field is filled in automatically when building the output stage.
  */
-type TopLevelFieldOf<T extends Document> = TopLevelField<FieldSelector<T>>;
-
-export type MergeOptions<TOutput extends Document> = {
-  /** Field(s) to match on - must exist in output document */
-  on: TopLevelFieldOf<TOutput> | TopLevelFieldOf<TOutput>[];
-  /** Action when document matches existing */
-  whenMatched?: "replace" | "merge" | "keepExisting" | "fail";
-  /** Action when document doesn't match existing */
-  whenNotMatched?: "insert" | "discard" | "fail";
-};
-
 export type CollectionMode<TOutput extends Document> =
   | { $out: Record<string, never> }
-  | { $merge: MergeOptions<TOutput> };
+  | { $merge: Omit<MergeOptions<TOutput>, "into"> };
 
 // ============================================================================
 // Materialization Configuration
@@ -265,38 +263,35 @@ export class Model<
 
   /**
    * Build the complete aggregation pipeline including output stage.
+   *
+   * For `$out` materialization, appends the stage to the user pipeline directly
+   * (preserves the existing emitted shape for both string and `{db, coll}` forms).
+   *
+   * For `$merge` materialization, delegates to `Pipeline#merge` so the emitted
+   * `$merge` document goes through the same builder users would call.
    */
   buildPipeline(): Document[] {
-    const stages = this.getPipelineStages();
-
-    // Add output stage based on materialization
-    const outputStage = this.buildOutputStage();
-    if (outputStage) {
-      return [...stages, outputStage];
-    }
-
-    return stages;
-  }
-
-  /**
-   * Build the $out or $merge stage based on materialization config.
-   */
-  private buildOutputStage(): Document | null {
-    const outputCollection = this.getOutputCollectionName();
-    const outputDb = this.getOutputDatabase();
+    const userPipeline = this._buildPipeline();
 
     if (this.materialize.type === "view") {
       // Views are created separately, not via pipeline
-      return null;
+      return userPipeline.getPipeline();
     }
 
     if (this.materialize.type === "collection") {
       const mode = this.materialize.mode;
+      const outputCollection = this.getOutputCollectionName();
+      const outputDb = this.getOutputDatabase();
 
       if ("$out" in mode) {
-        return outputDb ?
-            { $out: { db: outputDb, coll: outputCollection } }
-          : { $out: outputCollection };
+        const $out =
+          outputDb ?
+            { db: outputDb, coll: outputCollection }
+          : outputCollection;
+        // `$out` accepts either a string or a `{db, coll}` object; the public
+        // `Pipeline#out` is string-only, so we append the stage directly to
+        // preserve the existing emitted shape.
+        return [...userPipeline.getPipeline(), { $out }];
       }
 
       if ("$merge" in mode) {
@@ -305,17 +300,16 @@ export class Model<
             { db: outputDb, coll: outputCollection }
           : outputCollection;
 
-        return {
-          $merge: {
-            into,
-            on: mode.$merge.on,
-            whenMatched: mode.$merge.whenMatched ?? "replace",
-            whenNotMatched: mode.$merge.whenNotMatched ?? "insert",
-          },
-        };
+        const merged = userPipeline.merge({
+          into,
+          on: mode.$merge.on,
+          whenMatched: mode.$merge.whenMatched ?? "replace",
+          whenNotMatched: mode.$merge.whenNotMatched ?? "insert",
+        });
+        return merged.getPipeline();
       }
     }
 
-    return null;
+    return userPipeline.getPipeline();
   }
 }
