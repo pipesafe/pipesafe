@@ -25,6 +25,7 @@ import {
 import { ResolveUnionWithOutput } from "../stages/unionWith";
 import { SortQuery } from "../stages/sort";
 import { ResolveUnwindOutput } from "../stages/unwind";
+import { MergeOptions } from "../stages/merge";
 import { AggregationCursor, MongoClient } from "mongodb";
 import { type Source, type InferSourceType } from "../source/Source";
 
@@ -62,7 +63,6 @@ type KnownUnimplementedStages =
   | "$collStats"
   | "$geoNear"
   | "$indexStats"
-  | "$merge"
   | "$planCacheStats"
   | "$search"
   | "$searchMeta"
@@ -581,6 +581,26 @@ export class Pipeline<
 
   out($out: string) {
     return this._chain<never, "$out">([{ $out }]);
+  }
+
+  /**
+   * Write or merge documents into a collection (terminal stage).
+   *
+   * Like {@link out}, no further pipeline stages can follow `$merge`:
+   * the returned pipeline narrows `PreviousStageDocs` to `never`.
+   *
+   * @example
+   * .merge({ into: "metrics", on: "_id", whenMatched: "merge" })
+   *
+   * @example // Cross-database
+   * .merge({ into: { db: "analytics", coll: "metrics" } })
+   *
+   * @see https://www.mongodb.com/docs/manual/reference/operator/aggregation/merge/
+   */
+  merge(
+    $merge: MergeOptions<PreviousStageDocs>
+  ): Pipeline<StartingDocs, never, Mode, UsedStages | "$merge"> {
+    return this._chain<never, "$merge">([{ $merge }]);
   }
 
   execute(

@@ -38,6 +38,9 @@ export type {
   InferFieldReference,
 } from "./elements/fieldReference";
 
+// Stage option types
+export type { MergeOptions, TopLevelFieldOf } from "./stages/merge";
+
 // Type assertion utilities (for testing type inference)
 export type {
   Assert,
