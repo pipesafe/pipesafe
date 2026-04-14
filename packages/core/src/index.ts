@@ -44,6 +44,9 @@ export type { ResolveSkipOutput } from "./stages/skip";
 export type { ResolveSampleOutput, SampleQuery } from "./stages/sample";
 export type { ResolveCountOutput } from "./stages/count";
 
+// Stage option types
+export type { MergeOptions, TopLevelFieldOf } from "./stages/merge";
+
 // Type assertion utilities (for testing type inference)
 export type {
   Assert,
