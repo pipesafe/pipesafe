@@ -38,6 +38,12 @@ export type {
   InferFieldReference,
 } from "./elements/fieldReference";
 
+// Stage type re-exports for advanced usage
+export type { ResolveLimitOutput } from "./stages/limit";
+export type { ResolveSkipOutput } from "./stages/skip";
+export type { ResolveSampleOutput, SampleQuery } from "./stages/sample";
+export type { ResolveCountOutput } from "./stages/count";
+
 // Type assertion utilities (for testing type inference)
 export type {
   Assert,
