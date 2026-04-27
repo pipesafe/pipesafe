@@ -1,9 +1,10 @@
 import { FieldReferencesThatInferTo } from "../elements/fieldReference";
-import { Document } from "../utils/core";
+import { Document, ExclusifyUnion } from "../utils/core";
 
-type TimeSeriesGranularity =
+type TimeSeriesGranularity = ExclusifyUnion<
   | { granularity: "seconds" | "minutes" | "hours" }
-  | { bucketMaxSpanSeconds: number; bucketRoundingSeconds: number };
+  | { bucketMaxSpanSeconds: number; bucketRoundingSeconds: number }
+>;
 
 type TimeSeriesSpec<Schema extends Document> = {
   timeField: FieldReferencesThatInferTo<Schema, Date>;

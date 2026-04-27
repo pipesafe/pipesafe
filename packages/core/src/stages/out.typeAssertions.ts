@@ -170,6 +170,28 @@ type NestedTimeFieldTest = Assert<
   >
 >;
 
+// ============================================================================
+// Test 9: granularity and bucket params are mutually exclusive
+// ============================================================================
+type GranularityAndBucketExclusiveTest = Assert<
+  Equal<
+    IsAssignable<
+      {
+        db: "warehouse";
+        coll: "events";
+        timeseries: {
+          timeField: "$timestamp";
+          granularity: "seconds";
+          bucketMaxSpanSeconds: 3600;
+          bucketRoundingSeconds: 60;
+        };
+      },
+      OutQuery<EventsSchema>
+    >,
+    false
+  >
+>;
+
 export type {
   StringFormTest,
   DbCollFormTest,
@@ -179,4 +201,5 @@ export type {
   MetaFieldExcludesIdTest,
   TimeFieldDateOnlyTest,
   NestedTimeFieldTest,
+  GranularityAndBucketExclusiveTest,
 };
