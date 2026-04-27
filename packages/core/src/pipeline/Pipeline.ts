@@ -29,6 +29,7 @@ import { ResolveLimitOutput } from "../stages/limit";
 import { ResolveSkipOutput } from "../stages/skip";
 import { ResolveSampleOutput, SampleQuery } from "../stages/sample";
 import { ResolveCountOutput } from "../stages/count";
+import { OutQuery } from "../stages/out";
 import { AggregationCursor, MongoClient } from "mongodb";
 import { type Source, type InferSourceType } from "../source/Source";
 
@@ -632,7 +633,7 @@ export class Pipeline<
     );
   }
 
-  out($out: string) {
+  out($out: OutQuery<PreviousStageDocs>) {
     return this._chain<never, "$out">([{ $out }]);
   }
 

@@ -87,6 +87,17 @@ export type UnionToIntersection<U> =
   (U extends any ? (k: U) => void : never) extends (k: infer I) => void ? I
   : never;
 
+// Make a union of object types mutually exclusive: each branch is augmented
+// with `?: never` for keys that exist in *other* branches but not its own,
+// so a value satisfying multiple branches at once is rejected.
+type AllKeys<T> = T extends unknown ? keyof T : never;
+
+type _ExclusifyUnion<T, K extends PropertyKey> =
+  T extends unknown ? Prettify<T & Partial<Record<Exclude<K, keyof T>, never>>>
+  : never;
+
+export type ExclusifyUnion<T> = _ExclusifyUnion<T, AllKeys<T>>;
+
 export type FlattenToNested<T> = Prettify<
   UnionToIntersection<
     {
