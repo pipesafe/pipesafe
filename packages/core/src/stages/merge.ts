@@ -2,14 +2,6 @@ import { Document } from "../utils/core";
 import { FieldSelector, TopLevelField } from "../elements/fieldSelector";
 
 /**
- * Top-level field selector for a document type.
- * Excludes any nested (dotted) paths since `$merge` only matches on top-level fields.
- */
-export type TopLevelFieldOf<T extends Document> = TopLevelField<
-  FieldSelector<T>
->;
-
-/**
  * Type-safe options for the `$merge` stage.
  *
  * @template TOutput The document shape entering the `$merge` stage.
@@ -29,7 +21,9 @@ export type MergeOptions<TOutput extends Document> = {
    * Must reference top-level fields of the output document type.
    * Defaults to `_id` when omitted (per MongoDB).
    */
-  on?: TopLevelFieldOf<TOutput> | TopLevelFieldOf<TOutput>[];
+  on?:
+    | TopLevelField<FieldSelector<TOutput>>
+    | TopLevelField<FieldSelector<TOutput>>[];
   /** Action to take when a document in the pipeline matches an existing document. */
   whenMatched?: "replace" | "merge" | "keepExisting" | "fail";
   /** Action to take when a document in the pipeline does not match an existing document. */

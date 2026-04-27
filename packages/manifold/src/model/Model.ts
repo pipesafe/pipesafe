@@ -17,10 +17,6 @@ import {
   MergeOptions,
 } from "@pipesafe/core";
 
-// Re-export MergeOptions for backwards compatibility.
-// Manifold previously owned this type; it now lives in @pipesafe/core.
-export type { MergeOptions };
-
 // ============================================================================
 // Time-Series Options
 // ============================================================================
@@ -264,11 +260,8 @@ export class Model<
   /**
    * Build the complete aggregation pipeline including output stage.
    *
-   * For `$out` materialization, appends the stage to the user pipeline directly
-   * (preserves the existing emitted shape for both string and `{db, coll}` forms).
-   *
-   * For `$merge` materialization, delegates to `Pipeline#merge` so the emitted
-   * `$merge` document goes through the same builder users would call.
+   * Delegates to `Pipeline#out` / `Pipeline#merge` so the emitted output
+   * document goes through the same builders users would call.
    */
   buildPipeline(): Document[] {
     const userPipeline = this._buildPipeline();
@@ -282,31 +275,17 @@ export class Model<
       const mode = this.materialize.mode;
       const outputCollection = this.getOutputCollectionName();
       const outputDb = this.getOutputDatabase();
+      const target =
+        outputDb ? { db: outputDb, coll: outputCollection } : outputCollection;
 
       if ("$out" in mode) {
-        const $out =
-          outputDb ?
-            { db: outputDb, coll: outputCollection }
-          : outputCollection;
-        // `$out` accepts either a string or a `{db, coll}` object; the public
-        // `Pipeline#out` is string-only, so we append the stage directly to
-        // preserve the existing emitted shape.
-        return [...userPipeline.getPipeline(), { $out }];
+        return userPipeline.out(target).getPipeline();
       }
 
       if ("$merge" in mode) {
-        const into =
-          outputDb ?
-            { db: outputDb, coll: outputCollection }
-          : outputCollection;
-
-        const merged = userPipeline.merge({
-          into,
-          on: mode.$merge.on,
-          whenMatched: mode.$merge.whenMatched ?? "replace",
-          whenNotMatched: mode.$merge.whenNotMatched ?? "insert",
-        });
-        return merged.getPipeline();
+        return userPipeline
+          .merge({ ...mode.$merge, into: target })
+          .getPipeline();
       }
     }
 

@@ -25,7 +25,7 @@
     },
     "packages/core": {
       "name": "@pipesafe/core",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "devDependencies": {
         "typescript": "^5.9.3",
       },
@@ -35,7 +35,7 @@
     },
     "packages/manifold": {
       "name": "@pipesafe/manifold",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "devDependencies": {
         "@pipesafe/core": "workspace:*",
         "typescript": "^5.9.3",

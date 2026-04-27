@@ -13,11 +13,11 @@ export { Project } from "./project/Project";
 export type { InferModelOutput } from "./model/Model";
 export type {
   MaterializeConfig,
-  MergeOptions,
   CollectionMode,
   TypedTimeSeriesOptions,
   ModelConfig,
 } from "./model/Model";
+export type { MergeOptions } from "@pipesafe/core";
 export type {
   ProjectConfig,
   RunOptions,

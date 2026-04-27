@@ -1,5 +1,5 @@
-import { Assert, Equal, IsAssignable } from "../utils/tests";
-import { MergeOptions, TopLevelFieldOf } from "./merge";
+import { Assert, Equal } from "../utils/tests";
+import { MergeOptions } from "./merge";
 import type { Pipeline, InferOutputType } from "../pipeline/Pipeline";
 
 /**
@@ -40,20 +40,6 @@ type SimpleDoc = {
   _id: string;
   value: number;
 };
-
-// ============================================================================
-// TopLevelFieldOf
-// ============================================================================
-
-// Test 1: TopLevelFieldOf returns top-level fields only (no dotted paths)
-type EventTopLevel = TopLevelFieldOf<EventDoc>;
-type ExpectedEventTopLevel = "_id" | "eventType" | "timestamp" | "user";
-type _TopLevelFields = Assert<Equal<EventTopLevel, ExpectedEventTopLevel>>;
-
-// Dotted path "user.id" is NOT a top-level field
-type _DottedRejected = Assert<
-  Equal<IsAssignable<"user.id", TopLevelFieldOf<EventDoc>>, false>
->;
 
 // ============================================================================
 // MergeOptions Shape
@@ -194,9 +180,4 @@ void _withLet;
 void merged;
 void _customMerge;
 
-export type {
-  _TopLevelFields,
-  _DottedRejected,
-  _TerminalReturnsNever,
-  _StageTracked,
-};
+export type { _TerminalReturnsNever, _StageTracked };
