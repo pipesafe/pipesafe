@@ -1,5 +1,13 @@
 # @pipesafe/core
 
+## 0.9.0
+
+### Minor Changes
+
+- 41114be: Add typed `$merge` terminal stage to `Pipeline` (mirrors `.out()` semantics) and unify `Model.Mode.Upsert`/`Append` output construction in manifold to delegate to the new builder. `MergeOptions` now lives in `@pipesafe/core`; manifold re-exports it for back-compat.
+- 7cf13c1: Add `$limit`, `$skip`, `$sample`, and `$count` aggregation pipeline stages with type-safe wrappers and `UsedStages` tracking.
+- 48539ad: Add type-safe `$out` stage support for `{ db, coll }` and time-series output collections, with `timeField` constrained to `Date` field references and `metaField` constrained to non-`_id` field references
+
 ## 0.8.0
 
 ### Minor Changes
