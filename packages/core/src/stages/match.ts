@@ -1,8 +1,7 @@
 import {
   Document,
-  UnionToIntersection,
-  IsPlainObject,
   DollarPrefixed,
+  PipeSafeError,
   Prettify,
 } from "../utils/core";
 import {
@@ -24,16 +23,36 @@ type ContinuousMatchers = "$gte" | "$lte" | "$gt" | "$lt";
 type BSONTypeAlias = keyof typeof BSONType;
 type SomeBSONType = BSONType | BSONTypeAlias;
 
-type MergeUnion<T> =
-  IsPlainObject<T> extends true ?
-    {
-      [K in keyof UnionToIntersection<T>]: MergeUnion<
-        UnionToIntersection<T>[K]
-      >;
-    }
-  : T;
+// ---------------------------------------------------------------------------
+// Operand helpers — return the valid operand type for a compatible field type,
+// or a `PipeSafeError` whose literal message names the operator and the
+// incompatible type the user wrote against.
+// ---------------------------------------------------------------------------
 
-export type ComparatorMatchers<T extends unknown> = MergeUnion<
+type NumericOperand<T, Op extends string> =
+  T extends number | Date ? T
+  : PipeSafeError<
+      `Operator '${Op}' is not allowed on this field (numeric/date only)`,
+      T
+    >;
+
+type SizeOperand<T> =
+  T extends unknown[] ? number
+  : PipeSafeError<`Operator '$size' requires an array field`, T>;
+
+type ArrayValueOperand<T, Op extends string> =
+  T extends (infer U)[] ? U[]
+  : PipeSafeError<`Operator '${Op}' requires an array field`, T>;
+
+type ArrayElementOperand<T, Op extends string> =
+  T extends (infer U)[] ? U
+  : PipeSafeError<`Operator '${Op}' requires an array field`, T>;
+
+type RegexOperand<T> =
+  T extends string ? RegExp | string
+  : PipeSafeError<`Operator '$regex' is only valid on string fields`, T>;
+
+export type ComparatorMatchers<T extends unknown> = Prettify<
   /* Always */ {
     $exists?: boolean;
     $type?: SomeBSONType | SomeBSONType[];
@@ -41,15 +60,17 @@ export type ComparatorMatchers<T extends unknown> = MergeUnion<
     [m in EqualityMatchers]?: T;
   } & {
     [m in InMatchers]?: T[];
-  } & /* Numbers */ (T extends number ? { [m in ContinuousMatchers]?: number }
-    : {}) &
-    /* Dates */ (T extends Date ? { [m in ContinuousMatchers]?: Date } : {}) &
-    /* Arrays */ (T extends (infer U)[] ?
-      | { $size?: number }
-      | { [m in ArrayOnlyMatcher]?: U[] }
-      | { [m in ElementMatcher]?: U }
-    : {}) &
-    /* String */ (T extends string ? { $regex?: unknown } : {})
+  } & {
+    [m in ContinuousMatchers]?: NumericOperand<T, m>;
+  } & {
+    $size?: SizeOperand<T>;
+  } & {
+    [m in ArrayOnlyMatcher]?: ArrayValueOperand<T, m>;
+  } & {
+    [m in ElementMatcher]?: ArrayElementOperand<T, m>;
+  } & {
+    $regex?: RegexOperand<T>;
+  }
 >;
 
 export type RawMatchersForType<T extends unknown> =
