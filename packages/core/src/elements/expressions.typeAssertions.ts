@@ -11,6 +11,10 @@ import type {
   DateTruncExpression,
   DateAddExpression,
   DateSubtractExpression,
+  SizeExpression,
+  ConcatArraysExpression,
+  ArrayElemAtExpression,
+  FilterExpression,
 } from "./expressions";
 
 /**
@@ -27,6 +31,7 @@ type ArithSchema = {
   count: number;
   name: string;
   joinedAt: Date;
+  tags: string[];
 };
 
 // Extract the per-operator operand type from each expression. The operand is
@@ -208,6 +213,68 @@ type _Assert_DateToStringAcceptsDateRef = Assert<
   >
 >;
 
+// ----------------------------------------------------------------------------
+// Phase C4 — Array operand on $size, $concatArrays, $arrayElemAt, $filter
+// ----------------------------------------------------------------------------
+
+type SizeOperand<S extends Document> = SizeExpression<S>["$size"];
+type ConcatArraysOperandElement<S extends Document> =
+  ConcatArraysExpression<S>["$concatArrays"][number];
+type ArrayElemAtFirstOperand<S extends Document> =
+  ArrayElemAtExpression<S>["$arrayElemAt"][0];
+type FilterInputOperand<S extends Document> =
+  FilterExpression<S>["$filter"]["input"];
+
+// Each array operand union must include the branded error arm.
+type _Size_Brand = Extract<
+  SizeOperand<ArithSchema>,
+  PipeSafeError<string, unknown>
+>;
+type _Assert_SizeBrand = Assert<
+  AssertPipeSafeError<
+    _Size_Brand,
+    "Operator '$size' requires an array operand (field reference to an array or array literal)"
+  >
+>;
+
+type _ConcatArrays_Brand = Extract<
+  ConcatArraysOperandElement<ArithSchema>,
+  PipeSafeError<string, unknown>
+>;
+type _Assert_ConcatArraysBrand = Assert<
+  AssertPipeSafeError<
+    _ConcatArrays_Brand,
+    "Operator '$concatArrays' requires an array operand (field reference to an array or array literal)"
+  >
+>;
+
+type _ArrayElemAt_Brand = Extract<
+  ArrayElemAtFirstOperand<ArithSchema>,
+  PipeSafeError<string, unknown>
+>;
+type _Assert_ArrayElemAtBrand = Assert<
+  AssertPipeSafeError<
+    _ArrayElemAt_Brand,
+    "Operator '$arrayElemAt' requires an array operand (field reference to an array or array literal)"
+  >
+>;
+
+type _Filter_Brand = Extract<
+  FilterInputOperand<ArithSchema>,
+  PipeSafeError<string, unknown>
+>;
+type _Assert_FilterBrand = Assert<
+  AssertPipeSafeError<
+    _Filter_Brand,
+    "Operator '$filter' requires an array operand (field reference to an array or array literal)"
+  >
+>;
+
+// Positive sweep: an array field reference still satisfies $size.
+type _Assert_SizeAcceptsArrayRef = Assert<
+  Equal<"$tags" extends SizeOperand<ArithSchema> ? true : false, true>
+>;
+
 export type {
   _Assert_AddBrand,
   _Assert_SubtractBrand,
@@ -225,4 +292,9 @@ export type {
   _Assert_DateAddBrand,
   _Assert_DateSubtractBrand,
   _Assert_DateToStringAcceptsDateRef,
+  _Assert_SizeBrand,
+  _Assert_ConcatArraysBrand,
+  _Assert_ArrayElemAtBrand,
+  _Assert_FilterBrand,
+  _Assert_SizeAcceptsArrayRef,
 };

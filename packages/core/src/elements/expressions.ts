@@ -11,6 +11,20 @@ import { AnyLiteral } from "./literals";
 // ============================================================================
 
 /**
+ * Array operand — accepts a field reference to an array field, or an array
+ * literal of any element type. The branded `PipeSafeError` arm surfaces in
+ * IDE hovers when a user passes a non-array value (e.g. a string field
+ * reference) where an array is required.
+ */
+type ArrayOperandFor<Schema extends Document, Op extends string> =
+  | FieldReferencesThatInferTo<Schema, unknown[]>
+  | AnyLiteral<Schema>[]
+  | PipeSafeError<
+      `Operator '${Op}' requires an array operand (field reference to an array or array literal)`,
+      Schema
+    >;
+
+/**
  * $concatArrays expression - concatenates arrays
  * Syntax: { $concatArrays: [array1, array2, ...] }
  * Each array can be:
@@ -19,10 +33,7 @@ import { AnyLiteral } from "./literals";
  * - Nested expressions (future)
  */
 export type ConcatArraysExpression<Schema extends Document> = {
-  $concatArrays: (
-    | FieldReferencesThatInferTo<Schema, unknown[]>
-    | AnyLiteral<Schema>[]
-  )[];
+  $concatArrays: ArrayOperandFor<Schema, "$concatArrays">[];
 };
 
 /**
@@ -34,7 +45,7 @@ export type ConcatArraysExpression<Schema extends Document> = {
  * Returns: number (the length of the array)
  */
 export type SizeExpression<Schema extends Document> = {
-  $size: FieldReferencesThatInferTo<Schema, unknown[]> | AnyLiteral<Schema>[];
+  $size: ArrayOperandFor<Schema, "$size">;
 };
 
 /**
@@ -173,7 +184,7 @@ export type ToDateExpression<Schema extends Document> = {
  */
 export type ArrayElemAtExpression<Schema extends Document> = {
   $arrayElemAt: [
-    FieldReferencesThatInferTo<Schema, unknown[]> | AnyLiteral<Schema>[],
+    ArrayOperandFor<Schema, "$arrayElemAt">,
     number | FieldReferencesThatInferTo<Schema, number>,
   ];
 };
@@ -185,7 +196,7 @@ export type ArrayElemAtExpression<Schema extends Document> = {
  */
 export type FilterExpression<Schema extends Document> = {
   $filter: {
-    input: FieldReferencesThatInferTo<Schema, unknown[]> | unknown[];
+    input: ArrayOperandFor<Schema, "$filter">;
     as: string;
     cond: unknown; // Condition expression (uses $$var references)
     limit?: number;
