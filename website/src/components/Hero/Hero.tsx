@@ -5,6 +5,7 @@ import styles from "./Hero.module.css";
 export default function Hero() {
   return (
     <div className={styles.hero}>
+      <img src="/logo.svg" alt="" aria-hidden="true" className={styles.logo} />
       <h1 className={styles.title}>PipeSafe</h1>
       <p className={styles.tagline}>Type-safe MongoDB aggregations.</p>
       <InstallBox />

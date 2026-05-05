@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PipeSafe Brand Kit</title>
+    <meta
+      name="description"
+      content="Logos, color palette, typography, and usage guidance for PipeSafe. For press, partners, and contributors."
+    />
+    <link rel="icon" type="image/svg+xml" href="/public/pipesafe-logo.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <img
+        class="hero-logo"
+        src="/public/pipesafe-logo.svg"
+        alt="PipeSafe logo"
+      />
+      <h1 class="wordmark">PipeSafe</h1>
+      <p class="tagline">Type-safe MongoDB aggregations.</p>
+      <p class="eyebrow">Brand kit &middot; v1</p>
+    </header>
+
+    <main>
+      <section id="logos">
+        <h2 class="section-title">Logo</h2>
+        <p class="section-lede">
+          The mark is a three-facet &ldquo;P&rdquo; monogram that nods to the
+          M&ouml;bius strip of the JSON standard. Top facet is fresh green
+          (signal of safe), right facet is brand forest, left facet is
+          TypeScript blue. Use the SVG wherever possible; PNG variants are
+          provided for tooling that does not accept SVG.
+        </p>
+        <div class="logo-grid">
+          <p class="row-label">SVG &middot; vector, scales to any size</p>
+          <a
+            class="logo-tile bg-light"
+            href="/public/pipesafe-logo.svg"
+            download
+          >
+            <img
+              src="/public/pipesafe-logo.svg"
+              alt="PipeSafe logo, primary colors on white"
+            />
+            <span class="meta">White bg &middot; primary colors</span>
+          </a>
+          <a
+            class="logo-tile bg-dark"
+            href="/public/pipesafe-logo.svg"
+            download
+          >
+            <img
+              src="/public/pipesafe-logo.svg"
+              alt="PipeSafe logo, primary colors on dark"
+            />
+            <span class="meta">Dark bg &middot; primary colors</span>
+          </a>
+          <a
+            class="logo-tile bg-forest"
+            href="/public/pipesafe-logo-white.svg"
+            download
+          >
+            <img
+              src="/public/pipesafe-logo-white.svg"
+              alt="PipeSafe logo, inverted on forest"
+            />
+            <span class="meta">Forest bg &middot; inverted</span>
+          </a>
+
+          <p class="row-label">PNG &middot; raster, transparent background</p>
+          <a
+            class="logo-tile bg-light"
+            href="/public/pipesafe-logo.png"
+            download
+          >
+            <img
+              src="/public/pipesafe-logo.png"
+              alt="PipeSafe logo, primary colors on white"
+            />
+            <span class="meta">White bg &middot; primary colors</span>
+          </a>
+          <a
+            class="logo-tile bg-dark"
+            href="/public/pipesafe-logo.png"
+            download
+          >
+            <img
+              src="/public/pipesafe-logo.png"
+              alt="PipeSafe logo, primary colors on dark"
+            />
+            <span class="meta">Dark bg &middot; primary colors</span>
+          </a>
+          <a
+            class="logo-tile bg-forest"
+            href="/public/pipesafe-logo-white.png"
+            download
+          >
+            <img
+              src="/public/pipesafe-logo-white.png"
+              alt="PipeSafe logo, inverted on forest"
+            />
+            <span class="meta">Forest bg &middot; inverted</span>
+          </a>
+        </div>
+        <p class="press-kit">
+          <a href="/public/press-kit.zip" download>
+            Download all six logo files as press-kit.zip &darr;
+          </a>
+        </p>
+      </section>
+
+      <section id="palette">
+        <h2 class="section-title">Color palette</h2>
+        <p class="section-lede">
+          Three brand facets plus a mint tint and a forest surface. These are
+          the canonical brand colors as of the May 2026 logo refresh. Treat
+          legacy palette values as historical only.
+        </p>
+        <div class="swatch-grid">
+          <button
+            type="button"
+            class="swatch"
+            data-hex="#10AB50"
+            style="background: #10ab50"
+          >
+            <span class="swatch-name">Brand green</span>
+            <span class="swatch-hex">#10AB50</span>
+            <span class="swatch-role">Top facet &middot; primary accent</span>
+          </button>
+          <button
+            type="button"
+            class="swatch"
+            data-hex="#026056"
+            style="background: #026056"
+          >
+            <span class="swatch-name">Brand forest</span>
+            <span class="swatch-hex">#026056</span>
+            <span class="swatch-role"
+              >Right facet &middot; primary surface</span
+            >
+          </button>
+          <button
+            type="button"
+            class="swatch"
+            data-hex="#3178C6"
+            style="background: #3178c6"
+          >
+            <span class="swatch-name">Brand blue</span>
+            <span class="swatch-hex">#3178C6</span>
+            <span class="swatch-role">Left facet &middot; TypeScript blue</span>
+          </button>
+          <button
+            type="button"
+            class="swatch light"
+            data-hex="#D9EFED"
+            style="background: #d9efed; color: #001e2b"
+          >
+            <span class="swatch-name">Brand mint</span>
+            <span class="swatch-hex">#D9EFED</span>
+            <span class="swatch-role">Logo fill on forest bg</span>
+          </button>
+          <button
+            type="button"
+            class="swatch"
+            data-hex="#001E2B"
+            style="background: #001e2b"
+          >
+            <span class="swatch-name">Page bg</span>
+            <span class="swatch-hex">#001E2B</span>
+            <span class="swatch-role">Marketing site surface</span>
+          </button>
+          <button
+            type="button"
+            class="swatch light"
+            data-hex="#E3FCF7"
+            style="background: #e3fcf7; color: #001e2b"
+          >
+            <span class="swatch-name">Foreground</span>
+            <span class="swatch-hex">#E3FCF7</span>
+            <span class="swatch-role">Primary text on dark surfaces</span>
+          </button>
+        </div>
+        <p class="palette-hint">Click any swatch to copy its hex.</p>
+      </section>
+
+      <section id="type">
+        <h2 class="section-title">Typography</h2>
+        <p class="section-lede">
+          PipeSafe is mono-only by design. JetBrains Mono across body, headings,
+          and code. No serif or sans pairing.
+        </p>
+        <div class="type-stack">
+          <p class="type-sample" style="font-size: 3rem">
+            PipeSafe
+            <span class="type-meta"
+              >JetBrains Mono &middot; 700 &middot; 48px</span
+            >
+          </p>
+          <p class="type-sample" style="font-size: 1.5rem">
+            Type-safe MongoDB aggregations.
+            <span class="type-meta"
+              >JetBrains Mono &middot; 500 &middot; 24px</span
+            >
+          </p>
+          <p class="type-sample" style="font-size: 1rem">
+            Catch errors at compile time, not runtime. Today&rsquo;s typo is
+            tomorrow&rsquo;s incident.
+            <span class="type-meta"
+              >JetBrains Mono &middot; 400 &middot; 16px</span
+            >
+          </p>
+          <p class="type-sample" style="font-size: 0.75rem">
+            $ npm install @pipesafe/core
+            <span class="type-meta"
+              >JetBrains Mono &middot; 400 &middot; 12px</span
+            >
+          </p>
+        </div>
+      </section>
+
+      <section id="usage">
+        <h2 class="section-title">Usage</h2>
+        <div class="usage-grid">
+          <div class="usage-do">
+            <h3>Do</h3>
+            <ul>
+              <li>
+                Maintain at least the height of one facet as clear space around
+                the mark.
+              </li>
+              <li>
+                Use the white-on-dark variant on backgrounds darker than
+                #001E2B.
+              </li>
+              <li>
+                Pair the mark with the &ldquo;PipeSafe&rdquo; wordmark in
+                JetBrains Mono.
+              </li>
+              <li>
+                Render at 24px or larger so the three facets remain legible.
+              </li>
+            </ul>
+          </div>
+          <div class="usage-dont">
+            <h3>Don&rsquo;t</h3>
+            <ul>
+              <li>Recolor the facets. The three colors are the brand.</li>
+              <li>Rotate, skew, or distort the mark.</li>
+              <li>
+                Place the color mark on a background tinted near any of the
+                facet colors.
+              </li>
+              <li>Add drop shadows or outer glows.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="credits">
+        <h2 class="section-title">Credits</h2>
+        <p>
+          Logo and brand system designed by Ryzard Akita (Co-founder &amp;
+          Design Director, Suvera), with contributions from PipeSafe co-founders
+          Tim Vyas and Ryan Peggs.
+        </p>
+      </section>
+
+      <section id="contact">
+        <h2 class="section-title">Press &amp; media</h2>
+        <p>
+          Media enquiries:
+          <a href="mailto:hello@pipesafe.co.uk">hello@pipesafe.co.uk</a>
+        </p>
+        <p>
+          Engineering and product:
+          <a href="https://pipesafe.co.uk">pipesafe.co.uk</a>
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <p>&copy; PipeSafe. Brand kit v1.</p>
+    </footer>
+
+    <script>
+      document.querySelectorAll(".swatch").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const hex = btn.dataset.hex;
+          const hexLabel = btn.querySelector(".swatch-hex");
+          if (!hex || !hexLabel) return;
+          const original = hexLabel.textContent;
+          try {
+            await navigator.clipboard.writeText(hex);
+            hexLabel.textContent = "Copied";
+            btn.classList.add("is-copied");
+          } catch (err) {
+            hexLabel.textContent = "Press Ctrl/Cmd+C";
+          }
+          setTimeout(() => {
+            hexLabel.textContent = original;
+            btn.classList.remove("is-copied");
+          }, 1200);
+        });
+      });
+    </script>
+  </body>
+</html>
