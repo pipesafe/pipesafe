@@ -1,4 +1,4 @@
-import { Prettify } from "./core";
+import { PipeSafeError, Prettify } from "./core";
 
 // Generic type equality assertion - compile-time only
 // Uses exact type equality check (works correctly with unions)
@@ -41,6 +41,26 @@ export type NotImplemented<T extends false> = true & {
    */
   readonly __originalAssertion: T;
 };
+
+/**
+ * Type-level assertion that `Actual` is a `PipeSafeError` carrying the
+ * exact `ExpectedMsg` string. Use in `*.typeAssertions.ts` files to lock in
+ * the literal error message produced by a branded helper.
+ *
+ * Usage:
+ *   type _Result = InferFieldReference<S, '$bad.path'>;
+ *   type _Check = AssertPipeSafeError<_Result, "Unknown field 'bad' on path 'bad.path'">;
+ *   type _Pass = Assert<_Check>;
+ *
+ * Returns `true` when the message matches; otherwise `false` so wrapping with
+ * `Assert<...>` produces a compile error pointing to the mismatched message.
+ */
+export type AssertPipeSafeError<Actual, ExpectedMsg extends string> =
+  Actual extends PipeSafeError<infer Msg, unknown> ?
+    Equal<Msg, ExpectedMsg> extends true ?
+      true
+    : false
+  : false;
 
 // Function-based type assertion that causes actual compiler errors
 export function expectType<T>(_value: T): void {}

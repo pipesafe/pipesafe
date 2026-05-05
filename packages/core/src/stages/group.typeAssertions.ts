@@ -669,3 +669,32 @@ export type {
   NestedExpressionIdTest,
   FirstLastTest,
 };
+
+// ============================================================================
+// Phase 1 — Prettify wrapping on ResolveGroupOutput's _id shape
+// ============================================================================
+// When `_id` is a multi-field reference object, the resulting `_id` shape
+// must hover as a flat object, not as a chain of mapped-type applications.
+
+type PrettifyGroupSchema = {
+  category: string;
+  region: string;
+  total: number;
+};
+type PrettifyGroupQuery = {
+  _id: { category: "$category"; region: "$region" };
+  total: { $sum: "$total" };
+};
+type PrettifyGroupResult = ResolveGroupOutput<
+  PrettifyGroupSchema,
+  PrettifyGroupQuery
+>;
+type PrettifyGroupExpected = {
+  _id: { category: string; region: string };
+  total: number;
+};
+type PrettifyGroupTest = Assert<
+  Equal<PrettifyGroupResult, PrettifyGroupExpected>
+>;
+
+export type { PrettifyGroupTest };

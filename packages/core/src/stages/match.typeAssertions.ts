@@ -446,3 +446,32 @@ export type {
   NestedUnionTest,
   ElectronicsTest,
 };
+
+// ============================================================================
+// Phase 1 — Prettify wrapping on ResolveMatchOutput
+// ============================================================================
+// Verifies that a multi-key match query against a multi-key schema resolves to
+// a flat object shape (no nested intersection chains in hover).
+
+type PrettifyMatchSchema = {
+  a: number;
+  b: string;
+  c: boolean;
+  d: { nested: number };
+};
+type PrettifyMatchQuery = { a: 1; b: "x" };
+type PrettifyMatchResult = ResolveMatchOutput<
+  PrettifyMatchQuery,
+  PrettifyMatchSchema
+>;
+type PrettifyMatchExpected = {
+  a: number;
+  b: string;
+  c: boolean;
+  d: { nested: number };
+};
+type PrettifyMatchTest = Assert<
+  Equal<PrettifyMatchResult, PrettifyMatchExpected>
+>;
+
+export type { PrettifyMatchTest };

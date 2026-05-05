@@ -1129,3 +1129,27 @@ export type {
   RemoveEntireObjectTest,
   ComplexRemovalTest,
 };
+
+// ============================================================================
+// Phase 1 — Prettify wrapping on ResolveSetOutput
+// ============================================================================
+// Verifies that a multi-key set against a multi-key schema produces a flat
+// object shape, not nested intersection chains.
+
+type PrettifySetSchema = {
+  a: string;
+  b: number;
+  c: boolean;
+};
+type PrettifySetQuery = { d: "new"; e: 42 };
+type PrettifySetResult = ResolveSetOutput<PrettifySetQuery, PrettifySetSchema>;
+type PrettifySetExpected = {
+  a: string;
+  b: number;
+  c: boolean;
+  d: "new";
+  e: 42;
+};
+type PrettifySetTest = Assert<Equal<PrettifySetResult, PrettifySetExpected>>;
+
+export type { PrettifySetTest };

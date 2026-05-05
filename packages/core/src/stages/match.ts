@@ -3,6 +3,7 @@ import {
   UnionToIntersection,
   IsPlainObject,
   DollarPrefixed,
+  Prettify,
 } from "../utils/core";
 import {
   FieldSelector,
@@ -143,5 +144,5 @@ export type ExtractQueryFields<Q> = Omit<
 // Main type resolution with proper narrowing
 // Takes the schema explicitly since inference from MatchQuery is unreliable
 export type ResolveMatchOutput<Query, Schema extends Document> =
-  Query extends RawMatchQuery<Schema> ? FilterUnion<Schema, Query>
+  Query extends RawMatchQuery<Schema> ? Prettify<FilterUnion<Schema, Query>>
   : /* Complex operators ($and/$or/$nor) - keep original */ Schema;

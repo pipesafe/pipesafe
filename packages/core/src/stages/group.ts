@@ -92,7 +92,13 @@ export type ResolveGroupOutput<
   G extends GroupQuery<StartingDocs>,
 > = Prettify<
   {
-    _id: InferNestedFieldReference<StartingDocs, G["_id"]>; // Infer out
+    _id: InferNestedFieldReference<StartingDocs, G["_id"]> extends infer Id ?
+      Id extends object ?
+        Id extends Date | unknown[] ?
+          Id // Don't flatten Date/array _id (e.g. tuples from $dateToParts)
+        : Prettify<Id>
+      : Id // Primitive _id (string, number, null) — pass through
+    : never;
   } & {
     [key in Exclude<keyof G, "_id">]: ResolveAggregatorFunction<
       StartingDocs,

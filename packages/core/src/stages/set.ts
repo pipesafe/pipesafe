@@ -51,10 +51,12 @@ export type ResolveSetOutput<Query, Schema extends Document> =
   Query extends SetQuery<Schema> ?
     HasDottedKeys<ResolveSetInlineSchema<Schema, Query>> extends true ?
       // Has dotted keys - use FlattenDotSet (will optimize in Phase 2)
-      ApplySetUpdates<
-        Schema,
-        FlattenDotSet<ResolveSetInlineSchema<Schema, Query>>
+      Prettify<
+        ApplySetUpdates<
+          Schema,
+          FlattenDotSet<ResolveSetInlineSchema<Schema, Query>>
+        >
       >
     : // No dotted keys - skip FlattenDotSet entirely (Early Exit optimization)
-      ApplySetUpdates<Schema, ResolveSetInlineSchema<Schema, Query>>
+      Prettify<ApplySetUpdates<Schema, ResolveSetInlineSchema<Schema, Query>>>
   : never;
