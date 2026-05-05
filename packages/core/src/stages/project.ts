@@ -263,18 +263,24 @@ type ResolveExclusionMode<
  * Resolves the output schema type for a $project stage. PassThrough forwards
  * a branded `PipeSafeError` Schema unchanged so upstream errors short-circuit.
  *
- * Note: pipesafe permits mixing inclusion (1/true) and exclusion (0/false)
- * in the same projection — see `MixedTest` in project.typeAssertions.ts —
- * even though MongoDB would reject this at runtime. We don't surface a
- * type-level brand for it because the existing semantics treat it as
- * "exclude these fields, include the rest as if inclusion mode".
+ * Mixing inclusion (1/true) and exclusion (0/false) in the same projection
+ * is forbidden by MongoDB (the only exception is excluding `_id` while
+ * otherwise including, which `HasExclusions` already handles by skipping
+ * `_id`). When both modes appear on non-`_id` fields, surface a branded
+ * error rather than silently dispatching to one mode and dropping the
+ * conflicting key.
  */
 export type ResolveProjectOutput<Query, Schema extends Document> = PassThrough<
   Schema,
   Query extends ProjectQuery<Schema> ?
     HasInclusions<Query> extends true ?
-      // Inclusion mode
-      ResolveInclusionMode<Schema, Query>
+      HasExclusions<Query> extends true ?
+        PipeSafeError<
+          `Cannot mix inclusion (1/true) and exclusion (0/false) in the same $project. Pick one mode (excluding '_id' from inclusion mode is the only allowed mix).`,
+          Query
+        >
+      : // Inclusion mode
+        ResolveInclusionMode<Schema, Query>
     : HasExclusions<Query> extends true ?
       // Exclusion mode
       ResolveExclusionMode<Schema, Query>

@@ -129,8 +129,14 @@ type DotKeyAssignExpected = {
 type DotKeyAssignTest = Assert<Equal<DotKeyAssignResult, DotKeyAssignExpected>>;
 
 // ============================================================================
-// Test 4: Mixed inclusion and renaming
+// Test 4: Mixed inclusion and exclusion — rejected (MongoDB forbids this)
 // ============================================================================
+// Previously this test asserted that `{ id: 1, fullName: "$name", email: false }`
+// produced `{ id: string; fullName: string }` (exclusion of `email` plus
+// inclusion of `id` and computed `fullName`). MongoDB actually rejects this
+// at runtime: you can only mix when excluding `_id` from an otherwise-
+// inclusion projection. With the typed-error rollout the dispatch now
+// produces a branded `PipeSafeError` instead of silently picking a mode.
 type MixedSchema = {
   id: string;
   name: string;
@@ -146,12 +152,24 @@ type MixedProject = {
 
 type MixedResult = ResolveProjectOutput<MixedProject, MixedSchema>;
 
-type MixedExpected = {
-  id: string;
-  fullName: string;
-};
+type MixedTest = Assert<
+  AssertPipeSafeError<
+    MixedResult,
+    "Cannot mix inclusion (1/true) and exclusion (0/false) in the same $project. Pick one mode (excluding '_id' from inclusion mode is the only allowed mix)."
+  >
+>;
 
-type MixedTest = Assert<Equal<MixedResult, MixedExpected>>;
+// `_id`-only exclusion is the documented exception — should still type-check
+// in pure inclusion mode without a brand.
+type IdExclusionSchema = { _id: string; name: string; age: number };
+type IdExclusionProject = { name: 1; age: 1; _id: 0 };
+type IdExclusionResult = ResolveProjectOutput<
+  IdExclusionProject,
+  IdExclusionSchema
+>;
+type IdExclusionTest = Assert<
+  Equal<IdExclusionResult, { name: string; age: number }>
+>;
 
 // ============================================================================
 // Test 5: Nested field projection
@@ -814,6 +832,7 @@ export type {
   RenameTest,
   DotKeyAssignTest,
   MixedTest,
+  IdExclusionTest,
   NestedTest,
   NestedReplaceTest,
   IdIncludeTest,
@@ -877,7 +896,20 @@ type _Assert_InvalidValue = Assert<
   >
 >;
 
-// 3. Positive sweep — a fully valid inclusion still produces the expected
+// 3. Mixed inclusion and exclusion produces a branded error on the result
+//    type (MongoDB rejects this at runtime; only `_id` exclusion is allowed).
+type _MixedModeResult = ResolveProjectOutput<
+  { name: 1; age: 0 },
+  ProjectErrorSchema
+>;
+type _Assert_MixedMode = Assert<
+  AssertPipeSafeError<
+    _MixedModeResult,
+    "Cannot mix inclusion (1/true) and exclusion (0/false) in the same $project. Pick one mode (excluding '_id' from inclusion mode is the only allowed mix)."
+  >
+>;
+
+// 4. Positive sweep — a fully valid inclusion still produces the expected
 //    structural output (no brand leakage). Note: _id is dropped, not `never`.
 type _ValidInclusionResult = ResolveProjectOutput<
   { name: 1 },
@@ -890,5 +922,6 @@ type _Assert_ValidInclusion = Assert<
 export type {
   _Assert_UnknownInclusion,
   _Assert_InvalidValue,
+  _Assert_MixedMode,
   _Assert_ValidInclusion,
 };
