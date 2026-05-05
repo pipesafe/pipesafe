@@ -1,6 +1,7 @@
 import {
   Document,
   PassThrough,
+  PipeSafeError,
   Prettify,
   ExpandDottedKey,
   UnionToIntersection,
@@ -61,19 +62,28 @@ type IsInclusion<T> = T extends 1 | true ? true : false;
 // Helper: Check if a value is an exclusion (0 or false)
 type IsExclusion<T> = T extends 0 | false ? true : false;
 
-// Helper: Check if projection is in inclusion mode (has any 1 or true values)
+// Helper: Check if projection is in inclusion mode (has any 1 or true values).
+// Uses `true extends {...}[keyof Q]` (existential check) so that mixed-mode
+// queries like `{ name: 1; age: 0 }` correctly report `true` for both
+// HasInclusions and HasExclusions — without this, the union `true | false`
+// collapses to `boolean` and `boolean extends true` is false, hiding the
+// mix from the dispatch logic in `ResolveProjectOutput`.
 type HasInclusions<Query extends Record<string, unknown>> =
-  {
-    [K in keyof Query]: IsInclusion<Query[K]>;
-  }[keyof Query] extends true ?
+  true extends (
+    {
+      [K in keyof Query]: IsInclusion<Query[K]>;
+    }[keyof Query]
+  ) ?
     true
   : false;
 
 // Helper: Check if projection is in exclusion mode (has any 0 or false values, excluding _id)
 type HasExclusions<Query extends Record<string, unknown>> =
-  {
-    [K in keyof Query]: K extends "_id" ? false : IsExclusion<Query[K]>;
-  }[keyof Query] extends true ?
+  true extends (
+    {
+      [K in keyof Query]: K extends "_id" ? false : IsExclusion<Query[K]>;
+    }[keyof Query]
+  ) ?
     true
   : false;
 
@@ -94,14 +104,17 @@ type ResolveNestedProjection<Schema extends Document, Obj extends Document> = {
 // Helper: Resolve a single field value (handles both regular and dotted keys)
 type ResolveFieldValue<Schema extends Document, Value, Key extends string> =
   Value extends 1 | true ?
-    // Inclusion - get field type from schema
+    // Inclusion - get field type from schema. If the key isn't on the schema,
+    // surface a branded error rather than silently producing `never` (which
+    // would just drop the key from the output without any signal).
     IsDottedKey<Key> extends true ?
       // Dotted key - get nested field type
       GetFieldType<Schema, Key>
     : Key extends keyof Schema ? Schema[Key]
-    : never
+    : PipeSafeError<`Cannot include field '${Key}' — not on schema`, Schema>
   : Value extends 0 | false ?
-    // Exclusion - return never (field is excluded)
+    // Exclusion - return never (field is excluded). Intentional: `never`
+    // here means "the field is dropped from the output", which is correct.
     never
   : Value extends FieldReference<Schema> ?
     // Field reference - infer the referenced field type
@@ -112,7 +125,10 @@ type ResolveFieldValue<Schema extends Document, Value, Key extends string> =
   : Value extends Document ?
     // Nested object - recursively resolve field references and expressions within it
     ResolveNestedProjection<Schema, Value>
-  : never;
+  : PipeSafeError<
+      `Invalid projection value for '${Key}'. Expected 0, 1, a field reference, an expression, or a nested object.`,
+      { schema: Schema; value: Value }
+    >;
 
 // Helper: Create flat map of dotted keys to their types (only include keys with 1/true values)
 type DottedKeyFlatMap<
@@ -246,6 +262,12 @@ type ResolveExclusionMode<
 /**
  * Resolves the output schema type for a $project stage. PassThrough forwards
  * a branded `PipeSafeError` Schema unchanged so upstream errors short-circuit.
+ *
+ * Note: pipesafe permits mixing inclusion (1/true) and exclusion (0/false)
+ * in the same projection — see `MixedTest` in project.typeAssertions.ts —
+ * even though MongoDB would reject this at runtime. We don't surface a
+ * type-level brand for it because the existing semantics treat it as
+ * "exclude these fields, include the rest as if inclusion mode".
  */
 export type ResolveProjectOutput<Query, Schema extends Document> = PassThrough<
   Schema,

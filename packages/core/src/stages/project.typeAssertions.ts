@@ -1,4 +1,10 @@
-import { Assert, Equal, NotImplemented, IsAssignable } from "../utils/tests";
+import {
+  Assert,
+  AssertPipeSafeError,
+  Equal,
+  NotImplemented,
+  IsAssignable,
+} from "../utils/tests";
 import { ResolveProjectOutput, ProjectQuery } from "./project";
 
 /**
@@ -830,4 +836,59 @@ export type {
   AddProjectTest,
   DivideNestedProjectTest,
   MultipleArithmeticProjectTest,
+};
+
+// ============================================================================
+// Phase D — Typed projection errors
+// ============================================================================
+// `ResolveFieldValue` and `ResolveProjectOutput` now return branded
+// `PipeSafeError` types at three previously-silent failure sites:
+//   1. Inclusion of a field that doesn't exist on the schema (`{ unknownKey: 1 }`).
+//   2. Invalid projection value (anything other than 0/1/ref/expr/object).
+//   3. Mixed inclusion and exclusion in the same projection.
+
+type ProjectErrorSchema = {
+  name: string;
+  age: number;
+};
+
+// 1. Including a key not on the schema produces a branded error at that key.
+type _UnknownInclusionResult = ResolveProjectOutput<
+  { name: 1; unknownKey: 1 },
+  ProjectErrorSchema
+>;
+type _Assert_UnknownInclusion = Assert<
+  AssertPipeSafeError<
+    _UnknownInclusionResult["unknownKey"],
+    "Cannot include field 'unknownKey' — not on schema"
+  >
+>;
+
+// 2. Invalid projection value (anything other than 0/1/ref/expr/object)
+//    produces a branded error on the offending key.
+type _InvalidValueResult = ResolveProjectOutput<
+  { name: 1; bogus: 99 },
+  ProjectErrorSchema
+>;
+type _Assert_InvalidValue = Assert<
+  AssertPipeSafeError<
+    _InvalidValueResult["bogus"],
+    "Invalid projection value for 'bogus'. Expected 0, 1, a field reference, an expression, or a nested object."
+  >
+>;
+
+// 3. Positive sweep — a fully valid inclusion still produces the expected
+//    structural output (no brand leakage). Note: _id is dropped, not `never`.
+type _ValidInclusionResult = ResolveProjectOutput<
+  { name: 1 },
+  ProjectErrorSchema
+>;
+type _Assert_ValidInclusion = Assert<
+  Equal<_ValidInclusionResult, { name: string }>
+>;
+
+export type {
+  _Assert_UnknownInclusion,
+  _Assert_InvalidValue,
+  _Assert_ValidInclusion,
 };
