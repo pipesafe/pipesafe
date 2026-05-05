@@ -7,6 +7,10 @@ import type {
   DivideExpression,
   ModExpression,
   ConcatExpression,
+  DateToStringExpression,
+  DateTruncExpression,
+  DateAddExpression,
+  DateSubtractExpression,
 } from "./expressions";
 
 /**
@@ -137,6 +141,73 @@ type _Assert_ConcatAcceptsStringRef = Assert<
   Equal<"$name" extends ConcatOperandElement<ArithSchema> ? true : false, true>
 >;
 
+// ----------------------------------------------------------------------------
+// Phase C3 — Date operand on $dateToString.date / $dateTrunc.date /
+// $dateAdd.startDate / $dateSubtract.startDate
+// ----------------------------------------------------------------------------
+
+type DateToStringDateOperand<S extends Document> =
+  DateToStringExpression<S>["$dateToString"]["date"];
+type DateTruncDateOperand<S extends Document> =
+  DateTruncExpression<S>["$dateTrunc"]["date"];
+type DateAddStartDateOperand<S extends Document> =
+  DateAddExpression<S>["$dateAdd"]["startDate"];
+type DateSubtractStartDateOperand<S extends Document> =
+  DateSubtractExpression<S>["$dateSubtract"]["startDate"];
+
+// Each date operand union must include the branded error arm.
+type _DateToString_Brand = Extract<
+  DateToStringDateOperand<ArithSchema>,
+  PipeSafeError<string, unknown>
+>;
+type _Assert_DateToStringBrand = Assert<
+  AssertPipeSafeError<
+    _DateToString_Brand,
+    "Date operand requires a Date literal or field reference to a Date field"
+  >
+>;
+
+type _DateTrunc_Brand = Extract<
+  DateTruncDateOperand<ArithSchema>,
+  PipeSafeError<string, unknown>
+>;
+type _Assert_DateTruncBrand = Assert<
+  AssertPipeSafeError<
+    _DateTrunc_Brand,
+    "Date operand requires a Date literal or field reference to a Date field"
+  >
+>;
+
+type _DateAdd_Brand = Extract<
+  DateAddStartDateOperand<ArithSchema>,
+  PipeSafeError<string, unknown>
+>;
+type _Assert_DateAddBrand = Assert<
+  AssertPipeSafeError<
+    _DateAdd_Brand,
+    "Date operand requires a Date literal or field reference to a Date field"
+  >
+>;
+
+type _DateSubtract_Brand = Extract<
+  DateSubtractStartDateOperand<ArithSchema>,
+  PipeSafeError<string, unknown>
+>;
+type _Assert_DateSubtractBrand = Assert<
+  AssertPipeSafeError<
+    _DateSubtract_Brand,
+    "Date operand requires a Date literal or field reference to a Date field"
+  >
+>;
+
+// Positive sweep: a Date field reference still satisfies the operand.
+type _Assert_DateToStringAcceptsDateRef = Assert<
+  Equal<
+    "$joinedAt" extends DateToStringDateOperand<ArithSchema> ? true : false,
+    true
+  >
+>;
+
 export type {
   _Assert_AddBrand,
   _Assert_SubtractBrand,
@@ -149,4 +220,9 @@ export type {
   _Assert_ConcatBrand,
   _Assert_ConcatAcceptsLiteral,
   _Assert_ConcatAcceptsStringRef,
+  _Assert_DateToStringBrand,
+  _Assert_DateTruncBrand,
+  _Assert_DateAddBrand,
+  _Assert_DateSubtractBrand,
+  _Assert_DateToStringAcceptsDateRef,
 };

@@ -38,6 +38,20 @@ export type SizeExpression<Schema extends Document> = {
 };
 
 /**
+ * Date operand for $dateToString.date, $dateTrunc.date, $dateAdd.startDate,
+ * $dateSubtract.startDate. Branded `PipeSafeError` arm surfaces in IDE hovers
+ * when a non-Date operand is supplied (e.g. a string field reference passed
+ * to a `date` parameter) instead of letting the value silently degrade.
+ */
+type DateOperand<Schema extends Document> =
+  | Date
+  | FieldReferencesThatInferTo<Schema, Date>
+  | PipeSafeError<
+      `Date operand requires a Date literal or field reference to a Date field`,
+      Schema
+    >;
+
+/**
  * $dateToString expression - converts a date to a string
  * Syntax: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } }
  * Accepts:
@@ -50,7 +64,7 @@ export type SizeExpression<Schema extends Document> = {
 export type DateToStringExpression<Schema extends Document> = {
   $dateToString: {
     format: string;
-    date: FieldReferencesThatInferTo<Schema, Date> | Date;
+    date: DateOperand<Schema>;
     timezone?: string;
     onNull?: unknown;
   };
@@ -83,7 +97,7 @@ export type DateUnit =
  */
 export type DateTruncExpression<Schema extends Document> = {
   $dateTrunc: {
-    date: FieldReferencesThatInferTo<Schema, Date> | Date;
+    date: DateOperand<Schema>;
     unit: DateUnit;
     binSize?: number;
     timezone?: string;
@@ -110,7 +124,7 @@ export type DateTruncExpression<Schema extends Document> = {
  */
 export type DateAddExpression<Schema extends Document> = {
   $dateAdd: {
-    startDate: FieldReferencesThatInferTo<Schema, Date> | Date;
+    startDate: DateOperand<Schema>;
     unit: DateUnit;
     amount: number | FieldReferencesThatInferTo<Schema, number>;
     timezone?: string;
@@ -129,7 +143,7 @@ export type DateAddExpression<Schema extends Document> = {
  */
 export type DateSubtractExpression<Schema extends Document> = {
   $dateSubtract: {
-    startDate: FieldReferencesThatInferTo<Schema, Date> | Date;
+    startDate: DateOperand<Schema>;
     unit: DateUnit;
     amount: number | FieldReferencesThatInferTo<Schema, number>;
     timezone?: string;
