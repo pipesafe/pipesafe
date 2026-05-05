@@ -1,5 +1,5 @@
-import { Assert, Equal } from "../utils/tests";
-import { ResolveGroupOutput } from "./group";
+import { Assert, AssertPipeSafeError, Equal } from "../utils/tests";
+import { AggregatorFunction, ResolveGroupOutput } from "./group";
 
 /**
  * Type Resolution Behaviors for $group Stage:
@@ -698,3 +698,103 @@ type PrettifyGroupTest = Assert<
 >;
 
 export type { PrettifyGroupTest };
+
+// ============================================================================
+// Phase A — Typed aggregator operand errors
+// ============================================================================
+// `NumericAggregatorOperandFor<Schema, Op>` and `MinMaxAggregatorOperandFor`
+// add a branded `PipeSafeError` arm to the operand union so wrong field types
+// (e.g. $sum on a string field) hover with a literal message instead of
+// surfacing as a structural-mismatch wall.
+
+type AggregatorTestSchema = {
+  name: string;
+  age: number;
+  joinedAt: Date;
+  tags: string[];
+};
+
+// Extract the operand type for a specific aggregator from AggregatorFunction.
+type SumOperand<Schema extends Document> = Extract<
+  AggregatorFunction<Schema>,
+  { $sum: any }
+>["$sum"];
+type AvgOperand<Schema extends Document> = Extract<
+  AggregatorFunction<Schema>,
+  { $avg: any }
+>["$avg"];
+type MinOperand<Schema extends Document> = Extract<
+  AggregatorFunction<Schema>,
+  { $min: any }
+>["$min"];
+type MaxOperand<Schema extends Document> = Extract<
+  AggregatorFunction<Schema>,
+  { $max: any }
+>["$max"];
+
+import type { Document, PipeSafeError } from "../utils/core";
+
+// $sum operand union must include the numeric-only brand for the schema.
+type _SumOperand_HasBrand = SumOperand<AggregatorTestSchema>;
+type _Assert_SumBrand = Assert<
+  AssertPipeSafeError<
+    Extract<_SumOperand_HasBrand, PipeSafeError<string, unknown>>,
+    "Aggregator '$sum' requires a numeric field reference or expression"
+  >
+>;
+
+// $avg carries the same family of brand with a different operator name.
+type _AvgOperand_HasBrand = AvgOperand<AggregatorTestSchema>;
+type _Assert_AvgBrand = Assert<
+  AssertPipeSafeError<
+    Extract<_AvgOperand_HasBrand, PipeSafeError<string, unknown>>,
+    "Aggregator '$avg' requires a numeric field reference or expression"
+  >
+>;
+
+// $min/$max permit Date and so carry the wider message.
+type _MinOperand_HasBrand = MinOperand<AggregatorTestSchema>;
+type _Assert_MinBrand = Assert<
+  AssertPipeSafeError<
+    Extract<_MinOperand_HasBrand, PipeSafeError<string, unknown>>,
+    "Aggregator '$min' requires a numeric or date field reference"
+  >
+>;
+
+type _MaxOperand_HasBrand = MaxOperand<AggregatorTestSchema>;
+type _Assert_MaxBrand = Assert<
+  AssertPipeSafeError<
+    Extract<_MaxOperand_HasBrand, PipeSafeError<string, unknown>>,
+    "Aggregator '$max' requires a numeric or date field reference"
+  >
+>;
+
+// Positive sweep: a valid numeric ref still satisfies the operand. The
+// resolved group output for `{ $sum: '$age' }` should produce `{ total: number }`.
+type _SumValidQuery = {
+  _id: "$name";
+  total: { $sum: "$age" };
+};
+type _SumValidResult = ResolveGroupOutput<AggregatorTestSchema, _SumValidQuery>;
+type _Assert_SumValid = Assert<
+  Equal<_SumValidResult, { _id: string; total: number }>
+>;
+
+// Positive sweep: `$min` on a Date field still resolves correctly.
+type _MinValidQuery = {
+  _id: "$name";
+  earliest: { $min: "$joinedAt" };
+};
+type _MinValidResult = ResolveGroupOutput<AggregatorTestSchema, _MinValidQuery>;
+type _Assert_MinValid = Assert<
+  Equal<_MinValidResult, { _id: string; earliest: Date }>
+>;
+
+export type {
+  _Assert_SumBrand,
+  _Assert_AvgBrand,
+  _Assert_MinBrand,
+  _Assert_MaxBrand,
+  _Assert_SumValid,
+  _Assert_MinValid,
+};

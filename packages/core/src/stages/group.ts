@@ -8,30 +8,44 @@ import {
   ConditionalExpression,
   ArithmeticExpression,
 } from "../elements/expressions";
-import { Document, PassThrough, Prettify } from "../utils/core";
+import { Document, PassThrough, PipeSafeError, Prettify } from "../utils/core";
 
 /**
- * Numeric operand for aggregators like $sum, $avg
- * Accepts: numbers, field references to numbers, arithmetic expressions, conditional expressions
+ * Numeric operand for aggregators like $sum, $avg.
+ *
+ * Accepts: numbers, field references to numbers, arithmetic expressions,
+ * conditional expressions. Per-operator union arm includes a branded
+ * `PipeSafeError` that surfaces in IDE hovers when the operand is
+ * incompatible (e.g. a string field reference passed to $sum) — instead of
+ * the previous structural-mismatch wall.
  */
-type NumericAggregatorOperand<Schema extends Document> =
+type NumericAggregatorOperandFor<Schema extends Document, Op extends string> =
   | LiteralOrFieldReferenceInferringTo<Schema, number>
   | ArithmeticExpression<Schema>
-  | ConditionalExpression<Schema>;
+  | ConditionalExpression<Schema>
+  | PipeSafeError<
+      `Aggregator '${Op}' requires a numeric field reference or expression`,
+      Schema
+    >;
 
 /**
- * Operand for $min/$max that can be numbers or dates
- * Accepts: numbers/dates, field references, arithmetic expressions, conditional expressions
+ * Operand for $min/$max that can be numbers or dates.
+ * Same brand pattern as NumericAggregatorOperandFor but allows Date too.
  */
-type MinMaxAggregatorOperand<Schema extends Document> =
+type MinMaxAggregatorOperandFor<Schema extends Document, Op extends string> =
   | LiteralOrFieldReferenceInferringTo<Schema, number>
   | LiteralOrFieldReferenceInferringTo<Schema, Date>
   | ArithmeticExpression<Schema>
-  | ConditionalExpression<Schema>;
+  | ConditionalExpression<Schema>
+  | PipeSafeError<
+      `Aggregator '${Op}' requires a numeric or date field reference`,
+      Schema
+    >;
 
 /**
- * Flexible operand for aggregators like $push, $first, $last
- * Accepts: any literal, field reference, or expression
+ * Flexible operand for aggregators like $push, $first, $last.
+ * Intentionally accepts any literal/field-ref/expression — wrapping with a
+ * brand would defeat the purpose.
  */
 type FlexibleAggregatorOperand<Schema extends Document> =
   | LiteralOrFieldReferenceInferringTo<Schema, any>
@@ -39,16 +53,16 @@ type FlexibleAggregatorOperand<Schema extends Document> =
 
 export type AggregatorFunction<Schema extends Document> =
   | {
-      $sum: NumericAggregatorOperand<Schema>;
+      $sum: NumericAggregatorOperandFor<Schema, "$sum">;
     }
   | {
-      $avg: NumericAggregatorOperand<Schema>;
+      $avg: NumericAggregatorOperandFor<Schema, "$avg">;
     }
   | {
-      $min: MinMaxAggregatorOperand<Schema>;
+      $min: MinMaxAggregatorOperandFor<Schema, "$min">;
     }
   | {
-      $max: MinMaxAggregatorOperand<Schema>;
+      $max: MinMaxAggregatorOperandFor<Schema, "$max">;
     }
   | {
       $count: {};
