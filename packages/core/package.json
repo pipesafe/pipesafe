@@ -37,7 +37,7 @@
   "scripts": {
     "build": "tsdown",
     "build:watch": "tsdown --watch",
-    "typecheck": "tsc --noEmit -p tsconfig.assertions.json"
+    "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
     "mongodb": "^6.17.0"
