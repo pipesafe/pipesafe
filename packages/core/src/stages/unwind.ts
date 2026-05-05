@@ -1,10 +1,25 @@
-import { Document, PassThrough, Prettify, WithoutDollar } from "../utils/core";
+import {
+  Document,
+  PassThrough,
+  PipeSafeError,
+  Prettify,
+  WithoutDollar,
+} from "../utils/core";
 import { FieldReferencesThatInferTo } from "../elements/fieldReference";
 
-export type UnwindPath<Schema extends Document> = FieldReferencesThatInferTo<
-  Schema,
-  unknown[]
->;
+/**
+ * Acceptable values for `$unwind`'s path field. The user must supply a
+ * field reference (`'$arrayField'`) to an array-typed field. The branded
+ * `PipeSafeError` arm surfaces in IDE hovers when a non-array field is
+ * referenced (`'$scalar'`) — without the brand the union would degrade to
+ * `never` and the user would see a cryptic "is not assignable to never".
+ */
+export type UnwindPath<Schema extends Document> =
+  | FieldReferencesThatInferTo<Schema, unknown[]>
+  | PipeSafeError<
+      `$unwind requires a field reference to an array field`,
+      Schema
+    >;
 
 export type UnwindOptions<
   Schema extends Document,

@@ -1,4 +1,5 @@
-import { Assert, Equal } from "../utils/tests";
+import { Assert, AssertPipeSafeError, Equal } from "../utils/tests";
+import type { PipeSafeError } from "../utils/core";
 import {
   ResolveUnwindOutput,
   ExtractUnwindPath,
@@ -183,3 +184,36 @@ export type {
   NoIndexTest,
   OptionalUnwindTest,
 };
+
+// ============================================================================
+// Phase E — Typed UnwindPath errors
+// ============================================================================
+// `UnwindPath<Schema>` now includes a branded `PipeSafeError` union arm so
+// users referencing a non-array field surface a hover with the literal
+// message instead of degrading to silent `never`.
+
+import type { UnwindPath } from "./unwind";
+
+type UnwindPathSchema = {
+  tags: string[];
+  name: string;
+};
+
+// The brand sits in the UnwindPath union as the fallback for non-array refs.
+type _UnwindPath_Brand = Extract<
+  UnwindPath<UnwindPathSchema>,
+  PipeSafeError<string, unknown>
+>;
+type _Assert_UnwindPathBrand = Assert<
+  AssertPipeSafeError<
+    _UnwindPath_Brand,
+    "$unwind requires a field reference to an array field"
+  >
+>;
+
+// Positive sweep: a valid array field reference is still in the union.
+type _Assert_UnwindAcceptsArrayRef = Assert<
+  Equal<"$tags" extends UnwindPath<UnwindPathSchema> ? true : false, true>
+>;
+
+export type { _Assert_UnwindPathBrand, _Assert_UnwindAcceptsArrayRef };
