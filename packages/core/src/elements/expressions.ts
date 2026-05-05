@@ -1,4 +1,4 @@
-import { Document } from "../utils/core";
+import { Document, PipeSafeError } from "../utils/core";
 import {
   FieldReference,
   InferFieldReference,
@@ -146,7 +146,7 @@ export type DateSubtractExpression<Schema extends Document> = {
  * Returns: Date
  */
 export type ToDateExpression<Schema extends Document> = {
-  $toDate: ArithmeticOperand<Schema>;
+  $toDate: ArithmeticOperandFor<Schema, "$toDate">;
 };
 
 /**
@@ -238,13 +238,19 @@ export type ArrayExpression<Schema extends Document> =
   | SumExpression<Schema>;
 
 /**
- * Arithmetic expression operands - numbers, field references to numbers, or nested expressions
- * These can be nested recursively (e.g., $add inside $divide)
+ * Arithmetic expression operands — numbers, field references to numbers, or
+ * nested expressions. The branded `PipeSafeError` arm surfaces in IDE hovers
+ * when a user passes a non-numeric field reference (e.g. `'$stringField'`)
+ * instead of letting it silently degrade to `never` downstream.
  */
-type ArithmeticOperand<Schema extends Document> =
+type ArithmeticOperandFor<Schema extends Document, Op extends string> =
   | number
   | FieldReferencesThatInferTo<Schema, number>
-  | Expression<Schema>;
+  | Expression<Schema>
+  | PipeSafeError<
+      `Operator '${Op}' requires a numeric operand (number, field reference to a number, or nested expression)`,
+      Schema
+    >;
 
 /**
  * $add expression - adds numbers together
@@ -253,7 +259,7 @@ type ArithmeticOperand<Schema extends Document> =
  * Returns: number
  */
 export type AddExpression<Schema extends Document> = {
-  $add: ArithmeticOperand<Schema>[];
+  $add: ArithmeticOperandFor<Schema, "$add">[];
 };
 
 /**
@@ -263,7 +269,10 @@ export type AddExpression<Schema extends Document> = {
  * Returns: number
  */
 export type SubtractExpression<Schema extends Document> = {
-  $subtract: [ArithmeticOperand<Schema>, ArithmeticOperand<Schema>];
+  $subtract: [
+    ArithmeticOperandFor<Schema, "$subtract">,
+    ArithmeticOperandFor<Schema, "$subtract">,
+  ];
 };
 
 /**
@@ -273,7 +282,7 @@ export type SubtractExpression<Schema extends Document> = {
  * Returns: number
  */
 export type MultiplyExpression<Schema extends Document> = {
-  $multiply: ArithmeticOperand<Schema>[];
+  $multiply: ArithmeticOperandFor<Schema, "$multiply">[];
 };
 
 /**
@@ -283,7 +292,10 @@ export type MultiplyExpression<Schema extends Document> = {
  * Returns: number
  */
 export type DivideExpression<Schema extends Document> = {
-  $divide: [ArithmeticOperand<Schema>, ArithmeticOperand<Schema>];
+  $divide: [
+    ArithmeticOperandFor<Schema, "$divide">,
+    ArithmeticOperandFor<Schema, "$divide">,
+  ];
 };
 
 /**
@@ -293,7 +305,10 @@ export type DivideExpression<Schema extends Document> = {
  * Returns: number
  */
 export type ModExpression<Schema extends Document> = {
-  $mod: [ArithmeticOperand<Schema>, ArithmeticOperand<Schema>];
+  $mod: [
+    ArithmeticOperandFor<Schema, "$mod">,
+    ArithmeticOperandFor<Schema, "$mod">,
+  ];
 };
 
 /**
