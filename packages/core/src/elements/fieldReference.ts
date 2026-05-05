@@ -5,6 +5,7 @@ import {
   NonExpandableTypes,
   WithoutDollar,
   NoDollarString,
+  PipeSafeError,
   Prettify,
 } from "../utils/core";
 import { FieldSelector, InferFieldSelector } from "./fieldSelector";
@@ -30,14 +31,38 @@ export type FieldPath<T> =
 
 export type FieldReference<T extends Document> = DollarPrefixed<FieldPath<T>>;
 
-export type GetFieldTypeWithoutArrays<Schema, Path extends string> =
-  Schema extends (infer U)[] ? GetFieldTypeWithoutArrays<U, Path>[]
+/**
+ * Branded compile-time error fired by `GetFieldTypeWithoutArrays` when a path
+ * segment doesn't exist on the schema. Replaces the previous silent `: never`
+ * fallback so users get a hover with the offending segment + full path
+ * instead of cryptic "is not assignable to never".
+ */
+type SegmentMissError<
+  Head extends string,
+  Schema,
+  FullPath extends string,
+> = PipeSafeError<
+  `Unknown field '${Head}' on path '${FullPath}'`,
+  { schema: Schema; fullPath: FullPath; failedAt: Head }
+>;
+
+export type GetFieldTypeWithoutArrays<
+  Schema,
+  Path extends string,
+  FullPath extends string = Path,
+> =
+  Schema extends (infer U)[] ? GetFieldTypeWithoutArrays<U, Path, FullPath>[]
+  : // null/undefined branches of nullable unions silently fall through so
+  // distributing over `T | null` doesn't leak SegmentMissError into a result
+  // that's otherwise valid via the non-null branch.
+  Schema extends null | undefined ? never
   : Path extends keyof Schema ?
     Schema[Path] // Direct property access
   : Path extends `${infer Head}.${infer Tail}` ?
     Head extends keyof Schema ?
-      GetFieldTypeWithoutArrays<Schema[Head], Tail> // Recurse into property
-    : never
+      GetFieldTypeWithoutArrays<Schema[Head], Tail, FullPath> // Recurse into property
+    : SegmentMissError<Head, Schema, FullPath>
+  : Path extends string ? SegmentMissError<Path, Schema, FullPath>
   : never;
 
 // Infer the type of a field at a given selector
@@ -64,10 +89,11 @@ export type FieldReferencesThatInferToForLookup<
 > =
   Schema extends unknown ?
     {
-      [K in FieldReference<Schema>]: DesiredType extends (
-        InferFieldReference<Schema, K>
+      [K in FieldReference<Schema>]: InferFieldReference<Schema, K> extends (
+        PipeSafeError<string, unknown>
       ) ?
-        K
+        never // Skip branded errors — they only appear when K is widened past a valid path
+      : DesiredType extends InferFieldReference<Schema, K> ? K
       : never;
     }[FieldReference<Schema>]
   : never;
@@ -75,10 +101,11 @@ export type FieldReferencesThatInferToForLookup<
 export type FieldReferencesThatInferTo<Schema extends Document, DesiredType> =
   Schema extends unknown ?
     {
-      [K in FieldReference<Schema>]: NonNullable<
-        InferFieldReference<Schema, K>
-      > extends DesiredType ?
-        K
+      [K in FieldReference<Schema>]: InferFieldReference<Schema, K> extends (
+        PipeSafeError<string, unknown>
+      ) ?
+        never // Skip branded errors
+      : NonNullable<InferFieldReference<Schema, K>> extends DesiredType ? K
       : never;
     }[FieldReference<Schema>]
   : never;

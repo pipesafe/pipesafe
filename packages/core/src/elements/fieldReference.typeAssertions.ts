@@ -1,6 +1,7 @@
-import { assertTypeEqual } from "../utils/tests";
+import { Assert, AssertPipeSafeError, assertTypeEqual } from "../utils/tests";
 import {
   FieldReference,
+  GetFieldTypeWithoutArrays,
   InferFieldReference,
   FieldReferencesThatInferTo,
 } from "./fieldReference";
@@ -336,6 +337,14 @@ type ErrorSchema = {
   array: { item: string }[];
 };
 
+// Error cases — InferFieldReference's `Ref extends FieldReference<Schema>`
+// constraint still rejects bad paths at the call site, so these are still
+// `@ts-expect-error`. Phase 3 (Pilot B) adds a separate signal: when the
+// underlying `GetFieldTypeWithoutArrays` is invoked WITHOUT the constraint
+// (e.g. through widened generics, casts, or downstream consumers), the leaf
+// resolves to a branded `PipeSafeError` carrying the offending segment + full
+// path. The `_PipeSafeError_*` assertions below pin those literal messages.
+
 // @ts-expect-error - nonexistent top-level field
 type _InvalidField1 = InferFieldReference<ErrorSchema, "$nonexistent">;
 
@@ -353,6 +362,79 @@ type _InvalidField5 = InferFieldReference<ErrorSchema, "$array.nonexistent">;
 
 // @ts-expect-error - completely invalid path
 type _InvalidField6 = InferFieldReference<ErrorSchema, "$a.b.c.d.e.f">;
+
+// ---------------------------------------------------------------------------
+// Phase 3 — Branded error fires from the unconstrained helper
+// ---------------------------------------------------------------------------
+// `GetFieldTypeWithoutArrays<S, P>` doesn't constrain P; when P is invalid
+// the leaf resolves to a `PipeSafeError` whose message names the failed
+// segment and the full original path.
+
+// Single-segment unknown top-level field
+type _PipeSafeError_TopLevel = GetFieldTypeWithoutArrays<
+  ErrorSchema,
+  "nonexistent"
+>;
+type _Assert_TopLevel = Assert<
+  AssertPipeSafeError<
+    _PipeSafeError_TopLevel,
+    "Unknown field 'nonexistent' on path 'nonexistent'"
+  >
+>;
+
+// Two-segment unknown leaf — message preserves the full path
+type _PipeSafeError_NestedLeaf = GetFieldTypeWithoutArrays<
+  ErrorSchema,
+  "nested.nonexistent"
+>;
+type _Assert_NestedLeaf = Assert<
+  AssertPipeSafeError<
+    _PipeSafeError_NestedLeaf,
+    "Unknown field 'nonexistent' on path 'nested.nonexistent'"
+  >
+>;
+
+// Two-segment unknown root — names the failed root segment, not the leaf
+type _PipeSafeError_NestedRoot = GetFieldTypeWithoutArrays<
+  ErrorSchema,
+  "ueer.field1"
+>;
+type _Assert_NestedRoot = Assert<
+  AssertPipeSafeError<
+    _PipeSafeError_NestedRoot,
+    "Unknown field 'ueer' on path 'ueer.field1'"
+  >
+>;
+
+// Path through array — array structure is preserved; the inner type is the
+// branded error
+type _PipeSafeError_ThroughArray = GetFieldTypeWithoutArrays<
+  ErrorSchema,
+  "array.naem"
+>;
+type _Assert_ThroughArray = Assert<
+  AssertPipeSafeError<
+    _PipeSafeError_ThroughArray extends (infer Inner)[] ? Inner : never,
+    "Unknown field 'naem' on path 'array.naem'"
+  >
+>;
+
+// Positive sweep — valid paths still resolve to their value type, not a brand
+type _Valid_TopLevel = GetFieldTypeWithoutArrays<ErrorSchema, "field1">;
+assertTypeEqual({} as _Valid_TopLevel, "" as string);
+
+type _Valid_Nested = GetFieldTypeWithoutArrays<ErrorSchema, "nested.field2">;
+assertTypeEqual({} as _Valid_Nested, 0 as number);
+
+type _Valid_Array = GetFieldTypeWithoutArrays<ErrorSchema, "array.item">;
+assertTypeEqual({} as _Valid_Array, [] as string[]);
+
+export type {
+  _Assert_TopLevel,
+  _Assert_NestedLeaf,
+  _Assert_NestedRoot,
+  _Assert_ThroughArray,
+};
 
 // =============================================================================
 // Test 9: Nullable and optional field references in FieldReferencesThatInferTo
