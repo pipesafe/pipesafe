@@ -74,3 +74,18 @@ type _APSE_WrongMessage = Assert<
 type _APSE_NotAnError = Assert<
   Equal<AssertPipeSafeError<{ x: number }, "anything">, false>
 >;
+
+export type {
+  _IsErr_Branded,
+  _IsErr_PlainObject,
+  _IsErr_Unknown,
+  _IsErr_String,
+  _IsErr_BrandedNoCtx,
+  _PT_PreservesError,
+  _PT_ComputesOnValid,
+  _PT_DistributesOverUnion,
+  _PT_NeverInputProducesNever,
+  _APSE_MatchingMessage,
+  _APSE_WrongMessage,
+  _APSE_NotAnError,
+};
