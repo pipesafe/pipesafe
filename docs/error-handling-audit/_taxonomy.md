@@ -15,6 +15,7 @@ A **type-level error DX technique** is a TypeScript pattern that encodes validat
 **Definition:** A type-level error that is itself returned as the inferred/validated type (e.g., `type.validate<def>` returns `ErrorMessage<msg>` instead of a valid type).
 
 **Example (ArkType):**
+
 ```typescript
 // ark/util/errors.ts:41-42
 export type ErrorMessage<message extends string = string> =
@@ -42,6 +43,7 @@ export type validateAst<ast, $, args> =
 **Definition:** Error messages embedded in template literals that capture position or context from the parsed string (e.g., `"Expected X at position 5 in 'string|numbr'"`).
 
 **Example (ArkType):**
+
 ```typescript
 // ark/type/parser/shift/operator/operator.ts
 export const writeUnexpectedCharacterMessage = <s extends string>(
@@ -70,6 +72,7 @@ throwParseError(writeUnexpectedCharacterMessage(s.scanner.lookahead))
 **Definition:** A type-state machine that threads an `ErrorMessage` through a `finalizer` slot, allowing any parse branch to short-circuit with a detailed error while preserving machine state.
 
 **Example (ArkType):**
+
 ```typescript
 // ark/type/parser/reduce/static.ts:23-30
 export type StaticState = {
@@ -107,6 +110,7 @@ export type s.error<message extends string> = from<{
 **Definition:** A function or type that returns a valid type or `ErrorType<...>` based on a predicate; invalid inputs are wrapped in `ErrorType` which blocks further operations.
 
 **Example (ArkType):**
+
 ```typescript
 // ark/type/variants/object.ts:99-104
 merge<
@@ -138,6 +142,7 @@ export type NonObjectMergeErrorMessage = "Merged type must be an object"
 **Definition:** Function overloads for multiple arities where each overload has a default parameter `r` computing the result, and the return type uses `r extends infer _ ? _ : never` to force type instantiation and error propagation.
 
 **Example (ArkType):**
+
 ```typescript
 // ark/type/nary.ts:19-25
 <const a, r = Type<type.infer<a, $>, $>>(
@@ -164,12 +169,13 @@ export type NonObjectMergeErrorMessage = "Merged type must be an object"
 **Definition:** Type validation happens in generic constraints (e.g., `<T extends Constraint>`) or intersection constraints, rejecting invalid types at instantiation time.
 
 **Example (ArkType):**
+
 ```typescript
 // ark/type/declare.ts:48-51
 export type validateDeclared<declared, def, $, ctx extends DeclareContext> =
   def extends type.validate<def, $> ?
     validateInference<def, declared, $, bindThis<def>, ctx>
-  : type.validate<def, $>
+  : type.validate<def, $>;
 ```
 
 **Observable Effect:** When constraint fails, IDE shows "type X is not assignable to type Constraint" with a concise error message; the constraint violation IS the error.
@@ -187,16 +193,17 @@ export type validateDeclared<declared, def, $, ctx extends DeclareContext> =
 **Definition:** A type extracts and validates a candidate type via `infer`, then compares it against expected constraints using `equals<inferred, declared>` to detect mismatches.
 
 **Example (ArkType):**
+
 ```typescript
 // ark/type/declare.ts:122-129
 type validateShallowInference<
   t,
   declared,
   ctx extends DeclareContext,
-  inferred = ctx["side"] extends distill.Side ? distill<t, ctx["side"]> : t
+  inferred = ctx["side"] extends distill.Side ? distill<t, ctx["side"]> : t,
 > =
   equals<inferred, declared> extends true ? unknown
-  : show<declarationMismatch<inferred, declared>>
+  : show<declarationMismatch<inferred, declared>>;
 ```
 
 **Observable Effect:** If inferred and declared types don't match, `declarationMismatch<inferred, declared>` returns an `ErrorType` with both sides exposed, helping developers debug type misalignments.
@@ -214,6 +221,7 @@ type validateShallowInference<
 **Definition:** A runtime string parser that also has a compile-time type-state machine, capturing both parse result and error position/context at the type level.
 
 **Example (ArkType):**
+
 ```typescript
 // ark/type/parser/string.ts:21-40
 export const parseString = (
@@ -222,10 +230,10 @@ export const parseString = (
 ): InnerParseResult => {
   const aliasResolution = ctx.$.maybeResolveRoot(def)
   if (aliasResolution) return aliasResolution
-  
+
   const s = new RuntimeState(new Scanner(def), ctx)
   const node = fullStringParse(s)
-  
+
   if (s.finalizer === ">") throwParseError(writeUnexpectedCharacterMessage(">"))
   return node
 }
@@ -252,6 +260,7 @@ export type parseString<def extends string, $, args> =
 **Definition:** A function parameter includes an intersection with a conditional error message, which is invisible if valid but shows in diagnostics if the condition fails.
 
 **Example (ArkType):**
+
 ```typescript
 // ark/type/parser/definition.ts:164-172
 export type validateDefinition<def, $, args> =
@@ -262,11 +271,11 @@ export type validateDefinition<def, $, args> =
     ErrorMessage<shallowOptionalMessage>
   : isDefaultable<def, $, args> extends true ?
     ErrorMessage<shallowDefaultableMessage>
-  : validateInnerDefinition<def, $, args>
+  : validateInnerDefinition<def, $, args>;
 
 // ark/type/parser/ast/validate.ts:116-124
 export const shallowOptionalMessage =
-  "Optional definitions like 'string?' are only valid as properties in an object or tuple"
+  "Optional definitions like 'string?' are only valid as properties in an object or tuple";
 ```
 
 **Observable Effect:** If user writes `type("string?")` at the top level, IDE shows "Optional definitions... are only valid as properties" in the error tooltip.
@@ -284,6 +293,7 @@ export const shallowOptionalMessage =
 **Definition:** A utility type `show<T>` that forces intersection and union normalizations to display flattened in hover tooltips, making errors easier to read.
 
 **Example (ArkType):**
+
 ```typescript
 // ark/util/generics.ts:13-14
 /** Force an operation like `{ a: 0 } & { b: 1 }` to be computed so that it displays `{ a: 0; b: 1 }`. */
@@ -320,20 +330,21 @@ type validateObjectInference<
 **Definition:** A type uses `unique symbol` or a branded key (e.g., `[brand]`) to attach metadata that does not affect runtime but signals type-level state or ownership.
 
 **Example (ArkType):**
+
 ```typescript
 // ark/type/keywords/keywords.ts:107-110
 export declare namespace type {
   export interface cast<to> {
-    [inferred]?: to
+    [inferred]?: to;
   }
 }
 
 // ark/util/generics.ts:69-73
-export const brand = noSuggest("brand")
+export const brand = noSuggest("brand");
 
 export type Brand<t = unknown, id = unknown> = t & {
-  readonly [brand]: [t, id]
-}
+  readonly [brand]: [t, id];
+};
 ```
 
 **Observable Effect:** Type is "tagged" in the type system but has no runtime effect; when a branded type is returned, IDEs can see that it originated from a specific operation.
@@ -351,6 +362,7 @@ export type Brand<t = unknown, id = unknown> = t & {
 **Definition:** `@deprecated` and `@hidden` JSDoc annotations on type variants or deprecated overloads to guide users away from old APIs.
 
 **Example (ArkType):**
+
 ```typescript
 // ark/type/variants/base.ts (multiple entries)
 /** @deprecated */
@@ -372,18 +384,19 @@ export interface Type<out t = unknown, $ = {}> { ... }
 **Definition:** A choice between returning the first error encountered (short-circuit) or collecting all errors in an accumulator structure. ArkType favors short-circuit for simplicity.
 
 **Example (ArkType):**
+
 ```typescript
 // ark/type/parser/reduce/dynamic.ts short-circuits on first error
 export const parseUntilFinalizer = (s: RuntimeState): RootedRuntimeState => {
-  while (s.finalizer === undefined) next(s)
-  return s as RootedRuntimeState
-}
+  while (s.finalizer === undefined) next(s);
+  return s as RootedRuntimeState;
+};
 
 // Validation stops at first ErrorMessage
 type validateInfix<ast extends InfixExpression, $, args> =
   validateAst<ast[0], $, args> extends infer e extends ErrorMessage ? e
   : validateAst<ast[2], $, args> extends infer e extends ErrorMessage ? e
-  : undefined
+  : undefined;
 ```
 
 **Observable Effect:** IDE shows only the first blocking error; user must fix it to see next error (sequential error discovery).
@@ -401,6 +414,7 @@ type validateInfix<ast extends InfixExpression, $, args> =
 **Definition:** A type validates that generic arguments can be bound to generic parameters, with detailed errors if binding fails (e.g., too many/few arguments, type mismatch).
 
 **Example (ArkType):**
+
 ```typescript
 // ark/type/generic.ts (simplified)
 parseGenericParams<extractParams<s>, $> extends infer e extends ErrorMessage ?
@@ -427,12 +441,13 @@ parseGenericParams<extractParams<s>, $> extends infer e extends ErrorMessage ?
 **Definition:** An error type that is an object with `declared` and `inferred` fields, allowing IDEs to compare side-by-side what the user claimed vs. what the type system inferred.
 
 **Example (ArkType):**
+
 ```typescript
 // ark/type/declare.ts:131-134
 type declarationMismatch<inferred, declared> = ErrorType<{
-  declared: declared
-  inferred: inferred
-}>
+  declared: declared;
+  inferred: inferred;
+}>;
 ```
 
 **Observable Effect:** Hover on a `declare<T>().type(def)` mismatch shows a two-field object revealing the gap (e.g., `{ declared: boolean; inferred: number | string }`).
@@ -445,23 +460,23 @@ type declarationMismatch<inferred, declared> = ErrorType<{
 
 ## Summary Table
 
-| ID  | Name | Hover | Diagnostic | Perf | TL | Notes |
-|-----|------|-------|-----------|------|-----|-------|
-| T1  | Typed Error Returns | ✓ | ✓ | Low | No | ZeroWidthSpace sentinel |
-| T2  | Template-Literal Positional Errors | ✓ | ✓ | Med | Yes | Position/context captured |
-| T3  | State Machine Error Finalization | ✓ | ✓ | Low | No | Finalizer slot threading |
-| T4  | Conditional Degradation | ✓ | - | Med | No | ErrorType wrapping |
-| T5  | Overload Ladders | ✓ | ✓ | Low | No | r extends infer _ trick |
-| T6  | Constraint-Side Validation | - | ✓ | Low | No | Generic constraint errors |
-| T7  | Inference Capture | ✓ | - | Med | No | equals<> mismatch detection |
-| T8  | String DSL Parser | ✓ | ✓ | High | Yes | Scanner + StaticState |
-| T9  | Phantom-Parameter Messages | - | ✓ | Low | Yes | Context-specific errors |
-| T10 | Hover-Flattening | ✓ | - | Low | No | show<T> utility |
-| T11 | Symbol-Based Tracking | ✓ | - | Low | No | brand / inferred keys |
-| T12 | JSDoc Warnings | ✓ | ✓ | Low | No | @deprecated / @hidden |
-| T13 | Error Accumulation | ✓ | ✓ | Med | No | Short-circuit strategy |
-| T14 | Generic Context Binding | - | ✓ | Med | No | Generic arg validation |
-| T15 | Declaration Mismatch Objects | ✓ | - | Low | No | declared vs inferred |
+| ID  | Name                               | Hover | Diagnostic | Perf | TL  | Notes                       |
+| --- | ---------------------------------- | ----- | ---------- | ---- | --- | --------------------------- |
+| T1  | Typed Error Returns                | ✓     | ✓          | Low  | No  | ZeroWidthSpace sentinel     |
+| T2  | Template-Literal Positional Errors | ✓     | ✓          | Med  | Yes | Position/context captured   |
+| T3  | State Machine Error Finalization   | ✓     | ✓          | Low  | No  | Finalizer slot threading    |
+| T4  | Conditional Degradation            | ✓     | -          | Med  | No  | ErrorType wrapping          |
+| T5  | Overload Ladders                   | ✓     | ✓          | Low  | No  | r extends infer \_ trick    |
+| T6  | Constraint-Side Validation         | -     | ✓          | Low  | No  | Generic constraint errors   |
+| T7  | Inference Capture                  | ✓     | -          | Med  | No  | equals<> mismatch detection |
+| T8  | String DSL Parser                  | ✓     | ✓          | High | Yes | Scanner + StaticState       |
+| T9  | Phantom-Parameter Messages         | -     | ✓          | Low  | Yes | Context-specific errors     |
+| T10 | Hover-Flattening                   | ✓     | -          | Low  | No  | show<T> utility             |
+| T11 | Symbol-Based Tracking              | ✓     | -          | Low  | No  | brand / inferred keys       |
+| T12 | JSDoc Warnings                     | ✓     | ✓          | Low  | No  | @deprecated / @hidden       |
+| T13 | Error Accumulation                 | ✓     | ✓          | Med  | No  | Short-circuit strategy      |
+| T14 | Generic Context Binding            | -     | ✓          | Med  | No  | Generic arg validation      |
+| T15 | Declaration Mismatch Objects       | ✓     | -          | Low  | No  | declared vs inferred        |
 
 ---
 
@@ -474,4 +489,3 @@ type declarationMismatch<inferred, declared> = ErrorType<{
 5. **ErrorType<{...}> and ErrorMessage<>** provide distinct error shapes: `ErrorType` for method signature constraints, `ErrorMessage` for parse results.
 6. **Constraint-side errors and phantom-parameter messages** guide users toward correct syntax without needing explicit documentation.
 7. **show<T> and Brand<T, id>** are utility types that improve readability and type tracking at low performance cost.
-

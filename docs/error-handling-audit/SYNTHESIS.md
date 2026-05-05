@@ -55,11 +55,12 @@ Definition: instead of returning `never` on invalid input, return a branded inte
 - TanStack Router: `interface SerializationError<TMessage extends string> { [SERIALIZATION_ERROR]: TMessage }` (`packages/router-core/src/ssr/serializer/transformer.ts:148-150`)
 - type-plus: `$Error<M extends string, T = unknown>` carries both message and the offending type (`packages/type-plus/src/$type/errors/$error.ts`)
 - viem: `type ErrorType<name extends string = 'Error'> = Error & { name: name }` (`src/errors/utils.ts:3`)
-- Typia: discriminated `IValidation<T>` union with `IFailure.errors: IError[]` (runtime, but the *type* is structured)
+- Typia: discriminated `IValidation<T>` union with `IFailure.errors: IError[]` (runtime, but the _type_ is structured)
 
 TS-perf cost: low. All are shallow intersections; no recursion until used in a conditional.
 
 Applicability scores (1-5):
+
 - match.ts: 5 — slot it into `ComparatorMatchers<T>` to flag wrong operators
 - fieldReference.ts: 5 — return `FieldRefError<msg, schema>` instead of `never`
 - set.ts: 5 — flag dotted-key conflicts and unknown keys explicitly
@@ -90,7 +91,7 @@ TS-perf cost: low. Native constraint checking is the cheapest validation TS offe
 
 Applicability: 5 for fieldReference.ts and Pipeline.ts (stage-input constraints); 4 for match/set/group.
 
-Net recommendation: keep all current `extends` constraints, but pair them with T1 brands so invalid inputs get a *named* error rather than the generic structural one.
+Net recommendation: keep all current `extends` constraints, but pair them with T1 brands so invalid inputs get a _named_ error rather than the generic structural one.
 
 ### T10 — Hover-Flattening (10 libraries: ArkType, Drizzle, Effect, gql.tada, HotScript, Kysely, TS-Router, tRPC, type-plus, viem, Zod)
 
@@ -102,7 +103,7 @@ Definition: `type Prettify<T> = { [K in keyof T]: T[K] } & {}` (and variants lik
 - TS-Router: `Expand<T>` (`packages/router-core/src/utils.ts:28-34`) — 28 usages, includes a Function bypass
 - viem: `Prettify<T>` 215 hits (`src/types/utils.ts:165-167`)
 
-TS-perf cost: low *per-application*, but applying it inside a recursive type can compound. Kysely's `DrainOuterGeneric` is the most defensive variant.
+TS-perf cost: low _per-application_, but applying it inside a recursive type can compound. Kysely's `DrainOuterGeneric` is the most defensive variant.
 
 Applicability: 5 for set.ts and group.ts (deep accumulated objects); 4 for Pipeline.ts; 3 for match.ts (already flat-ish); 2 for fieldReference.ts (fields are strings).
 
@@ -144,7 +145,7 @@ Definition: arity-specific overloads with `r extends infer _ ? _ : never` to for
 - ts-pattern: 7 overloads of `.with()` (`src/types/Match.ts:34-130`)
 - Valibot: 22 `pipe()` overloads (`packages/valibot/library/src/methods/pipe/pipe.ts:82-2685`)
 
-TS-perf cost: low *if used at finite arities*. Effect notably refused this pattern (per the audit, "no overload ladders").
+TS-perf cost: low _if used at finite arities_. Effect notably refused this pattern (per the audit, "no overload ladders").
 
 Applicability: 3 for Pipeline.ts (stage methods are already chain-of-method-calls, not nary); 2 elsewhere.
 
@@ -183,7 +184,7 @@ Net recommendation: **don't build a generalised parser**. Instead, do a Kysely-s
 
 Definition: function parameter is intersected with a conditional error message. ts-pattern's `SeveralAnonymousSelectError<a = 'You can only use a single...'>` (`src/types/FindSelected.ts:159-183`) is the cleanest example.
 
-Applicability: 4 for `set()`/`match()` where the error needs to appear *on the offending key*, not just on the return type.
+Applicability: 4 for `set()`/`match()` where the error needs to appear _on the offending key_, not just on the return type.
 
 Net recommendation: pair with T1 — same brand, but injected into the parameter rather than returned.
 
@@ -256,7 +257,7 @@ Risks: medium. `MergeUnion<T>` is already in a hot path. Adding extra conditiona
 
 ### R4 — Pilot B: typed path errors in `fieldReference.ts` (see §5)
 
-Cite: Kysely's `ExtractTypeFromStringReference` multi-segment template-literal parser (`src/parser/reference-parser.ts:82-156`); TS-Router's `ParsePathParams` (`packages/router-core/src/link.ts:49-124`); Drizzle's `BuildSubquerySelection` (`src/query-builders/select.types.ts:116-131`) which returns `DrizzleTypeError<'You cannot reference this field without assigning it an alias first - use \`.as(<alias>)\`'>` instead of `never`.
+Cite: Kysely's `ExtractTypeFromStringReference` multi-segment template-literal parser (`src/parser/reference-parser.ts:82-156`); TS-Router's `ParsePathParams` (`packages/router-core/src/link.ts:49-124`); Drizzle's `BuildSubquerySelection` (`src/query-builders/select.types.ts:116-131`) which returns `DrizzleTypeError<'You cannot reference this field without assigning it an alias first - use \`.as(<alias>)\`'>`instead of`never`.
 
 Map: `packages/core/src/elements/fieldReference.ts` `InferFieldReference`, `GetFieldTypeWithoutArrays`.
 
@@ -284,13 +285,18 @@ Risks: breaking change; potential perf regression from extra tuple manipulation;
 
 ```ts
 export type ComparatorMatchers<T extends unknown> = MergeUnion<
-  { $exists?: boolean; $type?: SomeBSONType | SomeBSONType[] }
-  & { [m in EqualityMatchers]?: T }
-  & { [m in InMatchers]?: T[] }
-  & (T extends number ? { [m in ContinuousMatchers]?: number } : {})
-  & (T extends Date   ? { [m in ContinuousMatchers]?: Date   } : {})
-  & (T extends (infer U)[] ? { $size?: number } | { [m in ArrayOnlyMatcher]?: U[] } | { [m in ElementMatcher]?: U } : {})
-  & (T extends string ? { $regex?: unknown } : {})
+  { $exists?: boolean; $type?: SomeBSONType | SomeBSONType[] } & {
+    [m in EqualityMatchers]?: T;
+  } & { [m in InMatchers]?: T[] } & (T extends number ?
+      { [m in ContinuousMatchers]?: number }
+    : {}) &
+    (T extends Date ? { [m in ContinuousMatchers]?: Date } : {}) &
+    (T extends (infer U)[] ?
+      | { $size?: number }
+      | { [m in ArrayOnlyMatcher]?: U[] }
+      | { [m in ElementMatcher]?: U }
+    : {}) &
+    (T extends string ? { $regex?: unknown } : {})
 >;
 ```
 
@@ -302,7 +308,7 @@ Type '{ $gte: number }' is not assignable to type 'MatchersForType<string[]>'.
   'MatchersForType<string[]>'.
 ```
 
-— useful, but it doesn't say *why* `$gte` was dropped, and on big union schemas the message becomes "is not assignable to never".
+— useful, but it doesn't say _why_ `$gte` was dropped, and on big union schemas the message becomes "is not assignable to never".
 
 **After** — introduce `PipeSafeError`, then wrap each operator-allowed branch and explicitly mark forbidden ones (drawing on tRPC's nested ternaries and Kysely's KyselyTypeError pattern):
 
@@ -315,21 +321,33 @@ export interface PipeSafeError<Msg extends string, Ctx = unknown> {
 
 // stages/match.ts
 type NumericOperand<T, Op extends string> =
-  T extends number | Date ? T :
-  PipeSafeError<`Operator '${Op}' is not allowed on type '${TypeName<T>}' (numeric/date only)`, T>;
+  T extends number | Date ? T
+  : PipeSafeError<
+      `Operator '${Op}' is not allowed on type '${TypeName<T>}' (numeric/date only)`,
+      T
+    >;
 
 type ArrayOperand<T, Op extends string> =
-  T extends (infer U)[] ? U[] :
-  PipeSafeError<`Operator '${Op}' requires an array field, got '${TypeName<T>}'`, T>;
+  T extends (infer U)[] ? U[]
+  : PipeSafeError<
+      `Operator '${Op}' requires an array field, got '${TypeName<T>}'`,
+      T
+    >;
 
 export type ComparatorMatchers<T> = Prettify<
-    { $exists?: boolean; $type?: SomeBSONType | SomeBSONType[] }
-  & { [m in EqualityMatchers]?: T }
-  & { [m in InMatchers]?: T[] }
-  & { [m in ContinuousMatchers]?: NumericOperand<T, m> }
-  & { $size?: ArrayOperand<T, '$size'> extends infer A ? (A extends unknown[] ? number : A) : never }
-  & { $all?: ArrayOperand<T, '$all'> }
-  & (T extends string ? { $regex?: RegExp | string } : { $regex?: PipeSafeError<`'$regex' is only valid on string fields`, T> })
+  { $exists?: boolean; $type?: SomeBSONType | SomeBSONType[] } & {
+    [m in EqualityMatchers]?: T;
+  } & { [m in InMatchers]?: T[] } & {
+    [m in ContinuousMatchers]?: NumericOperand<T, m>;
+  } & {
+    $size?: ArrayOperand<T, "$size"> extends infer A ?
+      A extends unknown[] ?
+        number
+      : A
+    : never;
+  } & { $all?: ArrayOperand<T, "$all"> } & (T extends string ?
+      { $regex?: RegExp | string }
+    : { $regex?: PipeSafeError<`'$regex' is only valid on string fields`, T> })
 >;
 ```
 
@@ -351,39 +369,50 @@ export type GetFieldTypeWithoutArrays<Schema, Path extends string> =
   Schema extends (infer U)[] ? GetFieldTypeWithoutArrays<U, Path>[]
   : Path extends keyof Schema ? Schema[Path]
   : Path extends `${infer Head}.${infer Tail}` ?
-      Head extends keyof Schema ? GetFieldTypeWithoutArrays<Schema[Head], Tail>
-      : never
+    Head extends keyof Schema ?
+      GetFieldTypeWithoutArrays<Schema[Head], Tail>
+    : never
   : never;
 
-export type InferFieldReference<S extends Document, Ref extends FieldReference<S>> =
-  GetFieldTypeWithoutArrays<S, WithoutDollar<Ref>>;
+export type InferFieldReference<
+  S extends Document,
+  Ref extends FieldReference<S>,
+> = GetFieldTypeWithoutArrays<S, WithoutDollar<Ref>>;
 ```
 
-User writes `"$user.naem"` against schema `{ user: { name: string; age: number } }`. Today's hover: `never`. Today's downstream error: "Type 'never' is not assignable to type 'X'", which doesn't say *which* segment was wrong.
+User writes `"$user.naem"` against schema `{ user: { name: string; age: number } }`. Today's hover: `never`. Today's downstream error: "Type 'never' is not assignable to type 'X'", which doesn't say _which_ segment was wrong.
 
 **After** — replace each terminal `: never` with a `PipeSafeError` carrying the path segment that failed (Kysely-style). The brand stays out of valid result paths:
 
 ```ts
 // stages/fieldReference.ts (sketch)
-type SegmentMissError<Head extends string, Schema, FullPath extends string> =
-  PipeSafeError<
-    `Unknown field '${Head}' at path '${FullPath}'. Available: ${Extract<keyof Schema, string>}`,
-    { schema: Schema; fullPath: FullPath; failedAt: Head }
-  >;
+type SegmentMissError<
+  Head extends string,
+  Schema,
+  FullPath extends string,
+> = PipeSafeError<
+  `Unknown field '${Head}' at path '${FullPath}'. Available: ${Extract<keyof Schema, string>}`,
+  { schema: Schema; fullPath: FullPath; failedAt: Head }
+>;
 
-export type GetFieldTypeOrError<Schema, Path extends string, FullPath extends string = Path> =
+export type GetFieldTypeOrError<
+  Schema,
+  Path extends string,
+  FullPath extends string = Path,
+> =
   Schema extends (infer U)[] ? GetFieldTypeOrError<U, Path, FullPath>[]
   : Path extends keyof Schema ? Schema[Path]
   : Path extends `${infer Head}.${infer Tail}` ?
-      Head extends keyof Schema
-        ? GetFieldTypeOrError<Schema[Head], Tail, FullPath>
-        : SegmentMissError<Head, Schema, FullPath>
-  : Path extends string
-      ? SegmentMissError<Path, Schema, FullPath>
-      : never;
+    Head extends keyof Schema ?
+      GetFieldTypeOrError<Schema[Head], Tail, FullPath>
+    : SegmentMissError<Head, Schema, FullPath>
+  : Path extends string ? SegmentMissError<Path, Schema, FullPath>
+  : never;
 
-export type InferFieldReference<S extends Document, Ref extends FieldReference<S>> =
-  GetFieldTypeOrError<S, WithoutDollar<Ref>>;
+export type InferFieldReference<
+  S extends Document,
+  Ref extends FieldReference<S>,
+> = GetFieldTypeOrError<S, WithoutDollar<Ref>>;
 ```
 
 Worked example: `InferFieldReference<{ user: { name: string } }, "$user.naem">` now resolves to:
@@ -409,14 +438,16 @@ Old vs new: old `never` → no info; new branded error → exact failed segment,
 
 **Build-perf.** The Effect audit explicitly flagged its types as heavy (`packages/effect/src` is 187,839 LoC). Effect avoids overload ladders for this reason. PipeSafe's hot path is `Pipeline.match`/`set`/`group` chained 5–10 times; each new `Prettify` and each `PipeSafeError` brand adds a small evaluation cost. Run benchmarks (the project has a `benchmarking/` directory) before and after Pilot A.
 
-**Breaking changes.** Pilot A is non-breaking because `MatchersForType<T>` is a *constraint* on the user's match query — adding error types inside it can only narrow what they could write before, but the runtime contract is unchanged. Pilot B is **possibly breaking** for any internal call that does `InferFieldReference<S, R> extends never ? X : Y`; we need to grep these and update to `extends PipeSafeError<any, any> ? X : Y`.
+**Breaking changes.** Pilot A is non-breaking because `MatchersForType<T>` is a _constraint_ on the user's match query — adding error types inside it can only narrow what they could write before, but the runtime contract is unchanged. Pilot B is **possibly breaking** for any internal call that does `InferFieldReference<S, R> extends never ? X : Y`; we need to grep these and update to `extends PipeSafeError<any, any> ? X : Y`.
 
 **Validate with a benchmark before committing**:
+
 1. Run the existing `benchmarking/` suite before Pilot A.
 2. After each pilot, re-run and compare instantiation count and `tsc --extendedDiagnostics`.
 3. Test against the 21 `*.typeAssertions.ts` files; expect zero regressions.
 
 **Open questions:**
+
 - Should `PipeSafeError` carry `Ctx` always, or only when useful? type-plus carries it always; Kysely doesn't. Pipesafe's debugging story benefits from carrying it.
 - Should the error symbol be `unique symbol` (Kysely/tRPC) or a brand string property (Drizzle)? Brand string is friendlier for serialisation/printing in tests; symbol is more collision-proof. Recommend brand string with a `'~pipesafe.error'` key (TypeBox-style tilde prefix to imply internal).
 
@@ -425,17 +456,20 @@ Old vs new: old `never` → no info; new branded error → exact failed segment,
 ## 7. Out of scope / future work
 
 **Worth investigating later:**
+
 - **State-machine `AppliedStages` accumulator** for stage-ordering enforcement (R5 / ts-pattern T3). High value but breaking.
 - **Effect-style `Simplify` + `DrainOuterGeneric` combo** if benchmarks regress after Prettify rollout (Kysely `src/util/type-utils.ts:126`).
 - **Declaration-mismatch object** (T15, ArkType `declarationMismatch<inferred, declared>`) for set.ts when a user provides an explicit type annotation that disagrees with inference.
 - **Distributive control** (T16, type-plus) for match.ts union behaviour. Currently union narrowing in `RawMatchQuery<Schema>` is implicitly distributive; making it controllable would let users opt out of the union-explosion problem in `ComparatorMatchers`.
 
 **Speculative ideas:**
+
 - **TypeScript language-server plugin** that recognises the `PipeSafeError` brand and renders only the `message` field in the hover, hiding the `Ctx`. ArkType has experimented with similar plugins; not blocking, but would polish the DX.
 - **Accumulator-based error aggregation** (T13, Effect `ParseIssue` tree) is rejected in §3 but could be revisited if multi-error reporting becomes a user demand.
 - **Custom transformer** (Typia-style, `IMetadataTypeTag`) to detect mutually-exclusive operators (e.g., `$eq` + `$gt` on the same field). Heavy lift; only if the type-level approach proves infeasible.
 
 **Investigated and rejected:**
+
 - Full type-level DSL parser (T8, ArkType/gql.tada). Pipesafe's path strings are short (≤4 segments typical) and our `FieldPath<T>` recursion already handles them.
 - ZeroWidthSpace sentinel (ArkType `ark/util/errors.ts:41-42`). Adds string-collision protection that branded interfaces achieve more cleanly.
 - `r extends infer _ ? _ : never` aggressive instantiation (ArkType `nary.ts:19-25`). Useful for nary builders, but pipesafe is method-chain based.

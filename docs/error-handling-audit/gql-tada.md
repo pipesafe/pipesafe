@@ -69,11 +69,13 @@ type takeValue<In extends any[], Const extends boolean> =
 
 ```typescript
 export type parseDocument<In extends string> =
-  _takeDocumentRec<[], tokenize<In>> extends _match<[...infer Definitions], any>
-    ? Definitions extends []
-      ? never  // No definitions parsed
-      : { kind: Kind.DOCUMENT; definitions: Definitions }
-    : never;  // Parser failed entirely
+  _takeDocumentRec<[], tokenize<In>> extends (
+    _match<[...infer Definitions], any>
+  ) ?
+    Definitions extends [] ?
+      never // No definitions parsed
+    : { kind: Kind.DOCUMENT; definitions: Definitions }
+  : never; // Parser failed entirely
 ```
 
 **Key insight**: When `tokenize<In>` returns `void` or parser returns `void`, the type cascades to `never` at the call site, blocking invalid queries completely.
@@ -92,21 +94,21 @@ Fragment isolation uses branded phantom symbols:
 declare namespace $tada {
   const fragmentRefs: unique symbol;
   export type fragmentRefs = typeof fragmentRefs;
-  
+
   const ref: unique symbol;
   export type ref = typeof ref;
 }
 
 type makeFragmentRef<Document> =
-  Document extends FragmentShape<infer Definition, infer Result>
-    ? Definition['masked'] extends false
-      ? Result
-      : {
-          [$tada.fragmentRefs]: {
-            [Name in Definition['fragment']]: Definition['on'];
-          };
-        }
-    : never;
+  Document extends FragmentShape<infer Definition, infer Result> ?
+    Definition["masked"] extends false ?
+      Result
+    : {
+        [$tada.fragmentRefs]: {
+          [Name in Definition["fragment"]]: Definition["on"];
+        };
+      }
+  : never;
 ```
 
 **Error mechanism**: If a fragment is referenced but not defined in the document, `getFragmentsOfDocuments<Fragments>` returns an object missing that key, causing downstream field access to fail:
@@ -129,18 +131,18 @@ Fragments[Node['name']['value']] extends { [$tada.ref]: any }
 Type unwrapping validates schema introspection against parsed documents:
 
 ```typescript
-type unwrapTypeRec<TypeRef, Introspection extends SchemaLike, IsOptional> = 
-  TypeRef extends { kind: 'NON_NULL'; ofType: any }
-    ? unwrapTypeRec<TypeRef['ofType'], Introspection, false>
-  : TypeRef extends { kind: 'LIST'; ofType: any }
-    ? IsOptional extends false
-      ? Array<unwrapTypeRec<TypeRef['ofType'], Introspection, true>>
-      : null | Array<unwrapTypeRec<TypeRef['ofType'], Introspection, true>>
-  : TypeRef extends { name: any }
-    ? IsOptional extends false
-      ? getScalarType<TypeRef['name'], Introspection>
-      : null | getScalarType<TypeRef['name'], Introspection>
-    : unknown;  // Fallback for unrecognized types
+type unwrapTypeRec<TypeRef, Introspection extends SchemaLike, IsOptional> =
+  TypeRef extends { kind: "NON_NULL"; ofType: any } ?
+    unwrapTypeRec<TypeRef["ofType"], Introspection, false>
+  : TypeRef extends { kind: "LIST"; ofType: any } ?
+    IsOptional extends false ?
+      Array<unwrapTypeRec<TypeRef["ofType"], Introspection, true>>
+    : null | Array<unwrapTypeRec<TypeRef["ofType"], Introspection, true>>
+  : TypeRef extends { name: any } ?
+    IsOptional extends false ?
+      getScalarType<TypeRef["name"], Introspection>
+    : null | getScalarType<TypeRef["name"], Introspection>
+  : unknown; // Fallback for unrecognized types
 ```
 
 If `getScalarType<TypeRef['name'], Introspection>` finds no matching type in the introspection:
@@ -196,9 +198,8 @@ If `parseDocument<In>` is `never`, then `getDocumentNode<never, ...>` returns `n
 The `obj<T>` utility forces object intersection normalization:
 
 ```typescript
-export type obj<T> = T extends { [key: string | number]: any } 
-  ? { [K in keyof T]: T[K] } 
-  : never;
+export type obj<T> =
+  T extends { [key: string | number]: any } ? { [K in keyof T]: T[K] } : never;
 ```
 
 This is used to flatten complex intersection results in selection sets (e.g., `selection.ts:237`):
@@ -215,52 +216,62 @@ This is used to flatten complex intersection results in selection sets (e.g., `s
 
 ## Search Results Summary
 
-| Pattern | Count | Files |
-|---------|-------|-------|
-| `never` returns | 30+ | parser.ts, selection.ts, variables.ts, api.ts |
-| `void` (constraint failure) | 20+ | tokenizer.ts, parser.ts |
-| `infer` + constraint lookup | 15+ | selection.ts, variables.ts, introspection.ts |
-| Template-literal parsing | 50+ | tokenizer.ts, parser.ts |
-| `extends` conditionals | 100+ | selection.ts, variables.ts, namespace.ts |
-| Unique symbols | 3 | namespace.ts |
+| Pattern                     | Count | Files                                         |
+| --------------------------- | ----- | --------------------------------------------- |
+| `never` returns             | 30+   | parser.ts, selection.ts, variables.ts, api.ts |
+| `void` (constraint failure) | 20+   | tokenizer.ts, parser.ts                       |
+| `infer` + constraint lookup | 15+   | selection.ts, variables.ts, introspection.ts  |
+| Template-literal parsing    | 50+   | tokenizer.ts, parser.ts                       |
+| `extends` conditionals      | 100+  | selection.ts, variables.ts, namespace.ts      |
+| Unique symbols              | 3     | namespace.ts                                  |
 
 ---
 
 ## Top Techniques Relevant to Pipesafe
 
 ### 1. **Type-Level Recursive Descent Parser (P2)**
+
 gql.tada's `takeValue`, `takeSelectionSet`, `takeOperationDefinition` chain is directly analogous to pipesafe's `fieldReference.ts`. When parsing `"$field.nested.path"`:
+
 - **Advantage**: Exhaustive pattern matching (`In extends [Token.Name, ...]`) ensures all valid inputs are caught.
 - **Drawback**: No positional error messages; errors are silent `never` returns.
 - **Applicability**: HIGH—pipesafe can adopt the same state-threading pattern but should add error context via T2 (positional messages in template literals).
 
 ### 2. **Constraint-Side Validation via `never` (P2, P4)**
+
 When a field doesn't exist in the schema:
+
 ```typescript
-Type['fields'][Node['name']['value']]  // If field missing → undefined → never
+Type["fields"][Node["name"]["value"]]; // If field missing → undefined → never
 ```
+
 This is cleaner than wrapping in `ErrorType<...>` because it's automatic. However, the IDE error message is generic ("Type 'undefined' is not assignable to type X").
 
 - **Applicability**: MEDIUM—good for compile-time rejection, but IDE feedback is minimal.
 
 ### 3. **Bidirectional Schema Validation (P4)**
+
 The pattern in `getScalarType<TypeName, Introspection>` validates that a type exists in the schema. Pipesafe can use this for validating pipeline operators against allowed operations on field types (e.g., `$gt` only on numeric/date fields).
 
 - **Applicability**: HIGH—directly transferable to match.ts, set.ts, group.ts operators.
 
 ### 4. **State Threading with Disambiguation (P1, P2)**
+
 gql.tada threads state through a `_state` interface:
+
 ```typescript
 interface _state<In extends string, Out extends TokenNode[]> {
   out: Out;
   in: In;
 }
 ```
+
 This ensures the input (`in`) is consumed incrementally and prevents backtracking ambiguity.
 
 - **Applicability**: MEDIUM—pipesafe could adopt this for Pipeline type narrowing, though current `match.ts` union-based approach is simpler.
 
 ### 5. **Overload Escalation for Arity (P5)**
+
 Multiple function overloads with increasing parameter counts are a standard DX pattern in gql.tada's `graphql()` function.
 
 - **Applicability**: LOW for pipesafe—not directly applicable since pipeline operations have fixed arities.
@@ -288,6 +299,7 @@ Multiple function overloads with increasing parameter counts are a standard DX p
 gql.tada's error DX is **silent and minimal but effective**. It prioritizes correctness via type constraints over user-facing diagnostics. Its state machines (tokenizer, parser) are the most sophisticated aspect and directly applicable to pipesafe's string-DSL parsing.
 
 **Recommended adoption for pipesafe**:
+
 1. **Recursive descent parser architecture** (P2) for fieldReference and Pipeline validation
 2. **Bidirectional schema introspection** (P4) for operator type-checking
 3. **Phantom symbol tracking** (P3) for pipeline stage isolation

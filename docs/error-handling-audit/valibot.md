@@ -20,6 +20,7 @@ Valibot emphasizes **simplicity and lightweight design** over elaborate compile-
 The `pipe()` function exports **22 function overloads** (arities 1–20 + fallback), each with explicit generic parameters for input, output, and issue types. Each overload threads the output of step N as the input to step N+1.
 
 **Pattern:**
+
 ```typescript
 export function pipe<
   const TSchema extends BaseSchema<unknown, unknown, BaseIssue<unknown>>,
@@ -87,6 +88,7 @@ export type InferIssue<TItem extends ...> = NonNullable<TItem['~types']>['issue'
 ```
 
 Each schema/action declares:
+
 ```typescript
 readonly '~types'?: { input: TInput; output: TOutput; issue: TIssue } | undefined;
 ```
@@ -112,6 +114,7 @@ Valibot uses **readonly phantom keys** (`~types`, `~run`, `~standard`) to encode
 - `~standard`: metadata for Standard Schema compliance
 
 Example from `BaseValidation`:
+
 ```typescript
 readonly '~types'?: {
   readonly input: TInput;
@@ -165,24 +168,25 @@ When `InferIssue<BaseMetadata<T>>` is used in a pipe, it resolves to `never`, me
 
 Valibot **does not employ**:
 
-| Category | Technique | Reason |
-|----------|-----------|--------|
-| T1 | Typed Error Returns (ErrorMessage<>) | No custom error encoding; relies on TypeScript diagnostics |
-| T2 | Template-Literal Positional Errors | No string DSL parser or scanner state machine |
-| T3 | State Machine Error Finalization | No complex error threading; simple overloads suffice |
-| T8 | String DSL Parser with State Machine | Schemas/actions are function-based, not string-based |
-| T9 | Phantom-Parameter Error Messages | No context-specific error injection; messages are generic |
-| T10 | Hover-Flattening (show<T>) | Intersection displays are simple enough without flattening |
-| T12 | JSDoc Deprecation | Not observed in type system layer (may exist at API level) |
-| T13 | Error Accumulation Strategy | Uses short-circuit (abort early on first issue) |
-| T14 | Generic Context Binding Validation | No generic parameter validation in overloads |
-| T15 | Declaration Mismatch Objects | No `declare<ExternalType>()` construct |
+| Category | Technique                            | Reason                                                     |
+| -------- | ------------------------------------ | ---------------------------------------------------------- |
+| T1       | Typed Error Returns (ErrorMessage<>) | No custom error encoding; relies on TypeScript diagnostics |
+| T2       | Template-Literal Positional Errors   | No string DSL parser or scanner state machine              |
+| T3       | State Machine Error Finalization     | No complex error threading; simple overloads suffice       |
+| T8       | String DSL Parser with State Machine | Schemas/actions are function-based, not string-based       |
+| T9       | Phantom-Parameter Error Messages     | No context-specific error injection; messages are generic  |
+| T10      | Hover-Flattening (show<T>)           | Intersection displays are simple enough without flattening |
+| T12      | JSDoc Deprecation                    | Not observed in type system layer (may exist at API level) |
+| T13      | Error Accumulation Strategy          | Uses short-circuit (abort early on first issue)            |
+| T14      | Generic Context Binding Validation   | No generic parameter validation in overloads               |
+| T15      | Declaration Mismatch Objects         | No `declare<ExternalType>()` construct                     |
 
 ---
 
 ## Error Discovery Model
 
 **Sequence:**
+
 1. User writes `pipe(string(), maxLength(5), minValue(10))`
 2. Type checker evaluates overload 3: `TItem2 extends PipeItem<InferOutput<TItem1>, ...>`
 3. `InferOutput<TItem1>` (minLength) = `string`
@@ -190,18 +194,18 @@ Valibot **does not employ**:
 5. **Diagnostic:** "Type `string` is not assignable to type `number`"
 6. User fixes: `pipe(string(), minLength(5), transform(parseInt), minValue(10))`
 
-**Limitation:** Error message does not say *which* pipe step is incompatible or *why*. It's a generic structural mismatch.
+**Limitation:** Error message does not say _which_ pipe step is incompatible or _why_. It's a generic structural mismatch.
 
 ---
 
 ## Applicability to Pipesafe
 
-| Pipesafe Component | Valibot Technique | Value | Notes |
-|-------------------|------------------|-------|-------|
-| `Pipeline.ts` | Overload ladders (T5) | ★★★★ | Directly applicable; 20+ stages need arity coverage |
-| `Pipeline.ts` | Constraint-side validation (T6) | ★★★ | Chain type validation; but no custom error messages |
-| `match.ts`, `fieldReference.ts` | Inference utilities (T7) | ★★ | Type extraction; less complex than pipesafe's nested generics |
-| `set.ts`, `group.ts` | Phantom properties (T11) | ★★ | Metadata encoding; pipesafe uses explicit types |
+| Pipesafe Component              | Valibot Technique               | Value | Notes                                                         |
+| ------------------------------- | ------------------------------- | ----- | ------------------------------------------------------------- |
+| `Pipeline.ts`                   | Overload ladders (T5)           | ★★★★  | Directly applicable; 20+ stages need arity coverage           |
+| `Pipeline.ts`                   | Constraint-side validation (T6) | ★★★   | Chain type validation; but no custom error messages           |
+| `match.ts`, `fieldReference.ts` | Inference utilities (T7)        | ★★    | Type extraction; less complex than pipesafe's nested generics |
+| `set.ts`, `group.ts`            | Phantom properties (T11)        | ★★    | Metadata encoding; pipesafe uses explicit types               |
 
 **Assessment:** Valibot's **overload + constraint approach is lightweight and maintainable** but offers no compile-time error DX beyond standard TypeScript. For deeply nested pipelines (e.g., `match().field().group().set().accumulator()`), constraint errors may be cryptic. ArkType's error message encoding would be more informative.
 
@@ -210,11 +214,13 @@ Valibot **does not employ**:
 ## Technical Summary
 
 **Strengths:**
+
 - Clean, maintainable overload pattern (22 arities cover 90% of use cases)
 - Zero runtime cost for type tracking (phantom properties)
 - Inference utilities are elegant and extensible
 
 **Weaknesses:**
+
 - Generic TypeScript errors ("type X is not assignable to Y") lack domain context
 - No positional error information (which step failed, why)
 - State machine approach (T8) would enable richer diagnostics for complex chains
