@@ -323,12 +323,18 @@ export type DateExpression<Schema extends Document> =
   | ToDateExpression<Schema>;
 
 /**
- * String expression operands - strings and field references to strings only
- * Note: Does not support nested expressions to keep it simple
+ * String expression operands — strings and field references to strings only.
+ * Does not support nested expressions to keep things simple. The branded
+ * `PipeSafeError` arm surfaces in IDE hovers when a non-string operand is
+ * passed (e.g. a numeric field reference) instead of degrading silently.
  */
-type StringOperand<Schema extends Document> =
+type StringOperandFor<Schema extends Document, Op extends string> =
   | string
-  | FieldReferencesThatInferTo<Schema, string>;
+  | FieldReferencesThatInferTo<Schema, string>
+  | PipeSafeError<
+      `Operator '${Op}' requires a string operand (string literal or field reference to a string)`,
+      Schema
+    >;
 
 /**
  * $concat expression - concatenates strings together
@@ -337,7 +343,7 @@ type StringOperand<Schema extends Document> =
  * Returns: string
  */
 export type ConcatExpression<Schema extends Document> = {
-  $concat: StringOperand<Schema>[];
+  $concat: StringOperandFor<Schema, "$concat">[];
 };
 
 /**

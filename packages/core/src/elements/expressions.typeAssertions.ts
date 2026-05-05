@@ -6,6 +6,7 @@ import type {
   MultiplyExpression,
   DivideExpression,
   ModExpression,
+  ConcatExpression,
 } from "./expressions";
 
 /**
@@ -109,6 +110,33 @@ type _Assert_AddAcceptsNumericRef = Assert<
   Equal<"$count" extends AddOperandElement<ArithSchema> ? true : false, true>
 >;
 
+// ----------------------------------------------------------------------------
+// Phase C2 — $concat string operand
+// ----------------------------------------------------------------------------
+
+type ConcatOperandElement<S extends Document> =
+  ConcatExpression<S>["$concat"][number];
+
+// $concat operand element must include the brand for non-string operands.
+type _Concat_Brand = Extract<
+  ConcatOperandElement<ArithSchema>,
+  PipeSafeError<string, unknown>
+>;
+type _Assert_ConcatBrand = Assert<
+  AssertPipeSafeError<
+    _Concat_Brand,
+    "Operator '$concat' requires a string operand (string literal or field reference to a string)"
+  >
+>;
+
+// Positive sweeps for $concat.
+type _Assert_ConcatAcceptsLiteral = Assert<
+  Equal<"hi" extends ConcatOperandElement<ArithSchema> ? true : false, true>
+>;
+type _Assert_ConcatAcceptsStringRef = Assert<
+  Equal<"$name" extends ConcatOperandElement<ArithSchema> ? true : false, true>
+>;
+
 export type {
   _Assert_AddBrand,
   _Assert_SubtractBrand,
@@ -118,4 +146,7 @@ export type {
   _Assert_ModBrand,
   _Assert_AddAcceptsNumber,
   _Assert_AddAcceptsNumericRef,
+  _Assert_ConcatBrand,
+  _Assert_ConcatAcceptsLiteral,
+  _Assert_ConcatAcceptsStringRef,
 };
