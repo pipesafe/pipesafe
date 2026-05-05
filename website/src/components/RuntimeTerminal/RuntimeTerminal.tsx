@@ -45,7 +45,7 @@ export default function RuntimeTerminal({
         <MongoString>'orders'</MongoString>){"\n"}
         {"\n"}
         <MongoKeyword>const</MongoKeyword>{" "}
-        <TypeTooltip content="const largeOrderData: any">
+        <TypeTooltip content="const largeOrderData: Document[]">
           <MongoField>largeOrderData</MongoField>
         </TypeTooltip>{" "}
         = <MongoField>orders</MongoField>.<MongoKeyword>aggregate</MongoKeyword>
