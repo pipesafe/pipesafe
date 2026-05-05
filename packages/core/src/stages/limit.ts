@@ -1,7 +1,11 @@
-import { Document } from "../utils/core";
+import { Document, PassThrough } from "../utils/core";
 
 /**
  * `$limit` is a passthrough stage: it does not change the document schema,
- * only the number of documents flowing through the pipeline.
+ * only the number of documents flowing through the pipeline. PassThrough
+ * additionally forwards a branded `PipeSafeError` schema unchanged.
  */
-export type ResolveLimitOutput<Schema extends Document> = Schema;
+export type ResolveLimitOutput<Schema extends Document> = PassThrough<
+  Schema,
+  Schema
+>;

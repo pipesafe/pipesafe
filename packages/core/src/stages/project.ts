@@ -1,5 +1,6 @@
 import {
   Document,
+  PassThrough,
   Prettify,
   ExpandDottedKey,
   UnionToIntersection,
@@ -243,9 +244,11 @@ type ResolveExclusionMode<
 >;
 
 /**
- * Resolves the output schema type for a $project stage
+ * Resolves the output schema type for a $project stage. PassThrough forwards
+ * a branded `PipeSafeError` Schema unchanged so upstream errors short-circuit.
  */
-export type ResolveProjectOutput<Query, Schema extends Document> =
+export type ResolveProjectOutput<Query, Schema extends Document> = PassThrough<
+  Schema,
   Query extends ProjectQuery<Schema> ?
     HasInclusions<Query> extends true ?
       // Inclusion mode
@@ -255,4 +258,5 @@ export type ResolveProjectOutput<Query, Schema extends Document> =
       ResolveExclusionMode<Schema, Query>
     : // Default: inclusion mode (when only field references or nested objects)
       ResolveInclusionMode<Schema, Query>
-  : never;
+  : never
+>;

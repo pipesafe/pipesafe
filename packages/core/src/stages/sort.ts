@@ -1,5 +1,5 @@
 import { FieldSelector } from "../elements/fieldSelector";
-import { Document } from "../utils/core";
+import { Document, PassThrough } from "../utils/core";
 
 export type SortDirection = 1 | -1;
 
@@ -14,4 +14,7 @@ export type SortQuery<Schema extends Document> = {
   [key: string]: SortValue;
 };
 
-export type ResolveSortOutput<Schema extends Document> = Schema;
+export type ResolveSortOutput<Schema extends Document> = PassThrough<
+  Schema,
+  Schema
+>;

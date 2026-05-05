@@ -1,4 +1,4 @@
-import { Document } from "../utils/core";
+import { Document, PassThrough } from "../utils/core";
 
 /**
  * Options for `$sample`. Mirrors the MongoDB shape so values can be
@@ -8,6 +8,10 @@ export type SampleQuery = { size: number };
 
 /**
  * `$sample` is a passthrough stage: it randomly selects `size` documents
- * but does not change the document schema.
+ * but does not change the document schema. PassThrough additionally forwards
+ * a branded `PipeSafeError` schema unchanged.
  */
-export type ResolveSampleOutput<Schema extends Document> = Schema;
+export type ResolveSampleOutput<Schema extends Document> = PassThrough<
+  Schema,
+  Schema
+>;

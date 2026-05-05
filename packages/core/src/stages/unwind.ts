@@ -1,4 +1,4 @@
-import { Document, Prettify, WithoutDollar } from "../utils/core";
+import { Document, PassThrough, Prettify, WithoutDollar } from "../utils/core";
 import { FieldReferencesThatInferTo } from "../elements/fieldReference";
 
 export type UnwindPath<Schema extends Document> = FieldReferencesThatInferTo<
@@ -46,7 +46,8 @@ export type ResolveUnwindOutput<
   Schema extends Document,
   Path extends string,
   IndexField extends string = never,
-> =
+> = PassThrough<
+  Schema,
   Schema extends unknown ?
     Prettify<
       {
@@ -54,7 +55,8 @@ export type ResolveUnwindOutput<
         : Schema[K];
       } & ([IndexField] extends [never] ? {} : { [K in IndexField]: number })
     >
-  : never;
+  : never
+>;
 
 /**
  * Helper to extract path from unwind query (string or options object)

@@ -4,7 +4,7 @@ import {
 } from "../elements/fieldReference";
 import { Expression } from "../elements/expressions";
 import { AnyLiteral } from "../elements/literals";
-import { Document, Prettify } from "../utils/core";
+import { Document, PassThrough, Prettify } from "../utils/core";
 
 /**
  * $replaceRoot stage query type
@@ -28,7 +28,12 @@ export type ReplaceRootQuery<Schema extends Document> = {
  * Resolves the output schema type for a $replaceRoot stage
  * The output is whatever newRoot resolves to
  */
-export type ResolveReplaceRootOutput<Query, Schema extends Document> =
+export type ResolveReplaceRootOutput<
+  Query,
+  Schema extends Document,
+> = PassThrough<
+  Schema,
   Query extends ReplaceRootQuery<Schema> ?
     Prettify<InferNestedFieldReference<Schema, Query["newRoot"]>>
-  : never;
+  : never
+>;

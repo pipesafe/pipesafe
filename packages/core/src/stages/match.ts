@@ -1,6 +1,7 @@
 import {
   Document,
   DollarPrefixed,
+  PassThrough,
   PipeSafeError,
   Prettify,
 } from "../utils/core";
@@ -164,6 +165,11 @@ export type ExtractQueryFields<Q> = Omit<
 
 // Main type resolution with proper narrowing
 // Takes the schema explicitly since inference from MatchQuery is unreliable
-export type ResolveMatchOutput<Query, Schema extends Document> =
+// PassThrough short-circuits when Schema is already a PipeSafeError (e.g. an
+// earlier stage produced one). The match stage becomes a no-op so the user
+// sees the original upstream error verbatim instead of a fresh constraint mismatch.
+export type ResolveMatchOutput<Query, Schema extends Document> = PassThrough<
+  Schema,
   Query extends RawMatchQuery<Schema> ? Prettify<FilterUnion<Schema, Query>>
-  : /* Complex operators ($and/$or/$nor) - keep original */ Schema;
+  : /* Complex operators ($and/$or/$nor) - keep original */ Schema
+>;

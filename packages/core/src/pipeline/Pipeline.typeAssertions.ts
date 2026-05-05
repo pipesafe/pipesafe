@@ -133,3 +133,90 @@ export {
   _chainedSets,
   _projectThenMatch,
 };
+
+// ============================================================================
+// Phase 4 — Short-circuit propagation
+// ============================================================================
+// Each `Resolve<Stage>Output<Schema, ...>` is wrapped in `PassThrough<Schema,
+// ...>`. When Schema is already a branded `PipeSafeError`, every stage is a
+// no-op so the user sees the original upstream error, not a fresh constraint
+// failure piled on top.
+
+import { Assert, Equal } from "../utils/tests";
+import { PipeSafeError } from "../utils/core";
+import { ResolveMatchOutput } from "../stages/match";
+import { ResolveSetOutput } from "../stages/set";
+import { ResolveProjectOutput } from "../stages/project";
+import { ResolveUnwindOutput } from "../stages/unwind";
+import { ResolveReplaceRootOutput } from "../stages/replaceRoot";
+import { ResolveSkipOutput } from "../stages/skip";
+import { ResolveLimitOutput } from "../stages/limit";
+import { ResolveSortOutput } from "../stages/sort";
+import { ResolveSampleOutput } from "../stages/sample";
+import { ResolveUnsetOutput } from "../stages/unset";
+import { ResolveGroupOutput } from "../stages/group";
+import { ResolveLookupOutput } from "../stages/lookup";
+import { ResolveUnionWithOutput } from "../stages/unionWith";
+import { ResolveFacetOutput } from "../stages/facet";
+
+type _Err = PipeSafeError<"upstream", { fullPath: "user.naem" }>;
+
+// Each stage's Resolve type, fed an error schema, produces the same error.
+type _MatchPassthrough = Assert<
+  Equal<ResolveMatchOutput<{ x: 1 }, _Err>, _Err>
+>;
+type _SetPassthrough = Assert<Equal<ResolveSetOutput<{ x: 1 }, _Err>, _Err>>;
+type _ProjectPassthrough = Assert<
+  Equal<ResolveProjectOutput<{ x: 1 }, _Err>, _Err>
+>;
+type _UnwindPassthrough = Assert<
+  Equal<ResolveUnwindOutput<_Err, "x", never>, _Err>
+>;
+type _ReplaceRootPassthrough = Assert<
+  Equal<ResolveReplaceRootOutput<{ newRoot: "$x" }, _Err>, _Err>
+>;
+type _SkipPassthrough = Assert<Equal<ResolveSkipOutput<_Err>, _Err>>;
+type _LimitPassthrough = Assert<Equal<ResolveLimitOutput<_Err>, _Err>>;
+type _SortPassthrough = Assert<Equal<ResolveSortOutput<_Err>, _Err>>;
+type _SamplePassthrough = Assert<Equal<ResolveSampleOutput<_Err>, _Err>>;
+type _UnsetPassthrough = Assert<Equal<ResolveUnsetOutput<"x", _Err>, _Err>>;
+type _GroupPassthrough = Assert<
+  Equal<ResolveGroupOutput<_Err, { _id: null }>, _Err>
+>;
+type _LookupPassthrough = Assert<
+  Equal<ResolveLookupOutput<_Err, "joined", { id: string }>, _Err>
+>;
+type _UnionWithPassthrough = Assert<
+  Equal<ResolveUnionWithOutput<_Err, { id: string }>, _Err>
+>;
+type _FacetPassthrough = Assert<Equal<ResolveFacetOutput<_Err, {}>, _Err>>;
+
+// Distributive case: Schema = Doc | PipeSafeError → output keeps the error
+// branch and computes for the doc branch. Each branch is independent.
+type _DocOrErr = { x: number } | _Err;
+type _MatchDistributes = Assert<
+  Equal<ResolveMatchOutput<{ x: 1 }, _DocOrErr>, { x: number } | _Err>
+>;
+
+// Negative: a fully valid schema does NOT produce a brand at the leaf.
+type _ValidNoLeak = ResolveMatchOutput<{ x: 1 }, { x: number; y: string }>;
+type _ValidNoLeakAssert = Assert<Equal<_ValidNoLeak, { x: number; y: string }>>;
+
+export type {
+  _MatchPassthrough,
+  _SetPassthrough,
+  _ProjectPassthrough,
+  _UnwindPassthrough,
+  _ReplaceRootPassthrough,
+  _SkipPassthrough,
+  _LimitPassthrough,
+  _SortPassthrough,
+  _SamplePassthrough,
+  _UnsetPassthrough,
+  _GroupPassthrough,
+  _LookupPassthrough,
+  _UnionWithPassthrough,
+  _FacetPassthrough,
+  _MatchDistributes,
+  _ValidNoLeakAssert,
+};

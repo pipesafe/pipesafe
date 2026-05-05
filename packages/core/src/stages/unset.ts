@@ -1,5 +1,5 @@
 import { FieldPath } from "../elements/fieldReference";
-import { Document, Prettify } from "../utils/core";
+import { Document, PassThrough, Prettify } from "../utils/core";
 
 export type UnsetQuery<Schema extends Document> =
   | FieldPath<Schema>
@@ -219,18 +219,21 @@ type PreserveOptionality<Schema extends Document, Result extends Document> = {
   : never]?: Result[K];
 };
 
-export type ResolveUnsetOutput<Query, Schema extends Document> = Prettify<
-  Query extends UnsetQuery<Schema> ?
-    Query extends string ?
-      // Single field path
-      RemoveFieldPath<Schema, Query>
-    : Query extends readonly string[] ?
-      // Array of field paths
-      AllTopLevelPaths<Query> extends true ?
-        // All top-level - batched Omit result
-        RemoveFieldPaths<Schema, Query>
-      : // Has nested paths - PreserveOptionality needed to flatten intersection
-        PreserveOptionality<Schema, RemoveFieldPaths<Schema, Query>>
+export type ResolveUnsetOutput<Query, Schema extends Document> = PassThrough<
+  Schema,
+  Prettify<
+    Query extends UnsetQuery<Schema> ?
+      Query extends string ?
+        // Single field path
+        RemoveFieldPath<Schema, Query>
+      : Query extends readonly string[] ?
+        // Array of field paths
+        AllTopLevelPaths<Query> extends true ?
+          // All top-level - batched Omit result
+          RemoveFieldPaths<Schema, Query>
+        : // Has nested paths - PreserveOptionality needed to flatten intersection
+          PreserveOptionality<Schema, RemoveFieldPaths<Schema, Query>>
+      : never
     : never
-  : never
+  >
 >;
