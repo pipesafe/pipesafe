@@ -61,9 +61,8 @@ const _project_unknown = new Pipeline<User>().project({
 
 // replaceRoot — newRoot referencing a missing field should fail.
 // @ts-expect-error  '$missing' is not a valid field reference
-const _replaceRoot_bad = new Pipeline<User>().replaceRoot({
-  newRoot: "$missing",
-});
+// prettier-ignore
+const _replaceRoot_bad = new Pipeline<User>().replaceRoot({ newRoot: "$missing" });
 
 // unwind — $unwind on a scalar field already errors with a structural
 // message; keep it as a positive regression check.
