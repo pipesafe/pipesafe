@@ -83,6 +83,33 @@ type UnionSchema =
 type UnionSortOutput = ResolveSortOutput<UnionSchema>;
 type UnionSortTest = Assert<Equal<UnionSortOutput, UnionSchema>>;
 
+// ============================================================================
+// Phase F — Strict field selector
+// ============================================================================
+// `SortQuery<Schema>` is now strictly typed: arbitrary string keys (typos)
+// are rejected at compile time. Previously a permissive
+// `[key: string]: SortValue` index signature accepted anything, masking
+// typos like `pipeline.sort({ naem: 1 })` against a schema with `name`.
+
+type StrictSortSchema = { name: string; age: number };
+
+// keyof SortQuery must equal exactly the schema's FieldSelector keys —
+// no `string` index signature any more.
+type _SortKeys = keyof SortQuery<StrictSortSchema>;
+type _Assert_SortKeysAreFieldSelectors = Assert<
+  Equal<_SortKeys, "name" | "age">
+>;
+
+// A typo is structurally not assignable to the strict shape.
+type _Assert_TypoNotAssignable = Assert<
+  Equal<{ naem: 1 } extends SortQuery<StrictSortSchema> ? true : false, false>
+>;
+
+// Positive: a valid sort still works.
+type _Assert_ValidSort = Assert<
+  Equal<{ name: 1 } extends SortQuery<StrictSortSchema> ? true : false, true>
+>;
+
 // Export test types to prevent unused variable errors
 export type {
   SimpleSortTest,
@@ -90,4 +117,7 @@ export type {
   NestedSortTest,
   ArraySortTest,
   UnionSortTest,
+  _Assert_SortKeysAreFieldSelectors,
+  _Assert_TypoNotAssignable,
+  _Assert_ValidSort,
 };

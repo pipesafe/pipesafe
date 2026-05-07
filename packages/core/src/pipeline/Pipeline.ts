@@ -17,7 +17,7 @@ import { ResolveGraphLookupOutput } from "../stages/graphLookup";
 import { FacetQuery, ResolveFacetOutput } from "../stages/facet";
 import { GetFieldType } from "../elements/fieldSelector";
 import { GroupQuery, ResolveGroupOutput } from "../stages/group";
-import { ProjectQuery, ResolveProjectOutput } from "../stages/project";
+import { ResolveProjectOutput, ValidateProjectQuery } from "../stages/project";
 import {
   ReplaceRootQuery,
   ResolveReplaceRootOutput,
@@ -400,8 +400,8 @@ export class Pipeline<
     ]);
   }
 
-  project<const P extends ProjectQuery<PreviousStageDocs>>(
-    $project: P
+  project<const P>(
+    $project: ValidateProjectQuery<PreviousStageDocs, P>
   ): Pipeline<
     StartingDocs,
     ResolveProjectOutput<P, PreviousStageDocs>,
@@ -431,8 +431,8 @@ export class Pipeline<
    * Sort documents by field values (ascending 1 or descending -1)
    * @example .sort({ createdAt: -1, name: 1 })
    */
-  sort<const S extends SortQuery<PreviousStageDocs>>(
-    $sort: S
+  sort(
+    $sort: SortQuery<PreviousStageDocs>
   ): Pipeline<StartingDocs, PreviousStageDocs, Mode, UsedStages | "$sort"> {
     return this._chain<PreviousStageDocs, "$sort">([{ $sort }]);
   }

@@ -1,5 +1,6 @@
-import { Assert, Equal } from "../utils/tests";
-import { ResolveGroupOutput } from "./group";
+import { Assert, AssertPipeSafeError, Equal } from "../utils/tests";
+import type { Document, PipeSafeError } from "../utils/core";
+import { AccumulatorFunction, ResolveGroupOutput } from "./group";
 
 /**
  * Type Resolution Behaviors for $group Stage:
@@ -668,4 +669,137 @@ export type {
   ArithmeticIdTest,
   NestedExpressionIdTest,
   FirstLastTest,
+};
+
+// ============================================================================
+// Phase 1 — Prettify wrapping on ResolveGroupOutput's _id shape
+// ============================================================================
+// When `_id` is a multi-field reference object, the resulting `_id` shape
+// must hover as a flat object, not as a chain of mapped-type applications.
+
+type PrettifyGroupSchema = {
+  category: string;
+  region: string;
+  total: number;
+};
+type PrettifyGroupQuery = {
+  _id: { category: "$category"; region: "$region" };
+  total: { $sum: "$total" };
+};
+type PrettifyGroupResult = ResolveGroupOutput<
+  PrettifyGroupSchema,
+  PrettifyGroupQuery
+>;
+type PrettifyGroupExpected = {
+  _id: { category: string; region: string };
+  total: number;
+};
+type PrettifyGroupTest = Assert<
+  Equal<PrettifyGroupResult, PrettifyGroupExpected>
+>;
+
+export type { PrettifyGroupTest };
+
+// ============================================================================
+// Phase A — Typed accumulator operand errors
+// ============================================================================
+// `NumericAccumulatorOperand<Schema, Op>` and `MinMaxAccumulatorOperand`
+// add a branded `PipeSafeError` arm to the operand union so wrong field types
+// (e.g. $sum on a string field) hover with a literal message instead of
+// surfacing as a structural-mismatch wall.
+
+type AccumulatorTestSchema = {
+  name: string;
+  age: number;
+  joinedAt: Date;
+  tags: string[];
+};
+
+// Extract the operand type for a specific accumulator from AccumulatorFunction.
+type SumOperand<Schema extends Document> = Extract<
+  AccumulatorFunction<Schema>,
+  { $sum: any }
+>["$sum"];
+type AvgOperand<Schema extends Document> = Extract<
+  AccumulatorFunction<Schema>,
+  { $avg: any }
+>["$avg"];
+type MinOperand<Schema extends Document> = Extract<
+  AccumulatorFunction<Schema>,
+  { $min: any }
+>["$min"];
+type MaxOperand<Schema extends Document> = Extract<
+  AccumulatorFunction<Schema>,
+  { $max: any }
+>["$max"];
+
+// $sum operand union must include the numeric-only brand for the schema.
+type _SumOperand_HasBrand = SumOperand<AccumulatorTestSchema>;
+type _Assert_SumBrand = Assert<
+  AssertPipeSafeError<
+    Extract<_SumOperand_HasBrand, PipeSafeError<string>>,
+    "Accumulator '$sum' requires a numeric operand."
+  >
+>;
+
+// $avg carries the same family of brand with a different operator name.
+type _AvgOperand_HasBrand = AvgOperand<AccumulatorTestSchema>;
+type _Assert_AvgBrand = Assert<
+  AssertPipeSafeError<
+    Extract<_AvgOperand_HasBrand, PipeSafeError<string>>,
+    "Accumulator '$avg' requires a numeric operand."
+  >
+>;
+
+// $min/$max permit Date and so carry the wider message.
+type _MinOperand_HasBrand = MinOperand<AccumulatorTestSchema>;
+type _Assert_MinBrand = Assert<
+  AssertPipeSafeError<
+    Extract<_MinOperand_HasBrand, PipeSafeError<string>>,
+    "Accumulator '$min' requires a numeric or date operand."
+  >
+>;
+
+type _MaxOperand_HasBrand = MaxOperand<AccumulatorTestSchema>;
+type _Assert_MaxBrand = Assert<
+  AssertPipeSafeError<
+    Extract<_MaxOperand_HasBrand, PipeSafeError<string>>,
+    "Accumulator '$max' requires a numeric or date operand."
+  >
+>;
+
+// Positive sweep: a valid numeric ref still satisfies the operand. The
+// resolved group output for `{ $sum: '$age' }` should produce `{ total: number }`.
+type _SumValidQuery = {
+  _id: "$name";
+  total: { $sum: "$age" };
+};
+type _SumValidResult = ResolveGroupOutput<
+  AccumulatorTestSchema,
+  _SumValidQuery
+>;
+type _Assert_SumValid = Assert<
+  Equal<_SumValidResult, { _id: string; total: number }>
+>;
+
+// Positive sweep: `$min` on a Date field still resolves correctly.
+type _MinValidQuery = {
+  _id: "$name";
+  earliest: { $min: "$joinedAt" };
+};
+type _MinValidResult = ResolveGroupOutput<
+  AccumulatorTestSchema,
+  _MinValidQuery
+>;
+type _Assert_MinValid = Assert<
+  Equal<_MinValidResult, { _id: string; earliest: Date }>
+>;
+
+export type {
+  _Assert_SumBrand,
+  _Assert_AvgBrand,
+  _Assert_MinBrand,
+  _Assert_MaxBrand,
+  _Assert_SumValid,
+  _Assert_MinValid,
 };

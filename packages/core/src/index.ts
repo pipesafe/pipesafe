@@ -22,7 +22,13 @@ export type {
 } from "./pipeline/Pipeline";
 export type { InferCollectionType } from "./collection/Collection";
 export type { Source, InferSourceType } from "./source/Source";
-export type { Document, Prettify } from "./utils/core";
+export type {
+  Document,
+  Prettify,
+  PipeSafeError,
+  IsPipeSafeError,
+  PassThrough,
+} from "./utils/core";
 
 // Re-export commonly used types from elements for advanced usage
 export type {
@@ -54,6 +60,7 @@ export type {
   IsAssignable,
   NotImplemented,
   ExpectAssertFailure,
+  AssertPipeSafeError,
 } from "./utils/tests";
 export { expectType, assertTypeEqual } from "./utils/tests";
 

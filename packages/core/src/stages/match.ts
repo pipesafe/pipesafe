@@ -1,8 +1,9 @@
 import {
   Document,
-  UnionToIntersection,
-  IsPlainObject,
   DollarPrefixed,
+  PassThrough,
+  PipeSafeError,
+  Prettify,
 } from "../utils/core";
 import {
   FieldSelector,
@@ -23,16 +24,38 @@ type ContinuousMatchers = "$gte" | "$lte" | "$gt" | "$lt";
 type BSONTypeAlias = keyof typeof BSONType;
 type SomeBSONType = BSONType | BSONTypeAlias;
 
-type MergeUnion<T> =
-  IsPlainObject<T> extends true ?
-    {
-      [K in keyof UnionToIntersection<T>]: MergeUnion<
-        UnionToIntersection<T>[K]
-      >;
-    }
-  : T;
+// ---------------------------------------------------------------------------
+// Operand helpers — return the valid operand type for a compatible field
+// type, or a `PipeSafeError` whose literal message names the operator and
+// the constraint the field violates.
+//
+// Each conditional uses `[T] extends [...]` (single-element tuple wrapping)
+// to suppress distribution over a union T — for a mixed-typed field the
+// whole field is rejected with one error rather than producing a union of
+// per-branch outcomes.
+// ---------------------------------------------------------------------------
 
-export type ComparatorMatchers<T extends unknown> = MergeUnion<
+type NumericOperand<T, Op extends string> =
+  [T] extends [number | Date] ? T
+  : PipeSafeError<`Operator '${Op}' requires a numeric or date field.`>;
+
+type SizeOperand<T> =
+  [T] extends [unknown[]] ? number
+  : PipeSafeError<`Operator '$size' requires an array field.`>;
+
+type ArrayValueOperand<T, Op extends string> =
+  [T] extends [(infer U)[]] ? U[]
+  : PipeSafeError<`Operator '${Op}' requires an array field.`>;
+
+type ArrayElementOperand<T, Op extends string> =
+  [T] extends [(infer U)[]] ? U
+  : PipeSafeError<`Operator '${Op}' requires an array field.`>;
+
+type RegexOperand<T> =
+  [T] extends [string] ? RegExp | string
+  : PipeSafeError<`Operator '$regex' requires a string field.`>;
+
+export type ComparatorMatchers<T extends unknown> = Prettify<
   /* Always */ {
     $exists?: boolean;
     $type?: SomeBSONType | SomeBSONType[];
@@ -40,19 +63,25 @@ export type ComparatorMatchers<T extends unknown> = MergeUnion<
     [m in EqualityMatchers]?: T;
   } & {
     [m in InMatchers]?: T[];
-  } & /* Numbers */ (T extends number ? { [m in ContinuousMatchers]?: number }
-    : {}) &
-    /* Dates */ (T extends Date ? { [m in ContinuousMatchers]?: Date } : {}) &
-    /* Arrays */ (T extends (infer U)[] ?
-      | { $size?: number }
-      | { [m in ArrayOnlyMatcher]?: U[] }
-      | { [m in ElementMatcher]?: U }
-    : {}) &
-    /* String */ (T extends string ? { $regex?: unknown } : {})
+  } & {
+    [m in ContinuousMatchers]?: NumericOperand<T, m>;
+  } & {
+    $size?: SizeOperand<T>;
+  } & {
+    [m in ArrayOnlyMatcher]?: ArrayValueOperand<T, m>;
+  } & {
+    [m in ElementMatcher]?: ArrayElementOperand<T, m>;
+  } & {
+    $regex?: RegexOperand<T>;
+  }
 >;
 
+// `[T] extends [(infer U)[]]` rather than naked `T extends ...` — the
+// non-distributive form keeps a union-typed field intact when computing
+// the brand's `Ctx`, so a typo against `status: 'pending' | 'shipped' |
+// 'delivered'` hovers with the full union rather than just one branch.
 export type RawMatchersForType<T extends unknown> =
-  T extends (infer U)[] ?
+  [T] extends [(infer U)[]] ?
     ComparatorMatchers<T> | RawMatchersForType<U> // Element matcher (passthrough)
   : ComparatorMatchers<T>;
 
@@ -142,6 +171,11 @@ export type ExtractQueryFields<Q> = Omit<
 
 // Main type resolution with proper narrowing
 // Takes the schema explicitly since inference from MatchQuery is unreliable
-export type ResolveMatchOutput<Query, Schema extends Document> =
-  Query extends RawMatchQuery<Schema> ? FilterUnion<Schema, Query>
-  : /* Complex operators ($and/$or/$nor) - keep original */ Schema;
+// PassThrough short-circuits when Schema is already a PipeSafeError (e.g. an
+// earlier stage produced one). The match stage becomes a no-op so the user
+// sees the original upstream error verbatim instead of a fresh constraint mismatch.
+export type ResolveMatchOutput<Query, Schema extends Document> = PassThrough<
+  Schema,
+  Query extends RawMatchQuery<Schema> ? Prettify<FilterUnion<Schema, Query>>
+  : /* Complex operators ($and/$or/$nor) - keep original */ Schema
+>;

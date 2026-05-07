@@ -1,5 +1,5 @@
-import { Assert, Equal } from "../utils/tests";
-import { ResolveMatchOutput } from "./match";
+import { Assert, AssertPipeSafeError, Equal } from "../utils/tests";
+import { ComparatorMatchers, ResolveMatchOutput } from "./match";
 
 /**
  * Type Resolution Behaviors for $match Stage:
@@ -445,4 +445,130 @@ export type {
   ConferenceTest,
   NestedUnionTest,
   ElectronicsTest,
+};
+
+// ============================================================================
+// Phase 1 — Prettify wrapping on ResolveMatchOutput
+// ============================================================================
+// Verifies that a multi-key match query against a multi-key schema resolves to
+// a flat object shape (no nested intersection chains in hover).
+
+type PrettifyMatchSchema = {
+  a: number;
+  b: string;
+  c: boolean;
+  d: { nested: number };
+};
+type PrettifyMatchQuery = { a: 1; b: "x" };
+type PrettifyMatchResult = ResolveMatchOutput<
+  PrettifyMatchQuery,
+  PrettifyMatchSchema
+>;
+type PrettifyMatchExpected = {
+  a: number;
+  b: string;
+  c: boolean;
+  d: { nested: number };
+};
+type PrettifyMatchTest = Assert<
+  Equal<PrettifyMatchResult, PrettifyMatchExpected>
+>;
+
+export type { PrettifyMatchTest };
+
+// ============================================================================
+// Phase 2 — Typed operator errors (Pilot A)
+// ============================================================================
+// `ComparatorMatchers<T>` now returns `PipeSafeError` in operand slot positions
+// when the operator is incompatible with the field type. The literal message
+// surfaces in IDE hovers when a user assigns the wrong operand type.
+
+// $gte on string[] — incompatible (numeric/date only). Operand type must be
+// a `PipeSafeError` whose message names the operator and the field type.
+type GteOnStringArrayOperand = NonNullable<
+  ComparatorMatchers<string[]>["$gte"]
+>;
+type _GteOnStringArrayMsg = Assert<
+  AssertPipeSafeError<
+    GteOnStringArrayOperand,
+    "Operator '$gte' requires a numeric or date field."
+  >
+>;
+
+// $gte on Date — compatible. Operand type must be Date (positive case).
+type GteOnDateOperand = NonNullable<ComparatorMatchers<Date>["$gte"]>;
+type _GteOnDateValid = Assert<Equal<GteOnDateOperand, Date>>;
+
+// $gte on number — compatible. Operand type must be number (positive case).
+type GteOnNumberOperand = NonNullable<ComparatorMatchers<number>["$gte"]>;
+type _GteOnNumberValid = Assert<Equal<GteOnNumberOperand, number>>;
+
+// $regex on number — incompatible (string only).
+type RegexOnNumberOperand = NonNullable<ComparatorMatchers<number>["$regex"]>;
+type _RegexOnNumberMsg = Assert<
+  AssertPipeSafeError<
+    RegexOnNumberOperand,
+    "Operator '$regex' requires a string field."
+  >
+>;
+
+// $regex on string — compatible. Operand may be RegExp or string.
+type RegexOnStringOperand = NonNullable<ComparatorMatchers<string>["$regex"]>;
+type _RegexOnStringValid = Assert<Equal<RegexOnStringOperand, RegExp | string>>;
+
+// $size on string — incompatible (array only).
+type SizeOnStringOperand = NonNullable<ComparatorMatchers<string>["$size"]>;
+type _SizeOnStringMsg = Assert<
+  AssertPipeSafeError<
+    SizeOnStringOperand,
+    "Operator '$size' requires an array field."
+  >
+>;
+
+// $size on string[] — compatible. Operand is number.
+type SizeOnArrayOperand = NonNullable<ComparatorMatchers<string[]>["$size"]>;
+type _SizeOnArrayValid = Assert<Equal<SizeOnArrayOperand, number>>;
+
+// $all on string — incompatible.
+type AllOnStringOperand = NonNullable<ComparatorMatchers<string>["$all"]>;
+type _AllOnStringMsg = Assert<
+  AssertPipeSafeError<
+    AllOnStringOperand,
+    "Operator '$all' requires an array field."
+  >
+>;
+
+// $all on string[] — compatible. Operand is string[].
+type AllOnArrayOperand = NonNullable<ComparatorMatchers<string[]>["$all"]>;
+type _AllOnArrayValid = Assert<Equal<AllOnArrayOperand, string[]>>;
+
+// $elemMatch on number — incompatible.
+type ElemMatchOnNumberOperand = NonNullable<
+  ComparatorMatchers<number>["$elemMatch"]
+>;
+type _ElemMatchOnNumberMsg = Assert<
+  AssertPipeSafeError<
+    ElemMatchOnNumberOperand,
+    "Operator '$elemMatch' requires an array field."
+  >
+>;
+
+// $elemMatch on number[] — compatible. Operand is the element type (number).
+type ElemMatchOnArrayOperand = NonNullable<
+  ComparatorMatchers<number[]>["$elemMatch"]
+>;
+type _ElemMatchOnArrayValid = Assert<Equal<ElemMatchOnArrayOperand, number>>;
+
+export type {
+  _GteOnStringArrayMsg,
+  _GteOnDateValid,
+  _GteOnNumberValid,
+  _RegexOnNumberMsg,
+  _RegexOnStringValid,
+  _SizeOnStringMsg,
+  _SizeOnArrayValid,
+  _AllOnStringMsg,
+  _AllOnArrayValid,
+  _ElemMatchOnNumberMsg,
+  _ElemMatchOnArrayValid,
 };

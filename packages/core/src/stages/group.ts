@@ -8,95 +8,113 @@ import {
   ConditionalExpression,
   ArithmeticExpression,
 } from "../elements/expressions";
-import { Document, Prettify } from "../utils/core";
+import { Document, PassThrough, PipeSafeError, Prettify } from "../utils/core";
 
 /**
- * Numeric operand for aggregators like $sum, $avg
- * Accepts: numbers, field references to numbers, arithmetic expressions, conditional expressions
+ * Numeric operand for accumulators like $sum, $avg.
+ *
+ * Accepts: numbers, field references to numbers, arithmetic expressions,
+ * conditional expressions. Per-operator union arm includes a branded
+ * `PipeSafeError` that surfaces in IDE hovers when the operand is
+ * incompatible (e.g. a string field reference passed to $sum) — instead of
+ * the previous structural-mismatch wall.
  */
-type NumericAggregatorOperand<Schema extends Document> =
+type NumericAccumulatorOperand<Schema extends Document, Op extends string> =
   | LiteralOrFieldReferenceInferringTo<Schema, number>
   | ArithmeticExpression<Schema>
-  | ConditionalExpression<Schema>;
+  | ConditionalExpression<Schema>
+  | PipeSafeError<`Accumulator '${Op}' requires a numeric operand.`>;
 
 /**
- * Operand for $min/$max that can be numbers or dates
- * Accepts: numbers/dates, field references, arithmetic expressions, conditional expressions
+ * Operand for $min/$max that can be numbers or dates.
+ * Same brand pattern as NumericAccumulatorOperand but allows Date too.
  */
-type MinMaxAggregatorOperand<Schema extends Document> =
+type MinMaxAccumulatorOperand<Schema extends Document, Op extends string> =
   | LiteralOrFieldReferenceInferringTo<Schema, number>
   | LiteralOrFieldReferenceInferringTo<Schema, Date>
   | ArithmeticExpression<Schema>
-  | ConditionalExpression<Schema>;
+  | ConditionalExpression<Schema>
+  | PipeSafeError<`Accumulator '${Op}' requires a numeric or date operand.`>;
 
 /**
- * Flexible operand for aggregators like $push, $first, $last
- * Accepts: any literal, field reference, or expression
+ * Flexible operand for accumulators like $push, $first, $last.
+ * Intentionally accepts any literal/field-ref/expression — wrapping with a
+ * brand would defeat the purpose.
  */
-type FlexibleAggregatorOperand<Schema extends Document> =
+type FlexibleAccumulatorOperand<Schema extends Document> =
   | LiteralOrFieldReferenceInferringTo<Schema, any>
   | Expression<Schema>;
 
-export type AggregatorFunction<Schema extends Document> =
+export type AccumulatorFunction<Schema extends Document> =
   | {
-      $sum: NumericAggregatorOperand<Schema>;
+      $sum: NumericAccumulatorOperand<Schema, "$sum">;
     }
   | {
-      $avg: NumericAggregatorOperand<Schema>;
+      $avg: NumericAccumulatorOperand<Schema, "$avg">;
     }
   | {
-      $min: MinMaxAggregatorOperand<Schema>;
+      $min: MinMaxAccumulatorOperand<Schema, "$min">;
     }
   | {
-      $max: MinMaxAggregatorOperand<Schema>;
+      $max: MinMaxAccumulatorOperand<Schema, "$max">;
     }
   | {
       $count: {};
     }
   | {
-      $push: FlexibleAggregatorOperand<Schema>;
+      $push: FlexibleAccumulatorOperand<Schema>;
     }
   | {
-      $addToSet: FlexibleAggregatorOperand<Schema>;
+      $addToSet: FlexibleAccumulatorOperand<Schema>;
     }
   | {
-      $first: FlexibleAggregatorOperand<Schema>;
+      $first: FlexibleAccumulatorOperand<Schema>;
     }
   | {
-      $last: FlexibleAggregatorOperand<Schema>;
+      $last: FlexibleAccumulatorOperand<Schema>;
     };
 
-export type ResolveAggregatorFunction<Schema extends Document, Aggregator> =
-  Aggregator extends { $sum: any } ? number
-  : Aggregator extends { $avg: any } ? number
-  : Aggregator extends { $min: infer A } ? InferNestedFieldReference<Schema, A>
-  : Aggregator extends { $max: infer A } ? InferNestedFieldReference<Schema, A>
-  : Aggregator extends { $count: any } ? number
-  : Aggregator extends { $push: infer A } ?
+export type ResolveAccumulatorFunction<Schema extends Document, Accumulator> =
+  Accumulator extends { $sum: any } ? number
+  : Accumulator extends { $avg: any } ? number
+  : Accumulator extends { $min: infer A } ? InferNestedFieldReference<Schema, A>
+  : Accumulator extends { $max: infer A } ? InferNestedFieldReference<Schema, A>
+  : Accumulator extends { $count: any } ? number
+  : Accumulator extends { $push: infer A } ?
     InferNestedFieldReference<Schema, A>[]
-  : Aggregator extends { $addToSet: infer A } ?
+  : Accumulator extends { $addToSet: infer A } ?
     InferNestedFieldReference<Schema, A>[]
-  : Aggregator extends { $first: infer A } ?
+  : Accumulator extends { $first: infer A } ?
     InferNestedFieldReference<Schema, A>
-  : Aggregator extends { $last: infer A } ? InferNestedFieldReference<Schema, A>
+  : Accumulator extends { $last: infer A } ?
+    InferNestedFieldReference<Schema, A>
   : never;
 
 export type GroupQuery<Schema extends Document> = {
   _id: AnyLiteral<Schema> | Expression<Schema> | null;
 } & {
-  [key: string]: AnyLiteral<Schema> | AggregatorFunction<Schema> | null;
+  [key: string]: AnyLiteral<Schema> | AccumulatorFunction<Schema> | null;
 };
 
 export type ResolveGroupOutput<
   StartingDocs extends Document,
   G extends GroupQuery<StartingDocs>,
-> = Prettify<
-  {
-    _id: InferNestedFieldReference<StartingDocs, G["_id"]>; // Infer out
-  } & {
-    [key in Exclude<keyof G, "_id">]: ResolveAggregatorFunction<
-      StartingDocs,
-      G[key]
-    >;
-  }
+> = PassThrough<
+  StartingDocs,
+  Prettify<
+    {
+      _id: InferNestedFieldReference<StartingDocs, G["_id"]> extends infer Id ?
+        Id extends object ?
+          Id extends Date | unknown[] ?
+            Id // Don't flatten Date/array _id (e.g. tuples from $dateToParts)
+          : Prettify<Id>
+        : Id // Primitive _id (string, number, null) — pass through
+      : never;
+    } & {
+      [key in Exclude<keyof G, "_id">]: ResolveAccumulatorFunction<
+        StartingDocs,
+        G[key]
+      >;
+    }
+  >
 >;

@@ -1,4 +1,4 @@
-import { Document, Prettify } from "../utils/core";
+import { Document, PassThrough, Prettify } from "../utils/core";
 import type {
   LookupMode,
   PipelineBuilder,
@@ -30,7 +30,10 @@ export type FacetQuery<
 export type ResolveFacetOutput<
   PreviousStageDocs extends Document,
   F extends FacetQuery<PreviousStageDocs, any>,
-> = Prettify<{
-  [K in keyof F]: F[K] extends PipelineBuilder<any, infer O, any, any> ? O[]
-  : never;
-}>;
+> = PassThrough<
+  PreviousStageDocs,
+  Prettify<{
+    [K in keyof F]: F[K] extends PipelineBuilder<any, infer O, any, any> ? O[]
+    : never;
+  }>
+>;

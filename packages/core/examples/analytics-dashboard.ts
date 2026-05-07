@@ -163,8 +163,6 @@ const devicePerformancePipeline = new Pipeline<SessionSchema>()
     totalSessions: 1,
     totalPageViews: 1,
     totalEvents: 1,
-    averageDuration: 1,
-    averagePageViews: 1,
   });
 
 type DevicePerformance = InferOutputType<typeof devicePerformancePipeline>;

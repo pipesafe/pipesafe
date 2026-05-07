@@ -8,6 +8,40 @@ export type Prettify<T> = {
   [K in keyof T]: T[K];
 } & {};
 
+/**
+ * Branded compile-time error type used to surface helpful messages in IDE
+ * hovers instead of letting invalid input degrade silently to `never`.
+ *
+ * Single-parameter brand: the literal `Msg` is the entire surface area.
+ * Embed dynamic context (path segments, key names, operator names,
+ * field-type info) directly into the message via template literals
+ * rather than carrying a separate `Ctx` — that way the hover shows
+ * just the message string, not a wide schema dump.
+ */
+export interface PipeSafeError<Msg extends string> {
+  readonly "~pipesafe.error": Msg;
+}
+
+/**
+ * Predicate that returns `true` if `T` is a `PipeSafeError`, else `false`.
+ * Used by helpers that need to short-circuit when a branded error has
+ * already surfaced upstream.
+ */
+export type IsPipeSafeError<T> = T extends PipeSafeError<string> ? true : false;
+
+/**
+ * Short-circuit primitive: if `T` is a `PipeSafeError`, returns `T` unchanged;
+ * otherwise returns `Result`. Wrap stage outputs and Pipeline method return
+ * types with `PassThrough<Schema, ...>` so once an error appears in the chain,
+ * downstream stages preserve it verbatim instead of producing fresh failures.
+ *
+ * Distributes over unions: `PassThrough<A | PipeSafeError<...>, R>` produces
+ * `R | PipeSafeError<...>` (intentional — error branches survive while valid
+ * branches still get computed).
+ */
+export type PassThrough<T, Result> =
+  T extends PipeSafeError<string> ? T : Result;
+
 export type ExpandDottedKey<Key extends string, Value> =
   Key extends `${infer Left}.${infer Rest}` ?
     { [K in Left]: ExpandDottedKey<Rest, Value> }

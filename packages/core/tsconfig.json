@@ -8,5 +8,5 @@
     "checkJs": false
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["dist", "**/*.test.ts", "**/*.typeAssertions.ts"]
+  "exclude": ["dist", "**/*.test.ts"]
 }

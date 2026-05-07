@@ -1,4 +1,10 @@
-import { Assert, Equal, NotImplemented, IsAssignable } from "../utils/tests";
+import {
+  Assert,
+  AssertPipeSafeError,
+  Equal,
+  NotImplemented,
+  IsAssignable,
+} from "../utils/tests";
 import { ResolveProjectOutput, ProjectQuery } from "./project";
 
 /**
@@ -123,8 +129,14 @@ type DotKeyAssignExpected = {
 type DotKeyAssignTest = Assert<Equal<DotKeyAssignResult, DotKeyAssignExpected>>;
 
 // ============================================================================
-// Test 4: Mixed inclusion and renaming
+// Test 4: Mixed inclusion and exclusion — rejected (MongoDB forbids this)
 // ============================================================================
+// Previously this test asserted that `{ id: 1, fullName: "$name", email: false }`
+// produced `{ id: string; fullName: string }` (exclusion of `email` plus
+// inclusion of `id` and computed `fullName`). MongoDB actually rejects this
+// at runtime: you can only mix when excluding `_id` from an otherwise-
+// inclusion projection. With the typed-error rollout the dispatch now
+// produces a branded `PipeSafeError` instead of silently picking a mode.
 type MixedSchema = {
   id: string;
   name: string;
@@ -140,12 +152,24 @@ type MixedProject = {
 
 type MixedResult = ResolveProjectOutput<MixedProject, MixedSchema>;
 
-type MixedExpected = {
-  id: string;
-  fullName: string;
-};
+type MixedTest = Assert<
+  AssertPipeSafeError<
+    MixedResult,
+    "Stage '$project' cannot mix inclusion 1/true and exclusion 0/false."
+  >
+>;
 
-type MixedTest = Assert<Equal<MixedResult, MixedExpected>>;
+// `_id`-only exclusion is the documented exception — should still type-check
+// in pure inclusion mode without a brand.
+type IdExclusionSchema = { _id: string; name: string; age: number };
+type IdExclusionProject = { name: 1; age: 1; _id: 0 };
+type IdExclusionResult = ResolveProjectOutput<
+  IdExclusionProject,
+  IdExclusionSchema
+>;
+type IdExclusionTest = Assert<
+  Equal<IdExclusionResult, { name: string; age: number }>
+>;
 
 // ============================================================================
 // Test 5: Nested field projection
@@ -808,6 +832,7 @@ export type {
   RenameTest,
   DotKeyAssignTest,
   MixedTest,
+  IdExclusionTest,
   NestedTest,
   NestedReplaceTest,
   IdIncludeTest,
@@ -830,4 +855,73 @@ export type {
   AddProjectTest,
   DivideNestedProjectTest,
   MultipleArithmeticProjectTest,
+};
+
+// ============================================================================
+// Phase D — Typed projection errors
+// ============================================================================
+// `ResolveFieldValue` and `ResolveProjectOutput` now return branded
+// `PipeSafeError` types at three previously-silent failure sites:
+//   1. Inclusion of a field that doesn't exist on the schema (`{ unknownKey: 1 }`).
+//   2. Invalid projection value (anything other than 0/1/ref/expr/object).
+//   3. Mixed inclusion and exclusion in the same projection.
+
+type ProjectErrorSchema = {
+  name: string;
+  age: number;
+};
+
+// 1. Including a key not on the schema produces a branded error at that key.
+type _UnknownInclusionResult = ResolveProjectOutput<
+  { name: 1; unknownKey: 1 },
+  ProjectErrorSchema
+>;
+type _Assert_UnknownInclusion = Assert<
+  AssertPipeSafeError<
+    _UnknownInclusionResult["unknownKey"],
+    "Field 'unknownKey' is not on the schema."
+  >
+>;
+
+// 2. Invalid projection value (anything other than 0/1/ref/expr/object)
+//    produces a branded error on the offending key.
+type _InvalidValueResult = ResolveProjectOutput<
+  { name: 1; bogus: 99 },
+  ProjectErrorSchema
+>;
+type _Assert_InvalidValue = Assert<
+  AssertPipeSafeError<
+    _InvalidValueResult["bogus"],
+    "Invalid projection value for field 'bogus'."
+  >
+>;
+
+// 3. Mixed inclusion and exclusion produces a branded error on the result
+//    type (MongoDB rejects this at runtime; only `_id` exclusion is allowed).
+type _MixedModeResult = ResolveProjectOutput<
+  { name: 1; age: 0 },
+  ProjectErrorSchema
+>;
+type _Assert_MixedMode = Assert<
+  AssertPipeSafeError<
+    _MixedModeResult,
+    "Stage '$project' cannot mix inclusion 1/true and exclusion 0/false."
+  >
+>;
+
+// 4. Positive sweep — a fully valid inclusion still produces the expected
+//    structural output (no brand leakage). Note: _id is dropped, not `never`.
+type _ValidInclusionResult = ResolveProjectOutput<
+  { name: 1 },
+  ProjectErrorSchema
+>;
+type _Assert_ValidInclusion = Assert<
+  Equal<_ValidInclusionResult, { name: string }>
+>;
+
+export type {
+  _Assert_UnknownInclusion,
+  _Assert_InvalidValue,
+  _Assert_MixedMode,
+  _Assert_ValidInclusion,
 };
