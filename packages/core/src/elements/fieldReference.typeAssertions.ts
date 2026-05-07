@@ -378,7 +378,7 @@ type _PipeSafeError_TopLevel = GetFieldTypeWithoutArrays<
 type _Assert_TopLevel = Assert<
   AssertPipeSafeError<
     _PipeSafeError_TopLevel,
-    "Unknown field 'nonexistent' on path 'nonexistent'"
+    "Field 'nonexistent' is not on the schema."
   >
 >;
 
@@ -390,7 +390,7 @@ type _PipeSafeError_NestedLeaf = GetFieldTypeWithoutArrays<
 type _Assert_NestedLeaf = Assert<
   AssertPipeSafeError<
     _PipeSafeError_NestedLeaf,
-    "Unknown field 'nonexistent' on path 'nested.nonexistent'"
+    "Field 'nested.nonexistent' is not on the schema."
   >
 >;
 
@@ -402,7 +402,7 @@ type _PipeSafeError_NestedRoot = GetFieldTypeWithoutArrays<
 type _Assert_NestedRoot = Assert<
   AssertPipeSafeError<
     _PipeSafeError_NestedRoot,
-    "Unknown field 'ueer' on path 'ueer.field1'"
+    "Field 'ueer.field1' is not on the schema."
   >
 >;
 
@@ -415,7 +415,7 @@ type _PipeSafeError_ThroughArray = GetFieldTypeWithoutArrays<
 type _Assert_ThroughArray = Assert<
   AssertPipeSafeError<
     _PipeSafeError_ThroughArray extends (infer Inner)[] ? Inner : never,
-    "Unknown field 'naem' on path 'array.naem'"
+    "Field 'array.naem' is not on the schema."
   >
 >;
 

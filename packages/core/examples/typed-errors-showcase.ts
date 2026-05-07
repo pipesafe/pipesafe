@@ -50,7 +50,7 @@ const _match_valid = orders.match({ total: { $gte: 100 } });
 //
 // Hover shows:
 //   Type 'string' is not assignable to type 'PipeSafeError<"Operator
-//   '$gte' is not allowed on this field (numeric/date only)">'.
+//   '$gte' requires a numeric or date field.">'.
 //
 // @ts-expect-error  $gte requires numeric/date field
 const _match_bad = orders.match({ status: { $gte: "pending" } });
@@ -77,8 +77,8 @@ const _project_valid = orders.project({
 // names the offending key.
 //
 // Hover shows:
-//   Type 'number' is not assignable to type 'PipeSafeError<"Cannot
-//   include field 'totl' — not on schema">'.
+//   Type 'number' is not assignable to type 'PipeSafeError<"Field 'totl'
+//   is not on the schema.">'.
 //
 // @ts-expect-error  'totl' is not a field of Order
 const _project_bad = orders.project({ total: 1, totl: 1 });
@@ -87,9 +87,8 @@ const _project_bad = orders.project({ total: 1, totl: 1 });
 // rejects this at runtime; the brand surfaces it at compile time.
 //
 // Hover shows:
-//   PipeSafeError<"Cannot mix inclusion (1/true) and exclusion (0/false)
-//   in the same $project. Pick one mode (excluding '_id' from inclusion
-//   mode is the only allowed mix).">
+//   Type '0' is not assignable to type 'PipeSafeError<"Stage '$project'
+//   cannot mix inclusion 1/true and exclusion 0/false.">'.
 //
 // @ts-expect-error  cannot mix inclusion and exclusion
 const _project_mixed = orders.project({ total: 1, status: 0 });

@@ -207,7 +207,7 @@ type _UnwindPath_Brand = Extract<
 type _Assert_UnwindPathBrand = Assert<
   AssertPipeSafeError<
     _UnwindPath_Brand,
-    "$unwind requires a field reference to an array field"
+    "Stage '$unwind' requires an array field reference."
   >
 >;
 

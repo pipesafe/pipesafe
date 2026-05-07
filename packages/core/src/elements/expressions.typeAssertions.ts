@@ -51,10 +51,7 @@ type _Add_Brand = Extract<
   PipeSafeError<string>
 >;
 type _Assert_AddBrand = Assert<
-  AssertPipeSafeError<
-    _Add_Brand,
-    "Operator '$add' requires a numeric operand (number, field reference to a number, or nested expression)"
-  >
+  AssertPipeSafeError<_Add_Brand, "Operator '$add' requires a numeric operand.">
 >;
 
 // $subtract operand tuple must be a 2-tuple, each element including the brand.
@@ -63,7 +60,7 @@ type _Subtract_Brand = Extract<_Subtract_FirstElement, PipeSafeError<string>>;
 type _Assert_SubtractBrand = Assert<
   AssertPipeSafeError<
     _Subtract_Brand,
-    "Operator '$subtract' requires a numeric operand (number, field reference to a number, or nested expression)"
+    "Operator '$subtract' requires a numeric operand."
   >
 >;
 type _Assert_SubtractIs2Tuple = Assert<
@@ -78,7 +75,7 @@ type _Multiply_Brand = Extract<
 type _Assert_MultiplyBrand = Assert<
   AssertPipeSafeError<
     _Multiply_Brand,
-    "Operator '$multiply' requires a numeric operand (number, field reference to a number, or nested expression)"
+    "Operator '$multiply' requires a numeric operand."
   >
 >;
 
@@ -88,7 +85,7 @@ type _Divide_Brand = Extract<_Divide_FirstElement, PipeSafeError<string>>;
 type _Assert_DivideBrand = Assert<
   AssertPipeSafeError<
     _Divide_Brand,
-    "Operator '$divide' requires a numeric operand (number, field reference to a number, or nested expression)"
+    "Operator '$divide' requires a numeric operand."
   >
 >;
 
@@ -96,10 +93,7 @@ type _Assert_DivideBrand = Assert<
 type _Mod_FirstElement = ModOperandTuple<ArithSchema>[0];
 type _Mod_Brand = Extract<_Mod_FirstElement, PipeSafeError<string>>;
 type _Assert_ModBrand = Assert<
-  AssertPipeSafeError<
-    _Mod_Brand,
-    "Operator '$mod' requires a numeric operand (number, field reference to a number, or nested expression)"
-  >
+  AssertPipeSafeError<_Mod_Brand, "Operator '$mod' requires a numeric operand.">
 >;
 
 // Positive sweep: a literal number is still a valid $add operand.
@@ -128,7 +122,7 @@ type _Concat_Brand = Extract<
 type _Assert_ConcatBrand = Assert<
   AssertPipeSafeError<
     _Concat_Brand,
-    "Operator '$concat' requires a string operand (string literal or field reference to a string)"
+    "Operator '$concat' requires a string operand."
   >
 >;
 
@@ -162,7 +156,7 @@ type _DateToString_Brand = Extract<
 type _Assert_DateToStringBrand = Assert<
   AssertPipeSafeError<
     _DateToString_Brand,
-    "Date operand requires a Date literal or field reference to a Date field"
+    "Operator '$dateToString' requires a Date operand."
   >
 >;
 
@@ -173,7 +167,7 @@ type _DateTrunc_Brand = Extract<
 type _Assert_DateTruncBrand = Assert<
   AssertPipeSafeError<
     _DateTrunc_Brand,
-    "Date operand requires a Date literal or field reference to a Date field"
+    "Operator '$dateTrunc' requires a Date operand."
   >
 >;
 
@@ -184,7 +178,7 @@ type _DateAdd_Brand = Extract<
 type _Assert_DateAddBrand = Assert<
   AssertPipeSafeError<
     _DateAdd_Brand,
-    "Date operand requires a Date literal or field reference to a Date field"
+    "Operator '$dateAdd' requires a Date operand."
   >
 >;
 
@@ -195,7 +189,7 @@ type _DateSubtract_Brand = Extract<
 type _Assert_DateSubtractBrand = Assert<
   AssertPipeSafeError<
     _DateSubtract_Brand,
-    "Date operand requires a Date literal or field reference to a Date field"
+    "Operator '$dateSubtract' requires a Date operand."
   >
 >;
 
@@ -224,7 +218,7 @@ type _Size_Brand = Extract<SizeOperand<ArithSchema>, PipeSafeError<string>>;
 type _Assert_SizeBrand = Assert<
   AssertPipeSafeError<
     _Size_Brand,
-    "Operator '$size' requires an array operand (field reference to an array or array literal)"
+    "Operator '$size' requires an array operand."
   >
 >;
 
@@ -235,7 +229,7 @@ type _ConcatArrays_Brand = Extract<
 type _Assert_ConcatArraysBrand = Assert<
   AssertPipeSafeError<
     _ConcatArrays_Brand,
-    "Operator '$concatArrays' requires an array operand (field reference to an array or array literal)"
+    "Operator '$concatArrays' requires an array operand."
   >
 >;
 
@@ -246,7 +240,7 @@ type _ArrayElemAt_Brand = Extract<
 type _Assert_ArrayElemAtBrand = Assert<
   AssertPipeSafeError<
     _ArrayElemAt_Brand,
-    "Operator '$arrayElemAt' requires an array operand (field reference to an array or array literal)"
+    "Operator '$arrayElemAt' requires an array operand."
   >
 >;
 
@@ -257,7 +251,7 @@ type _Filter_Brand = Extract<
 type _Assert_FilterBrand = Assert<
   AssertPipeSafeError<
     _Filter_Brand,
-    "Operator '$filter' requires an array operand (field reference to an array or array literal)"
+    "Operator '$filter' requires an array operand."
   >
 >;
 

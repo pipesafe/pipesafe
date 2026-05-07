@@ -491,7 +491,7 @@ type GteOnStringArrayOperand = NonNullable<
 type _GteOnStringArrayMsg = Assert<
   AssertPipeSafeError<
     GteOnStringArrayOperand,
-    "Operator '$gte' is not allowed on this field (numeric/date only)"
+    "Operator '$gte' requires a numeric or date field."
   >
 >;
 
@@ -508,7 +508,7 @@ type RegexOnNumberOperand = NonNullable<ComparatorMatchers<number>["$regex"]>;
 type _RegexOnNumberMsg = Assert<
   AssertPipeSafeError<
     RegexOnNumberOperand,
-    "Operator '$regex' is only valid on string fields"
+    "Operator '$regex' requires a string field."
   >
 >;
 
@@ -521,7 +521,7 @@ type SizeOnStringOperand = NonNullable<ComparatorMatchers<string>["$size"]>;
 type _SizeOnStringMsg = Assert<
   AssertPipeSafeError<
     SizeOnStringOperand,
-    "Operator '$size' requires an array field"
+    "Operator '$size' requires an array field."
   >
 >;
 
@@ -534,7 +534,7 @@ type AllOnStringOperand = NonNullable<ComparatorMatchers<string>["$all"]>;
 type _AllOnStringMsg = Assert<
   AssertPipeSafeError<
     AllOnStringOperand,
-    "Operator '$all' requires an array field"
+    "Operator '$all' requires an array field."
   >
 >;
 
@@ -549,7 +549,7 @@ type ElemMatchOnNumberOperand = NonNullable<
 type _ElemMatchOnNumberMsg = Assert<
   AssertPipeSafeError<
     ElemMatchOnNumberOperand,
-    "Operator '$elemMatch' requires an array field"
+    "Operator '$elemMatch' requires an array field."
   >
 >;
 

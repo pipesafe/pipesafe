@@ -1,6 +1,6 @@
 import { Assert, AssertPipeSafeError, Equal } from "../utils/tests";
 import type { Document, PipeSafeError } from "../utils/core";
-import { AggregatorFunction, ResolveGroupOutput } from "./group";
+import { AccumulatorFunction, ResolveGroupOutput } from "./group";
 
 /**
  * Type Resolution Behaviors for $group Stage:
@@ -701,70 +701,70 @@ type PrettifyGroupTest = Assert<
 export type { PrettifyGroupTest };
 
 // ============================================================================
-// Phase A — Typed aggregator operand errors
+// Phase A — Typed accumulator operand errors
 // ============================================================================
-// `NumericAggregatorOperandFor<Schema, Op>` and `MinMaxAggregatorOperandFor`
+// `NumericAccumulatorOperand<Schema, Op>` and `MinMaxAccumulatorOperand`
 // add a branded `PipeSafeError` arm to the operand union so wrong field types
 // (e.g. $sum on a string field) hover with a literal message instead of
 // surfacing as a structural-mismatch wall.
 
-type AggregatorTestSchema = {
+type AccumulatorTestSchema = {
   name: string;
   age: number;
   joinedAt: Date;
   tags: string[];
 };
 
-// Extract the operand type for a specific aggregator from AggregatorFunction.
+// Extract the operand type for a specific accumulator from AccumulatorFunction.
 type SumOperand<Schema extends Document> = Extract<
-  AggregatorFunction<Schema>,
+  AccumulatorFunction<Schema>,
   { $sum: any }
 >["$sum"];
 type AvgOperand<Schema extends Document> = Extract<
-  AggregatorFunction<Schema>,
+  AccumulatorFunction<Schema>,
   { $avg: any }
 >["$avg"];
 type MinOperand<Schema extends Document> = Extract<
-  AggregatorFunction<Schema>,
+  AccumulatorFunction<Schema>,
   { $min: any }
 >["$min"];
 type MaxOperand<Schema extends Document> = Extract<
-  AggregatorFunction<Schema>,
+  AccumulatorFunction<Schema>,
   { $max: any }
 >["$max"];
 
 // $sum operand union must include the numeric-only brand for the schema.
-type _SumOperand_HasBrand = SumOperand<AggregatorTestSchema>;
+type _SumOperand_HasBrand = SumOperand<AccumulatorTestSchema>;
 type _Assert_SumBrand = Assert<
   AssertPipeSafeError<
     Extract<_SumOperand_HasBrand, PipeSafeError<string>>,
-    "Aggregator '$sum' requires a numeric field reference or expression"
+    "Accumulator '$sum' requires a numeric operand."
   >
 >;
 
 // $avg carries the same family of brand with a different operator name.
-type _AvgOperand_HasBrand = AvgOperand<AggregatorTestSchema>;
+type _AvgOperand_HasBrand = AvgOperand<AccumulatorTestSchema>;
 type _Assert_AvgBrand = Assert<
   AssertPipeSafeError<
     Extract<_AvgOperand_HasBrand, PipeSafeError<string>>,
-    "Aggregator '$avg' requires a numeric field reference or expression"
+    "Accumulator '$avg' requires a numeric operand."
   >
 >;
 
 // $min/$max permit Date and so carry the wider message.
-type _MinOperand_HasBrand = MinOperand<AggregatorTestSchema>;
+type _MinOperand_HasBrand = MinOperand<AccumulatorTestSchema>;
 type _Assert_MinBrand = Assert<
   AssertPipeSafeError<
     Extract<_MinOperand_HasBrand, PipeSafeError<string>>,
-    "Aggregator '$min' requires a numeric or date field reference"
+    "Accumulator '$min' requires a numeric or date operand."
   >
 >;
 
-type _MaxOperand_HasBrand = MaxOperand<AggregatorTestSchema>;
+type _MaxOperand_HasBrand = MaxOperand<AccumulatorTestSchema>;
 type _Assert_MaxBrand = Assert<
   AssertPipeSafeError<
     Extract<_MaxOperand_HasBrand, PipeSafeError<string>>,
-    "Aggregator '$max' requires a numeric or date field reference"
+    "Accumulator '$max' requires a numeric or date operand."
   >
 >;
 
@@ -774,7 +774,10 @@ type _SumValidQuery = {
   _id: "$name";
   total: { $sum: "$age" };
 };
-type _SumValidResult = ResolveGroupOutput<AggregatorTestSchema, _SumValidQuery>;
+type _SumValidResult = ResolveGroupOutput<
+  AccumulatorTestSchema,
+  _SumValidQuery
+>;
 type _Assert_SumValid = Assert<
   Equal<_SumValidResult, { _id: string; total: number }>
 >;
@@ -784,7 +787,10 @@ type _MinValidQuery = {
   _id: "$name";
   earliest: { $min: "$joinedAt" };
 };
-type _MinValidResult = ResolveGroupOutput<AggregatorTestSchema, _MinValidQuery>;
+type _MinValidResult = ResolveGroupOutput<
+  AccumulatorTestSchema,
+  _MinValidQuery
+>;
 type _Assert_MinValid = Assert<
   Equal<_MinValidResult, { _id: string; earliest: Date }>
 >;

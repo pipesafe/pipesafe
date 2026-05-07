@@ -155,7 +155,7 @@ type MixedResult = ResolveProjectOutput<MixedProject, MixedSchema>;
 type MixedTest = Assert<
   AssertPipeSafeError<
     MixedResult,
-    "Cannot mix inclusion (1/true) and exclusion (0/false) in the same $project. Pick one mode (excluding '_id' from inclusion mode is the only allowed mix)."
+    "Stage '$project' cannot mix inclusion 1/true and exclusion 0/false."
   >
 >;
 
@@ -879,7 +879,7 @@ type _UnknownInclusionResult = ResolveProjectOutput<
 type _Assert_UnknownInclusion = Assert<
   AssertPipeSafeError<
     _UnknownInclusionResult["unknownKey"],
-    "Cannot include field 'unknownKey' — not on schema"
+    "Field 'unknownKey' is not on the schema."
   >
 >;
 
@@ -892,7 +892,7 @@ type _InvalidValueResult = ResolveProjectOutput<
 type _Assert_InvalidValue = Assert<
   AssertPipeSafeError<
     _InvalidValueResult["bogus"],
-    "Invalid projection value for 'bogus'. Expected 0, 1, a field reference, an expression, or a nested object."
+    "Invalid projection value for field 'bogus'."
   >
 >;
 
@@ -905,7 +905,7 @@ type _MixedModeResult = ResolveProjectOutput<
 type _Assert_MixedMode = Assert<
   AssertPipeSafeError<
     _MixedModeResult,
-    "Cannot mix inclusion (1/true) and exclusion (0/false) in the same $project. Pick one mode (excluding '_id' from inclusion mode is the only allowed mix)."
+    "Stage '$project' cannot mix inclusion 1/true and exclusion 0/false."
   >
 >;
 

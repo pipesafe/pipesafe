@@ -37,23 +37,23 @@ type SomeBSONType = BSONType | BSONTypeAlias;
 
 type NumericOperand<T, Op extends string> =
   [T] extends [number | Date] ? T
-  : PipeSafeError<`Operator '${Op}' is not allowed on this field (numeric/date only)`>;
+  : PipeSafeError<`Operator '${Op}' requires a numeric or date field.`>;
 
 type SizeOperand<T> =
   [T] extends [unknown[]] ? number
-  : PipeSafeError<`Operator '$size' requires an array field`>;
+  : PipeSafeError<`Operator '$size' requires an array field.`>;
 
 type ArrayValueOperand<T, Op extends string> =
   [T] extends [(infer U)[]] ? U[]
-  : PipeSafeError<`Operator '${Op}' requires an array field`>;
+  : PipeSafeError<`Operator '${Op}' requires an array field.`>;
 
 type ArrayElementOperand<T, Op extends string> =
   [T] extends [(infer U)[]] ? U
-  : PipeSafeError<`Operator '${Op}' requires an array field`>;
+  : PipeSafeError<`Operator '${Op}' requires an array field.`>;
 
 type RegexOperand<T> =
   [T] extends [string] ? RegExp | string
-  : PipeSafeError<`Operator '$regex' is only valid on string fields`>;
+  : PipeSafeError<`Operator '$regex' requires a string field.`>;
 
 export type ComparatorMatchers<T extends unknown> = Prettify<
   /* Always */ {

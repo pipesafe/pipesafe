@@ -19,7 +19,7 @@ import { AnyLiteral } from "./literals";
 type ArrayOperandFor<Schema extends Document, Op extends string> =
   | FieldReferencesThatInferTo<Schema, unknown[]>
   | AnyLiteral<Schema>[]
-  | PipeSafeError<`Operator '${Op}' requires an array operand (field reference to an array or array literal)`>;
+  | PipeSafeError<`Operator '${Op}' requires an array operand.`>;
 
 /**
  * $concatArrays expression - concatenates arrays
@@ -51,10 +51,10 @@ export type SizeExpression<Schema extends Document> = {
  * when a non-Date operand is supplied (e.g. a string field reference passed
  * to a `date` parameter) instead of letting the value silently degrade.
  */
-type DateOperand<Schema extends Document> =
+type DateOperand<Schema extends Document, Op extends string> =
   | Date
   | FieldReferencesThatInferTo<Schema, Date>
-  | PipeSafeError<`Date operand requires a Date literal or field reference to a Date field`>;
+  | PipeSafeError<`Operator '${Op}' requires a Date operand.`>;
 
 /**
  * $dateToString expression - converts a date to a string
@@ -69,7 +69,7 @@ type DateOperand<Schema extends Document> =
 export type DateToStringExpression<Schema extends Document> = {
   $dateToString: {
     format: string;
-    date: DateOperand<Schema>;
+    date: DateOperand<Schema, "$dateToString">;
     timezone?: string;
     onNull?: unknown;
   };
@@ -102,7 +102,7 @@ export type DateUnit =
  */
 export type DateTruncExpression<Schema extends Document> = {
   $dateTrunc: {
-    date: DateOperand<Schema>;
+    date: DateOperand<Schema, "$dateTrunc">;
     unit: DateUnit;
     binSize?: number;
     timezone?: string;
@@ -129,7 +129,7 @@ export type DateTruncExpression<Schema extends Document> = {
  */
 export type DateAddExpression<Schema extends Document> = {
   $dateAdd: {
-    startDate: DateOperand<Schema>;
+    startDate: DateOperand<Schema, "$dateAdd">;
     unit: DateUnit;
     amount: number | FieldReferencesThatInferTo<Schema, number>;
     timezone?: string;
@@ -148,7 +148,7 @@ export type DateAddExpression<Schema extends Document> = {
  */
 export type DateSubtractExpression<Schema extends Document> = {
   $dateSubtract: {
-    startDate: DateOperand<Schema>;
+    startDate: DateOperand<Schema, "$dateSubtract">;
     unit: DateUnit;
     amount: number | FieldReferencesThatInferTo<Schema, number>;
     timezone?: string;
@@ -266,7 +266,7 @@ type ArithmeticOperandFor<Schema extends Document, Op extends string> =
   | number
   | FieldReferencesThatInferTo<Schema, number>
   | Expression<Schema>
-  | PipeSafeError<`Operator '${Op}' requires a numeric operand (number, field reference to a number, or nested expression)`>;
+  | PipeSafeError<`Operator '${Op}' requires a numeric operand.`>;
 
 /**
  * $add expression - adds numbers together
@@ -347,7 +347,7 @@ export type DateExpression<Schema extends Document> =
 type StringOperandFor<Schema extends Document, Op extends string> =
   | string
   | FieldReferencesThatInferTo<Schema, string>
-  | PipeSafeError<`Operator '${Op}' requires a string operand (string literal or field reference to a string)`>;
+  | PipeSafeError<`Operator '${Op}' requires a string operand.`>;
 
 /**
  * $concat expression - concatenates strings together
