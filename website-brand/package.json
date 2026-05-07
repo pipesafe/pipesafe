@@ -1,0 +1,9 @@
+{
+  "name": "@pipesafe/website-brand",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "rm -rf dist && mkdir -p dist && cp index.html styles.css dist/ && cp -R public dist/public",
+    "preview": "python3 -m http.server 8001 --directory dist"
+  }
+}

@@ -21,3 +21,6 @@ benchmarks/
 
 # local env files
 .env*
+# playwright-mcp screenshots and snapshots
+.playwright-mcp/
+cf-*.png
