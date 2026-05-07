@@ -1,7 +1,11 @@
 import { pipesafe } from "../singleton/pipesafe";
 import { tagClient } from "../singleton/tagClient";
 import { Document, WithoutDollar } from "../utils/core";
-import { MatchQuery, ResolveMatchOutput } from "../stages/match";
+import {
+  MatchQuery,
+  ResolveMatchOutput,
+  ValidateMatchQuery,
+} from "../stages/match";
 import { ResolveSetOutput, SetQuery } from "../stages/set";
 import { ResolveUnsetOutput, UnsetQuery } from "../stages/unset";
 import {
@@ -191,7 +195,7 @@ export class Pipeline<
 
   // $match step
   match<const M extends MatchQuery<PreviousStageDocs>>(
-    $match: M
+    $match: M & ValidateMatchQuery<PreviousStageDocs, M>
   ): Pipeline<
     StartingDocs,
     ResolveMatchOutput<M, PreviousStageDocs>,

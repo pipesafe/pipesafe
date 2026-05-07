@@ -96,6 +96,26 @@ export type RawMatchQuery<Schema extends Document> = {
   $expr?: unknown;
 };
 
+/**
+ * Validation wrapper for $match queries used at Pipeline.match's
+ * parameter position. Maps the user's literal M:
+ *
+ * - Logical operators (`$and`, `$or`, `$nor`) and `$expr` pass through.
+ * - Known schema fields are typed as `MatchersForType<...>`, so the
+ *   inner brand types (e.g. `$gte` against a string field) keep firing.
+ * - Unknown top-level keys are replaced with a branded `PipeSafeError`,
+ *   surfacing typos like `pipeline.match({ naem: { $eq: 'x' } })`.
+ *
+ * `<const M>` at the call site captures the literal so chained-stage
+ * union narrowing via `ResolveMatchOutput<M, Schema>` is preserved.
+ */
+export type ValidateMatchQuery<Schema extends Document, M> = {
+  [K in keyof M]: K extends `$${string}` ? M[K]
+  : K extends FieldSelector<Schema> ?
+    MatchersForType<InferFieldSelector<Schema, K>>
+  : PipeSafeError<`Field '${K & string}' is not on the schema`, Schema>;
+};
+
 export type MatchQuery<Schema extends Document> =
   | {
       $and?: MatchQuery<Schema>[];

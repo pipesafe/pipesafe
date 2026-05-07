@@ -54,10 +54,8 @@ const _project_mixed = new Pipeline<User>().project({ name: 1, age: 0 });
 
 // project — including an unknown key should fail.
 // @ts-expect-error  unknownKey is not a field of User
-const _project_unknown = new Pipeline<User>().project({
-  name: 1,
-  unknownKey: 1,
-});
+// prettier-ignore
+const _project_unknown = new Pipeline<User>().project({ name: 1, unknownKey: 1 });
 
 // replaceRoot — newRoot referencing a missing field should fail.
 // @ts-expect-error  '$missing' is not a valid field reference
@@ -70,10 +68,10 @@ const _replaceRoot_bad = new Pipeline<User>().replaceRoot({ newRoot: "$missing" 
 const _unwind_bad = new Pipeline<User>().unwind("$name");
 
 // facet — sub-pipeline using a typo'd field should fail.
+// Satisfied transitively by Task 1 (sort fix propagates into the lambda).
 // @ts-expect-error  'naem' is not a field inside the facet sub-pipeline
-const _facet_bad = new Pipeline<User>().facet({
-  bad: (p) => p.sort({ naem: 1 }),
-});
+// prettier-ignore
+const _facet_bad = new Pipeline<User>().facet({ bad: (p) => p.sort({ naem: 1 }) });
 
 export {
   _match_bad,
