@@ -9,6 +9,22 @@
 
 import { Pipeline } from "./Pipeline";
 import { Collection } from "../collection/Collection";
+import { Assert, Equal } from "../utils/tests";
+import { PipeSafeError } from "../utils/core";
+import { ResolveMatchOutput } from "../stages/match";
+import { ResolveSetOutput } from "../stages/set";
+import { ResolveProjectOutput } from "../stages/project";
+import { ResolveUnwindOutput } from "../stages/unwind";
+import { ResolveReplaceRootOutput } from "../stages/replaceRoot";
+import { ResolveSkipOutput } from "../stages/skip";
+import { ResolveLimitOutput } from "../stages/limit";
+import { ResolveSortOutput } from "../stages/sort";
+import { ResolveSampleOutput } from "../stages/sample";
+import { ResolveUnsetOutput } from "../stages/unset";
+import { ResolveGroupOutput } from "../stages/group";
+import { ResolveLookupOutput } from "../stages/lookup";
+import { ResolveUnionWithOutput } from "../stages/unionWith";
+import { ResolveFacetOutput } from "../stages/facet";
 
 // =============================================================================
 // Test Schema
@@ -141,23 +157,6 @@ export {
 // ...>`. When Schema is already a branded `PipeSafeError`, every stage is a
 // no-op so the user sees the original upstream error, not a fresh constraint
 // failure piled on top.
-
-import { Assert, Equal } from "../utils/tests";
-import { PipeSafeError } from "../utils/core";
-import { ResolveMatchOutput } from "../stages/match";
-import { ResolveSetOutput } from "../stages/set";
-import { ResolveProjectOutput } from "../stages/project";
-import { ResolveUnwindOutput } from "../stages/unwind";
-import { ResolveReplaceRootOutput } from "../stages/replaceRoot";
-import { ResolveSkipOutput } from "../stages/skip";
-import { ResolveLimitOutput } from "../stages/limit";
-import { ResolveSortOutput } from "../stages/sort";
-import { ResolveSampleOutput } from "../stages/sample";
-import { ResolveUnsetOutput } from "../stages/unset";
-import { ResolveGroupOutput } from "../stages/group";
-import { ResolveLookupOutput } from "../stages/lookup";
-import { ResolveUnionWithOutput } from "../stages/unionWith";
-import { ResolveFacetOutput } from "../stages/facet";
 
 type _Err = PipeSafeError<"upstream", { fullPath: "user.naem" }>;
 

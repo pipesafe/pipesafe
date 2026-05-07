@@ -1,4 +1,5 @@
 import { Assert, AssertPipeSafeError, Equal } from "../utils/tests";
+import type { Document, PipeSafeError } from "../utils/core";
 import { AggregatorFunction, ResolveGroupOutput } from "./group";
 
 /**
@@ -731,8 +732,6 @@ type MaxOperand<Schema extends Document> = Extract<
   AggregatorFunction<Schema>,
   { $max: any }
 >["$max"];
-
-import type { Document, PipeSafeError } from "../utils/core";
 
 // $sum operand union must include the numeric-only brand for the schema.
 type _SumOperand_HasBrand = SumOperand<AggregatorTestSchema>;

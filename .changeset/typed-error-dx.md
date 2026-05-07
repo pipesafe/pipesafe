@@ -17,10 +17,11 @@ Round 2 (Phases A, C1-C4, D, E, F):
 - `expressions.ts` arithmetic operators (`$add`, `$subtract`, `$multiply`, `$divide`, `$mod`, `$toDate`), the `$concat` string operator, the four date operators (`$dateToString`, `$dateTrunc`, `$dateAdd`, `$dateSubtract`), and the four array operators (`$size`, `$concatArrays`, `$arrayElemAt`, `$filter`) all surface per-operator branded errors instead of degrading silently to `never`.
 - `project.ts` flags two previously-silent failure modes: including a key that doesn't exist on the schema (`{ unknownKey: 1 }`) and supplying an invalid projection value (anything other than 0/1/ref/expr/object). The `HasInclusions`/`HasExclusions` helpers were also fixed to detect mixed-mode queries correctly.
 - `unwind.ts` `UnwindPath<Schema>` now brands non-array field references so `pipeline.unwind('$scalar')` hovers with a literal message.
-- `sort.ts` `SortQuery<Schema>` no longer accepts arbitrary string keys via a permissive index signature — typos like `pipeline.sort({ naem: 1 })` are now flagged at compile time.
+- `sort.ts` `SortQuery<Schema>` no longer accepts arbitrary string keys via a permissive index signature — typos like `pipeline.sort({ naem: 1 })` are now flagged at compile time. Minor behavior change.
 
 Infrastructure:
 
-- New `packages/core/tsconfig.assertions.json` and an updated `typecheck` script ensure `*.typeAssertions.ts` files are checked in CI (previously excluded from the build typecheck, hiding real errors).
+- `packages/core/tsconfig.json` no longer excludes `**/*.typeAssertions.ts`, so the root `tsc --noEmit` now covers all 21 type-assertion files via project references. Previously they were only checked by IDE LSP, letting real errors slip through CI.
+- `packages/core/tsconfig.benchmark.json` overrides `rootDir` to the package root so the benchmark suite type-checks `examples/`, `benchmarking/`, and `benchmarks/` instead of failing fast with TS6059. Fixes the `Instantiations: 0` readout the diagnostic parser was producing.
 
 No runtime behaviour changes; all 56 existing runtime tests and 21 type-assertion files still pass.
