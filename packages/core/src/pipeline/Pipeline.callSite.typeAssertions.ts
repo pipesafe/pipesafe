@@ -43,10 +43,8 @@ const _unset_bad = new Pipeline<User>().unset("naem");
 
 // group — $sum on a string field reference should fail.
 // @ts-expect-error  $sum requires numeric operand
-const _group_bad = new Pipeline<User>().group({
-  _id: "$status",
-  total: { $sum: "$name" },
-});
+// prettier-ignore
+const _group_bad = new Pipeline<User>().group({ _id: "$status", total: { $sum: "$name" } });
 
 // project — mixed inclusion/exclusion should fail.
 // @ts-expect-error  cannot mix inclusion and exclusion

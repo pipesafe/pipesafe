@@ -101,6 +101,23 @@ export type GroupQuery<Schema extends Document> = {
   [key: string]: AnyLiteral<Schema> | AggregatorFunction<Schema> | null;
 };
 
+/**
+ * Validation wrapper for $group queries used at Pipeline.group's
+ * parameter position. Used as `G & ValidateGroupQuery<Schema, G>`:
+ * the intersection forces TypeScript to check each accumulator's value
+ * structurally (firing the per-operator operand brands like
+ * `NumericAggregatorOperandFor` for `$sum: '$stringField'`) which the
+ * `[key: string]:` index signature on GroupQuery would otherwise let
+ * pass at the call site.
+ *
+ * `_id` passes through unchanged because its constraint is already
+ * checked via the GroupQuery extends-side of the intersection.
+ */
+export type ValidateGroupQuery<Schema extends Document, G> = {
+  [K in keyof G]: K extends "_id" ? G[K]
+  : AggregatorFunction<Schema> | AnyLiteral<Schema> | null;
+};
+
 export type ResolveGroupOutput<
   StartingDocs extends Document,
   G extends GroupQuery<StartingDocs>,

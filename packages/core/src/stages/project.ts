@@ -56,13 +56,55 @@ export type ProjectQuery<Schema extends Document> = {
     | Document; // For nested object replacement
 };
 
+// Detects whether P (a $project literal) has any non-_id key with an
+// inclusion value (1 | true).
+type HasInclusionNonId<P> =
+  true extends (
+    {
+      [K in keyof P]: K extends "_id" ? never
+      : P[K] extends 1 | true ? true
+      : never;
+    }[keyof P]
+  ) ?
+    true
+  : false;
+
+// Detects whether P has any non-_id key with an exclusion value
+// (0 | false). Excluding `_id` is the only allowed mix in MongoDB so
+// it's intentionally not counted as exclusion-mode.
+type HasExclusionNonId<P> =
+  true extends (
+    {
+      [K in keyof P]: K extends "_id" ? never
+      : P[K] extends 0 | false ? true
+      : never;
+    }[keyof P]
+  ) ?
+    true
+  : false;
+
+type ValidateProjectQueryKeys<Schema extends Document, P> = {
+  [K in keyof P]: K extends FieldSelector<Schema> ? P[K]
+  : P[K] extends 1 | 0 | true | false ?
+    PipeSafeError<
+      `Cannot include field '${K & string}' — not on schema`,
+      Schema
+    >
+  : P[K];
+};
+
 /**
  * Validation wrapper for $project queries used at Pipeline.project's
- * parameter position. Maps the user's literal P, replacing inclusion
- * values (1/0/true/false) at unknown-key positions with a branded
- * `PipeSafeError`. New-field-creation values (field references,
- * expressions, nested objects) on unknown keys are still allowed —
- * that's the legitimate "rename / compute new field" use case.
+ * parameter position. Two checks fire as branded `PipeSafeError`s at
+ * the call site:
+ *
+ * 1. Mixed inclusion (1/true) and exclusion (0/false) on non-_id
+ *    fields — MongoDB rejects this at runtime; only excluding `_id`
+ *    while otherwise including is allowed.
+ * 2. Inclusion of an unknown key — the user typed something that
+ *    isn't a schema field. New-field-creation values (field refs,
+ *    expressions, nested objects) on unknown keys still pass because
+ *    that's the legitimate "rename / compute new field" case.
  *
  * Schema-known keys pass through unchanged so chained-stage inference
  * via ResolveProjectOutput<P, Schema> sees the literal P.
@@ -73,15 +115,15 @@ export type ProjectQuery<Schema extends Document> = {
  * early-exit was tried and adds ~600 instantiations without helping
  * the per-stage cost — left out.
  */
-export type ValidateProjectQuery<Schema extends Document, P> = {
-  [K in keyof P]: K extends FieldSelector<Schema> ? P[K]
-  : P[K] extends 1 | 0 | true | false ?
-    PipeSafeError<
-      `Cannot include field '${K & string}' — not on schema`,
-      Schema
-    >
-  : P[K];
-};
+export type ValidateProjectQuery<Schema extends Document, P> =
+  HasInclusionNonId<P> extends true ?
+    HasExclusionNonId<P> extends true ?
+      PipeSafeError<
+        `Cannot mix inclusion (1/true) and exclusion (0/false) in the same $project. Pick one mode (excluding '_id' from inclusion mode is the only allowed mix).`,
+        P
+      >
+    : ValidateProjectQueryKeys<Schema, P>
+  : ValidateProjectQueryKeys<Schema, P>;
 
 // Helper: Check if a value is an inclusion (1 or true)
 type IsInclusion<T> = T extends 1 | true ? true : false;
