@@ -1,5 +1,5 @@
 ---
-"@pipesafe/core": minor
+"@pipesafe/core": major
 ---
 
 Add typed compile-time error messages across the pipeline builder. Invalid pipeline shapes that previously produced "is not assignable to never" cascades now hover with literal `PipeSafeError<Msg>` messages naming the operator, accumulator, stage, or field that's wrong.
