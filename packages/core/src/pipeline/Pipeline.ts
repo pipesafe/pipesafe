@@ -20,11 +20,7 @@ import { ResolveLookupOutput } from "../stages/lookup";
 import { ResolveGraphLookupOutput } from "../stages/graphLookup";
 import { FacetQuery, ResolveFacetOutput } from "../stages/facet";
 import { GetFieldType } from "../elements/fieldSelector";
-import {
-  GroupQuery,
-  ResolveGroupOutput,
-  ValidateGroupQuery,
-} from "../stages/group";
+import { GroupQuery, ResolveGroupOutput } from "../stages/group";
 import { ResolveProjectOutput, ValidateProjectQuery } from "../stages/project";
 import {
   ReplaceRootQuery,
@@ -396,7 +392,7 @@ export class Pipeline<
   }
 
   group<const G extends GroupQuery<PreviousStageDocs>>(
-    $group: ValidateGroupQuery<PreviousStageDocs, G>
+    $group: G
   ): Pipeline<
     StartingDocs,
     ResolveGroupOutput<PreviousStageDocs, G>,

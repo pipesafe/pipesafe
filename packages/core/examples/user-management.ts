@@ -115,7 +115,6 @@ const userListWithActivityPipeline = new Pipeline<UserSchema>()
     email: 1,
     profile: 1,
     lastLoginAt: 1,
-    activityCount: 1,
   })
   // Flatten profile fields using dotted keys
   .project({
