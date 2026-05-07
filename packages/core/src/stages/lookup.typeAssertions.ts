@@ -585,3 +585,66 @@ void _callsite_numeric_array_to_scalar;
 void _callsite_complex_array_to_scalar;
 void _callsite_complex_scalar_to_array;
 void _callsite_dotted_array_to_scalar;
+
+// ============================================================================
+// Branded error when no foreign field has a compatible type
+// ============================================================================
+// When the local field's type doesn't match any field on the foreign
+// collection, the constraint resolves to a `PipeSafeError` rather than
+// the previous silent `never`. The brand names the offending localField.
+
+import type { LookupForeignFieldOrError } from "./lookup";
+import type { AssertPipeSafeError } from "../utils/tests";
+
+// Foreign collection has only string-typed fields …
+type _OnlyStringsForeign = { _id: string; tag: string };
+
+// … so a numeric local field has no compatible foreign field.
+type _NoCompat_Numeric = LookupForeignFieldOrError<
+  _OnlyStringsForeign,
+  number,
+  "numericRef"
+>;
+
+type _Assert_NoCompat_Numeric = Assert<
+  AssertPipeSafeError<
+    _NoCompat_Numeric,
+    "Stage '$lookup' has no foreign field with a type compatible with localField 'numericRef'."
+  >
+>;
+
+// Same check with a dotted-path local field name templated into the message.
+type _NoCompat_Dotted = LookupForeignFieldOrError<
+  _OnlyStringsForeign,
+  Date,
+  "events.scheduledAt"
+>;
+
+type _Assert_NoCompat_Dotted = Assert<
+  AssertPipeSafeError<
+    _NoCompat_Dotted,
+    "Stage '$lookup' has no foreign field with a type compatible with localField 'events.scheduledAt'."
+  >
+>;
+
+// Positive sweep: when at least one foreign field matches, the helper
+// resolves to the union of compatible paths, NOT the brand.
+type _Compat_String = LookupForeignFieldOrError<
+  _OnlyStringsForeign,
+  string,
+  "anyName"
+>;
+// Should be "_id" | "tag" — assert it's not a PipeSafeError.
+type _Assert_Compat_NotBrand = Assert<
+  Equal<
+    _Compat_String extends { readonly "~pipesafe.error": string } ? true
+    : false,
+    false
+  >
+>;
+
+export type {
+  _Assert_NoCompat_Numeric,
+  _Assert_NoCompat_Dotted,
+  _Assert_Compat_NotBrand,
+};

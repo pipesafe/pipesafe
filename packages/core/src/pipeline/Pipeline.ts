@@ -12,7 +12,10 @@ import {
 } from "../elements/fieldReference";
 import { Expression, InferExpression } from "../elements/expressions";
 import { Collection } from "../collection/Collection";
-import { ResolveLookupOutput } from "../stages/lookup";
+import {
+  ResolveLookupOutput,
+  LookupForeignFieldOrError,
+} from "../stages/lookup";
 import { ResolveGraphLookupOutput } from "../stages/graphLookup";
 import { FacetQuery, ResolveFacetOutput } from "../stages/facet";
 import { GetFieldType } from "../elements/fieldSelector";
@@ -234,25 +237,15 @@ export class Pipeline<
     LocalField extends FieldPath<PreviousStageDocs>,
     LocalFieldType extends GetFieldType<PreviousStageDocs, LocalField>,
     // MongoDB's $lookup matches array elements against scalars in either
-    // direction (an array localField matches any document whose scalar
-    // foreignField equals an element, and vice versa). The four arms
-    // below cover all four type combinations:
-    //   - T   → T   (scalar = scalar)              arms 1, 2
-    //   - T[] → T   (array local vs scalar foreign) arm 3
-    //   - T   → T[] (scalar local vs array foreign) arm 4
-    //   - T[] → T[] (array = array)                 arms 1, 2
-    // `Element` in arm 3 is inferred via `(infer E)[]`, so the same
-    // logic handles primitive arrays AND arrays of complex objects.
-    ForeignField extends
-      | FieldPathsThatInferToForLookup<
-          InferSourceType<C>,
-          LocalFieldType extends string ? string : LocalFieldType
-        >
-      | FieldPathsThatInferToForLookup<InferSourceType<C>, LocalFieldType>
-      | (LocalFieldType extends (infer Element)[] ?
-          FieldPathsThatInferToForLookup<InferSourceType<C>, Element>
-        : never)
-      | FieldPathsThatInferToForLookup<InferSourceType<C>, LocalFieldType[]>,
+    // direction. `LookupForeignFieldOrError` (in stages/lookup.ts) covers
+    // all four T/T[] combinations and falls through to a branded
+    // `PipeSafeError` when no foreign field has a compatible type —
+    // surfacing a clear hover instead of "is not assignable to never".
+    ForeignField extends LookupForeignFieldOrError<
+      InferSourceType<C>,
+      LocalFieldType,
+      LocalField
+    >,
     NewKey extends string,
     PipelineOutput extends Document = InferSourceType<C>,
   >(
