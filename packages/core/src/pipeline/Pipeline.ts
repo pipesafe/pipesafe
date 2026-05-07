@@ -233,12 +233,26 @@ export class Pipeline<
     C extends AllowedSource<Mode, any>,
     LocalField extends FieldPath<PreviousStageDocs>,
     LocalFieldType extends GetFieldType<PreviousStageDocs, LocalField>,
+    // MongoDB's $lookup matches array elements against scalars in either
+    // direction (an array localField matches any document whose scalar
+    // foreignField equals an element, and vice versa). The four arms
+    // below cover all four type combinations:
+    //   - T   → T   (scalar = scalar)              arms 1, 2
+    //   - T[] → T   (array local vs scalar foreign) arm 3
+    //   - T   → T[] (scalar local vs array foreign) arm 4
+    //   - T[] → T[] (array = array)                 arms 1, 2
+    // `Element` in arm 3 is inferred via `(infer E)[]`, so the same
+    // logic handles primitive arrays AND arrays of complex objects.
     ForeignField extends
       | FieldPathsThatInferToForLookup<
           InferSourceType<C>,
           LocalFieldType extends string ? string : LocalFieldType
         >
-      | FieldPathsThatInferToForLookup<InferSourceType<C>, LocalFieldType>,
+      | FieldPathsThatInferToForLookup<InferSourceType<C>, LocalFieldType>
+      | (LocalFieldType extends (infer Element)[] ?
+          FieldPathsThatInferToForLookup<InferSourceType<C>, Element>
+        : never)
+      | FieldPathsThatInferToForLookup<InferSourceType<C>, LocalFieldType[]>,
     NewKey extends string,
     PipelineOutput extends Document = InferSourceType<C>,
   >(

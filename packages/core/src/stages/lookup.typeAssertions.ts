@@ -461,3 +461,127 @@ export type {
   SelfLookupTest,
   SequentialLookupTest,
 };
+
+// ============================================================================
+// Call-site $lookup field-type combinations
+// ============================================================================
+// MongoDB's $lookup matches localField against foreignField with element-wise
+// semantics for arrays. The four type combinations (T=T, T[]=T, T=T[], T[]=T[])
+// must all be accepted. The fix landed in Pipeline.lookup's ForeignField
+// constraint by adding two extra arms: one that strips `(infer E)[]` from the
+// localField type, and one that wraps the localField type in `[]`.
+//
+// These tests exercise actual `pipeline.lookup({...})` calls. If any of the
+// `_callsite_*` constants fails to type-check the constraint has regressed.
+
+import { Pipeline as _Pipeline } from "../pipeline/Pipeline";
+import { Collection as _Collection } from "../collection/Collection";
+
+// --- Local + Foreign schemas covering scalar, primitive arrays, complex
+// arrays, and arrays reached via a dotted path ------------------------------
+
+type LocalDoc = {
+  _id: string;
+  scalarRef: string;
+  arrayRefs: string[];
+  // Tests dotted-path inference: GetFieldType<LocalDoc, "wrapper.refs"> = string[]
+  wrapper: { refs: string }[];
+  numericRef: number;
+  numericArrayRefs: number[];
+  // Complex object array — element type is { id; tag } not a primitive
+  payloads: { id: string; tag: string }[];
+};
+
+type ScalarForeignDoc = {
+  _id: string;
+  someNumericId: number;
+  payloadId: { id: string; tag: string };
+};
+
+type ArrayForeignDoc = {
+  _id: string;
+  ids: string[];
+  numericIds: number[];
+  payloadIds: { id: string; tag: string }[];
+};
+
+declare const _scalarForeignCollection: _Collection<ScalarForeignDoc>;
+declare const _arrayForeignCollection: _Collection<ArrayForeignDoc>;
+declare const _basePipeline: _Pipeline<LocalDoc, LocalDoc, "runtime", never>;
+
+// Combination 1: scalar T → scalar T (already worked)
+const _callsite_scalar_to_scalar = _basePipeline.lookup({
+  from: _scalarForeignCollection,
+  localField: "scalarRef",
+  foreignField: "_id",
+  as: "joined",
+});
+
+// Combination 2: array T[] → scalar T (the demo-conference case)
+const _callsite_array_to_scalar = _basePipeline.lookup({
+  from: _scalarForeignCollection,
+  localField: "arrayRefs",
+  foreignField: "_id",
+  as: "joined",
+});
+
+// Combination 3: scalar T → array T[]
+const _callsite_scalar_to_array = _basePipeline.lookup({
+  from: _arrayForeignCollection,
+  localField: "scalarRef",
+  foreignField: "ids",
+  as: "joined",
+});
+
+// Combination 4: array T[] → array T[]
+const _callsite_array_to_array = _basePipeline.lookup({
+  from: _arrayForeignCollection,
+  localField: "arrayRefs",
+  foreignField: "ids",
+  as: "joined",
+});
+
+// Numeric coverage to confirm the four arms aren't string-specific
+const _callsite_numeric_array_to_scalar = _basePipeline.lookup({
+  from: _scalarForeignCollection,
+  localField: "numericArrayRefs",
+  foreignField: "someNumericId",
+  as: "joined",
+});
+
+// Complex-object array — element type is `{ id; tag }`, not a primitive.
+// Verifies the `(infer Element)[]` arm strips the array wrapper for any E,
+// not just primitives.
+const _callsite_complex_array_to_scalar = _basePipeline.lookup({
+  from: _scalarForeignCollection,
+  localField: "payloads",
+  foreignField: "payloadId",
+  as: "joined",
+});
+
+const _callsite_complex_scalar_to_array = _basePipeline.lookup({
+  from: _arrayForeignCollection,
+  localField: "payloads",
+  foreignField: "payloadIds",
+  as: "joined",
+});
+
+// Dotted-path local field whose inferred type is `string[]` (`{ refs: string }[]`
+// projected via a dotted path). The lookup helper's element-strip arm must
+// handle dotted-path-derived array types the same way it handles direct
+// array fields.
+const _callsite_dotted_array_to_scalar = _basePipeline.lookup({
+  from: _scalarForeignCollection,
+  localField: "wrapper.refs",
+  foreignField: "_id",
+  as: "joined",
+});
+
+void _callsite_scalar_to_scalar;
+void _callsite_array_to_scalar;
+void _callsite_scalar_to_array;
+void _callsite_array_to_array;
+void _callsite_numeric_array_to_scalar;
+void _callsite_complex_array_to_scalar;
+void _callsite_complex_scalar_to_array;
+void _callsite_dotted_array_to_scalar;
