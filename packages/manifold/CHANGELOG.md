@@ -1,5 +1,19 @@
 # @pipesafe/manifold
 
+## 1.0.0
+
+### Minor Changes
+
+- 41114be: Add typed `$merge` terminal stage to `Pipeline` (mirrors `.out()` semantics) and unify `Model.Mode.Upsert`/`Append` output construction in manifold to delegate to the new builder. `MergeOptions` now lives in `@pipesafe/core`; manifold re-exports it for back-compat.
+
+### Patch Changes
+
+- Updated dependencies [41114be]
+- Updated dependencies [7cf13c1]
+- Updated dependencies [48539ad]
+- Updated dependencies [c530d6d]
+  - @pipesafe/core@1.0.0
+
 ## 0.8.0
 
 ### Minor Changes
