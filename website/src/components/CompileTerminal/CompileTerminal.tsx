@@ -79,13 +79,13 @@ const ERRORS: ErrorInfo[] = [
   },
   {
     id: 3,
-    line: '✗ "$totl" does not exist on Order',
+    line: "✗ Field 'totl' is not on the schema.",
     detail: 'Did you mean "$total"?',
   },
   {
     id: 4,
-    line: "✗ Type 'number' not assignable to 'string'",
-    detail: "$concat operands must be strings",
+    line: "✗ Operator '$concat' requires a string operand.",
+    detail: "Pass a string literal or a field reference to a string field.",
   },
 ];
 
@@ -219,7 +219,7 @@ export default function CompileTerminal() {
         >
           <ErrorIfFiring
             error={{
-              message: '"$totl" does not exist on Order',
+              message: "Field 'totl' is not on the schema.",
               detail: 'Did you mean "$total"?',
             }}
             isFixed={isErrorFixed(3)}
@@ -247,8 +247,9 @@ export default function CompileTerminal() {
         >
           <ErrorIfFiring
             error={{
-              message: "Type 'number' not assignable to 'string'",
-              detail: "$concat operands must be strings",
+              message: "Operator '$concat' requires a string operand.",
+              detail:
+                "Pass a string literal or a field reference to a string field.",
             }}
             isFixed={isErrorFixed(4)}
             isUnderlineActive={activeUnderlines.has(4)}
