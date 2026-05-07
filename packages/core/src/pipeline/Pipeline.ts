@@ -431,8 +431,8 @@ export class Pipeline<
    * Sort documents by field values (ascending 1 or descending -1)
    * @example .sort({ createdAt: -1, name: 1 })
    */
-  sort<const S extends SortQuery<PreviousStageDocs>>(
-    $sort: S
+  sort(
+    $sort: SortQuery<PreviousStageDocs>
   ): Pipeline<StartingDocs, PreviousStageDocs, Mode, UsedStages | "$sort"> {
     return this._chain<PreviousStageDocs, "$sort">([{ $sort }]);
   }
