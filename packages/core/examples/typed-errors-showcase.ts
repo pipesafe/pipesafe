@@ -46,7 +46,8 @@ const _sort_bad = orders.sort({ createdAtt: -1 });
 const _match_valid = orders.match({ total: { $gte: 100 } });
 
 // ❌ $gte against a string field. The brand message names the operator
-// and explains the constraint.
+// and shows the full field type (the entire `status` union) as the
+// brand's `Ctx`, not just one arbitrary union member.
 //
 // Hover shows:
 //   Type 'string' is not assignable to type 'PipeSafeError<"Operator
@@ -56,13 +57,12 @@ const _match_valid = orders.match({ total: { $gte: 100 } });
 // @ts-expect-error  $gte requires numeric/date field
 const _match_bad = orders.match({ status: { $gte: "pending" } });
 
-// ❌ Typo'd top-level field. ValidateMatchQuery brands it.
-//
-// Hover shows:
-//   PipeSafeError<"Field 'tota' is not on the schema", Order>
-//
-// @ts-expect-error  'tota' is not a field of Order
-const _match_typo = orders.match({ tota: { $gte: 100 } });
+// Note: typo'd top-level fields (e.g. `match({ tota: { $gte: 100 } })`)
+// are NOT branded at the call site. A validation wrapper would catch
+// them but produces a verbose error type that includes both the
+// user's literal value and the brand intersected. Kept the error
+// surface focused on the higher-value brand cases (operator-on-wrong-
+// type) instead.
 
 // =============================================================================
 // $project
@@ -134,7 +134,6 @@ export {
   _sort_bad,
   _match_valid,
   _match_bad,
-  _match_typo,
   _project_valid,
   _project_bad,
   _project_mixed,
