@@ -31,15 +31,6 @@ export type FieldPath<T> =
 
 export type FieldReference<T extends Document> = DollarPrefixed<FieldPath<T>>;
 
-/**
- * Branded compile-time error fired by `GetFieldTypeWithoutArrays` when a
- * path segment doesn't exist on the schema. The full original path is
- * templated into the message so the user can see exactly which path
- * was being walked when it failed.
- */
-type SegmentMissError<FullPath extends string> =
-  PipeSafeError<`Field '${FullPath}' is not on the schema.`>;
-
 export type GetFieldTypeWithoutArrays<
   Schema,
   Path extends string,
@@ -47,7 +38,7 @@ export type GetFieldTypeWithoutArrays<
 > =
   Schema extends (infer U)[] ? GetFieldTypeWithoutArrays<U, Path, FullPath>[]
   : // null/undefined branches of nullable unions silently fall through so
-  // distributing over `T | null` doesn't leak SegmentMissError into a result
+  // distributing over `T | null` doesn't leak the brand into a result
   // that's otherwise valid via the non-null branch.
   Schema extends null | undefined ? never
   : Path extends keyof Schema ?
@@ -55,8 +46,9 @@ export type GetFieldTypeWithoutArrays<
   : Path extends `${infer Head}.${infer Tail}` ?
     Head extends keyof Schema ?
       GetFieldTypeWithoutArrays<Schema[Head], Tail, FullPath> // Recurse into property
-    : SegmentMissError<FullPath>
-  : Path extends string ? SegmentMissError<FullPath>
+    : PipeSafeError<`Field '${FullPath}' is not on the schema.`>
+  : Path extends string ?
+    PipeSafeError<`Field '${FullPath}' is not on the schema.`>
   : never;
 
 // Infer the type of a field at a given selector

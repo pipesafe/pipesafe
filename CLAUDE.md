@@ -245,7 +245,7 @@ Conventions:
 - `expressions.ts` — `ArithmeticOperandFor`, `StringOperandFor`, `ArrayOperandFor`, `DateOperand`
 - `project.ts` — `ValidateProjectQuery` (unknown-key inclusion + mixed mode), `ResolveFieldValue`
 - `unwind.ts` — `UnwindPath`
-- `fieldReference.ts` — `SegmentMissError`
+- `fieldReference.ts` — `GetFieldTypeWithoutArrays` (inline brand for unknown field paths)
 
 ### Pipeline method signature patterns
 
