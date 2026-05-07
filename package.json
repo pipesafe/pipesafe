@@ -11,7 +11,8 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "website"
+    "website",
+    "website-brand"
   ],
   "packageManager": "bun@1.2.17",
   "engines": {

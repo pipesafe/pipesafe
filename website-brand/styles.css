@@ -1,0 +1,353 @@
+/*
+  PipeSafe brand site
+  Tokens mirror site/conferences/.../ds/colors_and_type.css and
+  packages/website/src/styles. Keep them in sync if those change.
+*/
+
+:root {
+  --ps-bg: #001e2b;
+  --ps-bg-brand: #026056;
+  --ps-bg-section: #0d2c3a;
+  --ps-fg: #e3fcf7;
+  --ps-fg-muted: #889ba7;
+  --ps-fg-comment: #5c6d75;
+
+  --ps-brand-green: #10ab50;
+  --ps-brand-forest: #026056;
+  --ps-brand-blue: #3178c6;
+  --ps-brand-mint: #d9efed;
+  --ps-accent: #10ab50;
+
+  --ps-border: #1a3a4a;
+
+  --ps-font-mono:
+    "JetBrains Mono", ui-monospace, "SFMono-Regular", "Menlo", "Monaco",
+    "Consolas", monospace;
+
+  --ps-tracking-wordmark: 0.1em;
+  --ps-tracking-label: 0.05em;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--ps-bg);
+  color: var(--ps-fg);
+  font-family: var(--ps-font-mono);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+a {
+  color: var(--ps-brand-green);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+main,
+.hero,
+footer {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.hero {
+  /* 5rem top mirrors the main site (2rem body + 3rem hero). */
+  padding: 5rem 1.5rem 3rem;
+  text-align: center;
+}
+
+.hero-logo {
+  height: 4rem;
+  width: auto;
+  display: block;
+  margin: 0 auto 1rem;
+}
+
+.wordmark {
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: var(--ps-tracking-wordmark);
+  color: var(--ps-fg);
+  margin: 0 0 0.5rem;
+}
+
+.tagline {
+  color: var(--ps-fg-muted);
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.eyebrow {
+  margin-top: 1.5rem;
+  font-size: 0.75rem;
+  letter-spacing: var(--ps-tracking-label);
+  text-transform: uppercase;
+  color: var(--ps-fg-comment);
+}
+
+section {
+  padding: 3rem 0;
+  border-top: 1px solid var(--ps-border);
+}
+
+section:first-of-type {
+  border-top: none;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.75rem;
+  color: var(--ps-fg);
+}
+
+.section-lede {
+  color: var(--ps-fg-muted);
+  margin: 0 0 2rem;
+}
+
+/* ---------- Logo grid ----------
+   3 variants across, 2 format rows (SVG top, PNG bottom).
+*/
+.logo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.logo-grid .row-label {
+  grid-column: 1 / -1;
+  font-size: 0.75rem;
+  letter-spacing: var(--ps-tracking-label);
+  text-transform: uppercase;
+  color: var(--ps-fg-comment);
+  margin: 1.5rem 0 0;
+}
+
+.logo-grid .row-label:first-child {
+  margin-top: 0;
+}
+
+.logo-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--ps-border);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 120ms ease;
+  min-height: 200px;
+}
+
+.logo-tile:hover {
+  border-color: var(--ps-brand-green);
+  text-decoration: none;
+}
+
+.logo-tile.bg-light {
+  background: #ffffff;
+}
+.logo-tile.bg-dark {
+  background: var(--ps-bg);
+}
+.logo-tile.bg-forest {
+  background: var(--ps-brand-forest);
+}
+
+.logo-tile img {
+  max-width: 80%;
+  max-height: 8rem;
+  object-fit: contain;
+}
+
+.logo-tile .meta {
+  margin-top: 1rem;
+  font-size: 0.75rem;
+  letter-spacing: var(--ps-tracking-label);
+  text-transform: uppercase;
+  color: var(--ps-fg-comment);
+}
+
+.logo-tile.bg-dark .meta,
+.logo-tile.bg-forest .meta {
+  color: var(--ps-brand-mint);
+}
+
+.press-kit {
+  margin-top: 1.5rem;
+  font-size: 0.875rem;
+}
+
+/* ---------- Swatches ---------- */
+.swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.swatch {
+  padding: 1.25rem 1rem;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 0.25rem;
+  color: var(--ps-fg);
+  min-height: 8rem;
+  border: 1px solid var(--ps-border);
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.swatch:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.swatch:focus-visible {
+  outline: 2px solid var(--ps-brand-mint);
+  outline-offset: 2px;
+}
+
+.swatch.is-copied {
+  outline: 2px solid var(--ps-brand-green);
+  outline-offset: 2px;
+}
+
+.swatch-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.swatch-hex {
+  font-family: var(--ps-font-mono);
+  font-size: 0.875rem;
+  opacity: 0.8;
+}
+
+.swatch-role {
+  margin-top: auto;
+  font-size: 0.75rem;
+  letter-spacing: var(--ps-tracking-label);
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.palette-hint {
+  margin-top: 1rem;
+  font-size: 0.75rem;
+  letter-spacing: var(--ps-tracking-label);
+  text-transform: uppercase;
+  color: var(--ps-fg-comment);
+}
+
+/* ---------- Type ---------- */
+.type-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.type-sample {
+  margin: 0;
+  font-family: var(--ps-font-mono);
+  color: var(--ps-fg);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.type-sample .type-meta {
+  font-size: 0.75rem;
+  letter-spacing: var(--ps-tracking-label);
+  text-transform: uppercase;
+  color: var(--ps-fg-comment);
+}
+
+/* ---------- Usage ---------- */
+.usage-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.usage-do,
+.usage-dont {
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--ps-border);
+  background: var(--ps-bg-section);
+}
+
+.usage-do h3,
+.usage-dont h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+}
+
+.usage-do h3 {
+  color: var(--ps-brand-green);
+}
+.usage-dont h3 {
+  color: #ff6f61;
+}
+
+.usage-do ul,
+.usage-dont ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+footer {
+  padding: 2rem 1.5rem 4rem;
+  color: var(--ps-fg-comment);
+  font-size: 0.75rem;
+  text-align: center;
+  letter-spacing: var(--ps-tracking-label);
+  text-transform: uppercase;
+}
+
+/* ---------- Responsive ----------
+   Breakpoint matches the main site (600px) so headers stay in lockstep.
+*/
+@media (max-width: 600px) {
+  .wordmark {
+    font-size: 1.75rem;
+  }
+  .tagline {
+    font-size: 0.95rem;
+  }
+  .usage-grid {
+    grid-template-columns: 1fr;
+  }
+  .swatch-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+  .logo-grid {
+    grid-template-columns: 1fr;
+  }
+}

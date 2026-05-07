@@ -1,5 +1,9 @@
+import type { ReactNode } from "react";
 import Terminal from "../Terminal";
-import TypeTooltip, { OrderTypeContent } from "../TypeTooltip";
+import TypeTooltip, {
+  OrderTypeContent,
+  StageTypeContent,
+} from "../TypeTooltip";
 import {
   MongoKeyword,
   MongoField,
@@ -9,6 +13,52 @@ import {
 import ErrorIfFiring from "./ErrorIfFiring";
 import { useIntersectionObserver, useCompileAnimation } from "../../hooks";
 import styles from "./CompileTerminal.module.css";
+
+function StageTooltip({
+  active,
+  method,
+  input,
+  output,
+  children,
+}: {
+  active: boolean;
+  method: string;
+  input: string;
+  output: string;
+  children: ReactNode;
+}) {
+  if (!active) return <>{children}</>;
+  return (
+    <TypeTooltip
+      content={
+        <StageTypeContent method={method} input={input} output={output} />
+      }
+    >
+      {children}
+    </TypeTooltip>
+  );
+}
+
+const STAGE_TYPES = {
+  lookup: {
+    input: "Order",
+    output: "Order & { user: User[] }",
+  },
+  match: {
+    input: "Order & { user: User[] }",
+    output: "Order & { user: User[] }",
+  },
+  set: {
+    input: "Order & { user: User[] }",
+    output:
+      "Order & { user: User[] } & { orderTotalWithTax: number; fullName: string }",
+  },
+  project: {
+    input:
+      "Order & { user: User[] } & { orderTotalWithTax: number; fullName: string }",
+    output: "{ orderTotalWithTax: number; fullName: string }",
+  },
+} as const;
 
 interface ErrorInfo {
   id: number;
@@ -89,16 +139,18 @@ export default function CompileTerminal() {
         = <MongoField>orders</MongoField>.<MongoKeyword>aggregate</MongoKeyword>
         (){"\n"}
         {"  "}.
-        <ErrorIfFiring
-          error={{
-            message: "$lookup missing required fields",
-            detail: 'Required: "foreignField", "as"',
-          }}
-          isFixed={isErrorFixed(1)}
-          isUnderlineActive={activeUnderlines.has(1)}
-        >
-          lookup
-        </ErrorIfFiring>
+        <StageTooltip active={allFixed} method="lookup" {...STAGE_TYPES.lookup}>
+          <ErrorIfFiring
+            error={{
+              message: "$lookup missing required fields",
+              detail: 'Required: "foreignField", "as"',
+            }}
+            isFixed={isErrorFixed(1)}
+            isUnderlineActive={activeUnderlines.has(1)}
+          >
+            <MongoKeyword>lookup</MongoKeyword>
+          </ErrorIfFiring>
+        </StageTooltip>
         ({"{"}
         {"\n"}
         {"    "}
@@ -125,9 +177,12 @@ export default function CompileTerminal() {
           className={`${styles.codeCursor} ${activeCursor === 1 ? styles.visible : ""}`}
         ></span>
         {"\n"}
-        {"  "}.<MongoKeyword>match</MongoKeyword>({"{"}{" "}
-        <MongoField>total</MongoField>: {"{"} <MongoOperator>$gt</MongoOperator>
-        :{" "}
+        {"  "}.
+        <StageTooltip active={allFixed} method="match" {...STAGE_TYPES.match}>
+          <MongoKeyword>match</MongoKeyword>
+        </StageTooltip>
+        ({"{"} <MongoField>total</MongoField>: {"{"}{" "}
+        <MongoOperator>$gt</MongoOperator>:{" "}
         <span
           className={`${styles.fixableCode} ${isErrorFixed(2) ? styles.isFixed : ""}`}
         >
@@ -150,7 +205,11 @@ export default function CompileTerminal() {
           className={`${styles.codeCursor} ${activeCursor === 2 ? styles.visible : ""}`}
         ></span>{" "}
         {"}"} {"})"}){"\n"}
-        {"  "}.<MongoKeyword>set</MongoKeyword>({"{"}
+        {"  "}.
+        <StageTooltip active={allFixed} method="set" {...STAGE_TYPES.set}>
+          <MongoKeyword>set</MongoKeyword>
+        </StageTooltip>
+        ({"{"}
         {"\n"}
         {"    "}
         <MongoField>orderTotalWithTax</MongoField>: {"{"}{" "}
@@ -211,9 +270,17 @@ export default function CompileTerminal() {
         {"\n"}
         {"  "}
         {"})"}){"\n"}
-        {"  "}.<MongoKeyword>project</MongoKeyword>({"{"}{" "}
-        <MongoField>orderTotalWithTax</MongoField>: <MongoField>1</MongoField>,{" "}
-        <MongoField>fullName</MongoField>: <MongoField>1</MongoField> {"}"})
+        {"  "}.
+        <StageTooltip
+          active={allFixed}
+          method="project"
+          {...STAGE_TYPES.project}
+        >
+          <MongoKeyword>project</MongoKeyword>
+        </StageTooltip>
+        ({"{"} <MongoField>orderTotalWithTax</MongoField>:{" "}
+        <MongoField>1</MongoField>, <MongoField>fullName</MongoField>:{" "}
+        <MongoField>1</MongoField> {"}"})
       </pre>
 
       <div

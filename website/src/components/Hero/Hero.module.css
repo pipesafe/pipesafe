@@ -3,9 +3,16 @@
   padding: var(--spacing-3xl) 0;
 }
 
+.logo {
+  height: 4rem;
+  width: auto;
+  display: block;
+  margin: 0 auto var(--spacing-lg);
+}
+
 .title {
   font-size: var(--font-size-xl);
-  color: var(--color-primary);
+  color: var(--color-text);
   margin-bottom: var(--spacing-sm);
   letter-spacing: 0.1em;
 }
