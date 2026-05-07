@@ -207,3 +207,70 @@ Uses `mongodb-memory-server` for isolated testing with pre-seeded test data.
 ### TypeScript Config
 
 Always use the project's tsconfig.json for type checking. The project uses strict settings (`exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`, etc.) that differ from TypeScript defaults. Use `bun run build` for validation, not `tsc` on individual files.
+
+## Compile-Time Errors: `PipeSafeError<Msg>`
+
+Compile-time validation errors are surfaced through a single branded interface:
+
+```ts
+interface PipeSafeError<Msg extends string> {
+  readonly "~pipesafe.error": Msg;
+}
+```
+
+Defined in `packages/core/src/utils/core.ts`. Single type parameter — the literal `Msg` is the entire surface area. Embed dynamic context (operator names, key names, path segments) into the message via template literals; do not add a separate `Ctx` parameter.
+
+### Message format
+
+All brand messages follow one skeleton, keyed off MongoDB nomenclature:
+
+```
+Operator    '$op' requires <constraint>.
+Accumulator '$op' requires <constraint>.
+Stage       '$stage' <constraint>.
+Field       'name' is not on the schema.
+```
+
+Conventions:
+
+- Trailing period.
+- No parenthetical "what would work" hints — those belong in docs, not the brand.
+- Quote `$op` / field names with single quotes.
+- Use **Operator** for `$match` / expression operators, **Accumulator** for `$group` operands (`$sum`, `$avg`, etc.), **Stage** for `$project` / `$unwind` etc.
+
+### Where brands fire
+
+- `match.ts` — `ComparatorMatchers<T>` operand helpers (`NumericOperand`, `SizeOperand`, etc.)
+- `group.ts` — `NumericAccumulatorOperand`, `MinMaxAccumulatorOperand`
+- `expressions.ts` — `ArithmeticOperandFor`, `StringOperandFor`, `ArrayOperandFor`, `DateOperand`
+- `project.ts` — `ValidateProjectQuery` (unknown-key inclusion + mixed mode), `ResolveFieldValue`
+- `unwind.ts` — `UnwindPath`
+- `fieldReference.ts` — `SegmentMissError`
+
+### Pipeline method signature patterns
+
+Different stages need different patterns to make brands fire at the chained call site:
+
+- **Direct typing** (`(\$q: Q<Schema>)` — no generic): `sort`. Use when the query type is a finite-key mapped type and the return type doesn't need the literal query.
+- **Validation-mapped wrapper** (`<const P>(\$q: ValidateXQuery<Schema, P>)`): `project`. Use for stages with `[key: string]:` index signatures where direct typing alone wouldn't trigger excess-property checking. Output type still uses the literal `P` for narrowing.
+- **Generic constraint** (`<const M extends Q<Schema>>(\$q: M)`): `match`, `set`, `group`, `replaceRoot`, `facet`. Default pattern. Inner-value brands (e.g. `$gte` on a string) fire from the constraint check; call-site excess-property checking is suppressed but the resulting "is not assignable to PipeSafeError" message is still readable.
+
+### Error code: prefer TS2322 over TS2353
+
+When designing a brand site, place the `PipeSafeError` at a **value position** (the value of an offending key) so TypeScript reports `TS2322 "Type X is not assignable to type 'PipeSafeError<...>'"`. Wrapping the whole parameter type in `PipeSafeError` produces `TS2353 "Object literal may only specify known properties, and 'X' does not exist..."` which highlights an arbitrary valid key and misleads the reader.
+
+### Distribution control
+
+When a conditional returns a `PipeSafeError` for an incompatible type, use `[T] extends [...]` (single-element tuple wrapping) instead of naked `T extends ...`. The non-distributive form rejects mixed-typed unions with one error rather than producing a per-branch union of brands that TS displays awkwardly (e.g. showing only one arbitrary union member as the field type).
+
+### Stripping `readonly` from displayed types
+
+When a `<const P>`-inferred literal is used as the brand's `Ctx` (or as part of the error type's display), TypeScript carries `readonly` modifiers from the const generic into the hover text. Wrap with an inline `{ -readonly [K in keyof T]: T[K] }` mapped type at the call site — a reusable `Mutable<T>` alias does NOT work because TS preserves type alias names in error displays. (Note: the current `PipeSafeError<Msg>` interface no longer carries a `Ctx`, so this only applies if you ever bring it back.)
+
+### Known limitations
+
+- **`Pipeline.group`'s call-site brand surfacing** for `$sum: '$stringField'` etc. is silent. The brands exist in the type system (covered by `group.typeAssertions.ts`) but don't fire at chained call sites because `GroupQuery`'s `[key: string]:` index signature suppresses operand validation, and wrapping `Pipeline.group`'s parameter in a validation type interferes with TS's resolution of legitimate compound-`_id` patterns like `_id: { date: { $dateToString: ... } }`. Tracked as a follow-up. Annotating the literal as `GroupQuery<Schema>` directly still fires the brand.
+
+### Regression guard
+
+`packages/core/src/pipeline/Pipeline.callSite.typeAssertions.ts` pins the desired call-site rejection behavior for each stage with `@ts-expect-error` directives. Do not remove cases without replacing them — they're how we know future signature changes don't silently re-introduce holes.
