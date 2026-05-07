@@ -115,7 +115,15 @@ type ValidateProjectQueryKeys<Schema extends Document, P> = {
 export type ValidateProjectQuery<Schema extends Document, P> =
   HasInclusionNonId<P> extends true ?
     HasExclusionNonId<P> extends true ?
-      PipeSafeError<`Cannot mix inclusion (1/true) and exclusion (0/false) in the same $project. Pick one mode (excluding '_id' from inclusion mode is the only allowed mix).`>
+      // Mixed mode: brand each non-_id exclusion VALUE so TS reports
+      // TS2322 ("Type 0 is not assignable to PipeSafeError<...>") at
+      // the offending 0/false rather than TS2353 on a valid key.
+      {
+        [K in keyof P]: K extends "_id" ? P[K]
+        : P[K] extends 0 | false ?
+          PipeSafeError<`Cannot mix inclusion (1/true) and exclusion (0/false) in the same $project. Remove this 0/false or use a separate $project stage to exclude (excluding '_id' from inclusion mode is the only allowed mix).`>
+        : P[K];
+      }
     : ValidateProjectQueryKeys<Schema, P>
   : ValidateProjectQueryKeys<Schema, P>;
 
