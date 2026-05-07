@@ -24,4 +24,21 @@ Infrastructure:
 - `packages/core/tsconfig.json` no longer excludes `**/*.typeAssertions.ts`, so the root `tsc --noEmit` now covers all 21 type-assertion files via project references. Previously they were only checked by IDE LSP, letting real errors slip through CI.
 - `packages/core/tsconfig.benchmark.json` overrides `rootDir` to the package root so the benchmark suite type-checks `examples/`, `benchmarking/`, and `benchmarks/` instead of failing fast with TS6059. Fixes the `Instantiations: 0` readout the diagnostic parser was producing.
 
-No runtime behaviour changes; all 56 existing runtime tests and 21 type-assertion files still pass.
+Call-site brand surfacing (Round 3):
+
+The brands added in Rounds 1-2 fire at the type-level (proven by `*.typeAssertions.ts` tests) but mostly didn't surface at chained Pipeline call sites because the `<const X extends Q>($q: X)` generic-constraint pattern suppresses excess-property checking and hides per-key value brands behind index signatures. This round changes the Pipeline method signatures to make the brands fire at the call site so `pipeline.sort({ naem: 1 })` produces a useful compile error rather than silently passing.
+
+- `Pipeline.sort($sort: SortQuery<Schema>)` — direct typing surfaces TS2353 on typo'd field names. SortQuery's mapped type over a finite key union allows excess-property checking once the generic is dropped.
+- `Pipeline.match` keeps the `<const M extends MatchQuery<Schema>>` constraint (preserves union narrowing in `ResolveMatchOutput`) and adds an `M & ValidateMatchQuery<Schema, M>` parameter intersection that brands typo'd top-level keys (e.g. `match({ naem: { $eq: 'x' } })`) while letting inner operator brands like `$gte` against a string field continue firing through.
+- `Pipeline.project` switches to `<const P>($project: ValidateProjectQuery<Schema, P>)`. The new `ValidateProjectQuery` mapped type catches two previously-silent failures at the call site:
+  - Inclusion of an unknown key — `project({ name: 1, unknownKey: 1 })` now hovers as `PipeSafeError<"Cannot include field 'unknownKey' — not on schema", Schema>`. New-field-creation values (field references, expressions, nested objects) on unknown keys still pass because that's the legitimate "rename / compute new field" pattern.
+  - Mixed inclusion (1/true) and exclusion (0/false) on non-`_id` fields — `project({ name: 1, age: 0 })` is now rejected at compile time with the literal "Cannot mix..." message. Excluding `_id` from an otherwise-inclusion projection is still permitted (it's MongoDB's documented exception).
+- `Pipeline.callSite.typeAssertions.ts` (new) is a permanent regression guard: each Pipeline stage method has at least one `@ts-expect-error` case pinning the desired call-site rejection, so future signature regressions can't silently re-introduce the gap.
+
+Perf: validation-mapped types add ~3,600 instantiations (~0.4%) to the baseline package typecheck and zero per-stage cost for valid inputs (TS folds the mapping when its result shape matches the input).
+
+Known limitation: `Pipeline.group`'s call-site brand surfacing for `$sum`/`$avg` operand mismatches is left as a follow-up. Wrapping group's parameter in a validation type interferes with TS's resolution of legitimate compound-`_id` patterns (e.g. `_id: { date: { $dateToString: ... } }`). The brand still fires when assigning the literal to a `GroupQuery<Schema>`-typed variable directly; only the chained call site is silent. Tracked in a follow-up PR.
+
+Examples updated: two pre-existing latent bugs in `examples/analytics-dashboard.ts` and `examples/user-management.ts` (project keys not on the previous-stage schema) were uncovered by this change and removed; both lines were already commented as "would use additional stages".
+
+No runtime behaviour changes; all 56 existing runtime tests and 22 type-assertion files still pass.
