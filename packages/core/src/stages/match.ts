@@ -28,29 +28,36 @@ type SomeBSONType = BSONType | BSONTypeAlias;
 // Operand helpers — return the valid operand type for a compatible field type,
 // or a `PipeSafeError` whose literal message names the operator and the
 // incompatible type the user wrote against.
+//
+// Each conditional uses `[T] extends [...]` (single-element tuple wrapping)
+// to suppress distribution over union T. Without it, a field typed as
+// `"pending" | "shipped" | "delivered"` produces the brand once per union
+// member and TS displays only one (whichever it picks) in the hover —
+// e.g. `PipeSafeError<"...", "delivered">`. The tuple form keeps the union
+// intact so the brand's `Ctx` shows the full field type.
 // ---------------------------------------------------------------------------
 
 type NumericOperand<T, Op extends string> =
-  T extends number | Date ? T
+  [T] extends [number | Date] ? T
   : PipeSafeError<
       `Operator '${Op}' is not allowed on this field (numeric/date only)`,
       T
     >;
 
 type SizeOperand<T> =
-  T extends unknown[] ? number
+  [T] extends [unknown[]] ? number
   : PipeSafeError<`Operator '$size' requires an array field`, T>;
 
 type ArrayValueOperand<T, Op extends string> =
-  T extends (infer U)[] ? U[]
+  [T] extends [(infer U)[]] ? U[]
   : PipeSafeError<`Operator '${Op}' requires an array field`, T>;
 
 type ArrayElementOperand<T, Op extends string> =
-  T extends (infer U)[] ? U
+  [T] extends [(infer U)[]] ? U
   : PipeSafeError<`Operator '${Op}' requires an array field`, T>;
 
 type RegexOperand<T> =
-  T extends string ? RegExp | string
+  [T] extends [string] ? RegExp | string
   : PipeSafeError<`Operator '$regex' is only valid on string fields`, T>;
 
 export type ComparatorMatchers<T extends unknown> = Prettify<
@@ -74,8 +81,12 @@ export type ComparatorMatchers<T extends unknown> = Prettify<
   }
 >;
 
+// `[T] extends [(infer U)[]]` rather than naked `T extends ...` — the
+// non-distributive form keeps a union-typed field intact when computing
+// the brand's `Ctx`, so a typo against `status: 'pending' | 'shipped' |
+// 'delivered'` hovers with the full union rather than just one branch.
 export type RawMatchersForType<T extends unknown> =
-  T extends (infer U)[] ?
+  [T] extends [(infer U)[]] ?
     ComparatorMatchers<T> | RawMatchersForType<U> // Element matcher (passthrough)
   : ComparatorMatchers<T>;
 
