@@ -14,7 +14,7 @@ import {
   InferNestedFieldReference,
 } from "../elements/fieldReference";
 import { Expression, InferExpression } from "../elements/expressions";
-import { GetFieldType } from "../elements/fieldSelector";
+import { FieldSelector, GetFieldType } from "../elements/fieldSelector";
 
 // ============================================================================
 // Expression Operators for $project Stage
@@ -54,6 +54,33 @@ export type ProjectQuery<Schema extends Document> = {
     | FieldReference<Schema>
     | ProjectExpression<Schema>
     | Document; // For nested object replacement
+};
+
+/**
+ * Validation wrapper for $project queries used at Pipeline.project's
+ * parameter position. Maps the user's literal P, replacing inclusion
+ * values (1/0/true/false) at unknown-key positions with a branded
+ * `PipeSafeError`. New-field-creation values (field references,
+ * expressions, nested objects) on unknown keys are still allowed —
+ * that's the legitimate "rename / compute new field" use case.
+ *
+ * Schema-known keys pass through unchanged so chained-stage inference
+ * via ResolveProjectOutput<P, Schema> sees the literal P.
+ *
+ * Cost: ~3,600 instantiations once at baseline; zero per-stage marginal
+ * cost for valid inputs (TS folds the mapped type when shape matches).
+ * An `Exclude<keyof P, FieldSelector<Schema>> extends never ? P : ...`
+ * early-exit was tried and adds ~600 instantiations without helping
+ * the per-stage cost — left out.
+ */
+export type ValidateProjectQuery<Schema extends Document, P> = {
+  [K in keyof P]: K extends FieldSelector<Schema> ? P[K]
+  : P[K] extends 1 | 0 | true | false ?
+    PipeSafeError<
+      `Cannot include field '${K & string}' — not on schema`,
+      Schema
+    >
+  : P[K];
 };
 
 // Helper: Check if a value is an inclusion (1 or true)
