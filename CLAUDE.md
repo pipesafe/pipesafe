@@ -225,10 +225,11 @@ Defined in `packages/core/src/utils/core.ts`. Single type parameter — the lite
 All brand messages follow one skeleton, keyed off MongoDB nomenclature:
 
 ```
-Operator    '$op' requires <constraint>.
-Accumulator '$op' requires <constraint>.
-Stage       '$stage' <constraint>.
-Field       'name' is not on the schema.
+Operator           '$op' requires <constraint>.
+Accumulator        '$op' requires <constraint>.
+Stage              '$stage' <constraint>.
+Field              'name' is not on the schema.
+Foreign collection has no <constraint>.
 ```
 
 Conventions:
@@ -236,7 +237,8 @@ Conventions:
 - Trailing period.
 - No parenthetical "what would work" hints — those belong in docs, not the brand.
 - Quote `$op` / field names with single quotes.
-- Use **Operator** for `$match` / expression operators, **Accumulator** for `$group` operands (`$sum`, `$avg`, etc.), **Stage** for `$project` / `$unwind` etc.
+- Use **Operator** for `$match` / expression operators, **Accumulator** for `$group` operands (`$sum`, `$avg`, etc.), **Stage** for `$project` / `$unwind` etc., **Foreign collection** for `$lookup` constraints where the joined schema is the cause (the stage was used correctly; the schema is missing a compatible field).
+- Pick the subject by what the user needs to fix: the operator/accumulator/stage they wrote, the field they referenced, or the foreign collection's schema they joined against.
 
 ### Where brands fire
 
@@ -246,6 +248,7 @@ Conventions:
 - `project.ts` — `ValidateProjectQuery` (unknown-key inclusion + mixed mode), `ResolveFieldValue`
 - `unwind.ts` — `UnwindPath`
 - `fieldReference.ts` — `GetFieldTypeWithoutArrays` (inline brand for unknown field paths)
+- `lookup.ts` — `LookupForeignFieldOrError` (no foreign field with a compatible type, with passthrough for upstream errors)
 
 ### Pipeline method signature patterns
 

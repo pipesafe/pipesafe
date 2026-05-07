@@ -41,12 +41,21 @@ export type LookupCompatibleFieldPaths<
  * type compatible with the local field's type. Without this brand the
  * constraint silently fell through to `never`, producing the unhelpful
  * "Type 'X' is not assignable to type 'never'" hover.
+ *
+ * Passes through upstream errors: if either the foreign schema or the
+ * resolved local field type is already a `PipeSafeError` (from an
+ * earlier stage), surface that error instead of computing a fresh
+ * no-compatible-field brand on top of it.
  */
 export type LookupForeignFieldOrError<
   ForeignSchema extends Document,
   LocalFieldType,
   LocalField extends string,
 > =
-  [LookupCompatibleFieldPaths<ForeignSchema, LocalFieldType>] extends [never] ?
-    PipeSafeError<`Stage '$lookup' has no foreign field with a type compatible with localField '${LocalField}'.`>
+  ForeignSchema extends PipeSafeError<string> ? ForeignSchema
+  : LocalFieldType extends PipeSafeError<string> ? LocalFieldType
+  : [LookupCompatibleFieldPaths<ForeignSchema, LocalFieldType>] extends (
+    [never]
+  ) ?
+    PipeSafeError<`Foreign collection has no field with a type compatible with localField '${LocalField}'.`>
   : LookupCompatibleFieldPaths<ForeignSchema, LocalFieldType>;

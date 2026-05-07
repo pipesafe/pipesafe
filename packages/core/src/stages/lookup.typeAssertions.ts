@@ -591,10 +591,14 @@ void _callsite_dotted_array_to_scalar;
 // ============================================================================
 // When the local field's type doesn't match any field on the foreign
 // collection, the constraint resolves to a `PipeSafeError` rather than
-// the previous silent `never`. The brand names the offending localField.
+// the previous silent `never`. The brand names the offending localField
+// and points at the foreign collection (not the $lookup stage) — the
+// stage was used correctly; the collection's schema is what's missing
+// a field of a compatible type.
 
 import type { LookupForeignFieldOrError } from "./lookup";
 import type { AssertPipeSafeError } from "../utils/tests";
+import type { PipeSafeError } from "../utils/core";
 
 // Foreign collection has only string-typed fields …
 type _OnlyStringsForeign = { _id: string; tag: string };
@@ -609,7 +613,7 @@ type _NoCompat_Numeric = LookupForeignFieldOrError<
 type _Assert_NoCompat_Numeric = Assert<
   AssertPipeSafeError<
     _NoCompat_Numeric,
-    "Stage '$lookup' has no foreign field with a type compatible with localField 'numericRef'."
+    "Foreign collection has no field with a type compatible with localField 'numericRef'."
   >
 >;
 
@@ -623,7 +627,7 @@ type _NoCompat_Dotted = LookupForeignFieldOrError<
 type _Assert_NoCompat_Dotted = Assert<
   AssertPipeSafeError<
     _NoCompat_Dotted,
-    "Stage '$lookup' has no foreign field with a type compatible with localField 'events.scheduledAt'."
+    "Foreign collection has no field with a type compatible with localField 'events.scheduledAt'."
   >
 >;
 
@@ -643,8 +647,38 @@ type _Assert_Compat_NotBrand = Assert<
   >
 >;
 
+// Passthrough: an upstream error in the foreign schema surfaces as-is,
+// not buried under a fresh "no compatible foreign field" brand.
+type _UpstreamForeignErr = PipeSafeError<"upstream error in foreign schema">;
+type _PassthroughForeign = LookupForeignFieldOrError<
+  // Cast through Document because the helper's constraint is `extends Document`;
+  // in real chains an upstream brand reaches lookup via PassThrough on the
+  // PreviousStageDocs / Source schema.
+  _UpstreamForeignErr & Record<string, any>,
+  string,
+  "anyField"
+>;
+type _Assert_PassthroughForeign = Assert<
+  AssertPipeSafeError<_PassthroughForeign, "upstream error in foreign schema">
+>;
+
+// Passthrough: an upstream error reaching the local-field-type position
+// also surfaces verbatim — the no-compat brand doesn't get computed on
+// top of it.
+type _UpstreamLocalErr = PipeSafeError<"upstream error in local schema">;
+type _PassthroughLocal = LookupForeignFieldOrError<
+  _OnlyStringsForeign,
+  _UpstreamLocalErr,
+  "someLocal"
+>;
+type _Assert_PassthroughLocal = Assert<
+  AssertPipeSafeError<_PassthroughLocal, "upstream error in local schema">
+>;
+
 export type {
   _Assert_NoCompat_Numeric,
   _Assert_NoCompat_Dotted,
   _Assert_Compat_NotBrand,
+  _Assert_PassthroughForeign,
+  _Assert_PassthroughLocal,
 };
