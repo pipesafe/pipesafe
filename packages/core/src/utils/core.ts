@@ -15,6 +15,12 @@ export type Prettify<T> = {
  * Carries a literal `Msg` shown verbatim in "is not assignable to PipeSafeError<...>"
  * errors, plus an optional `Ctx` capturing the offending value/schema so users
  * can see what was being checked when the error fired.
+ *
+ * Note: when `Ctx` is a user literal inferred via `<const>`, wrap it
+ * with an inline mapped type `{ -readonly [K in keyof T]: T[K] }` at the
+ * call site to strip `readonly` modifiers from the hover. A reusable
+ * `Mutable<>` alias was tried but TS keeps the alias name in error
+ * displays — only inlining produces a clean `{ a: 1; b: 2 }` hover.
  */
 export interface PipeSafeError<Msg extends string, Ctx = unknown> {
   readonly "~pipesafe.error": { message: Msg; context: Ctx };

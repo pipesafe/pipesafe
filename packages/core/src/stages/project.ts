@@ -120,7 +120,9 @@ export type ValidateProjectQuery<Schema extends Document, P> =
     HasExclusionNonId<P> extends true ?
       PipeSafeError<
         `Cannot mix inclusion (1/true) and exclusion (0/false) in the same $project. Pick one mode (excluding '_id' from inclusion mode is the only allowed mix).`,
-        P
+        // Inlined { -readonly [K]: P[K] } so the hover renders the
+        // resolved object rather than `Mutable<...>`.
+        { -readonly [K in keyof P]: P[K] }
       >
     : ValidateProjectQueryKeys<Schema, P>
   : ValidateProjectQueryKeys<Schema, P>;
