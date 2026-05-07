@@ -19,10 +19,7 @@ import { AnyLiteral } from "./literals";
 type ArrayOperandFor<Schema extends Document, Op extends string> =
   | FieldReferencesThatInferTo<Schema, unknown[]>
   | AnyLiteral<Schema>[]
-  | PipeSafeError<
-      `Operator '${Op}' requires an array operand (field reference to an array or array literal)`,
-      Schema
-    >;
+  | PipeSafeError<`Operator '${Op}' requires an array operand (field reference to an array or array literal)`>;
 
 /**
  * $concatArrays expression - concatenates arrays
@@ -57,10 +54,7 @@ export type SizeExpression<Schema extends Document> = {
 type DateOperand<Schema extends Document> =
   | Date
   | FieldReferencesThatInferTo<Schema, Date>
-  | PipeSafeError<
-      `Date operand requires a Date literal or field reference to a Date field`,
-      Schema
-    >;
+  | PipeSafeError<`Date operand requires a Date literal or field reference to a Date field`>;
 
 /**
  * $dateToString expression - converts a date to a string
@@ -272,10 +266,7 @@ type ArithmeticOperandFor<Schema extends Document, Op extends string> =
   | number
   | FieldReferencesThatInferTo<Schema, number>
   | Expression<Schema>
-  | PipeSafeError<
-      `Operator '${Op}' requires a numeric operand (number, field reference to a number, or nested expression)`,
-      Schema
-    >;
+  | PipeSafeError<`Operator '${Op}' requires a numeric operand (number, field reference to a number, or nested expression)`>;
 
 /**
  * $add expression - adds numbers together
@@ -356,10 +347,7 @@ export type DateExpression<Schema extends Document> =
 type StringOperandFor<Schema extends Document, Op extends string> =
   | string
   | FieldReferencesThatInferTo<Schema, string>
-  | PipeSafeError<
-      `Operator '${Op}' requires a string operand (string literal or field reference to a string)`,
-      Schema
-    >;
+  | PipeSafeError<`Operator '${Op}' requires a string operand (string literal or field reference to a string)`>;
 
 /**
  * $concat expression - concatenates strings together

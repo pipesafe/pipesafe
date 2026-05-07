@@ -33,18 +33,14 @@ export type FieldReference<T extends Document> = DollarPrefixed<FieldPath<T>>;
 
 /**
  * Branded compile-time error fired by `GetFieldTypeWithoutArrays` when a path
- * segment doesn't exist on the schema. Replaces the previous silent `: never`
- * fallback so users get a hover with the offending segment + full path
- * instead of cryptic "is not assignable to never".
+ * segment doesn't exist on the schema. The failed segment and the full
+ * original path are templated into the message — both are info the user
+ * can't see in their own code (the path was being walked recursively).
  */
 type SegmentMissError<
   Head extends string,
-  Schema,
   FullPath extends string,
-> = PipeSafeError<
-  `Unknown field '${Head}' on path '${FullPath}'`,
-  { schema: Schema; fullPath: FullPath; failedAt: Head }
->;
+> = PipeSafeError<`Unknown field '${Head}' on path '${FullPath}'`>;
 
 export type GetFieldTypeWithoutArrays<
   Schema,
@@ -61,8 +57,8 @@ export type GetFieldTypeWithoutArrays<
   : Path extends `${infer Head}.${infer Tail}` ?
     Head extends keyof Schema ?
       GetFieldTypeWithoutArrays<Schema[Head], Tail, FullPath> // Recurse into property
-    : SegmentMissError<Head, Schema, FullPath>
-  : Path extends string ? SegmentMissError<Path, Schema, FullPath>
+    : SegmentMissError<Head, FullPath>
+  : Path extends string ? SegmentMissError<Path, FullPath>
   : never;
 
 // Infer the type of a field at a given selector
@@ -90,7 +86,7 @@ export type FieldReferencesThatInferToForLookup<
   Schema extends unknown ?
     {
       [K in FieldReference<Schema>]: InferFieldReference<Schema, K> extends (
-        PipeSafeError<string, unknown>
+        PipeSafeError<string>
       ) ?
         never // Skip branded errors — they only appear when K is widened past a valid path
       : DesiredType extends InferFieldReference<Schema, K> ? K
@@ -102,7 +98,7 @@ export type FieldReferencesThatInferTo<Schema extends Document, DesiredType> =
   Schema extends unknown ?
     {
       [K in FieldReference<Schema>]: InferFieldReference<Schema, K> extends (
-        PipeSafeError<string, unknown>
+        PipeSafeError<string>
       ) ?
         never // Skip branded errors
       : NonNullable<InferFieldReference<Schema, K>> extends DesiredType ? K

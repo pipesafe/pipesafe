@@ -56,7 +56,7 @@ export type NotImplemented<T extends false> = true & {
  * `Assert<...>` produces a compile error pointing to the mismatched message.
  */
 export type AssertPipeSafeError<Actual, ExpectedMsg extends string> =
-  Actual extends PipeSafeError<infer Msg, unknown> ?
+  Actual extends PipeSafeError<infer Msg> ?
     Equal<Msg, ExpectedMsg> extends true ?
       true
     : false

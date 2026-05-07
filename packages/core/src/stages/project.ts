@@ -86,10 +86,7 @@ type HasExclusionNonId<P> =
 type ValidateProjectQueryKeys<Schema extends Document, P> = {
   [K in keyof P]: K extends FieldSelector<Schema> ? P[K]
   : P[K] extends 1 | 0 | true | false ?
-    PipeSafeError<
-      `Cannot include field '${K & string}' — not on schema`,
-      Schema
-    >
+    PipeSafeError<`Cannot include field '${K & string}' — not on schema`>
   : P[K];
 };
 
@@ -118,12 +115,7 @@ type ValidateProjectQueryKeys<Schema extends Document, P> = {
 export type ValidateProjectQuery<Schema extends Document, P> =
   HasInclusionNonId<P> extends true ?
     HasExclusionNonId<P> extends true ?
-      PipeSafeError<
-        `Cannot mix inclusion (1/true) and exclusion (0/false) in the same $project. Pick one mode (excluding '_id' from inclusion mode is the only allowed mix).`,
-        // Inlined { -readonly [K]: P[K] } so the hover renders the
-        // resolved object rather than `Mutable<...>`.
-        { -readonly [K in keyof P]: P[K] }
-      >
+      PipeSafeError<`Cannot mix inclusion (1/true) and exclusion (0/false) in the same $project. Pick one mode (excluding '_id' from inclusion mode is the only allowed mix).`>
     : ValidateProjectQueryKeys<Schema, P>
   : ValidateProjectQueryKeys<Schema, P>;
 
@@ -182,7 +174,7 @@ type ResolveFieldValue<Schema extends Document, Value, Key extends string> =
       // Dotted key - get nested field type
       GetFieldType<Schema, Key>
     : Key extends keyof Schema ? Schema[Key]
-    : PipeSafeError<`Cannot include field '${Key}' — not on schema`, Schema>
+    : PipeSafeError<`Cannot include field '${Key}' — not on schema`>
   : Value extends 0 | false ?
     // Exclusion - return never (field is excluded). Intentional: `never`
     // here means "the field is dropped from the output", which is correct.
@@ -196,10 +188,7 @@ type ResolveFieldValue<Schema extends Document, Value, Key extends string> =
   : Value extends Document ?
     // Nested object - recursively resolve field references and expressions within it
     ResolveNestedProjection<Schema, Value>
-  : PipeSafeError<
-      `Invalid projection value for '${Key}'. Expected 0, 1, a field reference, an expression, or a nested object.`,
-      { schema: Schema; value: Value }
-    >;
+  : PipeSafeError<`Invalid projection value for '${Key}'. Expected 0, 1, a field reference, an expression, or a nested object.`>;
 
 // Helper: Create flat map of dotted keys to their types (only include keys with 1/true values)
 type DottedKeyFlatMap<
@@ -346,10 +335,7 @@ export type ResolveProjectOutput<Query, Schema extends Document> = PassThrough<
   Query extends ProjectQuery<Schema> ?
     HasInclusions<Query> extends true ?
       HasExclusions<Query> extends true ?
-        PipeSafeError<
-          `Cannot mix inclusion (1/true) and exclusion (0/false) in the same $project. Pick one mode (excluding '_id' from inclusion mode is the only allowed mix).`,
-          Query
-        >
+        PipeSafeError<`Cannot mix inclusion (1/true) and exclusion (0/false) in the same $project. Pick one mode (excluding '_id' from inclusion mode is the only allowed mix).`>
       : // Inclusion mode
         ResolveInclusionMode<Schema, Query>
     : HasExclusions<Query> extends true ?

@@ -202,7 +202,7 @@ type UnwindPathSchema = {
 // The brand sits in the UnwindPath union as the fallback for non-array refs.
 type _UnwindPath_Brand = Extract<
   UnwindPath<UnwindPathSchema>,
-  PipeSafeError<string, unknown>
+  PipeSafeError<string>
 >;
 type _Assert_UnwindPathBrand = Assert<
   AssertPipeSafeError<

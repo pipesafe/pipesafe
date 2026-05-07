@@ -17,9 +17,7 @@ import { Assert, AssertPipeSafeError, Equal } from "./tests";
 // IsPipeSafeError
 // ----------------------------------------------------------------------------
 
-type _IsErr_Branded = Assert<
-  Equal<IsPipeSafeError<PipeSafeError<"x", unknown>>, true>
->;
+type _IsErr_Branded = Assert<Equal<IsPipeSafeError<PipeSafeError<"x">>, true>>;
 type _IsErr_PlainObject = Assert<Equal<IsPipeSafeError<{ x: number }>, false>>;
 type _IsErr_Unknown = Assert<Equal<IsPipeSafeError<unknown>, false>>;
 type _IsErr_String = Assert<Equal<IsPipeSafeError<"hello">, false>>;
@@ -36,8 +34,8 @@ type _IsErr_BrandedNoCtx = Assert<
 
 type _PT_PreservesError = Assert<
   Equal<
-    PassThrough<PipeSafeError<"oops", { ctx: 1 }>, { x: number }>,
-    PipeSafeError<"oops", { ctx: 1 }>
+    PassThrough<PipeSafeError<"oops">, { x: number }>,
+    PipeSafeError<"oops">
   >
 >;
 
@@ -47,8 +45,8 @@ type _PT_ComputesOnValid = Assert<
 
 type _PT_DistributesOverUnion = Assert<
   Equal<
-    PassThrough<{ a: 1 } | PipeSafeError<"e", unknown>, { b: 2 }>,
-    { b: 2 } | PipeSafeError<"e", unknown>
+    PassThrough<{ a: 1 } | PipeSafeError<"e">, { b: 2 }>,
+    { b: 2 } | PipeSafeError<"e">
   >
 >;
 
@@ -61,12 +59,12 @@ type _PT_NeverInputProducesNever = Assert<
 // ----------------------------------------------------------------------------
 
 type _APSE_MatchingMessage = Assert<
-  AssertPipeSafeError<PipeSafeError<"my message", unknown>, "my message">
+  AssertPipeSafeError<PipeSafeError<"my message">, "my message">
 >;
 
 type _APSE_WrongMessage = Assert<
   Equal<
-    AssertPipeSafeError<PipeSafeError<"my message", unknown>, "wrong message">,
+    AssertPipeSafeError<PipeSafeError<"my message">, "wrong message">,
     false
   >
 >;

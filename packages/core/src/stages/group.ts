@@ -23,10 +23,7 @@ type NumericAggregatorOperandFor<Schema extends Document, Op extends string> =
   | LiteralOrFieldReferenceInferringTo<Schema, number>
   | ArithmeticExpression<Schema>
   | ConditionalExpression<Schema>
-  | PipeSafeError<
-      `Aggregator '${Op}' requires a numeric field reference or expression`,
-      Schema
-    >;
+  | PipeSafeError<`Aggregator '${Op}' requires a numeric field reference or expression`>;
 
 /**
  * Operand for $min/$max that can be numbers or dates.
@@ -37,10 +34,7 @@ type MinMaxAggregatorOperandFor<Schema extends Document, Op extends string> =
   | LiteralOrFieldReferenceInferringTo<Schema, Date>
   | ArithmeticExpression<Schema>
   | ConditionalExpression<Schema>
-  | PipeSafeError<
-      `Aggregator '${Op}' requires a numeric or date field reference`,
-      Schema
-    >;
+  | PipeSafeError<`Aggregator '${Op}' requires a numeric or date field reference`>;
 
 /**
  * Flexible operand for aggregators like $push, $first, $last.

@@ -46,13 +46,11 @@ const _sort_bad = orders.sort({ createdAtt: -1 });
 const _match_valid = orders.match({ total: { $gte: 100 } });
 
 // ❌ $gte against a string field. The brand message names the operator
-// and shows the full field type (the entire `status` union) as the
-// brand's `Ctx`, not just one arbitrary union member.
+// and the constraint it violates.
 //
 // Hover shows:
 //   Type 'string' is not assignable to type 'PipeSafeError<"Operator
-//   '$gte' is not allowed on this field (numeric/date only)", "pending"
-//   | "shipped" | "delivered">'.
+//   '$gte' is not allowed on this field (numeric/date only)">'.
 //
 // @ts-expect-error  $gte requires numeric/date field
 const _match_bad = orders.match({ status: { $gte: "pending" } });
@@ -76,11 +74,11 @@ const _project_valid = orders.project({
 });
 
 // ❌ Inclusion of a key that isn't on the schema. The brand message
-// names the key.
+// names the offending key.
 //
 // Hover shows:
 //   Type 'number' is not assignable to type 'PipeSafeError<"Cannot
-//   include field 'totl' — not on schema", Order>'.
+//   include field 'totl' — not on schema">'.
 //
 // @ts-expect-error  'totl' is not a field of Order
 const _project_bad = orders.project({ total: 1, totl: 1 });
@@ -91,7 +89,7 @@ const _project_bad = orders.project({ total: 1, totl: 1 });
 // Hover shows:
 //   PipeSafeError<"Cannot mix inclusion (1/true) and exclusion (0/false)
 //   in the same $project. Pick one mode (excluding '_id' from inclusion
-//   mode is the only allowed mix).", { total: 1; status: 0 }>
+//   mode is the only allowed mix).">
 //
 // @ts-expect-error  cannot mix inclusion and exclusion
 const _project_mixed = orders.project({ total: 1, status: 0 });
@@ -117,14 +115,14 @@ const _group_valid = orders.group({
 // Note: where these errors come from
 // =============================================================================
 //
-// Each `PipeSafeError<Msg, Ctx>` brand is defined in
-// `packages/core/src/utils/core.ts`. The literal `Msg` is what
-// surfaces in the hover. `Ctx` is the offending value/schema, useful
-// for debugging when the message alone isn't enough.
+// `PipeSafeError<Msg>` is a single-message branded interface defined
+// in `packages/core/src/utils/core.ts`. The literal `Msg` is the entire
+// surface area — dynamic context (operator names, key names, path
+// segments) is templated into the message so the hover stays focused.
 //
 // Brands fire from these wrappers (all in `packages/core/src/stages/`):
 //
-//   match.ts   → ValidateMatchQuery + ComparatorMatchers
+//   match.ts   → ComparatorMatchers (per-operator brands)
 //   sort.ts    → strict mapped type SortQuery (no wrapper needed)
 //   project.ts → ValidateProjectQuery (handles unknown keys + mixed mode)
 //   group.ts   → per-aggregator operand brands (call-site is a follow-up)

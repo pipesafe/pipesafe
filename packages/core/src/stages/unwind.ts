@@ -16,10 +16,7 @@ import { FieldReferencesThatInferTo } from "../elements/fieldReference";
  */
 export type UnwindPath<Schema extends Document> =
   | FieldReferencesThatInferTo<Schema, unknown[]>
-  | PipeSafeError<
-      `$unwind requires a field reference to an array field`,
-      Schema
-    >;
+  | PipeSafeError<`$unwind requires a field reference to an array field`>;
 
 export type UnwindOptions<
   Schema extends Document,

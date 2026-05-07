@@ -48,7 +48,7 @@ type ModOperandTuple<S extends Document> = ModExpression<S>["$mod"];
 // $add operand union must include the branded error arm.
 type _Add_Brand = Extract<
   AddOperandElement<ArithSchema>,
-  PipeSafeError<string, unknown>
+  PipeSafeError<string>
 >;
 type _Assert_AddBrand = Assert<
   AssertPipeSafeError<
@@ -59,10 +59,7 @@ type _Assert_AddBrand = Assert<
 
 // $subtract operand tuple must be a 2-tuple, each element including the brand.
 type _Subtract_FirstElement = SubtractOperandTuple<ArithSchema>[0];
-type _Subtract_Brand = Extract<
-  _Subtract_FirstElement,
-  PipeSafeError<string, unknown>
->;
+type _Subtract_Brand = Extract<_Subtract_FirstElement, PipeSafeError<string>>;
 type _Assert_SubtractBrand = Assert<
   AssertPipeSafeError<
     _Subtract_Brand,
@@ -76,7 +73,7 @@ type _Assert_SubtractIs2Tuple = Assert<
 // $multiply operand element must include the brand with the operator name.
 type _Multiply_Brand = Extract<
   MultiplyOperandElement<ArithSchema>,
-  PipeSafeError<string, unknown>
+  PipeSafeError<string>
 >;
 type _Assert_MultiplyBrand = Assert<
   AssertPipeSafeError<
@@ -87,10 +84,7 @@ type _Assert_MultiplyBrand = Assert<
 
 // $divide operand tuple — same as $subtract.
 type _Divide_FirstElement = DivideOperandTuple<ArithSchema>[0];
-type _Divide_Brand = Extract<
-  _Divide_FirstElement,
-  PipeSafeError<string, unknown>
->;
+type _Divide_Brand = Extract<_Divide_FirstElement, PipeSafeError<string>>;
 type _Assert_DivideBrand = Assert<
   AssertPipeSafeError<
     _Divide_Brand,
@@ -100,7 +94,7 @@ type _Assert_DivideBrand = Assert<
 
 // $mod operand tuple — same shape.
 type _Mod_FirstElement = ModOperandTuple<ArithSchema>[0];
-type _Mod_Brand = Extract<_Mod_FirstElement, PipeSafeError<string, unknown>>;
+type _Mod_Brand = Extract<_Mod_FirstElement, PipeSafeError<string>>;
 type _Assert_ModBrand = Assert<
   AssertPipeSafeError<
     _Mod_Brand,
@@ -129,7 +123,7 @@ type ConcatOperandElement<S extends Document> =
 // $concat operand element must include the brand for non-string operands.
 type _Concat_Brand = Extract<
   ConcatOperandElement<ArithSchema>,
-  PipeSafeError<string, unknown>
+  PipeSafeError<string>
 >;
 type _Assert_ConcatBrand = Assert<
   AssertPipeSafeError<
@@ -163,7 +157,7 @@ type DateSubtractStartDateOperand<S extends Document> =
 // Each date operand union must include the branded error arm.
 type _DateToString_Brand = Extract<
   DateToStringDateOperand<ArithSchema>,
-  PipeSafeError<string, unknown>
+  PipeSafeError<string>
 >;
 type _Assert_DateToStringBrand = Assert<
   AssertPipeSafeError<
@@ -174,7 +168,7 @@ type _Assert_DateToStringBrand = Assert<
 
 type _DateTrunc_Brand = Extract<
   DateTruncDateOperand<ArithSchema>,
-  PipeSafeError<string, unknown>
+  PipeSafeError<string>
 >;
 type _Assert_DateTruncBrand = Assert<
   AssertPipeSafeError<
@@ -185,7 +179,7 @@ type _Assert_DateTruncBrand = Assert<
 
 type _DateAdd_Brand = Extract<
   DateAddStartDateOperand<ArithSchema>,
-  PipeSafeError<string, unknown>
+  PipeSafeError<string>
 >;
 type _Assert_DateAddBrand = Assert<
   AssertPipeSafeError<
@@ -196,7 +190,7 @@ type _Assert_DateAddBrand = Assert<
 
 type _DateSubtract_Brand = Extract<
   DateSubtractStartDateOperand<ArithSchema>,
-  PipeSafeError<string, unknown>
+  PipeSafeError<string>
 >;
 type _Assert_DateSubtractBrand = Assert<
   AssertPipeSafeError<
@@ -226,10 +220,7 @@ type FilterInputOperand<S extends Document> =
   FilterExpression<S>["$filter"]["input"];
 
 // Each array operand union must include the branded error arm.
-type _Size_Brand = Extract<
-  SizeOperand<ArithSchema>,
-  PipeSafeError<string, unknown>
->;
+type _Size_Brand = Extract<SizeOperand<ArithSchema>, PipeSafeError<string>>;
 type _Assert_SizeBrand = Assert<
   AssertPipeSafeError<
     _Size_Brand,
@@ -239,7 +230,7 @@ type _Assert_SizeBrand = Assert<
 
 type _ConcatArrays_Brand = Extract<
   ConcatArraysOperandElement<ArithSchema>,
-  PipeSafeError<string, unknown>
+  PipeSafeError<string>
 >;
 type _Assert_ConcatArraysBrand = Assert<
   AssertPipeSafeError<
@@ -250,7 +241,7 @@ type _Assert_ConcatArraysBrand = Assert<
 
 type _ArrayElemAt_Brand = Extract<
   ArrayElemAtFirstOperand<ArithSchema>,
-  PipeSafeError<string, unknown>
+  PipeSafeError<string>
 >;
 type _Assert_ArrayElemAtBrand = Assert<
   AssertPipeSafeError<
@@ -261,7 +252,7 @@ type _Assert_ArrayElemAtBrand = Assert<
 
 type _Filter_Brand = Extract<
   FilterInputOperand<ArithSchema>,
-  PipeSafeError<string, unknown>
+  PipeSafeError<string>
 >;
 type _Assert_FilterBrand = Assert<
   AssertPipeSafeError<

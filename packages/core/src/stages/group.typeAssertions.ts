@@ -737,7 +737,7 @@ type MaxOperand<Schema extends Document> = Extract<
 type _SumOperand_HasBrand = SumOperand<AggregatorTestSchema>;
 type _Assert_SumBrand = Assert<
   AssertPipeSafeError<
-    Extract<_SumOperand_HasBrand, PipeSafeError<string, unknown>>,
+    Extract<_SumOperand_HasBrand, PipeSafeError<string>>,
     "Aggregator '$sum' requires a numeric field reference or expression"
   >
 >;
@@ -746,7 +746,7 @@ type _Assert_SumBrand = Assert<
 type _AvgOperand_HasBrand = AvgOperand<AggregatorTestSchema>;
 type _Assert_AvgBrand = Assert<
   AssertPipeSafeError<
-    Extract<_AvgOperand_HasBrand, PipeSafeError<string, unknown>>,
+    Extract<_AvgOperand_HasBrand, PipeSafeError<string>>,
     "Aggregator '$avg' requires a numeric field reference or expression"
   >
 >;
@@ -755,7 +755,7 @@ type _Assert_AvgBrand = Assert<
 type _MinOperand_HasBrand = MinOperand<AggregatorTestSchema>;
 type _Assert_MinBrand = Assert<
   AssertPipeSafeError<
-    Extract<_MinOperand_HasBrand, PipeSafeError<string, unknown>>,
+    Extract<_MinOperand_HasBrand, PipeSafeError<string>>,
     "Aggregator '$min' requires a numeric or date field reference"
   >
 >;
@@ -763,7 +763,7 @@ type _Assert_MinBrand = Assert<
 type _MaxOperand_HasBrand = MaxOperand<AggregatorTestSchema>;
 type _Assert_MaxBrand = Assert<
   AssertPipeSafeError<
-    Extract<_MaxOperand_HasBrand, PipeSafeError<string, unknown>>,
+    Extract<_MaxOperand_HasBrand, PipeSafeError<string>>,
     "Aggregator '$max' requires a numeric or date field reference"
   >
 >;

@@ -25,40 +25,35 @@ type BSONTypeAlias = keyof typeof BSONType;
 type SomeBSONType = BSONType | BSONTypeAlias;
 
 // ---------------------------------------------------------------------------
-// Operand helpers — return the valid operand type for a compatible field type,
-// or a `PipeSafeError` whose literal message names the operator and the
-// incompatible type the user wrote against.
+// Operand helpers — return the valid operand type for a compatible field
+// type, or a `PipeSafeError` whose literal message names the operator and
+// the constraint the field violates.
 //
 // Each conditional uses `[T] extends [...]` (single-element tuple wrapping)
-// to suppress distribution over union T. Without it, a field typed as
-// `"pending" | "shipped" | "delivered"` produces the brand once per union
-// member and TS displays only one (whichever it picks) in the hover —
-// e.g. `PipeSafeError<"...", "delivered">`. The tuple form keeps the union
-// intact so the brand's `Ctx` shows the full field type.
+// to suppress distribution over a union T — for a mixed-typed field the
+// whole field is rejected with one error rather than producing a union of
+// per-branch outcomes.
 // ---------------------------------------------------------------------------
 
 type NumericOperand<T, Op extends string> =
   [T] extends [number | Date] ? T
-  : PipeSafeError<
-      `Operator '${Op}' is not allowed on this field (numeric/date only)`,
-      T
-    >;
+  : PipeSafeError<`Operator '${Op}' is not allowed on this field (numeric/date only)`>;
 
 type SizeOperand<T> =
   [T] extends [unknown[]] ? number
-  : PipeSafeError<`Operator '$size' requires an array field`, T>;
+  : PipeSafeError<`Operator '$size' requires an array field`>;
 
 type ArrayValueOperand<T, Op extends string> =
   [T] extends [(infer U)[]] ? U[]
-  : PipeSafeError<`Operator '${Op}' requires an array field`, T>;
+  : PipeSafeError<`Operator '${Op}' requires an array field`>;
 
 type ArrayElementOperand<T, Op extends string> =
   [T] extends [(infer U)[]] ? U
-  : PipeSafeError<`Operator '${Op}' requires an array field`, T>;
+  : PipeSafeError<`Operator '${Op}' requires an array field`>;
 
 type RegexOperand<T> =
   [T] extends [string] ? RegExp | string
-  : PipeSafeError<`Operator '$regex' is only valid on string fields`, T>;
+  : PipeSafeError<`Operator '$regex' is only valid on string fields`>;
 
 export type ComparatorMatchers<T extends unknown> = Prettify<
   /* Always */ {

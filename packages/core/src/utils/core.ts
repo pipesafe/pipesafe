@@ -12,18 +12,14 @@ export type Prettify<T> = {
  * Branded compile-time error type used to surface helpful messages in IDE
  * hovers instead of letting invalid input degrade silently to `never`.
  *
- * Carries a literal `Msg` shown verbatim in "is not assignable to PipeSafeError<...>"
- * errors, plus an optional `Ctx` capturing the offending value/schema so users
- * can see what was being checked when the error fired.
- *
- * Note: when `Ctx` is a user literal inferred via `<const>`, wrap it
- * with an inline mapped type `{ -readonly [K in keyof T]: T[K] }` at the
- * call site to strip `readonly` modifiers from the hover. A reusable
- * `Mutable<>` alias was tried but TS keeps the alias name in error
- * displays — only inlining produces a clean `{ a: 1; b: 2 }` hover.
+ * Single-parameter brand: the literal `Msg` is the entire surface area.
+ * Embed dynamic context (path segments, key names, operator names,
+ * field-type info) directly into the message via template literals
+ * rather than carrying a separate `Ctx` — that way the hover shows
+ * just the message string, not a wide schema dump.
  */
-export interface PipeSafeError<Msg extends string, Ctx = unknown> {
-  readonly "~pipesafe.error": { message: Msg; context: Ctx };
+export interface PipeSafeError<Msg extends string> {
+  readonly "~pipesafe.error": Msg;
 }
 
 /**
@@ -31,8 +27,7 @@ export interface PipeSafeError<Msg extends string, Ctx = unknown> {
  * Used by helpers that need to short-circuit when a branded error has
  * already surfaced upstream.
  */
-export type IsPipeSafeError<T> =
-  T extends PipeSafeError<string, unknown> ? true : false;
+export type IsPipeSafeError<T> = T extends PipeSafeError<string> ? true : false;
 
 /**
  * Short-circuit primitive: if `T` is a `PipeSafeError`, returns `T` unchanged;
@@ -45,7 +40,7 @@ export type IsPipeSafeError<T> =
  * branches still get computed).
  */
 export type PassThrough<T, Result> =
-  T extends PipeSafeError<string, unknown> ? T : Result;
+  T extends PipeSafeError<string> ? T : Result;
 
 export type ExpandDottedKey<Key extends string, Value> =
   Key extends `${infer Left}.${infer Rest}` ?

@@ -158,7 +158,7 @@ export {
 // no-op so the user sees the original upstream error, not a fresh constraint
 // failure piled on top.
 
-type _Err = PipeSafeError<"upstream", { fullPath: "user.naem" }>;
+type _Err = PipeSafeError<"upstream">;
 
 // Each stage's Resolve type, fed an error schema, produces the same error.
 type _MatchPassthrough = Assert<
