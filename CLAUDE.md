@@ -172,6 +172,16 @@ TODO: Document the rest of the stages
 - Assertions in `packages/core/src/*/*.typeAssertions.ts` are used as tests for type functionality
 - The `custom()` method allows escape hatches for unsupported aggregation stages while maintaining type flow
 
+## TypeScript Instantiation Depth
+
+PipeSafe's deep type machinery regularly flirts with TS's three internal recursion ceilings (`instantiationDepth`=100, `instantiationCount`=5,000,000, `tailCount`=1,000). When you see `TS2589 "Type instantiation is excessively deep"`, **read the docs before guessing at fixes** — the same diagnostic has three different causes that need three different techniques, and several "obvious" workarounds (`Prettify`, `@ts-ignore`) don't actually help.
+
+- [`docs/typescript-depth/limits.md`](docs/typescript-depth/limits.md) — detailed reference: the three counters, twelve mitigation techniques, what the codebase already does, and a catalogue of high-risk recursive types.
+- [`docs/typescript-depth/avoids.md`](docs/typescript-depth/avoids.md) — one-page quick reference: don't-write list, prefer list, dead-ends.
+- [`docs/typescript-depth/fix-guide.md`](docs/typescript-depth/fix-guide.md) — runbook for diagnosing an active TS2589 with `bun run depth-blame`.
+
+Diagnostic tooling: `bun run depth-blame <varName> [file]` generates a TS trace for a single expression and ranks PipeSafe-owned hotspots. It works even when the build is currently failing — the trace is written before TS bails, while AST tools (`inspect-types.ts`, `ts-morph`) only see `any`. The local viewer at `.claude/depth-viewer/index.html` renders the same trace as a flame graph.
+
 ## Type Debugging Tools
 
 ### Workflow for Type Assertions
