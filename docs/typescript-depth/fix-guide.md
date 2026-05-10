@@ -43,7 +43,7 @@ What you get:
 
 > The trace is written _before_ the bail-out, so the report is useful even when the build is currently failing. AST tools like `inspect-types.ts` are not — when the checker bails, they see `any`.
 
-For the visual view: open `.claude/depth-viewer/index.html` in your browser, point it at the trace directory.
+For the visual view: run `bun run depth-view` to open the interactive Vite app, then pick any file/symbol to drill into its instantiation cost.
 
 ---
 

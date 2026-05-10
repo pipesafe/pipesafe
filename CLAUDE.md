@@ -180,7 +180,7 @@ PipeSafe's deep type machinery regularly flirts with TS's three internal recursi
 - [`docs/typescript-depth/avoids.md`](docs/typescript-depth/avoids.md) — one-page quick reference: don't-write list, prefer list, dead-ends.
 - [`docs/typescript-depth/fix-guide.md`](docs/typescript-depth/fix-guide.md) — runbook for diagnosing an active TS2589 with `bun run depth-blame`.
 
-Diagnostic tooling: `bun run depth-blame <varName> [file]` generates a TS trace for a single expression and ranks PipeSafe-owned hotspots. It works even when the build is currently failing — the trace is written before TS bails, while AST tools (`inspect-types.ts`, `ts-morph`) only see `any`. The local viewer at `.claude/depth-viewer/index.html` renders the same trace as a flame graph.
+Diagnostic tooling: `bun run depth-blame <varName> [file]` generates a TS trace for a single expression and ranks PipeSafe-owned hotspots. It works even when the build is currently failing — the trace is written before TS bails, while AST tools (`inspect-types.ts`, `ts-morph`) only see `any`. The interactive viewer (`bun run depth-view`, Vite + React app under `tools/depth-viewer/`) lets you pick any file/symbol and drill into what types contributed most to its instantiation cost.
 
 ## Type Debugging Tools
 

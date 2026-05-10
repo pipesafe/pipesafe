@@ -81,28 +81,22 @@ const PIPESAFE_OWNED_PREFIXES = [
 function usage(code = 1): never {
   console.log(`Usage:
   bun run depth-blame <varName> [filePath]
-  bun run depth-blame --view [traceDir]
   bun run depth-blame --help
 
 Examples:
   bun run depth-blame ResolveSetOutputResult packages/core/src/stages/set.typeAssertions.ts
   bun run depth-blame OwnersPipeline packages/core/examples/user-management.ts
-  bun run depth-blame --view /tmp/depth-blame-XXXX/trace
 
 Generates a TypeScript --generateTrace, ranks PipeSafe-owned types by self-time,
-and reports which TS2589 counter (if any) tripped.`);
+and reports which TS2589 counter (if any) tripped.
+
+For an interactive UI over the trace, run 'bun run depth-view'.`);
   process.exit(code);
 }
 
 const args = process.argv.slice(2);
 
 if (args.length === 0 || args[0] === "--help" || args[0] === "-h") usage(0);
-
-if (args[0] === "--view") {
-  const traceDir = args[1];
-  openViewer(traceDir);
-  process.exit(0);
-}
 
 const varName = args[0];
 const userFile = args[1];
@@ -130,7 +124,9 @@ function fmt(n: number): string {
 function findTscBin(): string {
   const local = resolve(REPO_ROOT, "node_modules/.bin/tsc");
   if (existsSync(local)) return local;
-  console.error(`Could not find local tsc at ${local}. Run 'bun install' first.`);
+  console.error(
+    `Could not find local tsc at ${local}. Run 'bun install' first.`
+  );
   process.exit(2);
 }
 
@@ -149,7 +145,7 @@ function resolveTargetFile(): string {
   }
   console.error(
     "filePath is required. Pass the file containing the symbol, e.g.\n" +
-      "  bun run depth-blame MyVar packages/core/src/stages/match.typeAssertions.ts",
+      "  bun run depth-blame MyVar packages/core/src/stages/match.typeAssertions.ts"
   );
   process.exit(2);
 }
@@ -214,7 +210,7 @@ function generateTrace(targetFile: string): {
       cwd: REPO_ROOT,
       encoding: "utf8",
       maxBuffer: 200 * 1024 * 1024,
-    },
+    }
   );
 
   return {
@@ -260,7 +256,7 @@ function loadTrace(traceDir: string): {
   const typesPath = join(traceDir, "types.json");
   if (!existsSync(tracePath) || !existsSync(typesPath)) {
     console.error(
-      `Trace files missing in ${traceDir}. tsc may have failed before writing them.`,
+      `Trace files missing in ${traceDir}. tsc may have failed before writing them.`
     );
     process.exit(3);
   }
@@ -289,7 +285,7 @@ interface DepthDiagnosis {
 function diagnoseDepthErrors(
   stdout: string,
   stderr: string,
-  events: TraceEvent[],
+  events: TraceEvent[]
 ): DepthDiagnosis {
   const combined = stdout + "\n" + stderr;
   const errorLines = combined
@@ -298,7 +294,7 @@ function diagnoseDepthErrors(
       (l) =>
         l.includes("TS2589") ||
         l.toLowerCase().includes("excessively deep") ||
-        l.toLowerCase().includes("possibly infinite"),
+        l.toLowerCase().includes("possibly infinite")
     );
 
   const out: DepthDiagnosis = {
@@ -312,7 +308,8 @@ function diagnoseDepthErrors(
 
   // Pull diagnostics totals if present (--extendedDiagnostics output is on stdout).
   const matchInst = stdout.match(/Instantiations:\s*([0-9,]+)/);
-  if (matchInst?.[1]) out.totalInstantiations = Number(matchInst[1].replace(/,/g, ""));
+  if (matchInst?.[1])
+    out.totalInstantiations = Number(matchInst[1].replace(/,/g, ""));
   const matchCheck = stdout.match(/Check time:\s*([0-9.]+)\s*s/);
   if (matchCheck?.[1]) out.checkTimeMs = Number(matchCheck[1]) * 1000;
 
@@ -352,7 +349,7 @@ function diagnoseDepthErrors(
 
 function resolveType(
   typeId: number,
-  typeById: Map<number, TypeEntry>,
+  typeById: Map<number, TypeEntry>
 ): TypeEntry | undefined {
   let cursor = typeById.get(typeId);
   let hops = 0;
@@ -374,7 +371,7 @@ function resolveType(
 
 function aggregateOffenders(
   events: TraceEvent[],
-  types: TypeEntry[],
+  types: TypeEntry[]
 ): OffenderRow[] {
   const typeById = new Map<number, TypeEntry>();
   for (const t of types) typeById.set(t.id, t);
@@ -424,7 +421,7 @@ function aggregateOffenders(
 
 function aggregateDepthLimitHits(
   events: TraceEvent[],
-  types: TypeEntry[],
+  types: TypeEntry[]
 ): DepthLimitHit[] {
   const typeById = new Map<number, TypeEntry>();
   for (const t of types) typeById.set(t.id, t);
@@ -466,7 +463,7 @@ function aggregateDepthLimitHits(
 
 function findVarOccurrence(
   targetFile: string,
-  variable: string,
+  variable: string
 ): { line: number; col: number } | null {
   try {
     const src = readFileSync(targetFile, "utf8");
@@ -489,7 +486,7 @@ function printReport(
   offenders: OffenderRow[],
   hits: DepthLimitHit[],
   traceDir: string,
-  owningTsconfig: string,
+  owningTsconfig: string
 ): void {
   const ownedTop = offenders.filter((o) => o.owned).slice(0, 15);
   const allTop = offenders.slice(0, 10);
@@ -502,11 +499,13 @@ function printReport(
 
   const occ = findVarOccurrence(targetFile, varName);
   if (occ) {
-    console.log(`  Symbol located at ${shortPath(targetFile)}:${occ.line}:${occ.col}`);
+    console.log(
+      `  Symbol located at ${shortPath(targetFile)}:${occ.line}:${occ.col}`
+    );
   } else {
     console.log(
       `  Symbol '${varName}' not found textually in ${shortPath(targetFile)} ` +
-        `(may exist via re-export).`,
+        `(may exist via re-export).`
     );
   }
   console.log("");
@@ -519,13 +518,13 @@ function printReport(
     console.log("  No TS2589, but the depth ceiling was approached:");
     console.log(
       `    ${diag.depthLimitHits} instantiateType_DepthLimit events ` +
-        `(instantiationDepth=100 threshold reached)`,
+        `(instantiationDepth=100 threshold reached)`
     );
     console.log(
-      `    ${diag.relatedToLimitHits} recursiveTypeRelatedTo_DepthLimit events`,
+      `    ${diag.relatedToLimitHits} recursiveTypeRelatedTo_DepthLimit events`
     );
     console.log(
-      "  This is a leading indicator. Adding one more deep call could trip TS2589.",
+      "  This is a leading indicator. Adding one more deep call could trip TS2589."
     );
   } else {
     console.log("  Healthy: no depth-limit events recorded.");
@@ -534,7 +533,7 @@ function printReport(
     const pct = ((diag.totalInstantiations / 5_000_000) * 100).toFixed(2);
     console.log(
       `  Total instantiations: ${fmt(diag.totalInstantiations)} ` +
-        `(${pct}% of count ceiling, peak per-unit ${fmt(diag.peakInstantiationCount)})`,
+        `(${pct}% of count ceiling, peak per-unit ${fmt(diag.peakInstantiationCount)})`
     );
   }
   if (diag.checkTimeMs !== undefined) {
@@ -556,7 +555,7 @@ function printReport(
       else hitBuckets.set(key, { hit: h, count: 1 });
     }
     const ranked = Array.from(hitBuckets.values()).sort(
-      (a, b) => b.count - a.count,
+      (a, b) => b.count - a.count
     );
 
     console.log("Depth-limit events (where the checker stopped descending):");
@@ -565,7 +564,7 @@ function printReport(
       const tag = r.hit.owned ? "★" : " ";
       console.log(
         `  ${tag} ${String(r.count).padStart(5)}×  [${r.hit.kind}]  ` +
-          `${r.hit.symbolName}  ${shortPath(r.hit.filePath)}:${r.hit.line}`,
+          `${r.hit.symbolName}  ${shortPath(r.hit.filePath)}:${r.hit.line}`
       );
     }
     console.log("");
@@ -577,14 +576,14 @@ function printReport(
   if (ownedTop.length === 0) {
     console.log(
       "  (no PipeSafe-owned types in trace — cost may be in lib.es*.d.ts " +
-        "or downstream. Look at the all-categories list below.)",
+        "or downstream. Look at the all-categories list below.)"
     );
   } else {
     for (const r of ownedTop) {
       const ms = (r.totalUs / 1000).toFixed(1);
       console.log(
         `  ${ms.padStart(8)}ms  ${fmt(r.callCount).padStart(7)}×  ` +
-          `${r.symbolName}  ${shortPath(r.filePath)}:${r.line}`,
+          `${r.symbolName}  ${shortPath(r.filePath)}:${r.line}`
       );
     }
   }
@@ -597,7 +596,7 @@ function printReport(
     const prefix = r.owned ? "★" : " ";
     console.log(
       `  ${prefix} ${ms.padStart(8)}ms  ${fmt(r.callCount).padStart(7)}×  ` +
-        `${r.symbolName}  ${shortPath(r.filePath)}:${r.line}`,
+        `${r.symbolName}  ${shortPath(r.filePath)}:${r.line}`
     );
   }
   console.log("");
@@ -606,42 +605,10 @@ function printReport(
   console.log(`  ${traceDir}/trace.json`);
   console.log(`  ${traceDir}/types.json`);
   console.log("");
-  console.log(`Open the local viewer:`);
-  console.log(`  bun run depth-blame --view ${traceDir}`);
+  console.log("Interactive viewer:");
+  console.log("  bun run depth-view");
   console.log("");
   console.log("Decision tree: docs/typescript-depth/fix-guide.md §3");
-}
-
-// ---------------------------------------------------------------------------
-// Viewer launch
-// ---------------------------------------------------------------------------
-
-function openViewer(traceDir: string | undefined): void {
-  const viewerHtml = resolve(REPO_ROOT, ".claude/depth-viewer/index.html");
-  if (!existsSync(viewerHtml)) {
-    console.error(`Viewer not found at ${viewerHtml}.`);
-    process.exit(2);
-  }
-  const url = traceDir
-    ? `file://${viewerHtml}?trace=${encodeURIComponent(resolve(traceDir))}`
-    : `file://${viewerHtml}`;
-
-  console.log(`Open this URL in your browser:`);
-  console.log(`  ${url}`);
-  console.log("");
-  console.log(
-    "Browsers block file:// fetches — drag-and-drop trace.json onto the " +
-      "viewer's drop zone if the URL parameter doesn't auto-load.",
-  );
-
-  if (!process.env["DISPLAY"] && process.platform === "linux") return;
-  const opener =
-    process.platform === "darwin"
-      ? "open"
-      : process.platform === "win32"
-        ? "explorer"
-        : "xdg-open";
-  spawnSync(opener, [url], { stdio: "ignore" });
 }
 
 // ---------------------------------------------------------------------------
@@ -650,7 +617,9 @@ function openViewer(traceDir: string | undefined): void {
 
 function main(): void {
   const targetFile = resolveTargetFile();
-  console.log(`Generating trace via owning tsconfig of ${shortPath(targetFile)}...`);
+  console.log(
+    `Generating trace via owning tsconfig of ${shortPath(targetFile)}...`
+  );
 
   const { traceDir, stdout, stderr, workDir, exitCode, owningTsconfig } =
     generateTrace(targetFile);

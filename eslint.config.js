@@ -3,7 +3,12 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 import { defineConfig } from "eslint/config";
 
-const ignorePatterns = [".claude/**/*", "**/dist/**/*", "benchmarks/**/*"];
+const ignorePatterns = [
+  ".claude/**/*",
+  "tools/**/*",
+  "**/dist/**/*",
+  "benchmarks/**/*",
+];
 
 export default defineConfig([
   { ignores: ignorePatterns },
