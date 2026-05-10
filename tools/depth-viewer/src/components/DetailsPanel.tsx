@@ -3,6 +3,9 @@ import { useMemo } from "react";
 import { expressionCostInRange, fmtCount, fmtUs, typesInRange } from "../data";
 import type { Dataset, SymbolEntry } from "../types";
 
+import { CallTreePanel } from "./CallTreePanel";
+import { ContributorsPanel } from "./ContributorsPanel";
+
 interface Props {
   data: Dataset;
   file: string;
@@ -99,6 +102,30 @@ export function DetailsPanel({ data, file, symbol }: Props) {
             </tbody>
           </table>
         : <p className="muted">No named types declared inside this symbol.</p>}
+      </section>
+
+      <section className="details-section">
+        <h3>Top contributing symbols</h3>
+        <p className="muted">
+          Walks each owned type's <code>instantiatedType</code> chain upward and
+          groups every encountered type by its source-symbol owner. Shows which
+          other constants/types feed the most cost into this symbol's lineage.
+        </p>
+        <ContributorsPanel
+          data={data}
+          rootTypes={ownTypes}
+          totalUs={ownTypesTotalUs}
+        />
+      </section>
+
+      <section className="details-section">
+        <h3>Lineage tree</h3>
+        <p className="muted">
+          For each named type owned by this symbol, the chain of generics it was
+          instantiated from. Repeating cycles are folded with a{" "}
+          <span className="lineage-repeats">×N</span> count.
+        </p>
+        <CallTreePanel data={data} rootTypes={ownTypes} />
       </section>
     </div>
   );

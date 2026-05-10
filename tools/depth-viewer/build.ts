@@ -234,6 +234,40 @@ function aggregate(traceDir: string): {
     totalCalls += 1;
   }
 
+  // Ensure every transitive ancestor is in the output. Without this, a chain
+  // like `Foo<X> -> Foo` breaks at `Foo` when `Foo` itself was never directly
+  // checked (zero events) — the lineage walker in the viewer would dead-end.
+  const seen = new Set<number>(agg.keys());
+  const queue = [...agg.values()];
+  while (queue.length > 0) {
+    const cur = queue.shift();
+    if (!cur || cur.parent === undefined) continue;
+    if (seen.has(cur.parent)) continue;
+    const named = resolveNamed(cur.parent);
+    if (!named) continue;
+    seen.add(named.id);
+    const placeholder: AggregatedType = {
+      id: named.id,
+      name: named.symbolName ?? named.intrinsicName ?? `Type#${named.id}`,
+      ...(named.firstDeclaration?.path !== undefined && {
+        file: relative(REPO_ROOT, named.firstDeclaration.path),
+      }),
+      ...(named.firstDeclaration?.start.line !== undefined && {
+        line: named.firstDeclaration.start.line,
+      }),
+      ...(named.firstDeclaration?.end.line !== undefined && {
+        endLine: named.firstDeclaration.end.line,
+      }),
+      totalUs: 0,
+      callCount: 0,
+      ...(named.instantiatedType !== undefined && {
+        parent: named.instantiatedType,
+      }),
+    };
+    agg.set(named.id, placeholder);
+    queue.push(placeholder);
+  }
+
   let depthLimit = 0;
   let relatedLimit = 0;
   let peakInstantiationCount = 0;
@@ -386,10 +420,12 @@ function main(): void {
   const { types, expressions, meta } = aggregate(traceDir);
   const index = buildSymbolIndex();
 
-  const filtered = types.filter((t) => t.totalUs > 0);
-  filtered.sort((a, b) => b.totalUs - a.totalUs);
+  // Keep zero-cost types: they're needed as intermediate nodes when walking
+  // `parent` chains for the lineage view. Otherwise the chain breaks at any
+  // type that wasn't directly checked.
+  types.sort((a, b) => b.totalUs - a.totalUs);
 
-  writeFileSync(join(DATA_DIR, "types.json"), JSON.stringify(filtered));
+  writeFileSync(join(DATA_DIR, "types.json"), JSON.stringify(types));
   writeFileSync(
     join(DATA_DIR, "expressions.json"),
     JSON.stringify(expressions)
@@ -402,7 +438,7 @@ function main(): void {
 
   console.log("");
   console.log(
-    `Wrote ${filtered.length} types, ${exprCount} expressions, ` +
+    `Wrote ${types.length} types, ${exprCount} expressions, ` +
       `${Object.keys(index).length} files.`
   );
   console.log(

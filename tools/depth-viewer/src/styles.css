@@ -331,3 +331,72 @@ pre,
 .types-table tbody tr:hover {
   background: var(--bg-2);
 }
+
+/* lineage tree */
+
+.call-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lineage {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 12px;
+}
+
+.lineage > summary {
+  cursor: pointer;
+  font-size: 13px;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.lineage > summary::-webkit-details-marker {
+  display: none;
+}
+
+.lineage > summary::before {
+  content: "▸";
+  display: inline-block;
+  width: 12px;
+  color: var(--fg-dim);
+  transition: transform 0.1s;
+}
+
+.lineage[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.lineage-steps {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  font-family: var(--mono);
+}
+
+.lineage-step {
+  padding: 2px 0;
+  white-space: pre;
+}
+
+.lineage-step .lineage-bar {
+  color: var(--fg-dim);
+}
+
+.lineage-repeats {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  background: var(--accent-warn);
+  color: var(--bg);
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+}
