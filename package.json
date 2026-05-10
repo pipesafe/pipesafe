@@ -44,7 +44,7 @@
     "prepare": "bunx lefthook install",
     "changeset": "changeset",
     "changeset:status": "changeset status --since=origin/main",
-    "version": "changeset version",
+    "version": "changeset version && bun install --no-frozen-lockfile",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier --check .",
