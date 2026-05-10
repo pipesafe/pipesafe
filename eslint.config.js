@@ -3,12 +3,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 import { defineConfig } from "eslint/config";
 
-const ignorePatterns = [
-  ".claude/**/*",
-  "tools/**/*",
-  "**/dist/**/*",
-  "benchmarks/**/*",
-];
+const ignorePatterns = [".claude/**/*", "**/dist/**/*", "benchmarks/**/*"];
 
 export default defineConfig([
   { ignores: ignorePatterns },
@@ -20,6 +15,17 @@ export default defineConfig([
   {
     files: ["**/*.{js,mjs,cjs,ts,mts,cts}"],
     languageOptions: { globals: globals.browser },
+  },
+  // Node-context tooling: CLI scripts, Vite configs, build helpers. These
+  // use `process`, `__dirname`, etc. and would fail with browser-only globals.
+  {
+    files: [
+      "tools/depth-blame.ts",
+      "tools/depth-viewer/vite.config.ts",
+      "tools/depth-viewer/build.ts",
+      "eslint.config.js",
+    ],
+    languageOptions: { globals: globals.node },
   },
   {
     ...tseslint.configs.strictTypeChecked[0],

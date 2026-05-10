@@ -1,9 +1,11 @@
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 
-const DATA_DIR = resolve(__dirname, "public/data");
+const HERE = dirname(fileURLToPath(import.meta.url));
+const DATA_DIR = resolve(HERE, "public/data");
 
 // Watch the trace data dir and trigger a full reload when build.ts rewrites
 // it. Vite's default watcher only tracks files imported by the module graph;
