@@ -12,7 +12,10 @@ import {
 } from "../elements/fieldReference";
 import { Expression, InferExpression } from "../elements/expressions";
 import { Collection } from "../collection/Collection";
-import { ResolveLookupOutput } from "../stages/lookup";
+import {
+  ResolveLookupOutput,
+  LookupForeignFieldOrError,
+} from "../stages/lookup";
 import { ResolveGraphLookupOutput } from "../stages/graphLookup";
 import { FacetQuery, ResolveFacetOutput } from "../stages/facet";
 import { GetFieldType } from "../elements/fieldSelector";
@@ -233,12 +236,16 @@ export class Pipeline<
     C extends AllowedSource<Mode, any>,
     LocalField extends FieldPath<PreviousStageDocs>,
     LocalFieldType extends GetFieldType<PreviousStageDocs, LocalField>,
-    ForeignField extends
-      | FieldPathsThatInferToForLookup<
-          InferSourceType<C>,
-          LocalFieldType extends string ? string : LocalFieldType
-        >
-      | FieldPathsThatInferToForLookup<InferSourceType<C>, LocalFieldType>,
+    // MongoDB's $lookup matches array elements against scalars in either
+    // direction. `LookupForeignFieldOrError` (in stages/lookup.ts) covers
+    // all four T/T[] combinations and falls through to a branded
+    // `PipeSafeError` when no foreign field has a compatible type —
+    // surfacing a clear hover instead of "is not assignable to never".
+    ForeignField extends LookupForeignFieldOrError<
+      InferSourceType<C>,
+      LocalFieldType,
+      LocalField
+    >,
     NewKey extends string,
     PipelineOutput extends Document = InferSourceType<C>,
   >(
