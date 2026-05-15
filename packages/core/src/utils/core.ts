@@ -389,37 +389,41 @@ type HaveSameKeys<A, B> =
 // Conditional early exit: only check for identical types when keys match
 // This avoids expensive bidirectional extends check when keys differ
 // Key insight: If keys differ, types can't be identical, so skip the check
+// Internal merge. Returns the raw mapped-type result without Prettify —
+// callers in the stage layer (e.g. ResolveSetOutput) apply Prettify at the
+// public boundary, so an inner Prettify here just doubles the mapped-type
+// pass on every recursion level.
 export type MergeNested<A, B> =
   HaveSameKeys<A, B> extends true ?
     // Keys match - check if types are identical (worth the check)
     [A] extends [B] ?
       [B] extends [A] ?
         A // Early exit: types are exactly identical
-      : Prettify<{
+      : {
           [K in keyof A | keyof B]: K extends keyof B ?
             K extends keyof A ?
               MergeKeyValue<A[K], B[K]>
             : B[K]
           : K extends keyof A ? A[K]
           : never;
-        }>
-    : Prettify<{
+        }
+    : {
         [K in keyof A | keyof B]: K extends keyof B ?
           K extends keyof A ?
             MergeKeyValue<A[K], B[K]>
           : B[K]
         : K extends keyof A ? A[K]
         : never;
-      }>
+      }
   : // Keys differ - skip expensive check, go straight to merge
-    Prettify<{
+    {
       [K in keyof A | keyof B]: K extends keyof B ?
         K extends keyof A ?
           MergeKeyValue<A[K], B[K]>
         : B[K]
       : K extends keyof A ? A[K]
       : never;
-    }>;
+    };
 
 // Flattens dot-nested keys (like "a.b": x) into nested object structure, merging as necessary.
 // E.g. { a: { b: "first" }, "a.c": "last" } => { a: { b: "first", c: "last" }}
@@ -446,18 +450,18 @@ type SeparateKeys<T> = {
 // Stage 2.3: Testing iterative merge to replace UnionToIntersection
 // Fixed: MergeExpandedObjectsIterative now uses UnionToIntersection internally
 // This maintains correctness while still using iterative expansion structure
+// Internal: leaves the result un-prettified. Public callers (ResolveSetOutput)
+// run Prettify once at the boundary.
 export type FlattenDotSet<T> =
   SeparateKeys<T> extends infer Separated ?
     Separated extends { dotted: infer D; nonDotted: infer N } ?
-      Prettify<
-        N & // Non-dotted keys pass through
-          RemoveDottedKeys<
-            MergeNested<
-              {},
-              ExpandAllDottedIterative<D> // Stage 2.3: Uses UnionToIntersection internally for correctness
-            >
+      N & // Non-dotted keys pass through
+        RemoveDottedKeys<
+          MergeNested<
+            {},
+            ExpandAllDottedIterative<D> // Stage 2.3: Uses UnionToIntersection internally for correctness
           >
-      >
+        >
     : never
   : never;
 
@@ -496,36 +500,35 @@ type PreservedBaseFields<Base, Updates extends Document> =
     : {}
   : {};
 
-type MergeSetPlainObjects<Base, Updates extends Document> = Prettify<
-  RemoveNeverFields<
-    PreservedBaseFields<Base, Updates> & {
-      // Required update keys: new fields or fields that were required, or optional fields being set to actual values
-      [K in keyof Updates as K extends keyof ExcludeUndefined<Base> ?
-        undefined extends ExcludeUndefined<Base>[K] ?
-          HasNonNeverValue<Updates[K]> extends false ?
-            never
-          : K
+// Internal: un-prettified. ResolveSetOutput applies Prettify at the boundary.
+type MergeSetPlainObjects<Base, Updates extends Document> = RemoveNeverFields<
+  PreservedBaseFields<Base, Updates> & {
+    // Required update keys: new fields or fields that were required, or optional fields being set to actual values
+    [K in keyof Updates as K extends keyof ExcludeUndefined<Base> ?
+      undefined extends ExcludeUndefined<Base>[K] ?
+        HasNonNeverValue<Updates[K]> extends false ?
+          never
         : K
-      : K]-?: MergedUpdateValue<
-        K extends keyof ExcludeUndefined<Base> ? ExcludeUndefined<Base>[K]
-        : never,
-        Updates[K]
-      >;
-    } & {
-      // Optional update keys: originally optional fields being set to only removals
-      [K in keyof Updates as K extends keyof ExcludeUndefined<Base> ?
-        undefined extends ExcludeUndefined<Base>[K] ?
-          HasNonNeverValue<Updates[K]> extends false ?
-            K
-          : never
+      : K
+    : K]-?: MergedUpdateValue<
+      K extends keyof ExcludeUndefined<Base> ? ExcludeUndefined<Base>[K]
+      : never,
+      Updates[K]
+    >;
+  } & {
+    // Optional update keys: originally optional fields being set to only removals
+    [K in keyof Updates as K extends keyof ExcludeUndefined<Base> ?
+      undefined extends ExcludeUndefined<Base>[K] ?
+        HasNonNeverValue<Updates[K]> extends false ?
+          K
         : never
-      : never]?: MergedUpdateValue<
-        K extends keyof ExcludeUndefined<Base> ? ExcludeUndefined<Base>[K]
-        : never,
-        Updates[K]
-      >;
-    }
-  >
+      : never
+    : never]?: MergedUpdateValue<
+      K extends keyof ExcludeUndefined<Base> ? ExcludeUndefined<Base>[K]
+      : never,
+      Updates[K]
+    >;
+  }
 >;
 
 // Helper to compute merged value for a single update key
@@ -604,15 +607,10 @@ type OptionalUpdateKeys<Schema extends Document, Updates extends Document> = {
   : never;
 }[keyof Updates];
 
-// Reorder keys in Output to match the order in Schema
-// This ensures key ordering matches expected schema order for type equality checks
-// Note: TypeScript's Equal type should be order-independent, but this helps ensure
-// consistent ordering for better type inference and debugging
-// IMPORTANT: Preserves required/optional status from Output, not Schema
-//
-// OPTIMIZATION ATTEMPT 2: Conditional reordering
-// Only reorder if keys actually differ from schema order
-// This avoids expensive operation when keys already match
+// Reorder keys in Output to match the order in Schema.
+// Internal: ResolveSetOutput Prettify-wraps the final ApplySetUpdates result,
+// so leaving the reordered intersection un-prettified here avoids a redundant
+// mapped-type pass on every $set call.
 type ReorderKeysToMatchSchema<
   Schema extends Document,
   Output extends Document,
@@ -621,21 +619,17 @@ type ReorderKeysToMatchSchema<
     keyof Schema extends keyof Output ?
       Output // Keys match exactly - no reordering needed
     : {
+        // Keys differ - need reordering
+        [K in keyof Output as K extends keyof Schema ? K : never]: Output[K];
+      } & {
+        [K in keyof Output as K extends keyof Schema ? never : K]: Output[K];
+      }
+  : {
       // Keys differ - need reordering
       [K in keyof Output as K extends keyof Schema ? K : never]: Output[K];
     } & {
       [K in keyof Output as K extends keyof Schema ? never : K]: Output[K];
-    } extends infer Reordered ?
-      Prettify<Reordered>
-    : never
-  : {
-    // Keys differ - need reordering
-    [K in keyof Output as K extends keyof Schema ? K : never]: Output[K];
-  } & {
-    [K in keyof Output as K extends keyof Schema ? never : K]: Output[K];
-  } extends infer Reordered ?
-    Prettify<Reordered>
-  : never;
+    };
 
 // Stage 3.1: Selective Path Processing - only process schema paths that are ancestors of dotted keys
 // This optimization reduces type instantiation depth when schema has many nested objects
