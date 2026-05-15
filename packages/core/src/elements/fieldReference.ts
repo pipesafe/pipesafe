@@ -6,7 +6,6 @@ import {
   WithoutDollar,
   NoDollarString,
   PipeSafeError,
-  Prettify,
 } from "../utils/core";
 import { FieldSelector, InferFieldSelector } from "./fieldSelector";
 import { Expression, InferExpression } from "./expressions";
@@ -168,9 +167,14 @@ type InferNestedFieldReferenceArray<Schema extends Document, Arr> =
   : never;
 
 /**
- * Helper type for resolving field references in objects
- * Preserves object structure while resolving any field references
+ * Helper type for resolving field references in objects.
+ * Preserves object structure while resolving any field references.
+ *
+ * Internal: every caller wraps the eventual result in Prettify at the stage
+ * boundary (ResolveSetOutput, ResolveGroupOutput, ResolveReplaceRootOutput,
+ * ResolveInclusionMode/ExclusionMode), so an inner Prettify here just runs
+ * the same mapped-type pass twice.
  */
-type InferNestedFieldReferenceObject<Schema extends Document, Obj> = Prettify<{
+type InferNestedFieldReferenceObject<Schema extends Document, Obj> = {
   [K in keyof Obj]: InferNestedFieldReference<Schema, Obj[K]>;
-}>;
+};

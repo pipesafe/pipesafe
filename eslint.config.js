@@ -16,6 +16,18 @@ export default defineConfig([
     files: ["**/*.{js,mjs,cjs,ts,mts,cts}"],
     languageOptions: { globals: globals.browser },
   },
+  // Node-context tooling: CLI scripts, Vite configs, build helpers. These
+  // use `process`, `__dirname`, etc. and would fail with browser-only globals.
+  {
+    files: [
+      "tools/depth-blame.ts",
+      "tools/depth-viewer/vite.config.ts",
+      "tools/depth-viewer/build.ts",
+      "tools/depth-viewer/query.ts",
+      "eslint.config.js",
+    ],
+    languageOptions: { globals: globals.node },
+  },
   {
     ...tseslint.configs.strictTypeChecked[0],
     rules: {

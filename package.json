@@ -11,6 +11,7 @@
   "type": "module",
   "workspaces": [
     "packages/*",
+    "tools/depth-viewer",
     "website",
     "website-brand"
   ],
@@ -54,6 +55,10 @@
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
     "typecheck": "tsc --noEmit --project tsconfig.json",
+    "depth-blame": "bun run tools/depth-blame.ts",
+    "depth-view": "bun run --filter @pipesafe/depth-viewer dev",
+    "depth-view:build": "bun run --filter @pipesafe/depth-viewer data",
+    "depth-view:query": "bun run --filter @pipesafe/depth-viewer query --",
     "website:dev": "bun run --filter @pipesafe/website dev",
     "website:build": "bun run --filter @pipesafe/website build",
     "website:preview": "bun run --filter @pipesafe/website preview"
