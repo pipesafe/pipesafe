@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "data": "bun run build.ts"
+    "data": "bun run build.ts",
+    "query": "bun run query.ts"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -18,7 +19,6 @@
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
-    "ts-morph": "27.0.2",
     "typescript": "^5.9.3",
     "vite": "^5.4.19"
   }

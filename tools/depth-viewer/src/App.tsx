@@ -2,14 +2,14 @@ import { useEffect, useState } from "react";
 
 import { DetailsPanel } from "./components/DetailsPanel";
 import { Sidebar } from "./components/Sidebar";
-import { fmtCount, fmtUs, loadDataset } from "./data";
-import type { Dataset, SymbolEntry } from "./types";
+import { fmtCount, loadDataset } from "./data";
+import type { Dataset, SymbolStats } from "./types";
 
 export function App() {
   const [data, setData] = useState<Dataset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [selectedSymbol, setSelectedSymbol] = useState<SymbolEntry | null>(
+  const [selectedSymbol, setSelectedSymbol] = useState<SymbolStats | null>(
     null
   );
 
@@ -27,11 +27,9 @@ export function App() {
         <h1>depth-viewer</h1>
         {data ?
           <span className="meta mono">
-            {data.meta.project} · {fmtCount(data.meta.uniqueTypes)} types ·{" "}
-            {fmtUs(data.meta.totalUs)} check time ·{" "}
-            <span className={data.meta.depthLimitHits > 0 ? "depth-warn" : ""}>
-              {data.meta.depthLimitHits} depth-limit hits
-            </span>
+            {data.meta.project} · {fmtCount(data.meta.totalSymbols)} symbols ·{" "}
+            {fmtCount(data.meta.ownedEntries)} owned registry entries (of{" "}
+            {fmtCount(data.meta.totalEntries)} total)
           </span>
         : <span className="meta">loading...</span>}
       </header>

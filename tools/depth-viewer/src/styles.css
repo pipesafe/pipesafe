@@ -196,6 +196,13 @@ pre,
   padding-left: 6px;
 }
 
+.picker-count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  padding-left: 8px;
+}
+
 .picker-empty {
   padding: 12px;
   color: var(--fg-dim);
@@ -235,6 +242,11 @@ pre,
   color: var(--owned);
 }
 
+.tag-class {
+  border-color: #9b6a4d;
+  color: #ffb479;
+}
+
 /* details panel */
 
 .details-header {
@@ -255,6 +267,76 @@ pre,
 .details-header p {
   margin: 0;
   font-size: 12px;
+}
+
+.source-snippet {
+  margin: 12px 0 0;
+  padding: 10px 0;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.source-snippet.inferred-display {
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.chain {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.chain-step {
+  border-left: 2px solid var(--border);
+  padding-left: 12px;
+}
+
+.chain-step-header {
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.chain-step .source-snippet {
+  margin-top: 4px;
+}
+
+.source-snippet code {
+  display: block;
+  font-family:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.source-line {
+  display: flex;
+  gap: 12px;
+  padding: 0 12px;
+  white-space: pre;
+}
+
+.source-line:hover {
+  background: var(--bg-3, rgba(255, 255, 255, 0.03));
+}
+
+.source-lineno {
+  flex: 0 0 auto;
+  width: 32px;
+  color: var(--muted);
+  text-align: right;
+  user-select: none;
+}
+
+.source-content {
+  flex: 1 1 auto;
+  color: var(--fg);
 }
 
 .details-section {

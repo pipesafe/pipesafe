@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 
-import type { Dataset, SymbolEntry } from "../types";
+import type { Dataset, SymbolStats } from "../types";
 
 interface Props {
   data: Dataset;
   selectedFile: string | null;
-  selectedSymbol: SymbolEntry | null;
-  onSelect(file: string, symbol: SymbolEntry): void;
+  selectedSymbol: SymbolStats | null;
+  onSelect(file: string, symbol: SymbolStats): void;
 }
 
 export function Sidebar({
@@ -89,10 +89,16 @@ export function Sidebar({
                   : ""
                 }`}
                 onClick={() => onSelect(selectedFile, s)}
+                title={`${s.entriesCreated} entries created`}
               >
                 <span className={`tag tag-${s.kind}`}>{s.kind}</span>
                 <span className="mono">{s.name}</span>
                 <span className="muted">:{s.startLine}</span>
+                {s.entriesCreated > 0 && (
+                  <span className="picker-count muted">
+                    {s.entriesCreated.toLocaleString()}
+                  </span>
+                )}
               </button>
             ))}
           {selectedFile && symbols.length === 0 && (

@@ -23,6 +23,7 @@ export default defineConfig([
       "tools/depth-blame.ts",
       "tools/depth-viewer/vite.config.ts",
       "tools/depth-viewer/build.ts",
+      "tools/depth-viewer/query.ts",
       "eslint.config.js",
     ],
     languageOptions: { globals: globals.node },
