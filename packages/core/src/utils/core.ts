@@ -132,14 +132,6 @@ type _ExclusifyUnion<T, K extends PropertyKey> =
 
 export type ExclusifyUnion<T> = _ExclusifyUnion<T, AllKeys<T>>;
 
-export type FlattenToNested<T> = Prettify<
-  UnionToIntersection<
-    {
-      [K in keyof T]: ExpandDottedKey<K & string, T[K]>;
-    }[keyof T]
-  >
->;
-
 // Check if a type has any dotted keys (keys containing a dot)
 export type HasDottedKeys<T> =
   {

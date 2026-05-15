@@ -10,10 +10,6 @@ import {
   HasDottedKeys,
 } from "../utils/core";
 
-export type RemoveNever<T> = Prettify<{
-  [K in keyof T as [T[K]] extends [never] ? never : K]: T[K];
-}>;
-
 /**
  * Transformation expressions - aggregation operators that transform values
  * These are not literals, but expressions that compute new values
