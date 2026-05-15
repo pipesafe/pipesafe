@@ -180,7 +180,14 @@ PipeSafe's deep type machinery regularly flirts with TS's three internal recursi
 - [`docs/typescript-depth/avoids.md`](docs/typescript-depth/avoids.md) — one-page quick reference: don't-write list, prefer list, dead-ends.
 - [`docs/typescript-depth/fix-guide.md`](docs/typescript-depth/fix-guide.md) — runbook for diagnosing an active TS2589 with `bun run depth-blame`.
 
-Diagnostic tooling: `bun run depth-blame <varName> [file]` generates a TS trace for a single expression and ranks PipeSafe-owned hotspots. It works even when the build is currently failing — the trace is written before TS bails, while AST tools (`inspect-types.ts`, `ts-morph`) only see `any`. The interactive viewer (`bun run depth-view`, Vite + React app under `tools/depth-viewer/`) lets you pick any file/symbol and drill into what types contributed most to its instantiation cost.
+Diagnostic tooling:
+
+- `bun run depth-blame <varName> [file]` — single-expression trace ranking PipeSafe-owned hotspots. Works even when the build is currently failing (the trace is flushed before tsc bails). AST tools (`inspect-types.ts`, `ts-morph`) cannot, because they see `errorType` post-bail.
+- `bun run depth-view` — interactive Vite + React app under `tools/depth-viewer/`. Pick any file → symbol → see source snippet, inferred type, walk depth, registry-attributed entries, kind breakdown, and (for value declarations) the initializer-call chain with declared vs resolved return types per step.
+- `bun run depth-view:build` — refresh the dataset that the viewer and query CLI both read. Sources the full (non-sampled) `types.json` registry from `--generateTrace` and walks the AST with the TypeScript Compiler API.
+- `bun run depth-view:query <cmd>` — CLI over the same dataset for programmatic use. Subcommands: `top` (rank by `entriesCreated` / `callSites` / `depth` / `uniqueTypes`), `symbol <name>`, `refs <name>`, `file <path>`, `meta`. Default output is a human-readable table; pass `--format json` for parseable output. The dataset lives at `tools/depth-viewer/public/data/index.json` if you want to read it directly.
+
+The depth-view dataset is deterministic and machine-independent (counts, not wall-clock). Useful for: ranking refactor targets (`bun run depth-view:query top`), diagnosing a specific TS2589 (`symbol <const>` → see its chain), reverse-lookup callers of a hot type (`refs <name>`), and PR-level regression checks (diff two dataset snapshots). See [`docs/typescript-depth/limits.md`](docs/typescript-depth/limits.md) for the underlying mechanics.
 
 ## Type Debugging Tools
 
