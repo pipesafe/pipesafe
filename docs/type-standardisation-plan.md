@@ -114,10 +114,11 @@ This is the strongest case in the codebase for the proposed container type.
   chained call site. The brand is only reachable if a user annotates
   `UnwindQuery` manually.
 - `stages/sort.ts` — `ResolveSortOutput` unused by `Pipeline.sort` (F2).
-- `utils/core.ts` — `ExpandAllDotted` retained alongside the
-  `ExpandAllDottedIterative` actually used by `FlattenDotSet`;
-  `MergeExpandedObjectsIterative`, `SeparateKeys` and several "Stage N.M"
-  optimization-log comments describe history rather than behavior.
+- `utils/core.ts` — `ExpandAllDotted` is unused (FlattenDotSet uses the
+  `ExpandAllDottedIterative` variant); `SeparateKeys` and
+  `MergeExpandedObjectsIterative` **are** live, but they and several "Stage
+  N.M" optimization-log comments read as historical experiment notes rather
+  than descriptions of current behavior.
 
 ### F6. `utils/core.ts` is a 700-line grab-bag
 
@@ -344,7 +345,7 @@ The full early-exit ladder, from cheapest check to most expensive work:
 | 3 | `$`-key isn't a known operator → `never` / brand, stop | O(1) registry lookup | registry dispatch |
 | 4 | Operator known → resolve `returns`, validate operands (brands) | full schema work | `ExpressionSpec` / operand kernel |
 
-Canonical helpers (new, in `utils/dispatch.ts` or `elements/operands.ts`):
+Canonical helpers (new, in `utils/dispatch.ts` — created in Phase 2):
 
 ```ts
 /** The $-prefixed key(s) of an expression-shaped literal, or never. */
@@ -361,6 +362,13 @@ type InferExpression<Schema extends Document, Expr> =
     : never                                          // tier 3: unknown operator
   : never;
 ```
+
+`NotAnExpression` is a sentinel type (not `never`) so callers like
+`InferNestedFieldReference` can distinguish "this is a literal — pass it
+through" from "this dispatched but resolved to nothing". The sketch omits
+the multi-operator guard for brevity: before the registry lookup, a
+`[Op] extends [UnionToIntersection<Op>]`-style single-key check routes
+multi-`$`-key objects to the exactly-one-operator brand described below.
 
 Mongo forbids `$`-prefixed keys in stored documents (and `NoDollarString`
 already encodes that), so `$`-key presence is a **sound discriminator**
@@ -515,9 +523,10 @@ plus the new `utils/dispatch.ts` from 3.4:
 | New module          | Contents |
 | ------------------- | -------- |
 | `utils/errors.ts`   | `PipeSafeError`, `IsPipeSafeError`, `PassThrough`, `RequiresMsg` |
+| `utils/dispatch.ts` | `OperatorKeyOf` + tuple-guarded dispatch helpers (3.4) |
 | `utils/strings.ts`  | `DollarPrefixed`, `WithoutDollar`, `NoDollarString`, `Alphabet`/`Digit`, `Join`, `IndexStr` |
 | `utils/paths.ts`    | `ExpandDottedKey*`, `FlattenDotSet`, `HasDottedKeys`, `RemoveDottedKeys`, `ExpandAllDotted*` |
-| `utils/merge.ts`    | `MergeNested`, `IsPlainObject`, `Prettify`, `UnionToIntersection`, `ExclusifyUnion` |
+| `utils/objects.ts`  | `Document`, `Prettify`, `MergeNested`, `IsPlainObject`, `UnionToIntersection`, `ExclusifyUnion`, `NonExpandableTypes` |
 | `stages/set.ts`     | `ApplySetUpdates` + its ~15 private helpers move next to their only consumer |
 
 `utils/core.ts` is **deleted**, not kept as a barrel — internal imports are
@@ -543,9 +552,9 @@ Rules:
   uses only the new names. Enforced with an ESLint `no-restricted-imports`
   rule so violations fail the pre-commit hook, plus a conformance assertion
   that each alias stays identical to its replacement.
-- Removal at the next major is then a two-line change: delete `src/compat.ts`
-  and its `index.ts` re-export line, plus a `major` changeset listing the
-  removed names (generated from the file's own exports).
+- Removal at the next major is then trivial: delete `src/compat.ts`, drop its
+  `index.ts` re-export line, and add a `major` changeset listing the removed
+  names (generated from the file's own exports).
 
 ---
 
@@ -564,11 +573,14 @@ counts within noise of the previous baseline. Changesets: phases 1–5 are
   Expect this to **fail** for `count` (no PassThrough), and to make the
   `sort`/`unwind` wiring gaps visible — mark those with
   `ExpectAssertFailure`/TODO so the gap is recorded before it's fixed.
-- Add the dispatch-semantics assertions from 3.4 (forgiving inference,
-  literal passthrough for `$`-less objects, exactly-one-operator brand) —
-  the forgiving-inference and multi-operator cases will be
-  `ExpectAssertFailure` until Phase 4 lands; the point is to declare the
-  target semantics up front.
+  Note: these assertions are written against the **current** signatures
+  (today's parameter orders); Phase 3 updates them to the `<Schema, Q>`
+  convention in the same PR that flips the signatures.
+- Add the dispatch-semantics assertions from 3.4 (forgiving inference, the
+  `NotAnExpression` sentinel for `$`-less objects, exactly-one-operator
+  brand) — these pin **target** semantics, not current ones, so all three
+  are `ExpectAssertFailure` until Phase 4 lands; the point is to declare
+  the intended behavior up front.
 - Record benchmark baseline numbers in the PR description.
 
 ### Phase 1 — Dead code and drift fixes (small, high-value)
@@ -662,8 +674,10 @@ instantiation counts.
 ### Phase 6 — Documentation
 
 - Replace the relevant CLAUDE.md sections with the conventions in section 3
-  (trio naming, operand kernel, early-exit rules, registry pattern, and the
-  explicit "stages get conventions, expressions get registries" decision).
+  (trio naming, operand kernel, early-exit/distribution rules, the
+  operator-key dispatch standard, the parameter-hoisting patterns, the
+  compat-file rule, and the explicit "stages get conventions, expressions
+  get registries" decision).
 - Document the selector/reference `never`-vs-brand asymmetry (F7) at both
   definitions.
 
