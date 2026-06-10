@@ -1,5 +1,5 @@
 import { Assert, Equal } from "../utils/tests";
-import { MergeOptions } from "./merge";
+import { MergeQuery } from "./merge";
 import type { Pipeline, InferOutputType } from "../pipeline/Pipeline";
 
 /**
@@ -42,88 +42,88 @@ type SimpleDoc = {
 };
 
 // ============================================================================
-// MergeOptions Shape
+// MergeQuery Shape
 // ============================================================================
 
 // Test 2: into as a string is accepted
-const _intoString: MergeOptions<SimpleDoc> = { into: "metrics" };
+const _intoString: MergeQuery<SimpleDoc> = { into: "metrics" };
 
 // Test 3: into as { db, coll } is accepted
-const _intoObject: MergeOptions<SimpleDoc> = {
+const _intoObject: MergeQuery<SimpleDoc> = {
   into: { db: "analytics", coll: "metrics" },
 };
 
 // Test 4: on as a single field
-const _onSingle: MergeOptions<SimpleDoc> = { into: "x", on: "_id" };
+const _onSingle: MergeQuery<SimpleDoc> = { into: "x", on: "_id" };
 
 // Test 5: on as an array of fields
-const _onArray: MergeOptions<EventDoc> = {
+const _onArray: MergeQuery<EventDoc> = {
   into: "x",
   on: ["_id", "eventType"],
 };
 
 // Test 6: incorrect field name in `on` is rejected
-const _onInvalid: MergeOptions<SimpleDoc> = {
+const _onInvalid: MergeQuery<SimpleDoc> = {
   into: "x",
   // @ts-expect-error - "missing" is not a top-level field of SimpleDoc
   on: "missing",
 };
 
 // Test 7: dotted path in `on` is rejected (must be top-level)
-const _onDotted: MergeOptions<EventDoc> = {
+const _onDotted: MergeQuery<EventDoc> = {
   into: "x",
   // @ts-expect-error - "user.id" is a nested path, not top-level
   on: "user.id",
 };
 
 // Test 8: invalid whenMatched literal is rejected
-const _whenMatchedInvalid: MergeOptions<SimpleDoc> = {
+const _whenMatchedInvalid: MergeQuery<SimpleDoc> = {
   into: "x",
   // @ts-expect-error - "upsert" is not a valid whenMatched action
   whenMatched: "upsert",
 };
 
 // Test 9: invalid whenNotMatched literal is rejected
-const _whenNotMatchedInvalid: MergeOptions<SimpleDoc> = {
+const _whenNotMatchedInvalid: MergeQuery<SimpleDoc> = {
   into: "x",
   // @ts-expect-error - "skip" is not a valid whenNotMatched action
   whenNotMatched: "skip",
 };
 
 // Test 10: all valid whenMatched values
-const _whenMatchedReplace: MergeOptions<SimpleDoc> = {
+const _whenMatchedReplace: MergeQuery<SimpleDoc> = {
   into: "x",
   whenMatched: "replace",
 };
-const _whenMatchedMerge: MergeOptions<SimpleDoc> = {
+const _whenMatchedMerge: MergeQuery<SimpleDoc> = {
   into: "x",
   whenMatched: "merge",
 };
-const _whenMatchedKeep: MergeOptions<SimpleDoc> = {
+const _whenMatchedKeep: MergeQuery<SimpleDoc> = {
   into: "x",
   whenMatched: "keepExisting",
 };
-const _whenMatchedFail: MergeOptions<SimpleDoc> = {
+const _whenMatchedFail: MergeQuery<SimpleDoc> = {
   into: "x",
   whenMatched: "fail",
 };
 
 // Test 11: all valid whenNotMatched values
-const _whenNotMatchedInsert: MergeOptions<SimpleDoc> = {
+const _whenNotMatchedInsert: MergeQuery<SimpleDoc> = {
   into: "x",
   whenNotMatched: "insert",
 };
-const _whenNotMatchedDiscard: MergeOptions<SimpleDoc> = {
+const _whenNotMatchedDiscard: MergeQuery<SimpleDoc> = {
   into: "x",
   whenNotMatched: "discard",
 };
-const _whenNotMatchedFail: MergeOptions<SimpleDoc> = {
+const _whenNotMatchedFail: MergeQuery<SimpleDoc> = {
   into: "x",
   whenNotMatched: "fail",
 };
 
 // Test 12: let is accepted
-const _withLet: MergeOptions<SimpleDoc> = {
+const _withLet: MergeQuery<SimpleDoc> = {
   into: "x",
   let: { threshold: 10, label: "$value" },
 };

@@ -15,12 +15,12 @@
  *      ExpectAssertFailure until Phase 4 lands.
  *
  * Known gaps recorded here (see spec §4 Phase 0):
- *   - count: resolver never sees the schema (F2) → method-level marker is
- *     ExpectAssertFailure until Phase 3.
- *   - sort: Pipeline.sort doesn't reference ResolveSortOutput, but the gap
+ *   - count: resolver never saw the schema (F2) — FIXED in Phase 3
+ *     (ResolveCountOutput<Schema, FieldName> + PassThrough); markers flipped
+ *     to real assertions.
+ *   - sort: Pipeline.sort didn't reference ResolveSortOutput, but the gap
  *     is behaviorally unobservable (ResolveSortOutput<S> ≡ S); the
- *     method-level assertion below passes either way. Wiring is Phase 1
- *     hygiene.
+ *     method-level assertion below passes either way. Wired in Phase 1.
  *   - unwind: the UnwindPath brand never fires at the chained call site;
  *     this is a hover-quality gap with no acceptance difference, pinned by
  *     a callSite fixture added in Phase 1 (Pipeline.callSite.typeAssertions.ts).
@@ -44,13 +44,9 @@ type _GraphLookupPassthrough = Assert<
   Equal<ResolveGraphLookupOutput<_Err, "related", { id: string }>, _Err>
 >;
 
-// GAP(F2): count's resolver has no schema parameter, so it cannot forward an
-// upstream error — it unconditionally produces the count document. Phase 3
-// changes the signature to ResolveCountOutput<Schema, FieldName>; this pin
-// then flips to Assert<Equal<ResolveCountOutput<_Err, "total">, _Err>>.
-type _CountCurrentBehavior = Assert<
-  Equal<ResolveCountOutput<"total">, Record<"total", number>>
->;
+// count forwards an upstream error verbatim (F2 — fixed in Phase 3 when the
+// resolver gained its Schema parameter and PassThrough wrap).
+type _CountPassthrough = Assert<Equal<ResolveCountOutput<_Err, "total">, _Err>>;
 
 // ============================================================================
 // 2. Method-level error forwarding ("the method is wired to its resolver")
@@ -111,10 +107,8 @@ type _FacetMethodForwards = Assert<
   Equal<InferOutputType<typeof _errFacet>, _Err>
 >;
 
-// GAP(F2): count replaces an upstream error with { total: number }. This is
-// the observable form of the missing PassThrough. Flips to Assert in Phase 3.
 const _errCount = _pErr.count("total");
-type _CountMethodGap = ExpectAssertFailure<
+type _CountMethodForwards = Assert<
   Equal<InferOutputType<typeof _errCount>, _Err>
 >;
 
@@ -169,7 +163,7 @@ export {
 
 export type {
   _GraphLookupPassthrough,
-  _CountCurrentBehavior,
+  _CountPassthrough,
   _MatchMethodForwards,
   _SetMethodForwards,
   _ProjectMethodForwards,
@@ -180,7 +174,7 @@ export type {
   _SkipMethodForwards,
   _SampleMethodForwards,
   _FacetMethodForwards,
-  _CountMethodGap,
+  _CountMethodForwards,
   _DispatchForgiving,
   _DispatchLiteralSentinel,
   _DispatchMultiOperator,

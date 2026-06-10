@@ -103,13 +103,13 @@ export type GroupQuery<Schema extends Document> = {
 };
 
 export type ResolveGroupOutput<
-  StartingDocs extends Document,
-  G extends GroupQuery<StartingDocs>,
+  Schema extends Document,
+  G extends GroupQuery<Schema>,
 > = PassThrough<
-  StartingDocs,
+  Schema,
   Prettify<
     {
-      _id: InferNestedFieldReference<StartingDocs, G["_id"]> extends infer Id ?
+      _id: InferNestedFieldReference<Schema, G["_id"]> extends infer Id ?
         Id extends object ?
           Id extends Date | unknown[] ?
             Id // Don't flatten Date/array _id (e.g. tuples from $dateToParts)
@@ -118,7 +118,7 @@ export type ResolveGroupOutput<
       : never;
     } & {
       [key in Exclude<keyof G, "_id">]: ResolveAccumulatorFunction<
-        StartingDocs,
+        Schema,
         G[key]
       >;
     }

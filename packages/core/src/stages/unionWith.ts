@@ -7,13 +7,13 @@ import { PassThrough } from "../utils/errors";
  * If the schemas are structurally identical, returns just one schema (collapses the union).
  */
 export type ResolveUnionWithOutput<
-  StartingDocs extends Document,
+  Schema extends Document,
   PipelineOutput extends Document,
 > = PassThrough<
-  StartingDocs,
-  [StartingDocs] extends [PipelineOutput] ?
-    [PipelineOutput] extends [StartingDocs] ?
-      Prettify<StartingDocs> // Schemas are identical - collapse to single type
-    : Prettify<StartingDocs | PipelineOutput> // Different schemas - union
-  : Prettify<StartingDocs | PipelineOutput> // Different schemas - union
+  Schema,
+  [Schema] extends [PipelineOutput] ?
+    [PipelineOutput] extends [Schema] ?
+      Prettify<Schema> // Schemas are identical - collapse to single type
+    : Prettify<Schema | PipelineOutput> // Different schemas - union
+  : Prettify<Schema | PipelineOutput> // Different schemas - union
 >;

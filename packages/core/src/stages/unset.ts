@@ -220,21 +220,23 @@ type PreserveOptionality<Schema extends Document, Result extends Document> = {
   : never]?: Result[K];
 };
 
-export type ResolveUnsetOutput<Query, Schema extends Document> = PassThrough<
+// The old outer `Query extends UnsetQuery<Schema>` re-check is gone (spec
+// 3.4): it re-enumerated FieldPath<Schema> per call even though the method's
+// parameter position already validated the query. The cheap string/array
+// narrowing below is all the body needs.
+export type ResolveUnsetOutput<Schema extends Document, Query> = PassThrough<
   Schema,
   Prettify<
-    Query extends UnsetQuery<Schema> ?
-      Query extends string ?
-        // Single field path
-        RemoveFieldPath<Schema, Query>
-      : Query extends readonly string[] ?
-        // Array of field paths
-        AllTopLevelPaths<Query> extends true ?
-          // All top-level - batched Omit result
-          RemoveFieldPaths<Schema, Query>
-        : // Has nested paths - PreserveOptionality needed to flatten intersection
-          PreserveOptionality<Schema, RemoveFieldPaths<Schema, Query>>
-      : never
+    Query extends string ?
+      // Single field path
+      RemoveFieldPath<Schema, Query>
+    : Query extends readonly string[] ?
+      // Array of field paths
+      AllTopLevelPaths<Query> extends true ?
+        // All top-level - batched Omit result
+        RemoveFieldPaths<Schema, Query>
+      : // Has nested paths - PreserveOptionality needed to flatten intersection
+        PreserveOptionality<Schema, RemoveFieldPaths<Schema, Query>>
     : never
   >
 >;

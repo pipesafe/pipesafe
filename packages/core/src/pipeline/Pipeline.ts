@@ -21,7 +21,12 @@ import { ResolveGraphLookupOutput } from "../stages/graphLookup";
 import { FacetQuery, ResolveFacetOutput } from "../stages/facet";
 import { GetFieldType } from "../elements/fieldSelector";
 import { GroupQuery, ResolveGroupOutput } from "../stages/group";
-import { ResolveProjectOutput, ValidateProjectQuery } from "../stages/project";
+import {
+  ResolveProjectOutput,
+  ValidateProjectQuery,
+  HasInclusionsNonId,
+  HasExclusionsNonId,
+} from "../stages/project";
 import {
   ReplaceRootQuery,
   ResolveReplaceRootOutput,
@@ -34,7 +39,7 @@ import { ResolveSkipOutput } from "../stages/skip";
 import { ResolveSampleOutput, SampleQuery } from "../stages/sample";
 import { ResolveCountOutput } from "../stages/count";
 import { OutQuery } from "../stages/out";
-import { MergeOptions } from "../stages/merge";
+import { MergeQuery } from "../stages/merge";
 import { AggregationCursor, MongoClient } from "mongodb";
 import { type Source, type InferSourceType } from "../source/Source";
 
@@ -198,11 +203,11 @@ export class Pipeline<
     $match: M
   ): Pipeline<
     StartingDocs,
-    ResolveMatchOutput<M, PreviousStageDocs>,
+    ResolveMatchOutput<PreviousStageDocs, M>,
     Mode,
     UsedStages | "$match"
   > {
-    return this._chain<ResolveMatchOutput<M, PreviousStageDocs>, "$match">([
+    return this._chain<ResolveMatchOutput<PreviousStageDocs, M>, "$match">([
       { $match },
     ]);
   }
@@ -211,11 +216,11 @@ export class Pipeline<
     $set: S
   ): Pipeline<
     StartingDocs,
-    ResolveSetOutput<S, PreviousStageDocs>,
+    ResolveSetOutput<PreviousStageDocs, S>,
     Mode,
     UsedStages | "$set"
   > {
-    return this._chain<ResolveSetOutput<S, PreviousStageDocs>, "$set">([
+    return this._chain<ResolveSetOutput<PreviousStageDocs, S>, "$set">([
       { $set },
     ]);
   }
@@ -224,11 +229,11 @@ export class Pipeline<
     $unset: U
   ): Pipeline<
     StartingDocs,
-    ResolveUnsetOutput<U, PreviousStageDocs>,
+    ResolveUnsetOutput<PreviousStageDocs, U>,
     Mode,
     UsedStages | "$unset"
   > {
-    return this._chain<ResolveUnsetOutput<U, PreviousStageDocs>, "$unset">([
+    return this._chain<ResolveUnsetOutput<PreviousStageDocs, U>, "$unset">([
       { $unset },
     ]);
   }
@@ -408,29 +413,36 @@ export class Pipeline<
     ]);
   }
 
-  project<const P>(
-    $project: ValidateProjectQuery<PreviousStageDocs, P>
+  project<
+    const P,
+    // Hoisted projection modes (spec 3.5 Pattern A): computed once per call
+    // and shared by the parameter (validate) and return (resolve) positions.
+    IncMode extends boolean = HasInclusionsNonId<P>,
+    ExcMode extends boolean = HasExclusionsNonId<P>,
+  >(
+    $project: ValidateProjectQuery<PreviousStageDocs, P, IncMode, ExcMode>
   ): Pipeline<
     StartingDocs,
-    ResolveProjectOutput<P, PreviousStageDocs>,
+    ResolveProjectOutput<PreviousStageDocs, P, IncMode, ExcMode>,
     Mode,
     UsedStages | "$project"
   > {
-    return this._chain<ResolveProjectOutput<P, PreviousStageDocs>, "$project">([
-      { $project },
-    ]);
+    return this._chain<
+      ResolveProjectOutput<PreviousStageDocs, P, IncMode, ExcMode>,
+      "$project"
+    >([{ $project }]);
   }
 
   replaceRoot<const R extends ReplaceRootQuery<PreviousStageDocs>>(
     $replaceRoot: R
   ): Pipeline<
     StartingDocs,
-    ResolveReplaceRootOutput<R, PreviousStageDocs>,
+    ResolveReplaceRootOutput<PreviousStageDocs, R>,
     Mode,
     UsedStages | "$replaceRoot"
   > {
     return this._chain<
-      ResolveReplaceRootOutput<R, PreviousStageDocs>,
+      ResolveReplaceRootOutput<PreviousStageDocs, R>,
       "$replaceRoot"
     >([{ $replaceRoot }]);
   }
@@ -512,11 +524,11 @@ export class Pipeline<
     fieldName: F
   ): Pipeline<
     StartingDocs,
-    ResolveCountOutput<F>,
+    ResolveCountOutput<PreviousStageDocs, F>,
     Mode,
     UsedStages | "$count"
   > {
-    return this._chain<ResolveCountOutput<F>, "$count">([
+    return this._chain<ResolveCountOutput<PreviousStageDocs, F>, "$count">([
       { $count: fieldName },
     ]);
   }
@@ -671,7 +683,7 @@ export class Pipeline<
    * @see https://www.mongodb.com/docs/manual/reference/operator/aggregation/merge/
    */
   merge(
-    $merge: MergeOptions<PreviousStageDocs>
+    $merge: MergeQuery<PreviousStageDocs>
   ): Pipeline<StartingDocs, never, Mode, UsedStages | "$merge"> {
     return this._chain<never, "$merge">([{ $merge }]);
   }

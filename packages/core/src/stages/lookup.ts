@@ -4,14 +4,14 @@ import { FieldPathsThatInferToForLookup } from "../elements/fieldReference";
 
 // Todo: Convert new key to a nested field and merge
 export type ResolveLookupOutput<
-  StartingDocs extends Document,
+  Schema extends Document,
   NewKey extends string,
   PipelineOutput extends Document,
 > = PassThrough<
-  StartingDocs,
+  Schema,
   // distribute over union schemas
-  StartingDocs extends unknown ?
-    Prettify<Omit<StartingDocs, NewKey> & { [K in NewKey]: PipelineOutput[] }>
+  Schema extends unknown ?
+    Prettify<Omit<Schema, NewKey> & { [K in NewKey]: PipelineOutput[] }>
   : never
 >;
 

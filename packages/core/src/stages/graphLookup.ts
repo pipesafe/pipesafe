@@ -19,7 +19,7 @@ type GraphLookupElement<Doc extends Document, DepthField extends string> =
 type NarrowForeignDoc<ForeignDoc extends Document, RestrictMatch> =
   [RestrictMatch] extends [never] ? ForeignDoc
   : RestrictMatch extends MatchQuery<ForeignDoc> ?
-    ResolveMatchOutput<RestrictMatch, ForeignDoc>
+    ResolveMatchOutput<ForeignDoc, RestrictMatch>
   : ForeignDoc;
 
 /**
@@ -28,20 +28,20 @@ type NarrowForeignDoc<ForeignDoc extends Document, RestrictMatch> =
  * Reuses ResolveLookupOutput from lookup.ts — additions are
  * element-level depthField augmentation and restrictSearchWithMatch narrowing.
  *
- * @template StartingDocs - The current pipeline document schema
+ * @template Schema - The current pipeline document schema
  * @template NewKey - The "as" field name where results are stored
  * @template ForeignDoc - The document type of the foreign collection
  * @template DepthField - Optional depth tracking field name (defaults to never)
  * @template RestrictMatch - Optional restrictSearchWithMatch query (defaults to never)
  */
 export type ResolveGraphLookupOutput<
-  StartingDocs extends Document,
+  Schema extends Document,
   NewKey extends string,
   ForeignDoc extends Document,
   DepthField extends string = never,
   RestrictMatch = never,
 > = ResolveLookupOutput<
-  StartingDocs,
+  Schema,
   NewKey,
   GraphLookupElement<NarrowForeignDoc<ForeignDoc, RestrictMatch>, DepthField>
 >;
