@@ -21,12 +21,7 @@ import { ResolveGraphLookupOutput } from "../stages/graphLookup";
 import { FacetQuery, ResolveFacetOutput } from "../stages/facet";
 import { GetFieldType } from "../elements/fieldSelector";
 import { GroupQuery, ResolveGroupOutput } from "../stages/group";
-import {
-  ResolveProjectOutput,
-  ValidateProjectQuery,
-  HasInclusionsNonId,
-  HasExclusionsNonId,
-} from "../stages/project";
+import { ResolveProjectOutput, ValidateProjectQuery } from "../stages/project";
 import {
   ReplaceRootQuery,
   ResolveReplaceRootOutput,
@@ -413,24 +408,22 @@ export class Pipeline<
     ]);
   }
 
-  project<
-    const P,
-    // Hoisted projection modes (spec 3.5 Pattern A): computed once per call
-    // and shared by the parameter (validate) and return (resolve) positions.
-    IncMode extends boolean = HasInclusionsNonId<P>,
-    ExcMode extends boolean = HasExclusionsNonId<P>,
-  >(
-    $project: ValidateProjectQuery<PreviousStageDocs, P, IncMode, ExcMode>
+  // ATTEMPT-B VARIATION 3 (spec 3.5 Pattern A comparison): no method-level
+  // mode hoist — ValidateProjectQuery and ResolveProjectOutput each compute
+  // the projection modes via their own defaulted parameters (twice per call
+  // instead of once). Measures whether the hoist pays for its signature
+  // complexity.
+  project<const P>(
+    $project: ValidateProjectQuery<PreviousStageDocs, P>
   ): Pipeline<
     StartingDocs,
-    ResolveProjectOutput<PreviousStageDocs, P, IncMode, ExcMode>,
+    ResolveProjectOutput<PreviousStageDocs, P>,
     Mode,
     UsedStages | "$project"
   > {
-    return this._chain<
-      ResolveProjectOutput<PreviousStageDocs, P, IncMode, ExcMode>,
-      "$project"
-    >([{ $project }]);
+    return this._chain<ResolveProjectOutput<PreviousStageDocs, P>, "$project">([
+      { $project },
+    ]);
   }
 
   replaceRoot<const R extends ReplaceRootQuery<PreviousStageDocs>>(
