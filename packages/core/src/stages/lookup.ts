@@ -8,7 +8,8 @@ export type ResolveLookupOutput<
   PipelineOutput extends Document,
 > = PassThrough<
   StartingDocs,
-  StartingDocs extends any ?
+  // distribute over union schemas
+  StartingDocs extends unknown ?
     Prettify<Omit<StartingDocs, NewKey> & { [K in NewKey]: PipelineOutput[] }>
   : never
 >;

@@ -662,11 +662,6 @@ export type InferArithmeticExpression<Schema extends Document, Expr> =
   Expr extends ArithmeticExpression<Schema> ? number : never;
 
 /**
- * Helper to exclude null and undefined from a type
- */
-type NonNullable<T> = T extends null | undefined ? never : T;
-
-/**
  * Helper to infer expression result type
  * Centralizes all expression type mappings for reusability
  */
