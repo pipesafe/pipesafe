@@ -26,8 +26,9 @@ handling and early-exit behavior differ file by file. Findings:
 ### F1. Naming and parameter-order drift
 
 - `Resolve*Output` parameter order is split roughly down the middle:
-  `<Query, Schema>` (match, set, unset, project, replaceRoot, sort-by-doc) vs
-  `<Schema, Query>` (group, facet, unwind, lookup, graphLookup, unionWith).
+  `<Query, Schema>` (match, set, unset, project, replaceRoot) vs
+  `<Schema, Query>` (group, facet, unwind, lookup, graphLookup, unionWith);
+  schema-only resolvers (sort, limit, skip, sample) take just `<Schema>`.
 - Input-shape naming is split: `*Query` (match, set, group, project, sort,
   unset, facet, replaceRoot, sample, out) vs `*Options` (merge, unwind's
   `UnwindOptions`).
@@ -279,7 +280,9 @@ Every file in `stages/` exports, with **Schema always the first parameter**:
 
 Standard generic names: `Schema` for the incoming docs (replace
 `StartingDocs`/`PreviousStageDocs` inside stage files), `Q` for the literal
-query, `Foreign` for joined schemas.
+query, `Foreign` for joined schemas. Two sanctioned deviations: schema-free
+queries (e.g. `SampleQuery`) take no `Schema` parameter, and trailing
+defaulted/hoisted parameters per 3.5 may extend any trio signature.
 
 ### 3.2 Operand kernel — new `elements/operands.ts`
 
@@ -370,7 +373,8 @@ type InferExpression<Schema extends Document, Expr> =
 `NotAnExpression` is a sentinel type (not `never`) so callers like
 `InferNestedFieldReference` can distinguish "this is a literal — pass it
 through" from "this dispatched but resolved to nothing". The sketch omits
-the multi-operator guard for brevity: before the registry lookup, a
+the multi-operator guard for brevity: immediately after the tier-2 check
+(so it runs before *both* operator lookups), a
 `[Op] extends [UnionToIntersection<Op>]`-style single-key check routes
 multi-`$`-key objects to the exactly-one-operator brand described below.
 
@@ -545,8 +549,10 @@ re-points at the new module locations.)
 Every backwards-compatibility export created by this plan — deprecated
 aliases for renamed/reordered types (`ResolveCountOutput<FieldName>` →
 `<Schema, FieldName>`, `MergeOptions` → `MergeQuery`, the old
-`Resolve*Output<Query, Schema>` parameter orders, old `utils/core` paths) —
-lives in **one file**: `src/compat.ts`.
+`Resolve*Output<Query, Schema>` parameter orders) — lives in **one file**:
+`src/compat.ts`. Module *paths* need no compat treatment: the package's
+public surface is the root `index.ts`, so moving a type between internal
+files (3.6) is invisible to consumers as long as the root re-export remains.
 
 Rules:
 
@@ -596,7 +602,11 @@ counts within noise of the previous baseline. Changesets: phases 1–5 are
 - Wire `Pipeline.sort` to `ResolveSortOutput`; wire `Pipeline.unwind` to
   `UnwindQuery`/`UnwindPath` so the documented `$unwind` brand actually fires
   at chained call sites (add a callSite assertion for it). Both types are
-  internal (not exported from `index.ts`), so this is non-breaking.
+  internal (not exported from `index.ts`), so this is non-breaking. Flip the
+  corresponding Phase-0 `ExpectAssertFailure` markers here — only `count`'s
+  stays red until Phase 3.
+- Replace lookup.ts's `StartingDocs extends any ?` with the standard
+  `extends unknown ?` distribution idiom + comment (3.3 rule 2).
 - Remove the local `NonNullable` shadow in `expressions.ts`.
 - Prune the unused `ExpandAllDotted` variant and convert "Stage N.M"
   optimization-log comments into a single short note (history lives in git).
@@ -616,8 +626,10 @@ counts within noise of the previous baseline. Changesets: phases 1–5 are
   `RawMatchQuery<Schema>` re-match. Both are hot paths; expect measurable
   instantiation-count improvements (record them against the baseline).
 - Execute the utils split (3.6) as pure moves. Create `src/compat.ts` (3.7)
-  with its `no-restricted-imports` lint rule here; any old-path re-exports
-  needed for compatibility go in it from day one.
+  with its `no-restricted-imports` lint rule here; any renamed exports
+  needing compatibility go in it from day one.
+- Add the branded `GetFieldTypeOrError<Schema, Path>` sibling (3.3 rule 4)
+  alongside the kernel, for user-surfacing call sites.
 
 ### Phase 3 — Stage trio standardization
 
@@ -638,12 +650,14 @@ counts within noise of the previous baseline. Changesets: phases 1–5 are
   `ProjectQuery<Schema>` re-checks inside resolvers (3.4): the Pipeline
   method's generic constraint already proved conformance at the parameter
   position.
-- Flip the Phase-0 `ExpectAssertFailure` markers for the stage contract to
-  real assertions.
+- Flip the remaining Phase-0 stage-contract `ExpectAssertFailure` markers
+  (`count`, plus any signature-order assertions) to real assertions —
+  sort/unwind's were already flipped in Phase 1.
 
 ### Phase 4 — Registry containers
 
-- Rebuild `expressions.ts` around `ExpressionSpec<Schema>` (section 2.1)
+- Rebuild `expressions.ts` around `ExpressionSpec<Schema>` (section 2,
+  recommendation 1)
   with **operator-key dispatch as the only dispatch mechanism** (3.4):
   derive `Expression`, category views, and the fixed-return arm of
   `InferExpression` from the registry; delete `InferExpressionType`; route
@@ -698,5 +712,5 @@ instantiation counts.
 | Error/hover display regressions (the product) | Brand messages asserted byte-for-byte in typeAssertions; `callSite.typeAssertions.ts` never weakened; `inspect-types.ts` spot checks in Phase 4 review. |
 | Type-instantiation count regressions | Benchmark gate per phase against the Phase-0 baseline. |
 | Registry indirection worsening hovers | Registry is internal only — user-facing parameter types remain plain (`Expression<Schema>` stays a union alias); if a derived union displays worse than the hand-written one, fall back to hand-written union + registry-driven conformance assertion instead. |
-| Public API breakage | Only `limit`/`skip`/`sample`/`count` resolvers, `MergeOptions`, `SampleQuery` and the `utils/core` quintet are exported; all keep aliases until next major — isolated in `src/compat.ts` (3.7) so removal is a single file deletion. |
+| Public API breakage | Only `limit`/`skip`/`sample`/`count` resolvers, `MergeOptions`, `SampleQuery` and the `utils/core` quintet are exported. The quintet isn't renamed — `index.ts` just re-points at the new modules. The renamed/reordered ones keep `@deprecated` aliases until next major, isolated in `src/compat.ts` (3.7) so removal is a single file deletion. |
 | Hoisted defaults computed on error paths | 3.5 caveat: defaults live on inner aliases behind `PassThrough`; pinned by a contract assertion in Phase 5. |
