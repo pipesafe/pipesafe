@@ -28,7 +28,8 @@ handling and early-exit behavior differ file by file. Findings:
 - `Resolve*Output` parameter order is split roughly down the middle:
   `<Query, Schema>` (match, set, unset, project, replaceRoot) vs
   `<Schema, Query>` (group, facet, unwind, lookup, graphLookup, unionWith);
-  schema-only resolvers (sort, limit, skip, sample) take just `<Schema>`.
+  schema-only resolvers (sort, limit, skip, sample) take just `<Schema>`,
+  and `count`'s takes only `<FieldName>` (see F2).
 - Input-shape naming is split: `*Query` (match, set, group, project, sort,
   unset, facet, replaceRoot, sample, out) vs `*Options` (merge, unwind's
   `UnwindOptions`).
@@ -319,6 +320,10 @@ export type RequiresMsg<
 
 Existing helpers become one-liners over the kernel, e.g.
 `type NumericOperand<T, Op extends string> = FieldOperand<T, number | Date, RequiresMsg<"Operator", Op, "a numeric or date field">>`.
+The expression-side helpers drop their inconsistent suffixes in the process
+(`ArrayOperandFor` → `ArrayOperand`, `StringOperandFor` → `StringOperand`,
+etc.) — these standardized names are the ones used in the registry sketch
+in section 2.
 
 ### 3.3 Early-exit and distribution rules (written into CLAUDE.md)
 
@@ -538,21 +543,28 @@ plus the new `utils/dispatch.ts` from 3.4:
 | `utils/objects.ts`  | `Document`, `Prettify`, `MergeNested`, `IsPlainObject`, `UnionToIntersection`, `ExclusifyUnion`, `NonExpandableTypes` |
 | `stages/set.ts`     | `ApplySetUpdates` + its ~15 private helpers move next to their only consumer |
 
+All rows are pure moves except two additions — `RequiresMsg` and the
+`utils/dispatch.ts` module — which are new code created in Phase 2.
+
 `utils/core.ts` is **deleted**, not kept as a barrel — internal imports are
-updated to the new modules, and anything needed for external compatibility
-moves to the compat file (3.7). (`Document`, `Prettify`, `PipeSafeError`,
-`IsPipeSafeError`, `PassThrough` are public API via `index.ts`, which simply
-re-points at the new module locations.)
+updated to the new modules. Nothing in the split is renamed, so it creates
+no compat entries (3.7): `Document`, `Prettify`, `PipeSafeError`,
+`IsPipeSafeError`, `PassThrough` stay public API via `index.ts`, which
+simply re-points at the new module locations.
 
 ### 3.7 One compat file to delete at the next major
 
-Every backwards-compatibility export created by this plan — deprecated
-aliases for renamed/reordered types (`ResolveCountOutput<FieldName>` →
-`<Schema, FieldName>`, `MergeOptions` → `MergeQuery`, the old
-`Resolve*Output<Query, Schema>` parameter orders) — lives in **one file**:
-`src/compat.ts`. Module *paths* need no compat treatment: the package's
-public surface is the root `index.ts`, so moving a type between internal
-files (3.6) is invisible to consumers as long as the root re-export remains.
+Every backwards-compatibility export created by this plan lives in **one
+file**: `src/compat.ts`. The expected contents are small — exactly two
+entries: `ResolveCountOutput`'s old single-parameter form (`<FieldName>`,
+superseded by `<Schema, FieldName>`) and the `MergeOptions` name
+(superseded by `MergeQuery`). The other parameter-order flips need no
+aliases because those types are internal, and the remaining exported
+resolvers (`limit`, `skip`, `sample`) are already schema-only and
+Schema-first, so they are unchanged. Module *paths* need no compat
+treatment either: the package's public surface is the root `index.ts`, so
+moving a type between internal files (3.6) is invisible to consumers as
+long as the root re-export remains.
 
 Rules:
 
@@ -626,17 +638,19 @@ counts within noise of the previous baseline. Changesets: phases 1–5 are
   `RawMatchQuery<Schema>` re-match. Both are hot paths; expect measurable
   instantiation-count improvements (record them against the baseline).
 - Execute the utils split (3.6) as pure moves. Create `src/compat.ts` (3.7)
-  with its `no-restricted-imports` lint rule here; any renamed exports
-  needing compatibility go in it from day one.
+  with its `no-restricted-imports` lint rule here — initially empty, since
+  its two entries (count's old resolver form, `MergeOptions`) only arise
+  when Phase 3 renames them.
 - Add the branded `GetFieldTypeOrError<Schema, Path>` sibling (3.3 rule 4)
   alongside the kernel, for user-surfacing call sites.
 
 ### Phase 3 — Stage trio standardization
 
 - Normalize names and parameter order (`<Schema, Q>`) across all stage files
-  and their `Pipeline` call sites. All internal except the four exported
-  resolvers (`limit`, `skip`, `sample`, `count`) and `MergeOptions` —
-  deprecated aliases for those go into `src/compat.ts` (3.7).
+  and their `Pipeline` call sites. Almost all of these types are internal;
+  of the exported ones, `limit`/`skip`/`sample` resolvers are already
+  schema-only and Schema-first (unchanged), leaving only `count` and
+  `MergeOptions` needing compat aliases (3.7).
 - Fix the `count` PassThrough hole (F2) here, not in Phase 1: the fix changes
   the **exported** `ResolveCountOutput` to `<Schema, FieldName>`, which needs
   a compat alias and therefore Phase 2's `compat.ts`. The Phase-0
@@ -650,9 +664,10 @@ counts within noise of the previous baseline. Changesets: phases 1–5 are
   `ProjectQuery<Schema>` re-checks inside resolvers (3.4): the Pipeline
   method's generic constraint already proved conformance at the parameter
   position.
-- Flip the remaining Phase-0 stage-contract `ExpectAssertFailure` markers
-  (`count`, plus any signature-order assertions) to real assertions —
-  sort/unwind's were already flipped in Phase 1.
+- Flip the last Phase-0 stage-contract `ExpectAssertFailure` marker
+  (`count`'s) to a real assertion — sort/unwind's were already flipped in
+  Phase 1 — and update the contract assertions to the new `<Schema, Q>`
+  signatures, per the Phase-0 note.
 
 ### Phase 4 — Registry containers
 
