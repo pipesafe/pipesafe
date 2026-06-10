@@ -10,9 +10,9 @@
  *      method-level matrix; it does not duplicate that block.
  *   2. Each Pipeline method's *return type* forwards an error schema —
  *      observable proof that the method is wired to its module's resolver.
- *   3. Target dispatch semantics for expressions (operator-key dispatch,
- *      spec §3.4). These pin behavior that does NOT exist yet and are
- *      ExpectAssertFailure until Phase 4 lands.
+ *   3. Dispatch semantics for expressions (operator-key dispatch, spec
+ *      §3.4) — pinned as targets in Phase 0, delivered by Phase 4's
+ *      registry rebuild.
  *
  * Known gaps recorded here (see spec §4 Phase 0):
  *   - count: resolver never saw the schema (F2) — FIXED in Phase 3
@@ -27,7 +27,8 @@
  */
 
 import { Pipeline, InferOutputType } from "../pipeline/Pipeline";
-import { Assert, Equal, ExpectAssertFailure } from "../utils/tests";
+import { Assert, Equal } from "../utils/tests";
+import { NotAnExpression } from "../utils/dispatch";
 import { PipeSafeError } from "../utils/errors";
 import { ResolveCountOutput } from "./count";
 import { ResolveGraphLookupOutput } from "./graphLookup";
@@ -113,34 +114,28 @@ type _CountMethodForwards = Assert<
 >;
 
 // ============================================================================
-// 3. Target dispatch semantics (spec §3.4) — red until Phase 4
+// 3. Dispatch semantics (spec §3.4) — delivered by the Phase-4 registry
 // ============================================================================
-// These pin the operator-key dispatch behavior the registry rebuild must
-// deliver. All three are ExpectAssertFailure today by design.
 
 type _DispatchSchema = { items: number[]; name: string };
 
-// (a) Forgiving dispatch: a wrong operand must not change the inferred kind.
-// { $size: 12 } is a malformed $size, but it IS a $size — target inference
-// is `number` (the brand fires at the input position instead).
-type _DispatchForgiving = ExpectAssertFailure<
+// (a) Forgiving dispatch: a wrong operand does not change the inferred kind.
+// { $size: 12 } is a malformed $size, but it IS a $size — inference is
+// `number`; the operand brand fires at the input position instead.
+type _DispatchForgiving = Assert<
   Equal<InferExpression<_DispatchSchema, { $size: 12 }>, number>
 >;
 
-// (b) `$`-less objects are literals, not expressions: target is the
-// NotAnExpression sentinel. The sentinel type doesn't exist until Phase 4
-// (utils/dispatch.ts); its structural shape is pinned here and the alias
-// below is replaced by the real import when it lands.
-// TODO(Phase 4): import NotAnExpression from "../utils/dispatch".
-type _NotAnExpressionShape = { readonly "~pipesafe.notAnExpression": true };
-type _DispatchLiteralSentinel = ExpectAssertFailure<
-  Equal<InferExpression<_DispatchSchema, { notAnOp: 1 }>, _NotAnExpressionShape>
+// (b) `$`-less objects are literals, not expressions: the NotAnExpression
+// sentinel (utils/dispatch.ts) tells callers to treat the value as a literal.
+type _DispatchLiteralSentinel = Assert<
+  Equal<InferExpression<_DispatchSchema, { notAnOp: 1 }>, NotAnExpression>
 >;
 
 // (c) Multi-operator objects brand with the exactly-one-operator message.
 type _MultiOperatorTarget =
   PipeSafeError<`Expression objects must have exactly one operator.`>;
-type _DispatchMultiOperator = ExpectAssertFailure<
+type _DispatchMultiOperator = Assert<
   Equal<
     InferExpression<_DispatchSchema, { $add: [1, 2]; $size: "$items" }>,
     _MultiOperatorTarget

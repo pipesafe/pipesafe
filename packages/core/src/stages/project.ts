@@ -6,6 +6,7 @@ import {
   IsPlainObject,
 } from "../utils/objects";
 import { PassThrough, PipeSafeError } from "../utils/errors";
+import { HasOperatorKey } from "../utils/dispatch";
 import { ExpandDottedKey } from "../utils/paths";
 import {
   FieldReference,
@@ -148,14 +149,11 @@ export type ValidateProjectQuery<
 type IsDottedKey<Key extends string> =
   Key extends `${string}.${string}` ? true : false;
 
-// Helper: Resolve nested objects with field references and expressions
-// Uses InferNestedFieldReference for field references, but also handles ProjectExpression
+// Helper: Resolve nested objects with field references and expressions.
+// InferNestedFieldReference key-dispatches expressions internally (spec
+// §3.4), so no separate ProjectExpression structural check is needed.
 type ResolveNestedProjection<Schema extends Document, Obj extends Document> = {
-  [K in keyof Obj]: Obj[K] extends ProjectExpression<Schema> ?
-    // Expression operator - infer the expression result type
-    InferProjectExpression<Schema, Obj[K]>
-  : // Use InferNestedFieldReference for everything else (field refs, nested objects, literals)
-    InferNestedFieldReference<Schema, Obj[K]>;
+  [K in keyof Obj]: InferNestedFieldReference<Schema, Obj[K]>;
 };
 
 // Helper: Resolve a single field value (handles both regular and dotted keys)
@@ -176,8 +174,8 @@ type ResolveFieldValue<Schema extends Document, Value, Key extends string> =
   : Value extends FieldReference<Schema> ?
     // Field reference - infer the referenced field type
     InferFieldReference<Schema, Value>
-  : Value extends ProjectExpression<Schema> ?
-    // Expression operator - infer the expression result type
+  : HasOperatorKey<Value> extends true ?
+    // $-keyed object = expression (operator-key dispatch, spec §3.4)
     InferProjectExpression<Schema, Value>
   : Value extends Document ?
     // Nested object - recursively resolve field references and expressions within it

@@ -51,41 +51,55 @@ type FlexibleAccumulatorOperand<Schema extends Document> =
   | LiteralOrFieldReferenceInferringTo<Schema, any>
   | Expression<Schema>;
 
-export type AccumulatorFunction<Schema extends Document> =
-  | {
-      $sum: NumericAccumulatorOperand<Schema, "$sum">;
-    }
-  | {
-      $avg: NumericAccumulatorOperand<Schema, "$avg">;
-    }
-  | {
-      $min: MinMaxAccumulatorOperand<Schema, "$min">;
-    }
-  | {
-      $max: MinMaxAccumulatorOperand<Schema, "$max">;
-    }
-  | {
-      $count: {};
-    }
-  | {
-      $push: FlexibleAccumulatorOperand<Schema>;
-    }
-  | {
-      $addToSet: FlexibleAccumulatorOperand<Schema>;
-    }
-  | {
-      $first: FlexibleAccumulatorOperand<Schema>;
-    }
-  | {
-      $last: FlexibleAccumulatorOperand<Schema>;
-    };
+/**
+ * Accumulator registry (spec §2 recommendation 2, mirroring ExpressionSpec):
+ * one entry per accumulator holding its operand shape and, for fixed-return
+ * accumulators ($sum/$avg/$count), its result type. `AccumulatorFunction`
+ * and the fixed arms of `ResolveAccumulatorFunction` are derived from it —
+ * adding an accumulator means adding one entry (plus one dependent arm if
+ * its result derives from the operand).
+ */
+export interface AccumulatorSpec<Schema extends Document> {
+  $sum: { operand: NumericAccumulatorOperand<Schema, "$sum">; returns: number };
+  $avg: { operand: NumericAccumulatorOperand<Schema, "$avg">; returns: number };
+  /** Result mirrors the operand's inferred type (dependent). */
+  $min: { operand: MinMaxAccumulatorOperand<Schema, "$min">; returns: unknown };
+  $max: { operand: MinMaxAccumulatorOperand<Schema, "$max">; returns: unknown };
+  $count: { operand: {}; returns: number };
+  /** Result is an array of the operand's inferred type (dependent). */
+  $push: { operand: FlexibleAccumulatorOperand<Schema>; returns: unknown[] };
+  $addToSet: {
+    operand: FlexibleAccumulatorOperand<Schema>;
+    returns: unknown[];
+  };
+  $first: { operand: FlexibleAccumulatorOperand<Schema>; returns: unknown };
+  $last: { operand: FlexibleAccumulatorOperand<Schema>; returns: unknown };
+}
 
+/** Single-operator accumulator shape(s) for `Op` (distributes over unions). */
+type AccumulatorFor<Schema extends Document, Op> =
+  Op extends keyof AccumulatorSpec<Schema> ?
+    { [K in Op]: AccumulatorSpec<Schema>[K]["operand"] }
+  : never;
+
+export type AccumulatorFunction<Schema extends Document> = AccumulatorFor<
+  Schema,
+  keyof AccumulatorSpec<Schema>
+>;
+
+/**
+ * Key-dispatched accumulator result inference. Fixed-return accumulators
+ * read the registry; operand-dependent ones ($min/$max/$first/$last yield
+ * the operand's type, $push/$addToSet an array of it) keep explicit arms.
+ */
 export type ResolveAccumulatorFunction<Schema extends Document, Accumulator> =
-  Accumulator extends { $sum: any } ? number
-  : Accumulator extends { $avg: any } ? number
+  Accumulator extends { $sum: any } ? AccumulatorSpec<Schema>["$sum"]["returns"]
+  : Accumulator extends { $avg: any } ?
+    AccumulatorSpec<Schema>["$avg"]["returns"]
+  : Accumulator extends { $count: any } ?
+    AccumulatorSpec<Schema>["$count"]["returns"]
   : Accumulator extends { $min: infer A } ? InferNestedFieldReference<Schema, A>
   : Accumulator extends { $max: infer A } ? InferNestedFieldReference<Schema, A>
-  : Accumulator extends { $count: any } ? number
   : Accumulator extends { $push: infer A } ?
     InferNestedFieldReference<Schema, A>[]
   : Accumulator extends { $addToSet: infer A } ?
