@@ -33,7 +33,7 @@ export type SetQuery<Schema extends Document> = {
 
 export type ResolveSetQueryValueType<
   Schema extends Document,
-  Query extends SetQuery<Schema>,
+  Query,
   Key extends keyof Query,
 > =
   Query[Key] extends "$$REMOVE" ? never
@@ -344,25 +344,24 @@ type ApplySetUpdatesSelective<
 // { a?: { b: string, c: string } | undefined } // { $set: { 'a.b': 'hello' }} ==> { a: { b: 'hello', c?: string | undefined }}
 
 // Don't use RemoveNever here - let ApplySetUpdates handle never values
-export type ResolveSetInlineSchema<
-  Schema extends Document,
-  Query extends SetQuery<Schema>,
-> = {
+export type ResolveSetInlineSchema<Schema extends Document, Query> = {
   [Key in keyof Query]: ResolveSetQueryValueType<Schema, Query, Key>;
 };
 
-export type ResolveSetOutput<Query, Schema extends Document> = PassThrough<
+// The old `Query extends SetQuery<Schema>` structural re-check is gone
+// (spec 3.4): Pipeline.set's generic constraint already validated the query
+// at the parameter position; re-proving it here instantiated the full
+// SetQuery mapped type (AnyLiteral + Expression unions) per call.
+export type ResolveSetOutput<Schema extends Document, Query> = PassThrough<
   Schema,
-  Query extends SetQuery<Schema> ?
-    HasDottedKeys<ResolveSetInlineSchema<Schema, Query>> extends true ?
-      // Has dotted keys - use FlattenDotSet (will optimize in Phase 2)
-      Prettify<
-        ApplySetUpdates<
-          Schema,
-          FlattenDotSet<ResolveSetInlineSchema<Schema, Query>>
-        >
+  HasDottedKeys<ResolveSetInlineSchema<Schema, Query>> extends true ?
+    // Has dotted keys - flatten them into nested structure first
+    Prettify<
+      ApplySetUpdates<
+        Schema,
+        FlattenDotSet<ResolveSetInlineSchema<Schema, Query>>
       >
-    : // No dotted keys - skip FlattenDotSet entirely (Early Exit optimization)
-      Prettify<ApplySetUpdates<Schema, ResolveSetInlineSchema<Schema, Query>>>
-  : never
+    >
+  : // No dotted keys - skip FlattenDotSet entirely (Early Exit optimization)
+    Prettify<ApplySetUpdates<Schema, ResolveSetInlineSchema<Schema, Query>>>
 >;

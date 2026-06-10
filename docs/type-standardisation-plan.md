@@ -562,13 +562,18 @@ simply re-points at the new module locations.
 ### 3.7 One compat file to delete at the next major
 
 Every backwards-compatibility export created by this plan lives in **one
-file**: `src/compat.ts`. The expected contents are small — exactly two
-entries: `ResolveCountOutput`'s old single-parameter form (`<FieldName>`,
-superseded by `<Schema, FieldName>`) and the `MergeOptions` name
-(superseded by `MergeQuery`). The other parameter-order flips need no
-aliases because those types are internal, and the remaining exported
-resolvers (`limit`, `skip`, `sample`) are already schema-only and
-Schema-first, so they are unchanged. Module _paths_ need no compat
+file**: `src/compat.ts`. The expected contents are small — exactly one
+entry: the `MergeOptions` name (superseded by `MergeQuery`).
+
+**Phase-3 amendment**: the originally-planned second entry — a compat alias
+for `ResolveCountOutput`'s old single-parameter form — is **impossible**:
+one exported name cannot carry two arities, and a legacy
+`ResolveCountOutput<"total">` call cannot satisfy the new
+`Schema extends Document` first parameter. The arity change ships as a
+documented breaking change instead (acceptable pre-1.0; noted in the
+changeset). The other parameter-order flips need no aliases because those
+types are internal, and the remaining exported resolvers (`limit`, `skip`,
+`sample`) are already schema-only and Schema-first, so they are unchanged. Module _paths_ need no compat
 treatment either: the package's public surface is the root `index.ts`, so
 moving a type between internal files (3.6) is invisible to consumers as
 long as the root re-export remains.
@@ -593,7 +598,14 @@ Rules:
 Each phase is a separate PR, gated by: `bun run build`, all
 `*.typeAssertions.ts` green, `Pipeline.callSite.typeAssertions.ts` untouched or
 strengthened (never weakened), and `packages/core/benchmarking` instantiation
-counts within noise of the previous baseline. Changesets: phases 1–5 are
+counts within noise of the previous baseline.
+
+**Gate mechanics (Phase-3 amendment)**: assertions are validated by
+**per-package** `tsc --noEmit` (`cd packages/core && bunx tsc --noEmit`,
+same for manifold) — the root `bun run typecheck` resolves project
+references to built `dist/` declarations and therefore does NOT re-check
+`packages/*/src`. Manifold's gate additionally requires a fresh
+`bun run build` of core first, for the same reason. Changesets: phases 1–5 are
 `patch` (internal); phase 6 is `minor` if any new public types are exported.
 
 ### Phase 0 — Pin current behavior (the safety net)
