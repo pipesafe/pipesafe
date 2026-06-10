@@ -1,13 +1,12 @@
 import {
   Document,
-  PassThrough,
-  PipeSafeError,
   Prettify,
-  ExpandDottedKey,
   UnionToIntersection,
   MergeNested,
   IsPlainObject,
-} from "../utils/core";
+} from "../utils/objects";
+import { PassThrough, PipeSafeError } from "../utils/errors";
+import { ExpandDottedKey } from "../utils/paths";
 import {
   FieldReference,
   InferFieldReference,

@@ -4,7 +4,8 @@ import {
 } from "../elements/fieldReference";
 import { Expression } from "../elements/expressions";
 import { AnyLiteral } from "../elements/literals";
-import { Document, PassThrough, Prettify } from "../utils/core";
+import { Document, Prettify } from "../utils/objects";
+import { PassThrough } from "../utils/errors";
 
 /**
  * $replaceRoot stage query type

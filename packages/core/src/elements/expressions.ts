@@ -1,4 +1,6 @@
-import { Document, PipeSafeError } from "../utils/core";
+import { Document } from "../utils/objects";
+import { PipeSafeError, RequiresMsg } from "../utils/errors";
+import { ExpressionOperand } from "./operands";
 import {
   FieldReference,
   InferFieldReference,
@@ -14,12 +16,14 @@ import { AnyLiteral } from "./literals";
  * Array operand — accepts a field reference to an array field, or an array
  * literal of any element type. The branded `PipeSafeError` arm surfaces in
  * IDE hovers when a user passes a non-array value (e.g. a string field
- * reference) where an array is required.
+ * reference) where an array is required. Specialized rather than an
+ * `ExpressionOperand` one-liner because the literal arm is `AnyLiteral[]`
+ * while the reference arm targets `unknown[]`.
  */
-type ArrayOperandFor<Schema extends Document, Op extends string> =
+type ArrayOperand<Schema extends Document, Op extends string> =
   | FieldReferencesThatInferTo<Schema, unknown[]>
   | AnyLiteral<Schema>[]
-  | PipeSafeError<`Operator '${Op}' requires an array operand.`>;
+  | PipeSafeError<RequiresMsg<"Operator", Op, "an array operand">>;
 
 /**
  * $concatArrays expression - concatenates arrays
@@ -30,7 +34,7 @@ type ArrayOperandFor<Schema extends Document, Op extends string> =
  * - Nested expressions (future)
  */
 export type ConcatArraysExpression<Schema extends Document> = {
-  $concatArrays: ArrayOperandFor<Schema, "$concatArrays">[];
+  $concatArrays: ArrayOperand<Schema, "$concatArrays">[];
 };
 
 /**
@@ -42,7 +46,7 @@ export type ConcatArraysExpression<Schema extends Document> = {
  * Returns: number (the length of the array)
  */
 export type SizeExpression<Schema extends Document> = {
-  $size: ArrayOperandFor<Schema, "$size">;
+  $size: ArrayOperand<Schema, "$size">;
 };
 
 /**
@@ -51,10 +55,14 @@ export type SizeExpression<Schema extends Document> = {
  * when a non-Date operand is supplied (e.g. a string field reference passed
  * to a `date` parameter) instead of letting the value silently degrade.
  */
-type DateOperand<Schema extends Document, Op extends string> =
-  | Date
-  | FieldReferencesThatInferTo<Schema, Date>
-  | PipeSafeError<`Operator '${Op}' requires a Date operand.`>;
+type DateOperand<
+  Schema extends Document,
+  Op extends string,
+> = ExpressionOperand<
+  Schema,
+  Date,
+  RequiresMsg<"Operator", Op, "a Date operand">
+>;
 
 /**
  * $dateToString expression - converts a date to a string
@@ -165,7 +173,7 @@ export type DateSubtractExpression<Schema extends Document> = {
  * Returns: Date
  */
 export type ToDateExpression<Schema extends Document> = {
-  $toDate: ArithmeticOperandFor<Schema, "$toDate">;
+  $toDate: ArithmeticOperand<Schema, "$toDate">;
 };
 
 /**
@@ -178,7 +186,7 @@ export type ToDateExpression<Schema extends Document> = {
  */
 export type ArrayElemAtExpression<Schema extends Document> = {
   $arrayElemAt: [
-    ArrayOperandFor<Schema, "$arrayElemAt">,
+    ArrayOperand<Schema, "$arrayElemAt">,
     number | FieldReferencesThatInferTo<Schema, number>,
   ];
 };
@@ -190,7 +198,7 @@ export type ArrayElemAtExpression<Schema extends Document> = {
  */
 export type FilterExpression<Schema extends Document> = {
   $filter: {
-    input: ArrayOperandFor<Schema, "$filter">;
+    input: ArrayOperand<Schema, "$filter">;
     as: string;
     cond: unknown; // Condition expression (uses $$var references)
     limit?: number;
@@ -262,11 +270,13 @@ export type ArrayExpression<Schema extends Document> =
  * when a user passes a non-numeric field reference (e.g. `'$stringField'`)
  * instead of letting it silently degrade to `never` downstream.
  */
-type ArithmeticOperandFor<Schema extends Document, Op extends string> =
-  | number
-  | FieldReferencesThatInferTo<Schema, number>
-  | Expression<Schema>
-  | PipeSafeError<`Operator '${Op}' requires a numeric operand.`>;
+type ArithmeticOperand<Schema extends Document, Op extends string> =
+  | ExpressionOperand<
+      Schema,
+      number,
+      RequiresMsg<"Operator", Op, "a numeric operand">
+    >
+  | Expression<Schema>;
 
 /**
  * $add expression - adds numbers together
@@ -275,7 +285,7 @@ type ArithmeticOperandFor<Schema extends Document, Op extends string> =
  * Returns: number
  */
 export type AddExpression<Schema extends Document> = {
-  $add: ArithmeticOperandFor<Schema, "$add">[];
+  $add: ArithmeticOperand<Schema, "$add">[];
 };
 
 /**
@@ -286,8 +296,8 @@ export type AddExpression<Schema extends Document> = {
  */
 export type SubtractExpression<Schema extends Document> = {
   $subtract: [
-    ArithmeticOperandFor<Schema, "$subtract">,
-    ArithmeticOperandFor<Schema, "$subtract">,
+    ArithmeticOperand<Schema, "$subtract">,
+    ArithmeticOperand<Schema, "$subtract">,
   ];
 };
 
@@ -298,7 +308,7 @@ export type SubtractExpression<Schema extends Document> = {
  * Returns: number
  */
 export type MultiplyExpression<Schema extends Document> = {
-  $multiply: ArithmeticOperandFor<Schema, "$multiply">[];
+  $multiply: ArithmeticOperand<Schema, "$multiply">[];
 };
 
 /**
@@ -309,8 +319,8 @@ export type MultiplyExpression<Schema extends Document> = {
  */
 export type DivideExpression<Schema extends Document> = {
   $divide: [
-    ArithmeticOperandFor<Schema, "$divide">,
-    ArithmeticOperandFor<Schema, "$divide">,
+    ArithmeticOperand<Schema, "$divide">,
+    ArithmeticOperand<Schema, "$divide">,
   ];
 };
 
@@ -321,10 +331,7 @@ export type DivideExpression<Schema extends Document> = {
  * Returns: number
  */
 export type ModExpression<Schema extends Document> = {
-  $mod: [
-    ArithmeticOperandFor<Schema, "$mod">,
-    ArithmeticOperandFor<Schema, "$mod">,
-  ];
+  $mod: [ArithmeticOperand<Schema, "$mod">, ArithmeticOperand<Schema, "$mod">];
 };
 
 /**
@@ -344,10 +351,14 @@ export type DateExpression<Schema extends Document> =
  * `PipeSafeError` arm surfaces in IDE hovers when a non-string operand is
  * passed (e.g. a numeric field reference) instead of degrading silently.
  */
-type StringOperandFor<Schema extends Document, Op extends string> =
-  | string
-  | FieldReferencesThatInferTo<Schema, string>
-  | PipeSafeError<`Operator '${Op}' requires a string operand.`>;
+type StringOperand<
+  Schema extends Document,
+  Op extends string,
+> = ExpressionOperand<
+  Schema,
+  string,
+  RequiresMsg<"Operator", Op, "a string operand">
+>;
 
 /**
  * $concat expression - concatenates strings together
@@ -356,7 +367,7 @@ type StringOperandFor<Schema extends Document, Op extends string> =
  * Returns: string
  */
 export type ConcatExpression<Schema extends Document> = {
-  $concat: StringOperandFor<Schema, "$concat">[];
+  $concat: StringOperand<Schema, "$concat">[];
 };
 
 /**

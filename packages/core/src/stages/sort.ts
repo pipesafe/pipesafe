@@ -1,5 +1,6 @@
 import { FieldSelector } from "../elements/fieldSelector";
-import { Document, PassThrough } from "../utils/core";
+import { Document } from "../utils/objects";
+import { PassThrough } from "../utils/errors";
 
 export type SortDirection = 1 | -1;
 

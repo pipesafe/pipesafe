@@ -1,5 +1,6 @@
 import { FieldPath } from "../elements/fieldReference";
-import { Document, PassThrough, Prettify } from "../utils/core";
+import { Document, Prettify } from "../utils/objects";
+import { PassThrough } from "../utils/errors";
 
 export type UnsetQuery<Schema extends Document> =
   | FieldPath<Schema>

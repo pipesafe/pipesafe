@@ -1,4 +1,5 @@
-import { Document, PassThrough, Prettify } from "../utils/core";
+import { Document, Prettify } from "../utils/objects";
+import { PassThrough } from "../utils/errors";
 
 /**
  * Resolves the output schema type for a $unionWith stage

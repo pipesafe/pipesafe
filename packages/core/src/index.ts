@@ -22,13 +22,12 @@ export type {
 } from "./pipeline/Pipeline";
 export type { InferCollectionType } from "./collection/Collection";
 export type { Source, InferSourceType } from "./source/Source";
+export type { Document, Prettify } from "./utils/objects";
 export type {
-  Document,
-  Prettify,
   PipeSafeError,
   IsPipeSafeError,
   PassThrough,
-} from "./utils/core";
+} from "./utils/errors";
 
 // Re-export commonly used types from elements for advanced usage
 export type {

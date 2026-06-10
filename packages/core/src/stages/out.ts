@@ -1,5 +1,5 @@
 import { FieldReferencesThatInferTo } from "../elements/fieldReference";
-import { Document, ExclusifyUnion } from "../utils/core";
+import { Document, ExclusifyUnion } from "../utils/objects";
 
 type TimeSeriesGranularity = ExclusifyUnion<
   | { granularity: "seconds" | "minutes" | "hours" }
