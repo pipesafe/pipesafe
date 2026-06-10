@@ -24,6 +24,11 @@ export type FieldPath<T> =
 
 export type FieldReference<T extends Document> = DollarPrefixed<FieldPath<T>>;
 
+// NOTE (F7 asymmetry, deliberate): unknown paths brand with PipeSafeError
+// here, while the field-selector twin (GetFieldType in fieldSelector.ts)
+// resolves them to `never` — its `never` is load-bearing for union
+// narrowing. FullPath is an accumulator parameter so recursion doesn't
+// lose the original path for the error message (spec §3.5 precedent).
 export type GetFieldTypeWithoutArrays<
   Schema,
   Path extends string,

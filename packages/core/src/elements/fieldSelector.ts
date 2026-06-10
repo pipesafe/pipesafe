@@ -28,6 +28,11 @@ export type PathsIncludingArrayIndexes<T> =
 
 export type FieldSelector<S extends Document> = PathsIncludingArrayIndexes<S>;
 
+// NOTE (F7 asymmetry, deliberate): unknown paths resolve to `never` here,
+// while the field-reference twin (GetFieldTypeWithoutArrays) brands them with
+// PipeSafeError. The `never` is load-bearing for union narrowing internals
+// (FilterUnion / FieldMatchingInterim in stages/match.ts); user-surfacing
+// call sites should use GetFieldTypeOrError below.
 export type GetFieldType<Schema, Path extends string> =
   // Case 1: Schema is an array
   Schema extends (infer U)[] ?
