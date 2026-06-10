@@ -12,13 +12,14 @@ pipesafe/
 │   ├── core/                    # Core library (Apache 2.0 - OSI-approved)
 │   │   ├── src/
 │   │   │   ├── pipeline/        # Pipeline - aggregation builder
-│   │   │   ├── stages/          # Pipeline stage implementations
-│   │   │   ├── elements/        # Type system building blocks
+│   │   │   ├── stages/          # Pipeline stage implementations (one trio per stage)
+│   │   │   ├── elements/        # Type system building blocks (+ operand kernel)
 │   │   │   ├── collection/      # Collection wrapper
 │   │   │   ├── source/          # Source interface
-│   │   │   ├── utils/           # Type utilities
+│   │   │   ├── utils/           # errors/strings/objects/paths/dispatch type utilities
 │   │   │   ├── singleton/       # Global pipesafe instance
-│   │   │   └── database/        # Database utilities
+│   │   │   ├── database/        # Database utilities
+│   │   │   └── compat.ts        # THE deprecated-alias file (see Compat rule)
 │   │   ├── examples/            # Pipeline usage examples
 │   │   ├── benchmarking/        # TypeScript performance benchmarks
 │   │   └── LICENSE              # Apache License 2.0
@@ -112,12 +113,12 @@ The type system is organized into modular building blocks located in `packages/c
 
 #### Core Type Modules (`packages/core/src/elements/`)
 
-- **document.ts**: Base `Document` type (`Record<string, any>`)
-
 - **fieldSelector.ts**: Field selectors for use as keys in queries (e.g., in `$match`)
   - `PathsIncludingArrayIndexes<T>`: Recursive path traversal supporting array indices
   - `FieldSelector<Schema>`: All valid field paths including dotted notation and array indices
-  - `GetFieldType<Schema, Path>`: Type resolution for a field path
+  - `GetFieldType<Schema, Path>`: Type resolution for a field path (`never` for unknown
+    paths — load-bearing for union narrowing; use `GetFieldTypeOrError` at
+    user-surfacing call sites)
   - `InferFieldSelector<Schema, Selector>`: Infers the type at a given field selector
   - Array index access supported (e.g., `"items.0.name"`)
 
@@ -125,23 +126,46 @@ The type system is organized into modular building blocks located in `packages/c
   - `FieldPath<T>`: Recursive path traversal without array indices
   - `FieldReference<Schema>`: Dollar-prefixed field paths (e.g., `"$user.name"`)
   - `GetFieldTypeWithoutArrays<Schema, Path>`: Type resolution traversing through arrays
+    (brands unknown paths with `PipeSafeError` — asymmetric with `GetFieldType` on purpose)
   - `InferFieldReference<Schema, Ref>`: Infers the type at a given field reference
-  - `InferNestedFieldReference<Schema, Obj>`: Recursively resolves field references in nested structures
+  - `InferNestedFieldReference<Schema, Obj>`: Recursively resolves field references in
+    nested structures; routes `$`-keyed objects to `InferExpression` (operator-key dispatch)
+  - `SchemaRefTypeMap<Schema>` (internal): one ref→type map per schema, alias-cached and
+    filtered by `FieldReferencesThatInferTo` per target type
   - Array traversal without indices (field references apply to all array elements)
+
+- **operands.ts**: THE operand kernel — `FieldOperand<T, Allowed, Msg, Result>` for
+  field-position checks (non-distributive, brands incompatible field types) and
+  `ExpressionOperand<Schema, T, Msg>` for expression-position operand sets. All
+  brand-carrying operand helpers are one-liners over these; messages are built with
+  `RequiresMsg` (utils/errors.ts).
+
+- **expressions.ts**: THE expression registry — `ExpressionSpec<Schema>` maps each
+  operator to `{ operand; returns }`. Per-operator types, category unions, `Expression`,
+  and the fixed-return arm of `InferExpression` are all derived. Adding an operator =
+  one registry entry (+ one `InferDependentExpression` arm if the result depends on the
+  literal arguments: `$concatArrays`, `$arrayElemAt`, `$filter`, `$ifNull`, `$cond`,
+  `$literal`).
 
 - **literals.ts**: Literal value type constraints
 
-- **arrayOperator.ts**: Array operation type utilities
+#### Utility Types (`packages/core/src/utils/`)
 
-#### Utility Types (`packages/core/src/utils/core.ts`)
+`utils/core.ts` was split along its seams:
 
-- **Type Utilities**:
-  - `DollarPrefixed<T>` / `WithoutDollar<T>`: Dollar prefix manipulation
-  - `Prettify<T>`: Improves TypeScript intellisense display
-  - `Join<K, P>`: Dot notation path joining
-  - `IndexStr<A>`: Array index string generation for tuples
-  - `NoDollarString`: String type that cannot start with `$`
-  - `NonExpandableTypes`: Types that should not be recursively expanded (Function, BSON types, Date)
+- **errors.ts**: `PipeSafeError`, `IsPipeSafeError`, `PassThrough` (the tier-1 early
+  exit), `RequiresMsg` (the brand-message skeleton template)
+- **dispatch.ts**: operator-key dispatch kernel — `OperatorKeyOf`, `HasOperatorKey`,
+  `HasSingleOperatorKey`, and the `NotAnExpression` sentinel
+- **strings.ts**: `DollarPrefixed`/`WithoutDollar`, `Join`, `IndexStr`, `NoDollarString`
+  and the character unions
+- **objects.ts**: `Document`, `Prettify`, `NonExpandableTypes`, `UnionToIntersection`,
+  `ExclusifyUnion`, `ExcludeUndefined`, `IsPlainObject`, `MergeNested`
+- **paths.ts**: `SplitPath` (tail-recursive segment splitter), `ExpandDottedKey`
+  (split + fold), `HasDottedKeys`, `RemoveDottedKeys`, `FlattenDotSet`
+
+The `$set` update machinery (`ApplySetUpdates` + helpers) lives in `stages/set.ts`,
+its only consumer.
 
 ### Pipeline Stages
 
@@ -242,20 +266,25 @@ Conventions:
 
 ### Where brands fire
 
-- `match.ts` — `ComparatorMatchers<T>` operand helpers (`NumericOperand`, `SizeOperand`, etc.)
-- `group.ts` — `NumericAccumulatorOperand`, `MinMaxAccumulatorOperand`
-- `expressions.ts` — `ArithmeticOperandFor`, `StringOperandFor`, `ArrayOperandFor`, `DateOperand`
+All operand brands are built from the kernel (`elements/operands.ts`) with messages
+from `RequiresMsg` (utils/errors.ts):
+
+- `match.ts` — `ComparatorMatchers<T>` operand helpers (`NumericOperand`, `SizeOperand`, etc.) — `FieldOperand` one-liners
+- `group.ts` — `NumericAccumulatorOperand`, `MinMaxAccumulatorOperand` — `ExpressionOperand`-based
+- `expressions.ts` — `ArithmeticOperand`, `StringOperand`, `ArrayOperand`, `DateOperand` (registry operand shapes)
 - `project.ts` — `ValidateProjectQuery` (unknown-key inclusion + mixed mode), `ResolveFieldValue`
-- `unwind.ts` — `UnwindPath`
+- `unwind.ts` — `UnwindPath` (wired into `Pipeline.unwind`'s constraint so it fires at chained call sites)
 - `fieldReference.ts` — `GetFieldTypeWithoutArrays` (inline brand for unknown field paths)
+- `fieldSelector.ts` — `GetFieldTypeOrError` (branded sibling of `GetFieldType` for user-surfacing call sites)
 - `lookup.ts` — `LookupForeignFieldOrError` (no foreign field with a compatible type, with passthrough for upstream errors)
+- `expressions.ts` `InferExpression` — the exactly-one-operator brand for multi-`$`-key objects
 
 ### Pipeline method signature patterns
 
 Different stages need different patterns to make brands fire at the chained call site:
 
 - **Direct typing** (`(\$q: Q<Schema>)` — no generic): `sort`. Use when the query type is a finite-key mapped type and the return type doesn't need the literal query.
-- **Validation-mapped wrapper** (`<const P>(\$q: ValidateXQuery<Schema, P>)`): `project`. Use for stages with `[key: string]:` index signatures where direct typing alone wouldn't trigger excess-property checking. Output type still uses the literal `P` for narrowing.
+- **Validation-mapped wrapper** (`<const P, IncMode = ..., ExcMode = ...>(\$q: ValidateXQuery<Schema, P, IncMode, ExcMode>)`): `project`. Use for stages with `[key: string]:` index signatures where direct typing alone wouldn't trigger excess-property checking. Output type still uses the literal `P` for narrowing. The defaulted trailing generics are _hoisted_ computations (see Hoisting patterns) shared by the parameter and return positions.
 - **Generic constraint** (`<const M extends Q<Schema>>(\$q: M)`): `match`, `set`, `group`, `replaceRoot`, `facet`. Default pattern. Inner-value brands (e.g. `$gte` on a string) fire from the constraint check; call-site excess-property checking is suppressed but the resulting "is not assignable to PipeSafeError" message is still readable.
 
 ### Error code: prefer TS2322 over TS2353
@@ -276,4 +305,74 @@ When a `<const P>`-inferred literal is used as the brand's `Ctx` (or as part of 
 
 ### Regression guard
 
-`packages/core/src/pipeline/Pipeline.callSite.typeAssertions.ts` pins the desired call-site rejection behavior for each stage with `@ts-expect-error` directives. Do not remove cases without replacing them — they're how we know future signature changes don't silently re-introduce holes.
+Two assertion files pin the standardized behavior — do not weaken either without
+replacing the coverage:
+
+- `packages/core/src/pipeline/Pipeline.callSite.typeAssertions.ts` pins the desired
+  call-site rejection behavior for each stage with `@ts-expect-error` directives.
+- `packages/core/src/stages/stages.contract.typeAssertions.ts` pins the per-stage
+  contract: every resolver forwards `PipeSafeError` schemas (PassThrough), every
+  Pipeline method is wired to its module's resolver, and the operator-key dispatch
+  semantics (forgiving inference, `NotAnExpression` sentinel, exactly-one-operator
+  brand). These markers have caught real bugs (e.g. a non-distributing
+  `HasSingleOperatorKey`).
+
+### The stage trio convention
+
+Every file in `stages/` exports, with **Schema always the first type parameter**:
+
+- `XxxQuery<Schema>` — what the user may write (skipped for scalar stages like `limit`)
+- `ValidateXxxQuery<Schema, Q, ...>` — only when the validation-mapped signature
+  pattern is needed (currently `project`)
+- `ResolveXxxOutput<Schema, Q>` — the output schema; MUST wrap its body in
+  `PassThrough<Schema, ...>` (terminal stages `out`/`merge` are exempt — they have no
+  resolver). Do NOT re-prove `Q extends XxxQuery<Schema>` inside the resolver: the
+  method's parameter position already validated it (use cheap structural narrowing
+  like `Q extends { newRoot: infer N }` where the body needs it).
+
+Standard generic names: `Schema` (incoming docs), `Q` (literal query), `Foreign`
+(joined schemas). Trailing defaulted/hoisted parameters may extend any trio signature.
+
+### Operator-key dispatch (the early-exit ladder)
+
+Decide what a value _is_ from its `$`-prefixed keys alone; only after dispatch,
+resolve and validate against the schema. Never match a value against a
+Schema-parameterized union to pick a branch (no `extends Expression<Schema>` /
+`extends XxxQuery<Schema>` in inference positions — constraint positions on Pipeline
+methods are where those belong).
+
+| Tier | Check                                                                              | Lives in                                             |
+| ---- | ---------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| 1    | Schema already a `PipeSafeError` → forward                                         | `PassThrough` in every resolver                      |
+| 2    | No `$`-prefixed key → literal (`NotAnExpression` sentinel)                         | `OperatorKeyOf`/`HasOperatorKey` (utils/dispatch.ts) |
+| 3    | Multi-`$`-key → exactly-one-operator brand; unknown op → `never`                   | `InferExpression`                                    |
+| 4    | Known operator → registry `returns` / dependent arm; operand brands validate input | `ExpressionSpec` / operand kernel                    |
+
+Inference is **forgiving**: a malformed operand does not change the inferred kind —
+`{ $size: 12 }` still infers `number`; the operand brand reports at the input position.
+
+### Hoisting patterns (depth & recomputation)
+
+- **Method-level defaulted generics** share one computation between the parameter
+  (validate) and return (resolve) positions — see `Pipeline.project`'s
+  `IncMode`/`ExcMode`.
+- **Defaulted cache parameters** on deep helpers replace re-spelled subexpressions
+  (`ExpectedValue`'s `FieldType`, `MergeSetPlainObjects`' `BaseObj`,
+  `RemoveFieldPaths`' `TopOnly`/`Keys`). Keep them on inner aliases _behind_
+  `PassThrough` — defaults evaluate eagerly.
+- **Distribution caveat**: a defaulted parameter computed from `Schema` is unsound if
+  the body distributes a union schema (defaults substitute before distribution).
+  Distribute first, then apply a cached helper alias per member — see
+  `SchemaRefTypeMap` in fieldReference.ts.
+- **Tail-recursive accumulators** (`SplitPath<S, Acc>`) get the ~1000-depth budget;
+  parse paths tail-recursively, then fold the segments (`ExpandDottedKey`,
+  `RemoveAtSegments`).
+- Do NOT cache path unions as `Pipeline` class generics (hover blowup, threading
+  churn; alias caching already dedupes per schema).
+
+### Compat rule
+
+`packages/core/src/compat.ts` is THE only home for deprecated aliases (currently:
+`MergeOptions` → `MergeQuery`). `index.ts` is the only file allowed to import it
+(enforced by `no-restricted-imports`). Removal at the next major = delete the file +
+its `index.ts` re-export line.
