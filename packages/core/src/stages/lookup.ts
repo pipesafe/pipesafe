@@ -1,4 +1,5 @@
-import { Document, PassThrough, PipeSafeError, Prettify } from "../utils/core";
+import { Document, Prettify } from "../utils/objects";
+import { PassThrough, PipeSafeError } from "../utils/errors";
 import { FieldPathsThatInferToForLookup } from "../elements/fieldReference";
 
 // Todo: Convert new key to a nested field and merge

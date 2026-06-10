@@ -10,7 +10,7 @@
 import { Pipeline } from "./Pipeline";
 import { Collection } from "../collection/Collection";
 import { Assert, Equal } from "../utils/tests";
-import { PipeSafeError } from "../utils/core";
+import { PipeSafeError } from "../utils/errors";
 import { ResolveMatchOutput } from "../stages/match";
 import { ResolveSetOutput } from "../stages/set";
 import { ResolveProjectOutput } from "../stages/project";

@@ -1,4 +1,5 @@
-import type { Document, PipeSafeError } from "../utils/core";
+import type { Document } from "../utils/objects";
+import type { PipeSafeError } from "../utils/errors";
 import type { Assert, AssertPipeSafeError, Equal } from "../utils/tests";
 import type {
   AddExpression,

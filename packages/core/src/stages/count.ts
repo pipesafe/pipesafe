@@ -1,4 +1,4 @@
-import { Document } from "../utils/core";
+import { Document } from "../utils/objects";
 
 /**
  * `$count` produces a single document with one numeric field whose

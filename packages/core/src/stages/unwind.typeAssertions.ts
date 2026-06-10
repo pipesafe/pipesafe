@@ -1,5 +1,5 @@
 import { Assert, AssertPipeSafeError, Equal } from "../utils/tests";
-import type { PipeSafeError } from "../utils/core";
+import type { PipeSafeError } from "../utils/errors";
 import {
   ResolveUnwindOutput,
   ExtractUnwindPath,

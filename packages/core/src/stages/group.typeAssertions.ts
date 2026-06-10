@@ -1,5 +1,6 @@
 import { Assert, AssertPipeSafeError, Equal } from "../utils/tests";
-import type { Document, PipeSafeError } from "../utils/core";
+import type { Document } from "../utils/objects";
+import type { PipeSafeError } from "../utils/errors";
 import { AccumulatorFunction, ResolveGroupOutput } from "./group";
 
 /**

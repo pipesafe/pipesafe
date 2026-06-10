@@ -8,33 +8,39 @@ import {
   ConditionalExpression,
   ArithmeticExpression,
 } from "../elements/expressions";
-import { Document, PassThrough, PipeSafeError, Prettify } from "../utils/core";
+import { Document, Prettify } from "../utils/objects";
+import { PassThrough, RequiresMsg } from "../utils/errors";
+import { ExpressionOperand } from "../elements/operands";
 
 /**
- * Numeric operand for accumulators like $sum, $avg.
- *
- * Accepts: numbers, field references to numbers, arithmetic expressions,
- * conditional expressions. Per-operator union arm includes a branded
- * `PipeSafeError` that surfaces in IDE hovers when the operand is
- * incompatible (e.g. a string field reference passed to $sum) — instead of
- * the previous structural-mismatch wall.
+ * Numeric operand for accumulators like $sum, $avg — an ExpressionOperand
+ * kernel set (numbers, field references to numbers, brand) extended with the
+ * expression forms accumulators accept. The brand surfaces in IDE hovers
+ * when the operand is incompatible (e.g. a string field reference passed to
+ * $sum) — instead of a structural-mismatch wall.
  */
 type NumericAccumulatorOperand<Schema extends Document, Op extends string> =
-  | LiteralOrFieldReferenceInferringTo<Schema, number>
+  | ExpressionOperand<
+      Schema,
+      number,
+      RequiresMsg<"Accumulator", Op, "a numeric operand">
+    >
   | ArithmeticExpression<Schema>
-  | ConditionalExpression<Schema>
-  | PipeSafeError<`Accumulator '${Op}' requires a numeric operand.`>;
+  | ConditionalExpression<Schema>;
 
 /**
  * Operand for $min/$max that can be numbers or dates.
  * Same brand pattern as NumericAccumulatorOperand but allows Date too.
  */
 type MinMaxAccumulatorOperand<Schema extends Document, Op extends string> =
-  | LiteralOrFieldReferenceInferringTo<Schema, number>
+  | ExpressionOperand<
+      Schema,
+      number,
+      RequiresMsg<"Accumulator", Op, "a numeric or date operand">
+    >
   | LiteralOrFieldReferenceInferringTo<Schema, Date>
   | ArithmeticExpression<Schema>
-  | ConditionalExpression<Schema>
-  | PipeSafeError<`Accumulator '${Op}' requires a numeric or date operand.`>;
+  | ConditionalExpression<Schema>;
 
 /**
  * Flexible operand for accumulators like $push, $first, $last.

@@ -1,4 +1,4 @@
-import { Document } from "../utils/core";
+import { Document } from "../utils/objects";
 import { FieldSelector, TopLevelField } from "../elements/fieldSelector";
 
 /**

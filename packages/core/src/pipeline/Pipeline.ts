@@ -1,6 +1,7 @@
 import { pipesafe } from "../singleton/pipesafe";
 import { tagClient } from "../singleton/tagClient";
-import { Document, WithoutDollar } from "../utils/core";
+import { Document } from "../utils/objects";
+import { WithoutDollar } from "../utils/strings";
 import { MatchQuery, ResolveMatchOutput } from "../stages/match";
 import { ResolveSetOutput, SetQuery } from "../stages/set";
 import { ResolveUnsetOutput, UnsetQuery } from "../stages/unset";

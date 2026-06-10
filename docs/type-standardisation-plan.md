@@ -121,6 +121,13 @@ This is the strongest case in the codebase for the proposed container type.
   `MergeExpandedObjectsIterative` **are** live, but they and several "Stage
   N.M" optimization-log comments read as historical experiment notes rather
   than descriptions of current behavior.
+- `utils/core.ts` (found during the Phase-2 split): `FlattenToNested`,
+  `ExpandDottedKeyPreservingOptional` and
+  `ExpandAllDottedPreservingOptional` + its seven private helpers
+  (`GetTopLevelKeys`, `HasAnyRequiredSubPath`, `AreAllSubPathsOptional`,
+  `Optional`/`RequiredTopLevelKeys`, `NonDottedKeys`, `BuildNestedForKey`)
+  are also referenced nowhere outside the file — dropped during the split
+  rather than moved.
 
 ### F6. `utils/core.ts` is a 700-line grab-bag
 

@@ -598,7 +598,7 @@ void _callsite_dotted_array_to_scalar;
 
 import type { LookupForeignFieldOrError } from "./lookup";
 import type { AssertPipeSafeError } from "../utils/tests";
-import type { PipeSafeError } from "../utils/core";
+import type { PipeSafeError } from "../utils/errors";
 
 // Foreign collection has only string-typed fields …
 type _OnlyStringsForeign = { _id: string; tag: string };

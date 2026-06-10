@@ -1,10 +1,6 @@
-import {
-  Document,
-  PassThrough,
-  PipeSafeError,
-  Prettify,
-  WithoutDollar,
-} from "../utils/core";
+import { Document, Prettify } from "../utils/objects";
+import { PassThrough, PipeSafeError, RequiresMsg } from "../utils/errors";
+import { WithoutDollar } from "../utils/strings";
 import { FieldReferencesThatInferTo } from "../elements/fieldReference";
 
 /**
@@ -16,7 +12,7 @@ import { FieldReferencesThatInferTo } from "../elements/fieldReference";
  */
 export type UnwindPath<Schema extends Document> =
   | FieldReferencesThatInferTo<Schema, unknown[]>
-  | PipeSafeError<`Stage '$unwind' requires an array field reference.`>;
+  | PipeSafeError<RequiresMsg<"Stage", "$unwind", "an array field reference">>;
 
 /**
  * `$unwind`'s full input shape: a bare path or an options object. `P` is the
