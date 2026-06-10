@@ -8,6 +8,8 @@
  * sound discriminator between expression objects and nested object literals.
  */
 
+import { UnionToIntersection } from "./objects";
+
 /**
  * The `$`-prefixed key(s) of an expression-shaped value, or `never` for
  * non-objects and `$`-less objects. A multi-operator object yields a union
@@ -29,22 +31,15 @@ export type HasOperatorKey<Expr> =
  * `true` when the value has exactly one `$`-prefixed key. Multi-operator
  * objects (`{ $add: ..., $size: ... }`) are invalid in MongoDB; dispatchers
  * use this to route them to the exactly-one-operator brand.
+ *
+ * Detection: a union of keys is not assignable to its own intersection; a
+ * single key is. Routed through `UnionToIntersection` (a generic alias)
+ * because distribution only happens over naked type parameters — inlining
+ * the conditional over `OperatorKeyOf<Expr>` would not distribute.
  */
 export type HasSingleOperatorKey<Expr> =
   [OperatorKeyOf<Expr>] extends [never] ? false
-  : // A union of keys is not assignable to its own intersection; a single
-  // key is. (UnionToIntersection-style single-member detection.)
-  [OperatorKeyOf<Expr>] extends (
-    [
-      (
-        OperatorKeyOf<Expr> extends any ?
-          (k: OperatorKeyOf<Expr>) => void
-        : never
-      ) extends (k: infer I) => void ?
-        I
-      : never,
-    ]
-  ) ?
+  : [OperatorKeyOf<Expr>] extends [UnionToIntersection<OperatorKeyOf<Expr>>] ?
     true
   : false;
 
