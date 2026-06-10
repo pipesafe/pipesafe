@@ -10,27 +10,26 @@ import {
   UnionToIntersection,
 } from "./objects";
 
-export type ExpandDottedKey<Key extends string, Value> =
-  Key extends `${infer Left}.${infer Rest}` ?
-    { [K in Left]: ExpandDottedKey<Rest, Value> }
-  : { [K in Key]: Value };
+/**
+ * Tail-recursive path splitter (spec §3.5 Pattern C): the accumulator makes
+ * the recursion eligible for TS's tail-recursion elimination (~1000-depth
+ * budget instead of ~50), so deep dotted paths no longer need hand-batched
+ * 2-levels-per-step parsing.
+ */
+export type SplitPath<S extends string, Acc extends string[] = []> =
+  S extends `${infer Head}.${infer Tail}` ? SplitPath<Tail, [...Acc, Head]>
+  : [...Acc, S];
 
-// Batch expand — processes 2 dot levels per recursion, halving instantiation
-// depth for deeply nested paths (e.g. "a.b.c.d" → 2 recursions instead of 4).
-export type ExpandDottedKeyBatched<Key extends string, Value> =
-  Key extends `${infer First}.${infer Second}.${infer Rest}` ?
-    Rest extends (
-      `${string}.${string}` // More dots exist
-    ) ?
-      {
-        [K in First]: {
-          [K2 in Second]: ExpandDottedKeyBatched<Rest, Value>;
-        };
-      }
-    : { [K in First]: { [K2 in Second]: { [K3 in Rest]: Value } } } // Base case: last 3 segments
-  : Key extends `${infer First}.${infer Rest}` ?
-    { [K in First]: { [K2 in Rest]: Value } } // Base case: last 2 segments
-  : { [K in Key]: Value }; // No dots
+/** Fold segments into nested single-key objects, innermost-out (tail-recursive). */
+type BuildNestedFromSegments<Segs extends readonly string[], Value> =
+  Segs extends [...infer Rest extends string[], infer Last extends string] ?
+    BuildNestedFromSegments<Rest, { [K in Last]: Value }>
+  : Value;
+
+export type ExpandDottedKey<
+  Key extends string,
+  Value,
+> = BuildNestedFromSegments<SplitPath<Key>, Value>;
 
 // Check if a type has any dotted keys (keys containing a dot)
 export type HasDottedKeys<T> =
@@ -75,7 +74,7 @@ type MergeExpandedObjectsIterative<T> =
 // `| undefined` to indexed access of optional properties).
 type ExpandAllDottedIterative<T> =
   {
-    [K in keyof T]: K extends string ? ExpandDottedKeyBatched<K, T[K]> : never;
+    [K in keyof T]: K extends string ? ExpandDottedKey<K, T[K]> : never;
   } extends infer Expanded ?
     Expanded extends Record<string, any> ?
       MergeExpandedObjectsIterative<Expanded>

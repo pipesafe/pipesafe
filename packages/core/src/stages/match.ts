@@ -114,27 +114,33 @@ export type MatchQuery<Schema extends Document> =
 
 // Type narrowing utilities for match queries
 
-// Extract literal values from match operators
-export type ExpectedValue<Schema, QueryKey extends string, QueryValue> =
+// Extract literal values from match operators.
+// FieldType is a hoisted cache parameter (spec §3.5 Pattern B): the field's
+// resolved type is computed once per (Schema, QueryKey) instead of being
+// re-spelled in four arms.
+export type ExpectedValue<
+  Schema,
+  QueryKey extends string,
+  QueryValue,
+  FieldType = GetFieldType<Schema, QueryKey>,
+> =
   QueryValue extends (
     {
       $eq: infer E;
     }
   ) ?
     E
-  : QueryValue extends { $exists: true } ? GetFieldType<Schema, QueryKey>
+  : QueryValue extends { $exists: true } ? FieldType
   : QueryValue extends { $exists: false } ? unknown
-  : QueryValue extends { [matcher in ContinuousMatchers]: unknown } ?
-    GetFieldType<Schema, QueryKey>
+  : QueryValue extends { [matcher in ContinuousMatchers]: unknown } ? FieldType
   : QueryValue extends { $in: (infer I)[] } ? I
   : QueryValue extends { $all: (infer A)[] } ?
     A // For $all, return the array element type
-  : QueryValue extends { $nin: (infer E)[] } ?
-    Exclude<GetFieldType<Schema, QueryKey>, E>
+  : QueryValue extends { $nin: (infer E)[] } ? Exclude<FieldType, E>
   : QueryValue extends {
     [matcher in DollarPrefixed<string>]: unknown;
   } ?
-    GetFieldType<Schema, QueryKey> // Do not narrow unknown selectors
+    FieldType // Do not narrow unknown selectors
   : QueryValue; // Direct literal value
 
 // Simplified union member matching - checks if all query fields match the document

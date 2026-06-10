@@ -51,6 +51,38 @@ export type InferFieldReference<
   Ref extends FieldReference<Schema>,
 > = GetFieldTypeWithoutArrays<Schema, WithoutDollar<Ref>>;
 
+/**
+ * One ref→type map per schema (spec §3.5 Pattern B, the library's biggest
+ * recomputation sink): every field reference mapped to its inferred type,
+ * computed once per (distributed) schema and alias-cached — so the ~10
+ * distinct target types used across operand helpers all filter the same
+ * precomputed map instead of re-running InferFieldReference per target.
+ *
+ * NOTE: deliberately applied AFTER `Schema extends unknown` distribution in
+ * the consumers below. A defaulted parameter (`M = SchemaRefTypeMap<Schema>`)
+ * would be unsound: defaults substitute at instantiation, before the body's
+ * conditional distributes a union schema, so the map would be built over the
+ * whole union (per-path cross-member unions; brand-skip misfires).
+ */
+type SchemaRefTypeMap<Schema extends Document> = {
+  [K in FieldReference<Schema>]: InferFieldReference<Schema, K>;
+};
+
+/** Filter a precomputed ref→type map down to refs assignable to T. */
+type RefsInferringTo<M, DesiredType> = {
+  [K in keyof M]: M[K] extends PipeSafeError<string> ?
+    never // Skip branded errors — they only appear when K is widened past a valid path
+  : NonNullable<M[K]> extends DesiredType ? K
+  : never;
+}[keyof M];
+
+/** Lookup variant: reversed assignability, no NonNullable stripping. */
+type RefsInferringToForLookup<M, DesiredType> = {
+  [K in keyof M]: M[K] extends PipeSafeError<string> ? never
+  : DesiredType extends M[K] ? K
+  : never;
+}[keyof M];
+
 export type FieldPathsThatInferToForLookup<
   Schema extends Document,
   DesiredType,
@@ -67,26 +99,12 @@ export type FieldReferencesThatInferToForLookup<
   DesiredType,
 > =
   Schema extends unknown ?
-    {
-      [K in FieldReference<Schema>]: InferFieldReference<Schema, K> extends (
-        PipeSafeError<string>
-      ) ?
-        never // Skip branded errors — they only appear when K is widened past a valid path
-      : DesiredType extends InferFieldReference<Schema, K> ? K
-      : never;
-    }[FieldReference<Schema>]
+    RefsInferringToForLookup<SchemaRefTypeMap<Schema>, DesiredType>
   : never;
 
 export type FieldReferencesThatInferTo<Schema extends Document, DesiredType> =
   Schema extends unknown ?
-    {
-      [K in FieldReference<Schema>]: InferFieldReference<Schema, K> extends (
-        PipeSafeError<string>
-      ) ?
-        never // Skip branded errors
-      : NonNullable<InferFieldReference<Schema, K>> extends DesiredType ? K
-      : never;
-    }[FieldReference<Schema>]
+    RefsInferringTo<SchemaRefTypeMap<Schema>, DesiredType>
   : never;
 
 /**
