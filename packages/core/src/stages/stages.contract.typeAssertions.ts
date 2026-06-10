@@ -28,7 +28,7 @@
 
 import { Pipeline, InferOutputType } from "../pipeline/Pipeline";
 import { Assert, Equal, ExpectAssertFailure } from "../utils/tests";
-import { PipeSafeError } from "../utils/core";
+import { PipeSafeError } from "../utils/errors";
 import { ResolveCountOutput } from "./count";
 import { ResolveGraphLookupOutput } from "./graphLookup";
 import { InferExpression } from "../elements/expressions";

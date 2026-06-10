@@ -1,5 +1,6 @@
 import { ObjectId } from "mongodb";
-import { Document, NoDollarString } from "../utils/core";
+import { Document } from "../utils/objects";
+import { NoDollarString } from "../utils/strings";
 import { FieldReferencesThatInferTo } from "./fieldReference";
 
 export type LiteralOrFieldReferenceInferringTo<Schema extends Document, T> =

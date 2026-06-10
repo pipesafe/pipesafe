@@ -1,4 +1,4 @@
-import { Document, Prettify } from "../utils/core";
+import { Document, Prettify } from "../utils/objects";
 import { ResolveLookupOutput } from "./lookup";
 import { MatchQuery, ResolveMatchOutput } from "./match";
 

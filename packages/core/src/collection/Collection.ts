@@ -27,7 +27,7 @@ import {
   DropCollectionOptions,
 } from "mongodb";
 import { Pipeline } from "../pipeline/Pipeline";
-import { Document } from "../utils/core";
+import { Document } from "../utils/objects";
 import { pipesafe } from "../singleton/pipesafe";
 import { tagClient } from "../singleton/tagClient";
 import { Source } from "../source/Source";

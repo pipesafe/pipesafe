@@ -1,4 +1,6 @@
-import { Document, IndexStr, Join, NonExpandableTypes } from "../utils/core";
+import { Document, NonExpandableTypes } from "../utils/objects";
+import { IndexStr, Join } from "../utils/strings";
+import { PipeSafeError } from "../utils/errors";
 
 // Types related to field selectors
 // These are used in $match stages as KEYS of documents
@@ -56,6 +58,18 @@ export type GetFieldType<Schema, Path extends string> =
       GetFieldType<Schema[Head], Tail> // Recurse into property
     : never
   : never;
+
+/**
+ * Branded sibling of `GetFieldType` for call sites that surface to users:
+ * unknown paths produce a `PipeSafeError` naming the path instead of `never`.
+ * `GetFieldType` itself intentionally keeps `never` — that result is
+ * load-bearing for union narrowing internals (see `FilterUnion` in
+ * stages/match.ts).
+ */
+export type GetFieldTypeOrError<Schema, Path extends string> =
+  [GetFieldType<Schema, Path>] extends [never] ?
+    PipeSafeError<`Field '${Path}' is not on the schema.`>
+  : GetFieldType<Schema, Path>;
 
 // Infer the type of a field at a given selector
 // If traversing an array *without* an index, return an array of the nested field type

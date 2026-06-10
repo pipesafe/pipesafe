@@ -1,4 +1,5 @@
-import { PipeSafeError, Prettify } from "./core";
+import { PipeSafeError } from "./errors";
+import { Prettify } from "./objects";
 
 // Generic type equality assertion - compile-time only
 // Uses exact type equality check (works correctly with unions)

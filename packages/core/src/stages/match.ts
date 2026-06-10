@@ -1,10 +1,7 @@
-import {
-  Document,
-  DollarPrefixed,
-  PassThrough,
-  PipeSafeError,
-  Prettify,
-} from "../utils/core";
+import { Document, Prettify } from "../utils/objects";
+import { DollarPrefixed } from "../utils/strings";
+import { PassThrough, PipeSafeError, RequiresMsg } from "../utils/errors";
+import { FieldOperand } from "../elements/operands";
 import {
   FieldSelector,
   GetFieldType,
@@ -25,35 +22,40 @@ type BSONTypeAlias = keyof typeof BSONType;
 type SomeBSONType = BSONType | BSONTypeAlias;
 
 // ---------------------------------------------------------------------------
-// Operand helpers — return the valid operand type for a compatible field
-// type, or a `PipeSafeError` whose literal message names the operator and
-// the constraint the field violates.
-//
-// Each conditional uses `[T] extends [...]` (single-element tuple wrapping)
-// to suppress distribution over a union T — for a mixed-typed field the
-// whole field is rejected with one error rather than producing a union of
-// per-branch outcomes.
+// Operand helpers — one-liners over the FieldOperand kernel
+// (elements/operands.ts): the valid operand type for a compatible field
+// type, or a `PipeSafeError` built via RequiresMsg. Helpers that extract an
+// inferred element type ($all, $elemMatch) keep a specialized conditional —
+// still non-distributive via `[T] extends [...]` tuple wrapping.
 // ---------------------------------------------------------------------------
 
-type NumericOperand<T, Op extends string> =
-  [T] extends [number | Date] ? T
-  : PipeSafeError<`Operator '${Op}' requires a numeric or date field.`>;
+type NumericOperand<T, Op extends string> = FieldOperand<
+  T,
+  number | Date,
+  RequiresMsg<"Operator", Op, "a numeric or date field">
+>;
 
-type SizeOperand<T> =
-  [T] extends [unknown[]] ? number
-  : PipeSafeError<`Operator '$size' requires an array field.`>;
+type SizeOperand<T> = FieldOperand<
+  T,
+  unknown[],
+  RequiresMsg<"Operator", "$size", "an array field">,
+  number
+>;
 
 type ArrayValueOperand<T, Op extends string> =
   [T] extends [(infer U)[]] ? U[]
-  : PipeSafeError<`Operator '${Op}' requires an array field.`>;
+  : PipeSafeError<RequiresMsg<"Operator", Op, "an array field">>;
 
 type ArrayElementOperand<T, Op extends string> =
   [T] extends [(infer U)[]] ? U
-  : PipeSafeError<`Operator '${Op}' requires an array field.`>;
+  : PipeSafeError<RequiresMsg<"Operator", Op, "an array field">>;
 
-type RegexOperand<T> =
-  [T] extends [string] ? RegExp | string
-  : PipeSafeError<`Operator '$regex' requires a string field.`>;
+type RegexOperand<T> = FieldOperand<
+  T,
+  string,
+  RequiresMsg<"Operator", "$regex", "a string field">,
+  RegExp | string
+>;
 
 export type ComparatorMatchers<T extends unknown> = Prettify<
   /* Always */ {
@@ -174,8 +176,14 @@ export type ExtractQueryFields<Q> = Omit<
 // PassThrough short-circuits when Schema is already a PipeSafeError (e.g. an
 // earlier stage produced one). The match stage becomes a no-op so the user
 // sees the original upstream error verbatim instead of a fresh constraint mismatch.
+//
+// Operator-key dispatch (spec §3.4): the logical-vs-raw split is decided by a
+// cheap keyof check instead of the full `Query extends RawMatchQuery<Schema>`
+// structural re-match — the method's generic constraint already validated
+// Query at the parameter position.
 export type ResolveMatchOutput<Query, Schema extends Document> = PassThrough<
   Schema,
-  Query extends RawMatchQuery<Schema> ? Prettify<FilterUnion<Schema, Query>>
-  : /* Complex operators ($and/$or/$nor) - keep original */ Schema
+  [keyof Query & ("$and" | "$or" | "$nor")] extends [never] ?
+    Prettify<FilterUnion<Schema, Query>>
+  : /* Logical operators - keep original schema */ Schema
 >;

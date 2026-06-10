@@ -1,5 +1,5 @@
 import { Assert, Equal } from "../utils/tests";
-import type { Document } from "../utils/core";
+import type { Document } from "../utils/objects";
 import { ResolveFacetOutput } from "./facet";
 import type {
   PipelineBuilder,

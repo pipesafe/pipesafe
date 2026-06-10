@@ -45,4 +45,30 @@ export default defineConfig([
       ],
     },
   },
+  {
+    // Internal code must use the new names, never the deprecated compat
+    // aliases — compat.ts exists solely for external consumers via index.ts
+    // (docs/type-standardisation-plan.md §3.7).
+    files: ["packages/*/src/**/*.{ts,mts,cts}"],
+    ignores: ["packages/*/src/index.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/packages/**"],
+              message:
+                'Use package imports (e.g., "@pipesafe/core") instead of relative cross-package imports',
+            },
+            {
+              group: ["**/compat"],
+              message:
+                "Internal code must not import from compat.ts — use the replacement named in the alias's @deprecated doc (docs/type-standardisation-plan.md §3.7)",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ]);
