@@ -1,5 +1,5 @@
 import { InferNestedFieldReference } from "../elements/fieldReference";
-import { Expression, InferExpression } from "../elements/expressions";
+import { Expression } from "../elements/expressions";
 import { AnyLiteral } from "../elements/literals";
 import { PassThrough } from "../utils/errors";
 import {
@@ -37,9 +37,10 @@ export type ResolveSetQueryValueType<
   Key extends keyof Query,
 > =
   Query[Key] extends "$$REMOVE" ? never
-  : Query[Key] extends Expression<Schema> ?
-    InferExpression<Schema, Query[Key]> // Handle expression operators
-  : InferNestedFieldReference<Schema, Query[Key]>; // Fall back to literal/field ref handling
+  : // InferNestedFieldReference key-dispatches expressions internally (spec
+    // §3.4) — the old `extends Expression<Schema>` structural pre-check
+    // instantiated the full expression union per value.
+    InferNestedFieldReference<Schema, Query[Key]>;
 
 // ============================================================================
 // $set update machinery — applies a flattened update object to the schema

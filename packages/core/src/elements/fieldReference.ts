@@ -2,7 +2,7 @@ import { Document, NonExpandableTypes, Prettify } from "../utils/objects";
 import { Join, DollarPrefixed, WithoutDollar } from "../utils/strings";
 import { PipeSafeError } from "../utils/errors";
 import { HasOperatorKey } from "../utils/dispatch";
-import { Expression, InferExpression } from "./expressions";
+import { InferExpression } from "./expressions";
 
 // Types related to field referencees
 // These are used as part of values within expressions
@@ -110,14 +110,13 @@ export type InferNestedFieldReference<Schema extends Document, Obj> =
     Obj extends NonExpandableTypes ? Obj
     : // Tier-2 operator-key dispatch (spec §3.4): only objects carrying a
     // `$`-prefixed key are candidates for expression inference — `$`-less
-    // objects are nested literals and skip the expensive
-    // `Obj extends Expression<Schema>` structural check entirely. This is
-    // the hottest path in the library (every value of every $set/$project/
-    // $group literal flows through here).
-    HasOperatorKey<Obj> extends true ?
-      Obj extends Expression<Schema> ?
-        InferExpression<Schema, Obj>
-      : never // Malformed $-keyed object — Phase 4 replaces with forgiving registry dispatch
+    // objects are nested literals and never pay for expression dispatch.
+    // This is the hottest path in the library (every value of every
+    // $set/$project/$group literal flows through here). InferExpression is
+    // forgiving (registry dispatch): malformed operands keep the operator's
+    // declared result type while the operand brand reports the error at the
+    // input position.
+    HasOperatorKey<Obj> extends true ? InferExpression<Schema, Obj>
     : InferNestedFieldReferenceObject<Schema, Obj>
   : Obj; // Handles literals (string, number, boolean, null, undefined, etc.)
 
