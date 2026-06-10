@@ -115,32 +115,30 @@ export type MatchQuery<Schema extends Document> =
 // Type narrowing utilities for match queries
 
 // Extract literal values from match operators.
-// FieldType is a hoisted cache parameter (spec §3.5 Pattern B): the field's
-// resolved type is computed once per (Schema, QueryKey) instead of being
-// re-spelled in four arms.
-export type ExpectedValue<
-  Schema,
-  QueryKey extends string,
-  QueryValue,
-  FieldType = GetFieldType<Schema, QueryKey>,
-> =
+// ATTEMPT-B VARIATION 2: no hoisted FieldType cache parameter — each arm
+// spells GetFieldType lazily (only the taken branch instantiates it; repeat
+// hits are alias-cached). Measures the spec's "defaults evaluate eagerly"
+// caveat from the other direction vs attempt A's hoisted parameter.
+export type ExpectedValue<Schema, QueryKey extends string, QueryValue> =
   QueryValue extends (
     {
       $eq: infer E;
     }
   ) ?
     E
-  : QueryValue extends { $exists: true } ? FieldType
+  : QueryValue extends { $exists: true } ? GetFieldType<Schema, QueryKey>
   : QueryValue extends { $exists: false } ? unknown
-  : QueryValue extends { [matcher in ContinuousMatchers]: unknown } ? FieldType
+  : QueryValue extends { [matcher in ContinuousMatchers]: unknown } ?
+    GetFieldType<Schema, QueryKey>
   : QueryValue extends { $in: (infer I)[] } ? I
   : QueryValue extends { $all: (infer A)[] } ?
     A // For $all, return the array element type
-  : QueryValue extends { $nin: (infer E)[] } ? Exclude<FieldType, E>
+  : QueryValue extends { $nin: (infer E)[] } ?
+    Exclude<GetFieldType<Schema, QueryKey>, E>
   : QueryValue extends {
     [matcher in DollarPrefixed<string>]: unknown;
   } ?
-    FieldType // Do not narrow unknown selectors
+    GetFieldType<Schema, QueryKey> // Do not narrow unknown selectors
   : QueryValue; // Direct literal value
 
 // Simplified union member matching - checks if all query fields match the document

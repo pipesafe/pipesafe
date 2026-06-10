@@ -1,4 +1,4 @@
-import { Assert, AssertPipeSafeError, assertTypeEqual } from "../utils/tests";
+import { Assert, AssertPipeSafeError, Equal, assertTypeEqual } from "../utils/tests";
 import {
   FieldReference,
   GetFieldTypeWithoutArrays,
@@ -509,3 +509,20 @@ assertTypeEqual({} as OptionalEmailType, {} as string | undefined);
 
 type NullableRefundType = InferFieldReference<NullableSchema, "$refundAmount">;
 assertTypeEqual({} as NullableRefundType, {} as number | null);
+
+// ============================================================================
+// Union-schema soundness for the ref→type map (attempt-B addition)
+// ============================================================================
+// Pins WHY SchemaRefTypeMap must be applied after `Schema extends unknown`
+// distribution (a defaulted `M = SchemaRefTypeMap<Schema>` parameter would
+// compute the map over the whole union — defaults substitute before the
+// body distributes). For a union schema, refs valid for EITHER member must
+// appear, computed per member.
+type _UnionA = { shared: number; onlyA: string };
+type _UnionB = { shared: number; onlyB: boolean };
+type _UnionRefs = FieldReferencesThatInferTo<_UnionA | _UnionB, number>;
+type _Assert_UnionRefSoundness = Assert<Equal<_UnionRefs, "$shared">>;
+type _UnionStrRefs = FieldReferencesThatInferTo<_UnionA | _UnionB, string>;
+type _Assert_UnionStrRefSoundness = Assert<Equal<_UnionStrRefs, "$onlyA">>;
+
+export type { _Assert_UnionRefSoundness, _Assert_UnionStrRefSoundness };
