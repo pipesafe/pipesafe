@@ -4,11 +4,9 @@ import {
   DollarPrefixed,
   NonExpandableTypes,
   WithoutDollar,
-  NoDollarString,
   PipeSafeError,
   Prettify,
 } from "../utils/core";
-import { FieldSelector, InferFieldSelector } from "./fieldSelector";
 import { Expression, InferExpression } from "./expressions";
 
 // Types related to field referencees
@@ -95,39 +93,6 @@ export type FieldReferencesThatInferTo<Schema extends Document, DesiredType> =
       : never;
     }[FieldReference<Schema>]
   : never;
-
-export type ElementResolvingToType<Schema extends Document, Type> =
-  Type extends string ?
-    FieldReferencesThatInferTo<Schema, string> | NoDollarString
-  : Type extends object ?
-    Type extends Function ?
-      never
-    : | FieldReferencesThatInferTo<Schema, Type>
-      | {
-          [K in keyof Type]: Type[K] extends string ?
-            FieldReferencesThatInferTo<Schema, string> | NoDollarString
-          : ArrayResolvingToType<Schema, Type[K]> extends Array<infer U> ? U
-          : Type[K];
-        }
-  : Type | FieldReferencesThatInferTo<Schema, Type>;
-
-// Perhaps should be ArrayResolvingToSameType<Schema>
-export type ArrayResolvingToType<
-  Schema extends Document,
-  Type,
-> = ElementResolvingToType<Schema, Type>[];
-
-export type MatcherThatOnlyDoesEquals<Schema extends Document> =
-  | {
-      [K in FieldSelector<Schema>]: InferFieldSelector<Schema, K>;
-    }
-  | {
-      $expr: {
-        $eq:
-          | ArrayResolvingToType<Schema, string>
-          | ArrayResolvingToType<Schema, number>;
-      };
-    };
 
 /**
  * Recursively infers and resolves all field references and expressions within a nested structure

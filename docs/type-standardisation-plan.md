@@ -14,11 +14,11 @@ target conventions, and lays out a phased execution plan.
 
 Every stage and expression in the library plays some subset of three roles:
 
-| Role         | Purpose                                                              | Example                              |
-| ------------ | -------------------------------------------------------------------- | ------------------------------------ |
-| **Query**    | The shape the user may write (input constraint, often carrying brands) | `MatchQuery<Schema>`               |
-| **Validate** | A mapped wrapper used at the parameter position to make brands fire at the call site | `ValidateProjectQuery<Schema, P>` |
-| **Resolve**  | The output schema after the stage / result type of the expression    | `ResolveMatchOutput<Query, Schema>` |
+| Role         | Purpose                                                                              | Example                             |
+| ------------ | ------------------------------------------------------------------------------------ | ----------------------------------- |
+| **Query**    | The shape the user may write (input constraint, often carrying brands)               | `MatchQuery<Schema>`                |
+| **Validate** | A mapped wrapper used at the parameter position to make brands fire at the call site | `ValidateProjectQuery<Schema, P>`   |
+| **Resolve**  | The output schema after the stage / result type of the expression                    | `ResolveMatchOutput<Query, Schema>` |
 
 The roles exist almost everywhere, but the naming, parameter order, error
 handling and early-exit behavior differ file by file. Findings:
@@ -187,7 +187,7 @@ The proposal: `type XXX<A, B, C> = { infer: ..., validate: ..., other: ... }`.
 
 TS has no higher-kinded types, so a `StageSpec` container can never be passed
 around as a type constructor — `Pipeline` could not be written generically over
-"any stage spec". What *is* possible is a **registry interface** whose members
+"any stage spec". What _is_ possible is a **registry interface** whose members
 are object types with well-known keys:
 
 ```ts
@@ -248,7 +248,6 @@ types at the user-facing boundary.** Concretely:
    module exports a standardized trio (section 3) with standard names and
    parameter order. A new `stages/stages.contract.typeAssertions.ts` pins the
    contract for every stage:
-
    - `ResolveXxxOutput<Schema, Q>` forwards `PipeSafeError` schemas verbatim
      (PassThrough), asserted per stage:
      `Assert<Equal<ResolveSetOutput<PipeSafeError<"x">, Q>, PipeSafeError<"x">>>`
@@ -260,7 +259,7 @@ types at the user-facing boundary.** Concretely:
 
    A container at the method-signature position is rejected because (a) the
    three documented signature patterns (direct / validation-mapped / generic
-   constraint) exist precisely because stages need *different* parameter-position
+   constraint) exist precisely because stages need _different_ parameter-position
    tricks to make brands fire, and a uniform wrapper would undo that tuning;
    (b) hover/error quality is the product; (c) without HKTs the abstraction
    buys no reuse in `Pipeline` anyway.
@@ -273,11 +272,11 @@ types at the user-facing boundary.** Concretely:
 
 Every file in `stages/` exports, with **Schema always the first parameter**:
 
-| Export                          | Required | Notes |
-| ------------------------------- | -------- | ----- |
-| `XxxQuery<Schema>`              | yes (unless the stage takes a scalar, e.g. `limit`) | Rename `MergeOptions` → `MergeQuery` (public `MergeOptions` alias kept in compat, 3.7); fold `UnwindOptions` into `UnwindQuery`. |
-| `ValidateXxxQuery<Schema, Q>`   | only when the stage uses the validation-mapped signature pattern | Currently only `project`; `group`'s known limitation (CLAUDE.md) is the candidate follow-up. |
-| `ResolveXxxOutput<Schema, Q>`   | yes      | Must wrap its body in `PassThrough<Schema, ...>`. Terminal stages (`out`, `merge`) are exempt and say so in a doc comment. |
+| Export                        | Required                                                         | Notes                                                                                                                            |
+| ----------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `XxxQuery<Schema>`            | yes (unless the stage takes a scalar, e.g. `limit`)              | Rename `MergeOptions` → `MergeQuery` (public `MergeOptions` alias kept in compat, 3.7); fold `UnwindOptions` into `UnwindQuery`. |
+| `ValidateXxxQuery<Schema, Q>` | only when the stage uses the validation-mapped signature pattern | Currently only `project`; `group`'s known limitation (CLAUDE.md) is the candidate follow-up.                                     |
+| `ResolveXxxOutput<Schema, Q>` | yes                                                              | Must wrap its body in `PassThrough<Schema, ...>`. Terminal stages (`out`, `merge`) are exempt and say so in a doc comment.       |
 
 Standard generic names: `Schema` for the incoming docs (replace
 `StartingDocs`/`PreviousStageDocs` inside stage files), `Q` for the literal
@@ -344,18 +343,18 @@ in section 2.
 
 This generalizes the early-exit idea from F2/F9 into one enforced rule:
 
-> **Decide what a value *is* from its `$`-keys alone; only after dispatch,
+> **Decide what a value _is_ from its `$`-keys alone; only after dispatch,
 > resolve and validate it against the schema.** Never match a value against a
 > Schema-parameterized union to pick a branch.
 
 The full early-exit ladder, from cheapest check to most expensive work:
 
-| Tier | Check | Cost | Lives in |
-| ---- | ----- | ---- | -------- |
-| 1 | Schema is already a `PipeSafeError` → forward it | O(1) | `PassThrough` in every `ResolveXxxOutput` |
-| 2 | Value has no `$`-prefixed key → it's a literal, stop | O(keys) | new `OperatorKeyOf` dispatch |
-| 3 | `$`-key isn't a known operator → `never` / brand, stop | O(1) registry lookup | registry dispatch |
-| 4 | Operator known → resolve `returns`, validate operands (brands) | full schema work | `ExpressionSpec` / operand kernel |
+| Tier | Check                                                          | Cost                 | Lives in                                  |
+| ---- | -------------------------------------------------------------- | -------------------- | ----------------------------------------- |
+| 1    | Schema is already a `PipeSafeError` → forward it               | O(1)                 | `PassThrough` in every `ResolveXxxOutput` |
+| 2    | Value has no `$`-prefixed key → it's a literal, stop           | O(keys)              | new `OperatorKeyOf` dispatch              |
+| 3    | `$`-key isn't a known operator → `never` / brand, stop         | O(1) registry lookup | registry dispatch                         |
+| 4    | Operator known → resolve `returns`, validate operands (brands) | full schema work     | `ExpressionSpec` / operand kernel         |
 
 Canonical helpers (new, in `utils/dispatch.ts` — created in Phase 2):
 
@@ -366,12 +365,13 @@ type OperatorKeyOf<Expr> =
 
 type InferExpression<Schema extends Document, Expr> =
   OperatorKeyOf<Expr> extends infer Op ?
-    [Op] extends [never] ? NotAnExpression          // tier 2: no $ key — literal
+    [Op] extends [never] ?
+      NotAnExpression // tier 2: no $ key — literal
     : [Op] extends [LiteralDependentOps] ?
-        InferDependentExpression<Schema, Expr, Op>  // ~6 hand-written arms
+      InferDependentExpression<Schema, Expr, Op> // ~6 hand-written arms
     : [Op] extends [keyof ExpressionSpec<Schema>] ?
-        ExpressionSpec<Schema>[Op & keyof ExpressionSpec<Schema>]["returns"]
-    : never                                          // tier 3: unknown operator
+      ExpressionSpec<Schema>[Op & keyof ExpressionSpec<Schema>]["returns"]
+    : never // tier 3: unknown operator
   : never;
 ```
 
@@ -379,7 +379,7 @@ type InferExpression<Schema extends Document, Expr> =
 `InferNestedFieldReference` can distinguish "this is a literal — pass it
 through" from "this dispatched but resolved to nothing". The sketch omits
 the multi-operator guard for brevity: immediately after the tier-2 check
-(so it runs before *both* operator lookups), a
+(so it runs before _both_ operator lookups), a
 `[Op] extends [UnionToIntersection<Op>]`-style single-key check routes
 multi-`$`-key objects to the exactly-one-operator brand described below.
 
@@ -422,7 +422,7 @@ Where the rule applies beyond `InferExpression`:
 
 **How it's forced, not just encouraged:**
 
-1. **By construction** — once dispatch is *derived* from `ExpressionSpec` /
+1. **By construction** — once dispatch is _derived_ from `ExpressionSpec` /
    `AccumulatorSpec`, there is no hand-written per-operator dispatch left to
    get wrong; new operators inherit key-first dispatch automatically.
 2. **Conformance assertions** (Phase 0 file) pin the behavior:
@@ -432,7 +432,7 @@ Where the rule applies beyond `InferExpression`:
    - `InferExpression<S, { $add: [], $size: x }>` is the exactly-one-operator
      brand.
 3. **Grep-able CLAUDE.md rule**: no `extends <Category>Expression<Schema>` or
-   `extends XxxQuery<Schema>` in *inference/dispatch* positions (constraint
+   `extends XxxQuery<Schema>` in _inference/dispatch_ positions (constraint
    positions on Pipeline methods are exactly where they belong instead).
 4. **Benchmark gate** catches reintroduced full-union dispatch as an
    instantiation-count regression.
@@ -449,7 +449,7 @@ Two precedents already exist in the codebase and should become the standard:
   `ForeignField` constraint and the brand message.
 
 A note on what hoisting actually buys: TS caches instantiations by
-`(alias, type-args)`, so repeating an *identical* alias call is mostly cache
+`(alias, type-args)`, so repeating an _identical_ alias call is mostly cache
 hits, not full recomputation. The real wins are:
 
 1. **Depth**: every `X extends infer Y ? ...` aliasing trick adds a
@@ -463,7 +463,7 @@ hits, not full recomputation. The real wins are:
    `HasInclusionNonId`) can never share a cache entry; hoisting one computed
    value into a shared parameter makes the sharing structural.
 4. **Cross-position sharing**: a method-level inferred/defaulted generic is
-   the only way for the *parameter* position (validate) and the *return*
+   the only way for the _parameter_ position (validate) and the _return_
    position (resolve) to share one computation.
 
 #### Pattern A — method-level generics shared between validate and resolve
@@ -485,17 +485,17 @@ near-duplicate alias pair collapses to one definition).
 
 #### Pattern B — defaulted "cache" parameters on deep helpers
 
-| Site | Today | Hoist |
-| ---- | ----- | ----- |
+| Site                                                        | Today                                                                                                                                                                         | Hoist                                                                                                                                                                                                                                                                                                                                             |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `FieldReferencesThatInferTo<Schema, T>` (fieldReference.ts) | Re-maps the full `FieldReference<Schema>` union and re-filters per **each of ~10 distinct `T`** used across operands (`number`, `string`, `Date`, `unknown[]`, `number[]`, …) | `SchemaRefTypeMap<Schema> = { [K in FieldReference<Schema>]: InferFieldReference<Schema, K> }` computed **once per schema**; `FieldReferencesThatInferTo<Schema, T, M = SchemaRefTypeMap<Schema>>` filters the precomputed map. The single biggest recomputation sink in the library — every operand helper for every target type reuses one map. |
-| `ExpectedValue<Schema, QueryKey, QueryValue>` (match.ts) | `GetFieldType<Schema, QueryKey>` written in 4 arms | `ExpectedValue<…, FieldType = GetFieldType<Schema, QueryKey>>` |
-| `MergeSetPlainObjects<Base, Updates>` (utils/core.ts) | `ExcludeUndefined<Base>` written **8 times** | `MergeSetPlainObjects<Base, Updates, BaseObj = ExcludeUndefined<Base>>` |
-| `ResolveSetOutput` (set.ts) | `ResolveSetInlineSchema<Schema, Query>` written 3 times across branches | hoist as defaulted param on an inner alias |
-| `ResolveUnsetOutput` / `RemoveFieldPaths` (unset.ts) | `AllTopLevelPaths<Paths>` and `ExtractTopLevelKeys<Paths>` each computed in both the resolver and the helper | compute once in the resolver, pass down as parameters |
-| `RequiredUpdateKeys` / `OptionalUpdateKeys` (utils/core.ts) | Exact complements, each independently walking all of `Updates` | one walk producing a classification map; derive both key sets from it |
+| `ExpectedValue<Schema, QueryKey, QueryValue>` (match.ts)    | `GetFieldType<Schema, QueryKey>` written in 4 arms                                                                                                                            | `ExpectedValue<…, FieldType = GetFieldType<Schema, QueryKey>>`                                                                                                                                                                                                                                                                                    |
+| `MergeSetPlainObjects<Base, Updates>` (utils/core.ts)       | `ExcludeUndefined<Base>` written **8 times**                                                                                                                                  | `MergeSetPlainObjects<Base, Updates, BaseObj = ExcludeUndefined<Base>>`                                                                                                                                                                                                                                                                           |
+| `ResolveSetOutput` (set.ts)                                 | `ResolveSetInlineSchema<Schema, Query>` written 3 times across branches                                                                                                       | hoist as defaulted param on an inner alias                                                                                                                                                                                                                                                                                                        |
+| `ResolveUnsetOutput` / `RemoveFieldPaths` (unset.ts)        | `AllTopLevelPaths<Paths>` and `ExtractTopLevelKeys<Paths>` each computed in both the resolver and the helper                                                                  | compute once in the resolver, pass down as parameters                                                                                                                                                                                                                                                                                             |
+| `RequiredUpdateKeys` / `OptionalUpdateKeys` (utils/core.ts) | Exact complements, each independently walking all of `Updates`                                                                                                                | one walk producing a classification map; derive both key sets from it                                                                                                                                                                                                                                                                             |
 
 Caveat: defaulted parameters are evaluated **eagerly** at instantiation, so
-they must sit *inside* the `PassThrough` happy path (an inner alias), never
+they must sit _inside_ the `PassThrough` happy path (an inner alias), never
 on the outer resolver — otherwise the error short-circuit pays for the
 computation it exists to skip.
 
@@ -534,14 +534,14 @@ generics (Pattern A) capture the benefit without the cost.
 `utils/core.ts` splits along its existing seams (pure moves, no logic change),
 plus the new `utils/dispatch.ts` from 3.4:
 
-| New module          | Contents |
-| ------------------- | -------- |
-| `utils/errors.ts`   | `PipeSafeError`, `IsPipeSafeError`, `PassThrough`, `RequiresMsg` |
-| `utils/dispatch.ts` | `OperatorKeyOf` + tuple-guarded dispatch helpers (3.4) |
-| `utils/strings.ts`  | `DollarPrefixed`, `WithoutDollar`, `NoDollarString`, `Alphabet`/`Digit`, `Join`, `IndexStr` |
-| `utils/paths.ts`    | `ExpandDottedKey*`, `FlattenDotSet`, `HasDottedKeys`, `RemoveDottedKeys`, `ExpandAllDotted*` |
+| New module          | Contents                                                                                                              |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `utils/errors.ts`   | `PipeSafeError`, `IsPipeSafeError`, `PassThrough`, `RequiresMsg`                                                      |
+| `utils/dispatch.ts` | `OperatorKeyOf` + tuple-guarded dispatch helpers (3.4)                                                                |
+| `utils/strings.ts`  | `DollarPrefixed`, `WithoutDollar`, `NoDollarString`, `Alphabet`/`Digit`, `Join`, `IndexStr`                           |
+| `utils/paths.ts`    | `ExpandDottedKey*`, `FlattenDotSet`, `HasDottedKeys`, `RemoveDottedKeys`, `ExpandAllDotted*`                          |
 | `utils/objects.ts`  | `Document`, `Prettify`, `MergeNested`, `IsPlainObject`, `UnionToIntersection`, `ExclusifyUnion`, `NonExpandableTypes` |
-| `stages/set.ts`     | `ApplySetUpdates` + its ~15 private helpers move next to their only consumer |
+| `stages/set.ts`     | `ApplySetUpdates` + its ~15 private helpers move next to their only consumer                                          |
 
 All rows are pure moves except two additions — `RequiresMsg` and the
 `utils/dispatch.ts` module — which are new code created in Phase 2.
@@ -561,7 +561,7 @@ superseded by `<Schema, FieldName>`) and the `MergeOptions` name
 (superseded by `MergeQuery`). The other parameter-order flips need no
 aliases because those types are internal, and the remaining exported
 resolvers (`limit`, `skip`, `sample`) are already schema-only and
-Schema-first, so they are unchanged. Module *paths* need no compat
+Schema-first, so they are unchanged. Module _paths_ need no compat
 treatment either: the package's public surface is the root `index.ts`, so
 moving a type between internal files (3.6) is invisible to consumers as
 long as the root re-export remains.
@@ -722,10 +722,10 @@ instantiation counts.
 
 ## 5. Risks and mitigations
 
-| Risk | Mitigation |
-| ---- | ---------- |
-| Error/hover display regressions (the product) | Brand messages asserted byte-for-byte in typeAssertions; `callSite.typeAssertions.ts` never weakened; `inspect-types.ts` spot checks in Phase 4 review. |
-| Type-instantiation count regressions | Benchmark gate per phase against the Phase-0 baseline. |
-| Registry indirection worsening hovers | Registry is internal only — user-facing parameter types remain plain (`Expression<Schema>` stays a union alias); if a derived union displays worse than the hand-written one, fall back to hand-written union + registry-driven conformance assertion instead. |
-| Public API breakage | Only `limit`/`skip`/`sample`/`count` resolvers, `MergeOptions`, `SampleQuery` and the `utils/core` quintet are exported. The quintet isn't renamed — `index.ts` just re-points at the new modules. The renamed/reordered ones keep `@deprecated` aliases until next major, isolated in `src/compat.ts` (3.7) so removal is a single file deletion. |
-| Hoisted defaults computed on error paths | 3.5 caveat: defaults live on inner aliases behind `PassThrough`; pinned by a contract assertion in Phase 5. |
+| Risk                                          | Mitigation                                                                                                                                                                                                                                                                                                                                         |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Error/hover display regressions (the product) | Brand messages asserted byte-for-byte in typeAssertions; `callSite.typeAssertions.ts` never weakened; `inspect-types.ts` spot checks in Phase 4 review.                                                                                                                                                                                            |
+| Type-instantiation count regressions          | Benchmark gate per phase against the Phase-0 baseline.                                                                                                                                                                                                                                                                                             |
+| Registry indirection worsening hovers         | Registry is internal only — user-facing parameter types remain plain (`Expression<Schema>` stays a union alias); if a derived union displays worse than the hand-written one, fall back to hand-written union + registry-driven conformance assertion instead.                                                                                     |
+| Public API breakage                           | Only `limit`/`skip`/`sample`/`count` resolvers, `MergeOptions`, `SampleQuery` and the `utils/core` quintet are exported. The quintet isn't renamed — `index.ts` just re-points at the new modules. The renamed/reordered ones keep `@deprecated` aliases until next major, isolated in `src/compat.ts` (3.7) so removal is a single file deletion. |
+| Hoisted defaults computed on error paths      | 3.5 caveat: defaults live on inner aliases behind `PassThrough`; pinned by a contract assertion in Phase 5.                                                                                                                                                                                                                                        |

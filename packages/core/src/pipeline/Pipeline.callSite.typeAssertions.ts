@@ -64,8 +64,10 @@ const _project_unknown = new Pipeline<User>().project({ name: 1, unknownKey: 1 }
 // prettier-ignore
 const _replaceRoot_bad = new Pipeline<User>().replaceRoot({ newRoot: "$missing" });
 
-// unwind — $unwind on a scalar field already errors with a structural
-// message; keep it as a positive regression check.
+// unwind — $unwind on a scalar field is rejected, and since Pipeline.unwind
+// is constrained to UnwindPath, the rejection hover names the module's
+// branded error ('$unwind' requires an array field reference) rather than a
+// raw structural mismatch.
 // @ts-expect-error  $unwind requires an array field
 const _unwind_bad = new Pipeline<User>().unwind("$name");
 
