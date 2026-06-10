@@ -401,7 +401,6 @@ export type DateToStringExpression<Schema extends Document> = {
   };
 };
 
-
 /**
  * $dateTrunc expression - truncates a date to a specified unit
  * Syntax: { $dateTrunc: { date: "$timestamp", unit: "day" } }
@@ -510,8 +509,6 @@ export type FilterExpression<Schema extends Document> = {
   };
 };
 
-
-
 /**
  * $map expression - transforms each element of an array
  * Syntax: { $map: { input: <array>, as: <string>, in: <expression> } }
@@ -553,7 +550,6 @@ export type ArrayExpression<Schema extends Document> =
   | FilterExpression<Schema>
   | MapExpression<Schema>
   | SumExpression<Schema>;
-
 
 /**
  * $add expression - adds numbers together
@@ -622,7 +618,6 @@ export type DateExpression<Schema extends Document> =
   | DateSubtractExpression<Schema>
   | ToDateExpression<Schema>;
 
-
 /**
  * $concat expression - concatenates strings together
  * Syntax: { $concat: [expr1, expr2, ...] }
@@ -639,7 +634,6 @@ export type ConcatExpression<Schema extends Document> = {
  */
 export type StringExpression<Schema extends Document> =
   ConcatExpression<Schema>;
-
 
 /**
  * $ifNull expression - returns the first non-null value from a list of expressions
@@ -735,7 +729,6 @@ export type LiteralExpression<_Schema extends Document> = {
 // ============================================================================
 // Comparison Expression Operators (return boolean)
 // ============================================================================
-
 
 /**
  * $in expression (aggregation) - checks if a value is in an array
@@ -985,7 +978,7 @@ export type InferExpression<Schema extends Document, Expr> =
   : [OperatorKeyOf<Expr>] extends [LiteralDependentOps] ?
     InferDependentExpression<Schema, Expr>
   : // ATTEMPT-B VARIATION 1: hand-written fixed-return arms instead of the
-    // registry's "returns" lookup (conformance assertions pin equivalence).
+  // registry's "returns" lookup (conformance assertions pin equivalence).
   Expr extends { $size: any } ? number
   : Expr extends { $map: any } ? unknown[]
   : Expr extends { $sum: any } ? number

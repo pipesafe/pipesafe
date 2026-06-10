@@ -1,4 +1,9 @@
-import { Assert, AssertPipeSafeError, Equal, assertTypeEqual } from "../utils/tests";
+import {
+  Assert,
+  AssertPipeSafeError,
+  Equal,
+  assertTypeEqual,
+} from "../utils/tests";
 import {
   FieldReference,
   GetFieldTypeWithoutArrays,

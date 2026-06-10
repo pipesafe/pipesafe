@@ -66,7 +66,9 @@ type _c6 = Assert<Equal<SumExpression<S>, ExpressionFor<S, "$sum">>>;
 type _c7 = Assert<
   Equal<DateToStringExpression<S>, ExpressionFor<S, "$dateToString">>
 >;
-type _c8 = Assert<Equal<DateTruncExpression<S>, ExpressionFor<S, "$dateTrunc">>>;
+type _c8 = Assert<
+  Equal<DateTruncExpression<S>, ExpressionFor<S, "$dateTrunc">>
+>;
 type _c9 = Assert<Equal<DateAddExpression<S>, ExpressionFor<S, "$dateAdd">>>;
 type _c10 = Assert<
   Equal<DateSubtractExpression<S>, ExpressionFor<S, "$dateSubtract">>
@@ -100,7 +102,10 @@ type _unionComplete = Assert<
 // ============================================================================
 
 type _r1 = Assert<
-  Equal<InferExpression<S, { $size: "$arr" }>, ExpressionSpec<S>["$size"]["returns"]>
+  Equal<
+    InferExpression<S, { $size: "$arr" }>,
+    ExpressionSpec<S>["$size"]["returns"]
+  >
 >;
 type _r2 = Assert<
   Equal<
@@ -109,7 +114,10 @@ type _r2 = Assert<
   >
 >;
 type _r3 = Assert<
-  Equal<InferExpression<S, { $add: [1, 2] }>, ExpressionSpec<S>["$add"]["returns"]>
+  Equal<
+    InferExpression<S, { $add: [1, 2] }>,
+    ExpressionSpec<S>["$add"]["returns"]
+  >
 >;
 type _r4 = Assert<
   Equal<
@@ -118,7 +126,10 @@ type _r4 = Assert<
   >
 >;
 type _r5 = Assert<
-  Equal<InferExpression<S, { $eq: [1, 1] }>, ExpressionSpec<S>["$eq"]["returns"]>
+  Equal<
+    InferExpression<S, { $eq: [1, 1] }>,
+    ExpressionSpec<S>["$eq"]["returns"]
+  >
 >;
 
 // ============================================================================
@@ -130,7 +141,39 @@ type _acc = Assert<
 >;
 
 export type {
-  _c1, _c2, _c3, _c4, _c5, _c6, _c7, _c8, _c9, _c10, _c11, _c12, _c13, _c14,
-  _c15, _c16, _c17, _c18, _c19, _c20, _c21, _c22, _c23, _c24, _c25, _c26,
-  _c27, _c28, _unionComplete, _r1, _r2, _r3, _r4, _r5, _acc,
+  _c1,
+  _c2,
+  _c3,
+  _c4,
+  _c5,
+  _c6,
+  _c7,
+  _c8,
+  _c9,
+  _c10,
+  _c11,
+  _c12,
+  _c13,
+  _c14,
+  _c15,
+  _c16,
+  _c17,
+  _c18,
+  _c19,
+  _c20,
+  _c21,
+  _c22,
+  _c23,
+  _c24,
+  _c25,
+  _c26,
+  _c27,
+  _c28,
+  _unionComplete,
+  _r1,
+  _r2,
+  _r3,
+  _r4,
+  _r5,
+  _acc,
 };
