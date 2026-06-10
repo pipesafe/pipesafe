@@ -249,7 +249,9 @@ types at the user-facing boundary.** Concretely:
 
    - `ResolveXxxOutput<Schema, Q>` forwards `PipeSafeError` schemas verbatim
      (PassThrough), asserted per stage:
-     `Assert<Equal<ResolveSetOutput<PipeSafeError<"x">, Q>, PipeSafeError<"x">>>`.
+     `Assert<Equal<ResolveSetOutput<PipeSafeError<"x">, Q>, PipeSafeError<"x">>>`
+     (shown in the target `<Schema, Q>` order; the Phase-0 version uses
+     today's signatures — see the Phase-0 note).
    - Each stage's Pipeline method actually uses its module's Query/Validate/
      Resolve types (prevents the `sort`/`unwind` drift in F2/F5 from
      recurring).
@@ -271,7 +273,7 @@ Every file in `stages/` exports, with **Schema always the first parameter**:
 
 | Export                          | Required | Notes |
 | ------------------------------- | -------- | ----- |
-| `XxxQuery<Schema>`              | yes (unless the stage takes a scalar, e.g. `limit`) | Rename `MergeOptions` → keep public alias, internal name `MergeQuery`; fold `UnwindOptions` into `UnwindQuery`. |
+| `XxxQuery<Schema>`              | yes (unless the stage takes a scalar, e.g. `limit`) | Rename `MergeOptions` → `MergeQuery` (public `MergeOptions` alias kept in compat, 3.7); fold `UnwindOptions` into `UnwindQuery`. |
 | `ValidateXxxQuery<Schema, Q>`   | only when the stage uses the validation-mapped signature pattern | Currently only `project`; `group`'s known limitation (CLAUDE.md) is the candidate follow-up. |
 | `ResolveXxxOutput<Schema, Q>`   | yes      | Must wrap its body in `PassThrough<Schema, ...>`. Terminal stages (`out`, `merge`) are exempt and say so in a doc comment. |
 
@@ -281,7 +283,9 @@ query, `Foreign` for joined schemas.
 
 ### 3.2 Operand kernel — new `elements/operands.ts`
 
-Two primitives replace the eleven ad-hoc helpers from F3:
+Two primitives replace the eleven brand-carrying helpers from F3 (the
+brand-free ones — `FlexibleAccumulatorOperand`, `ConditionalOperand`,
+`ComparisonOperand` — are deliberately permissive and stay as plain unions):
 
 ```ts
 /** Field-position check: the field's resolved type T must satisfy Allowed.
@@ -415,7 +419,7 @@ Where the rule applies beyond `InferExpression`:
 2. **Conformance assertions** (Phase 0 file) pin the behavior:
    - `InferExpression<S, { $size: 12 }>` is `number` (forgiving dispatch — a
      wrong operand must not change the inferred kind);
-   - `InferExpression<S, { notAnOp: 1 }>` is the literal-passthrough result;
+   - `InferExpression<S, { notAnOp: 1 }>` is the `NotAnExpression` sentinel;
    - `InferExpression<S, { $add: [], $size: x }>` is the exactly-one-operator
      brand.
 3. **Grep-able CLAUDE.md rule**: no `extends <Category>Expression<Schema>` or
@@ -467,7 +471,8 @@ project<const P, IncMode extends boolean = HasInclusions<P>,
 ): Pipeline<..., ResolveProjectOutput<PreviousStageDocs, P, IncMode, ExcMode>, ...>
 ```
 
-One mode computation per call instead of four (two near-duplicated pairs).
+Each mode is then computed once per call instead of twice (and the
+near-duplicate alias pair collapses to one definition).
 
 #### Pattern B — defaulted "cache" parameters on deep helpers
 
@@ -590,9 +595,8 @@ counts within noise of the previous baseline. Changesets: phases 1–5 are
   file if Manifold examples touch them — verify first).
 - Wire `Pipeline.sort` to `ResolveSortOutput`; wire `Pipeline.unwind` to
   `UnwindQuery`/`UnwindPath` so the documented `$unwind` brand actually fires
-  at chained call sites (add a callSite assertion for it).
-- Add `PassThrough` to `ResolveCountOutput` (needs the schema parameter:
-  `ResolveCountOutput<Schema, FieldName>`).
+  at chained call sites (add a callSite assertion for it). Both types are
+  internal (not exported from `index.ts`), so this is non-breaking.
 - Remove the local `NonNullable` shadow in `expressions.ts`.
 - Prune the unused `ExpandAllDotted` variant and convert "Stage N.M"
   optimization-log comments into a single short note (history lives in git).
@@ -621,6 +625,10 @@ counts within noise of the previous baseline. Changesets: phases 1–5 are
   and their `Pipeline` call sites. All internal except the four exported
   resolvers (`limit`, `skip`, `sample`, `count`) and `MergeOptions` —
   deprecated aliases for those go into `src/compat.ts` (3.7).
+- Fix the `count` PassThrough hole (F2) here, not in Phase 1: the fix changes
+  the **exported** `ResolveCountOutput` to `<Schema, FieldName>`, which needs
+  a compat alias and therefore Phase 2's `compat.ts`. The Phase-0
+  `ExpectAssertFailure` marker for `count` stays red until this lands.
 - Consolidate the duplicate projection-mode pairs and hoist the mode into
   `Pipeline.project`'s method-level generics (3.5 Pattern A) — this phase
   already touches every signature, so the hoist rides along.
