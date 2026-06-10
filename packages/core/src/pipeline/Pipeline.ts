@@ -26,8 +26,8 @@ import {
   ResolveReplaceRootOutput,
 } from "../stages/replaceRoot";
 import { ResolveUnionWithOutput } from "../stages/unionWith";
-import { SortQuery } from "../stages/sort";
-import { ResolveUnwindOutput } from "../stages/unwind";
+import { SortQuery, ResolveSortOutput } from "../stages/sort";
+import { ResolveUnwindOutput, UnwindPath, UnwindQuery } from "../stages/unwind";
 import { ResolveLimitOutput } from "../stages/limit";
 import { ResolveSkipOutput } from "../stages/skip";
 import { ResolveSampleOutput, SampleQuery } from "../stages/sample";
@@ -440,8 +440,15 @@ export class Pipeline<
    */
   sort(
     $sort: SortQuery<PreviousStageDocs>
-  ): Pipeline<StartingDocs, PreviousStageDocs, Mode, UsedStages | "$sort"> {
-    return this._chain<PreviousStageDocs, "$sort">([{ $sort }]);
+  ): Pipeline<
+    StartingDocs,
+    ResolveSortOutput<PreviousStageDocs>,
+    Mode,
+    UsedStages | "$sort"
+  > {
+    return this._chain<ResolveSortOutput<PreviousStageDocs>, "$sort">([
+      { $sort },
+    ]);
   }
 
   /**
@@ -518,24 +525,28 @@ export class Pipeline<
    * @example .unwind("$items") or .unwind({ path: "$items", includeArrayIndex: "idx" })
    */
   unwind<
-    Path extends FieldReferencesThatInferTo<PreviousStageDocs, unknown[]>,
+    // Constrained to UnwindPath (not the raw FieldReferencesThatInferTo) so
+    // the module's branded error arm surfaces in hovers at the call site.
+    Path extends UnwindPath<PreviousStageDocs>,
     IndexField extends string = never,
   >(
-    $unwind:
-      | Path
-      | {
-          path: Path;
-          includeArrayIndex?: IndexField;
-          preserveNullAndEmptyArrays?: boolean;
-        }
+    $unwind: UnwindQuery<PreviousStageDocs, Path, IndexField>
   ): Pipeline<
     StartingDocs,
-    ResolveUnwindOutput<PreviousStageDocs, WithoutDollar<Path>, IndexField>,
+    ResolveUnwindOutput<
+      PreviousStageDocs,
+      WithoutDollar<Path & string>,
+      IndexField
+    >,
     Mode,
     UsedStages | "$unwind"
   > {
     return this._chain<
-      ResolveUnwindOutput<PreviousStageDocs, WithoutDollar<Path>, IndexField>,
+      ResolveUnwindOutput<
+        PreviousStageDocs,
+        WithoutDollar<Path & string>,
+        IndexField
+      >,
       "$unwind"
     >([{ $unwind }]);
   }

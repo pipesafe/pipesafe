@@ -47,8 +47,8 @@ export type ExpandDottedKey<Key extends string, Value> =
     { [K in Left]: ExpandDottedKey<Rest, Value> }
   : { [K in Key]: Value };
 
-// Stage 2.1: Batch expand - process 2 dot levels at a time to reduce recursion depth
-// This reduces depth by ~50% for deeply nested paths (e.g., "a.b.c.d" -> 2 recursions instead of 4)
+// Batch expand — processes 2 dot levels per recursion, halving instantiation
+// depth for deeply nested paths (e.g. "a.b.c.d" → 2 recursions instead of 4).
 export type ExpandDottedKeyBatched<Key extends string, Value> =
   Key extends `${infer First}.${infer Second}.${infer Rest}` ?
     Rest extends (
@@ -223,43 +223,25 @@ type HasNonNeverValue<T> =
   : T extends never ? false
   : true;
 
-// Expands all dotted keys into nested objects, UnionToIntersection merges them together.
-// Note: We exclude undefined to handle optional properties correctly, as TypeScript
-// adds | undefined to indexed access of optional properties
-// Stage 2.1: Use batched expansion to reduce recursion depth
-export type ExpandAllDotted<T> = UnionToIntersection<
-  ExcludeUndefined<
-    {
-      [K in keyof T]: K extends string ? ExpandDottedKeyBatched<K, T[K]>
-      : unknown;
-    }[keyof T]
-  >
->;
-
-// Stage 2.3: Replace UnionToIntersection with Iterative Merge
-// Alternative approach: Merge expanded objects iteratively
-// Note: We still use UnionToIntersection internally for correctness
-// because MergeNested is order-dependent and produces different results
-
-// Merge expanded objects iteratively
-// Issue: Iterative MergeNested produces different results than UnionToIntersection
-// because MergeNested order matters for optional fields and nested structures
-// Solution: Use UnionToIntersection within iterative merge to maintain correctness
+// Merge expanded objects. Uses UnionToIntersection internally for
+// correctness: a purely iterative MergeNested would be order-dependent for
+// optional fields and nested structures, whereas UnionToIntersection merges
+// all expanded objects simultaneously (commutative).
 type MergeExpandedObjectsIterative<T> =
   T extends Record<string, any> ?
     {
       [K in keyof T]: T[K];
     } extends infer ExpandedMap ?
       ExpandedMap extends Record<string, any> ?
-        // Extract all expanded objects as a union and use UnionToIntersection
-        // This merges all objects simultaneously (commutative) like original ExpandAllDotted
+        // Extract all expanded objects as a union and merge simultaneously
         UnionToIntersection<ExcludeUndefined<ExpandedMap[keyof ExpandedMap]>>
       : never
     : never
   : {};
 
-// Iterative version of ExpandAllDotted (Stage 2.3)
-// Replaces UnionToIntersection with iterative MergeNested
+// Expands all dotted keys into nested objects and merges them together.
+// Excludes undefined to handle optional properties correctly (TS adds
+// `| undefined` to indexed access of optional properties).
 type ExpandAllDottedIterative<T> =
   {
     [K in keyof T]: K extends string ? ExpandDottedKeyBatched<K, T[K]> : never;
@@ -385,10 +367,9 @@ type HaveSameKeys<A, B> =
     : false
   : false;
 
-// Stage 3.1: Optimize MergeNested Recursion
-// Conditional early exit: only check for identical types when keys match
-// This avoids expensive bidirectional extends check when keys differ
-// Key insight: If keys differ, types can't be identical, so skip the check
+// Conditional early exit: only check for identical types when keys match —
+// if keys differ the types can't be identical, so the expensive bidirectional
+// extends check is skipped.
 export type MergeNested<A, B> =
   HaveSameKeys<A, B> extends true ?
     // Keys match - check if types are identical (worth the check)
@@ -427,36 +408,22 @@ export type MergeNested<A, B> =
 // 1. Expands any dotted keys in T to their nested structure,
 // 2. Merges expanded structure into original object (non-dotted keys win for those keys),
 // 3. Removes original dotted keys from output.
-//
-// Stage 1.2: Type aliases for intermediate steps - REMOVED
-// Analysis: Type aliases don't create separate cache entries - TypeScript caches by type identity.
-// Benchmark comparison showed no measurable difference:
-//   - With aliases: +1,086,995 instantiations, 320ms
-//   - Without aliases: +1,087,985 instantiations, 295ms
-// Conclusion: Aliases provide NO caching benefit - kept only for code organization.
-// Removed to simplify code - types are inlined directly in FlattenDotSet.
+// (Optimization history — alias-caching experiments, batched vs iterative
+// expansion comparisons — lives in git history.)
 
-// Stage 2.4: Two-Phase Processing - separate dotted and non-dotted keys for better optimization
-// This allows optimizing each path independently
+// Two-phase processing: separate dotted and non-dotted keys so each path can
+// be optimized independently.
 type SeparateKeys<T> = {
   dotted: Pick<T, Extract<keyof T, `${string}.${string}`>>;
   nonDotted: Omit<T, Extract<keyof T, `${string}.${string}`>>;
 };
 
-// Stage 2.3: Testing iterative merge to replace UnionToIntersection
-// Fixed: MergeExpandedObjectsIterative now uses UnionToIntersection internally
-// This maintains correctness while still using iterative expansion structure
 export type FlattenDotSet<T> =
   SeparateKeys<T> extends infer Separated ?
     Separated extends { dotted: infer D; nonDotted: infer N } ?
       Prettify<
         N & // Non-dotted keys pass through
-          RemoveDottedKeys<
-            MergeNested<
-              {},
-              ExpandAllDottedIterative<D> // Stage 2.3: Uses UnionToIntersection internally for correctness
-            >
-          >
+          RemoveDottedKeys<MergeNested<{}, ExpandAllDottedIterative<D>>>
       >
     : never
   : never;
@@ -549,10 +516,8 @@ type MergeSetValue<BaseValue, UpdateValue> =
 
 // Helper to filter out keys with never values from a type
 // Handles both required never fields and optional never fields (never | undefined)
-// Recursively removes never fields from nested objects
-//
-// Stage 3.2: Optimize RemoveNeverFields Recursion
-// Added early exit for non-object types to reduce unnecessary processing
+// Recursively removes never fields from nested objects, with early exits for
+// arrays and non-object types.
 type RemoveNeverFields<T> =
   T extends object ?
     T extends any[] ?
@@ -609,10 +574,7 @@ type OptionalUpdateKeys<Schema extends Document, Updates extends Document> = {
 // Note: TypeScript's Equal type should be order-independent, but this helps ensure
 // consistent ordering for better type inference and debugging
 // IMPORTANT: Preserves required/optional status from Output, not Schema
-//
-// OPTIMIZATION ATTEMPT 2: Conditional reordering
-// Only reorder if keys actually differ from schema order
-// This avoids expensive operation when keys already match
+// Conditional: only reorders if keys actually differ from schema order.
 type ReorderKeysToMatchSchema<
   Schema extends Document,
   Output extends Document,
@@ -637,9 +599,9 @@ type ReorderKeysToMatchSchema<
     Prettify<Reordered>
   : never;
 
-// Stage 3.1: Selective Path Processing - only process schema paths that are ancestors of dotted keys
-// This optimization reduces type instantiation depth when schema has many nested objects
-// but only a few dotted keys in the query
+// Selective path processing — only process schema paths that are ancestors of
+// dotted keys. Reduces type instantiation depth when the schema has many
+// nested objects but the query has only a few dotted keys.
 export type ApplySetUpdates<Schema extends Document, Updates extends Document> =
   HasDottedKeys<Updates> extends true ?
     // Has dotted keys - use selective schema extraction
