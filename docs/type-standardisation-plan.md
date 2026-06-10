@@ -144,6 +144,36 @@ typos in places that use `GetFieldType` directly degrade silently.
 output dispatch) each enumerate the nine accumulators independently — the same
 multi-site registration problem as F4, just smaller.
 
+### F9. Dispatch style is mixed: cheap key checks vs expensive full-union checks
+
+Inference/dispatch types decide "what is this value?" in two different ways:
+
+- **Operator-key presence** (cheap, short-circuits early):
+  `Accumulator extends { $sum: any }` (group.ts),
+  `Expr extends { $ifNull: infer Operands }`,
+  `Expr extends { $concatArrays: infer Arrays }` (expressions.ts). Only the
+  literal's keys are inspected; nothing schema-parameterized is instantiated
+  when the key is absent.
+- **Full structural match against a Schema-parameterized union** (expensive):
+  `Expr extends DateExpression<Schema>`, `Expr extends ArithmeticExpression<Schema>`
+  (the top-level `InferExpression` dispatch),
+  `Obj extends Expression<Schema>` (in `InferNestedFieldReference` — a hot
+  path, evaluated for **every value** in `$set`/`$project`/`$group` literals),
+  and the stage resolvers' `Query extends SetQuery<Schema>` /
+  `Query extends ProjectQuery<Schema>` / `Query extends RawMatchQuery<Schema>`
+  re-checks. Each of these instantiates large unions (including
+  `FieldReferencesThatInferTo`, which maps over every field path of the
+  schema) just to pick a branch — even when the value has no `$` key at all
+  and could have been ruled out immediately.
+
+The full-union style also has a **robustness cost**, not just a perf cost: a
+malformed-but-clearly-intended expression (e.g.
+`{ $dateToString: { format: 1, date: "$ts" } }`) fails the
+`extends DateExpression<Schema>` test and silently falls through to the next
+arm — the inferred output changes shape entirely (literal passthrough or
+`never`) instead of "this is a `$dateToString`, it returns `string`, and the
+operand brand flags the bad `format`".
+
 ---
 
 ## 2. Should we adopt a container type per stage/expression?
@@ -297,9 +327,99 @@ Existing helpers become one-liners over the kernel, e.g.
    definitions, and add a branded sibling
    (`GetFieldTypeOrError<Schema, Path>`) for call sites that surface to users.
 
-### 3.4 Utils split
+### 3.4 Operator-key dispatch standard ("early exit" everywhere)
 
-`utils/core.ts` splits along its existing seams (pure moves, no logic change):
+This generalizes the early-exit idea from F2/F9 into one enforced rule:
+
+> **Decide what a value *is* from its `$`-keys alone; only after dispatch,
+> resolve and validate it against the schema.** Never match a value against a
+> Schema-parameterized union to pick a branch.
+
+The full early-exit ladder, from cheapest check to most expensive work:
+
+| Tier | Check | Cost | Lives in |
+| ---- | ----- | ---- | -------- |
+| 1 | Schema is already a `PipeSafeError` → forward it | O(1) | `PassThrough` in every `ResolveXxxOutput` |
+| 2 | Value has no `$`-prefixed key → it's a literal, stop | O(keys) | new `OperatorKeyOf` dispatch |
+| 3 | `$`-key isn't a known operator → `never` / brand, stop | O(1) registry lookup | registry dispatch |
+| 4 | Operator known → resolve `returns`, validate operands (brands) | full schema work | `ExpressionSpec` / operand kernel |
+
+Canonical helpers (new, in `utils/dispatch.ts` or `elements/operands.ts`):
+
+```ts
+/** The $-prefixed key(s) of an expression-shaped literal, or never. */
+type OperatorKeyOf<Expr> =
+  Expr extends object ? keyof Expr & `$${string}` : never;
+
+type InferExpression<Schema extends Document, Expr> =
+  OperatorKeyOf<Expr> extends infer Op ?
+    [Op] extends [never] ? NotAnExpression          // tier 2: no $ key — literal
+    : [Op] extends [LiteralDependentOps] ?
+        InferDependentExpression<Schema, Expr, Op>  // ~6 hand-written arms
+    : [Op] extends [keyof ExpressionSpec<Schema>] ?
+        ExpressionSpec<Schema>[Op & keyof ExpressionSpec<Schema>]["returns"]
+    : never                                          // tier 3: unknown operator
+  : never;
+```
+
+Mongo forbids `$`-prefixed keys in stored documents (and `NoDollarString`
+already encodes that), so `$`-key presence is a **sound discriminator**
+between expression objects and nested object literals — this is what makes
+tier 2 safe.
+
+Consequences, deliberately accepted:
+
+- **Inference becomes forgiving; validation stays strict.** A malformed
+  `{ $dateToString: { format: 1, ... } }` still dispatches to `$dateToString`
+  and infers `string`; the bad operand is reported by the brand at the input
+  position (where the user can fix it), and the downstream schema stays
+  stable instead of mutating into a literal/`never`. This is a semantic
+  change from today's fall-through behavior — typeAssertion updates are
+  expected and intentional.
+- **Multi-operator objects become detectable.** `{ $add: [...], $size: ... }`
+  yields a union `Op`, which the dispatch can brand as
+  `PipeSafeError<"Expression objects must have exactly one operator.">` —
+  today this falls through structural matching unpredictably.
+- `OperatorKeyOf` must be guarded with `[Op] extends [never]`-style tuple
+  checks (a union of keys must not distribute), and a fallback arm is needed
+  for non-literal/widened `Expr`.
+
+Where the rule applies beyond `InferExpression`:
+
+- `InferNestedFieldReference` (hottest path): replace
+  `Obj extends Expression<Schema>` with the tier-2 key check before treating
+  an object as a literal.
+- `ResolveMatchOutput`: replace `Query extends RawMatchQuery<Schema>` with a
+  cheap `keyof Query & ("$and" | "$or" | "$nor")` check to split logical vs
+  raw queries.
+- Stage resolvers: drop the redundant full `Query extends SetQuery<Schema>` /
+  `ProjectQuery<Schema>` re-checks — the method's generic constraint already
+  guaranteed conformance at the parameter position; the resolver only needs
+  the narrowing, which a cheap `Query extends Document` (or nothing) provides.
+- `ResolveAccumulatorFunction` already follows the rule; the registry just
+  formalizes it.
+
+**How it's forced, not just encouraged:**
+
+1. **By construction** — once dispatch is *derived* from `ExpressionSpec` /
+   `AccumulatorSpec`, there is no hand-written per-operator dispatch left to
+   get wrong; new operators inherit key-first dispatch automatically.
+2. **Conformance assertions** (Phase 0 file) pin the behavior:
+   - `InferExpression<S, { $size: 12 }>` is `number` (forgiving dispatch — a
+     wrong operand must not change the inferred kind);
+   - `InferExpression<S, { notAnOp: 1 }>` is the literal-passthrough result;
+   - `InferExpression<S, { $add: [], $size: x }>` is the exactly-one-operator
+     brand.
+3. **Grep-able CLAUDE.md rule**: no `extends <Category>Expression<Schema>` or
+   `extends XxxQuery<Schema>` in *inference/dispatch* positions (constraint
+   positions on Pipeline methods are exactly where they belong instead).
+4. **Benchmark gate** catches reintroduced full-union dispatch as an
+   instantiation-count regression.
+
+### 3.5 Utils split
+
+`utils/core.ts` splits along its existing seams (pure moves, no logic change),
+plus the new `utils/dispatch.ts` from 3.4:
 
 | New module          | Contents |
 | ------------------- | -------- |
@@ -330,6 +450,11 @@ counts within noise of the previous baseline. Changesets: phases 1–4 are
   Expect this to **fail** for `count` (no PassThrough), and to make the
   `sort`/`unwind` wiring gaps visible — mark those with
   `ExpectAssertFailure`/TODO so the gap is recorded before it's fixed.
+- Add the dispatch-semantics assertions from 3.4 (forgiving inference,
+  literal passthrough for `$`-less objects, exactly-one-operator brand) —
+  the forgiving-inference and multi-operator cases will be
+  `ExpectAssertFailure` until Phase 4 lands; the point is to declare the
+  target semantics up front.
 - Record benchmark baseline numbers in the PR description.
 
 ### Phase 1 — Dead code and drift fixes (small, high-value)
@@ -348,12 +473,19 @@ counts within noise of the previous baseline. Changesets: phases 1–4 are
 
 ### Phase 2 — Shared kernels
 
-- Create `utils/errors.ts` (`RequiresMsg`) and `elements/operands.ts`
-  (`FieldOperand`, `ExpressionOperand`).
+- Create `utils/errors.ts` (`RequiresMsg`), `elements/operands.ts`
+  (`FieldOperand`, `ExpressionOperand`), and `utils/dispatch.ts`
+  (`OperatorKeyOf` + tuple-guarded dispatch helpers from 3.4).
 - Migrate match.ts, group.ts, expressions.ts operand helpers onto the kernel.
   Hover text must remain byte-identical — assert the exact brand messages in
   the existing typeAssertions before/after.
-- Execute the utils split (3.4) as pure moves with a re-export barrel.
+- Retrofit the two registry-independent early-exit wins:
+  `InferNestedFieldReference`'s tier-2 `$`-key check before
+  `Obj extends Expression<Schema>`, and `ResolveMatchOutput`'s
+  `keyof Query & ("$and" | "$or" | "$nor")` split instead of the full
+  `RawMatchQuery<Schema>` re-match. Both are hot paths; expect measurable
+  instantiation-count improvements (record them against the baseline).
+- Execute the utils split (3.5) as pure moves with a re-export barrel.
 
 ### Phase 3 — Stage trio standardization
 
@@ -363,15 +495,23 @@ counts within noise of the previous baseline. Changesets: phases 1–4 are
   deprecated aliases for those, remove at next major.
 - Rename `StartingDocs` → `Schema` inside lookup/unionWith/graphLookup stage
   files (cosmetic, but it currently misstates which schema flows in).
-- Flip the Phase-0 `ExpectAssertFailure` markers to real assertions.
+- Drop the redundant full `Query extends SetQuery<Schema>` /
+  `ProjectQuery<Schema>` re-checks inside resolvers (3.4): the Pipeline
+  method's generic constraint already proved conformance at the parameter
+  position.
+- Flip the Phase-0 `ExpectAssertFailure` markers for the stage contract to
+  real assertions.
 
 ### Phase 4 — Registry containers
 
-- Rebuild `expressions.ts` around `ExpressionSpec<Schema>` (section 2.1):
+- Rebuild `expressions.ts` around `ExpressionSpec<Schema>` (section 2.1)
+  with **operator-key dispatch as the only dispatch mechanism** (3.4):
   derive `Expression`, category views, and the fixed-return arm of
-  `InferExpression`; delete `InferExpressionType`; route `$ifNull`/`$cond`
-  operand inference through the single dispatch. This phase carries the most
-  diagnostic-display risk — review every changed hover in
+  `InferExpression` from the registry; delete `InferExpressionType`; route
+  `$ifNull`/`$cond` operand inference through the single dispatch. Flip the
+  Phase-0 dispatch-semantics `ExpectAssertFailure` markers (forgiving
+  inference, one-operator brand) to real assertions. This phase carries the
+  most diagnostic-display risk — review every changed hover in
   `set.typeAssertions.ts` / `project.typeAssertions.ts` with
   `.claude/inspect-types.ts`.
 - Rebuild `group.ts` accumulators around `AccumulatorSpec<Schema>` the same
