@@ -17,7 +17,9 @@ export type {
   TypedTimeSeriesOptions,
   ModelConfig,
 } from "./model/Model";
-export type { MergeOptions } from "@pipesafe/core";
+// MergeOptions is the deprecated alias of MergeQuery — both re-exported for
+// manifold consumers until the next major.
+export type { MergeQuery, MergeOptions } from "@pipesafe/core";
 export type {
   ProjectConfig,
   RunOptions,

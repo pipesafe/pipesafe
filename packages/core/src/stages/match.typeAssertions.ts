@@ -48,8 +48,8 @@ type SimpleEqualityQuery = {
 };
 
 type SimpleEqualityResult = ResolveMatchOutput<
-  SimpleEqualityQuery,
-  SimpleEqualitySchema
+  SimpleEqualitySchema,
+  SimpleEqualityQuery
 >;
 
 type SimpleEqualityExpected = {
@@ -71,7 +71,7 @@ type ExplicitEqQuery = {
   status: { $eq: "active" };
 };
 
-type ExplicitEqResult = ResolveMatchOutput<ExplicitEqQuery, ExplicitEqSchema>;
+type ExplicitEqResult = ResolveMatchOutput<ExplicitEqSchema, ExplicitEqQuery>;
 
 type ExplicitEqExpected = {
   status: string;
@@ -101,7 +101,7 @@ type SpeakerQuery = {
   type: "speaker";
 };
 
-type SpeakerResult = ResolveMatchOutput<SpeakerQuery, Person>;
+type SpeakerResult = ResolveMatchOutput<Person, SpeakerQuery>;
 
 type SpeakerExpected = {
   type: "speaker";
@@ -116,7 +116,7 @@ type AttendeeQuery = {
   type: "attendee";
 };
 
-type AttendeeResult = ResolveMatchOutput<AttendeeQuery, Person>;
+type AttendeeResult = ResolveMatchOutput<Person, AttendeeQuery>;
 
 type AttendeeExpected = {
   type: "attendee";
@@ -131,7 +131,7 @@ type InUnionQuery = {
   type: { $in: ["speaker"] };
 };
 
-type InUnionResult = ResolveMatchOutput<InUnionQuery, Person>;
+type InUnionResult = ResolveMatchOutput<Person, InUnionQuery>;
 
 type InUnionExpected = {
   type: "speaker";
@@ -163,7 +163,7 @@ type CarQuery = {
   vehicleType: "car";
 };
 
-type CarResult = ResolveMatchOutput<CarQuery, Vehicle>;
+type CarResult = ResolveMatchOutput<Vehicle, CarQuery>;
 
 type CarExpected = {
   vehicleType: "car";
@@ -187,7 +187,7 @@ type GtQuery = {
   age: { $gt: 18 };
 };
 
-type GtResult = ResolveMatchOutput<GtQuery, ComparisonSchema>;
+type GtResult = ResolveMatchOutput<ComparisonSchema, GtQuery>;
 
 type GtExpected = {
   age: number;
@@ -201,7 +201,7 @@ type LteQuery = {
   age: { $lte: 65 };
 };
 
-type LteResult = ResolveMatchOutput<LteQuery, ComparisonSchema>;
+type LteResult = ResolveMatchOutput<ComparisonSchema, LteQuery>;
 
 type LteExpected = {
   age: number;
@@ -224,7 +224,7 @@ type ExistsQuery = {
   optional: { $exists: true };
 };
 
-type ExistsResult = ResolveMatchOutput<ExistsQuery, OptionalFieldSchema>;
+type ExistsResult = ResolveMatchOutput<OptionalFieldSchema, ExistsQuery>;
 
 type ExistsExpected = {
   required: string;
@@ -247,7 +247,7 @@ type SizeQuery = {
   tags: { $size: 3 };
 };
 
-type SizeResult = ResolveMatchOutput<SizeQuery, ArraySchema>;
+type SizeResult = ResolveMatchOutput<ArraySchema, SizeQuery>;
 
 type SizeExpected = {
   tags: string[];
@@ -274,7 +274,7 @@ type NestedQuery = {
   "user.profile.age": { $gte: 21 };
 };
 
-type NestedResult = ResolveMatchOutput<NestedQuery, NestedSchema>;
+type NestedResult = ResolveMatchOutput<NestedSchema, NestedQuery>;
 
 type NestedExpected = {
   user: {
@@ -296,7 +296,7 @@ type ArrayIndexQuery = {
   "items.0.id": 1;
 };
 
-type ArrayIndexResult = ResolveMatchOutput<ArrayIndexQuery, ArrayIndexSchema>;
+type ArrayIndexResult = ResolveMatchOutput<ArrayIndexSchema, ArrayIndexQuery>;
 
 type ArrayIndexExpected = {
   items: { id: number; name: string }[];
@@ -313,7 +313,7 @@ type AndQuery = {
   $and: [{ type: "speaker" }, { name: "Alice" }];
 };
 
-type AndResult = ResolveMatchOutput<AndQuery, Person>;
+type AndResult = ResolveMatchOutput<Person, AndQuery>;
 
 // Currently $and doesn't narrow - preserves full schema
 type AndExpected = Person;
@@ -325,7 +325,7 @@ type OrQuery = {
   $or: [{ type: "speaker" }, { type: "attendee" }];
 };
 
-type OrResult = ResolveMatchOutput<OrQuery, Person>;
+type OrResult = ResolveMatchOutput<Person, OrQuery>;
 
 // Currently $or doesn't narrow - preserves full schema
 type OrExpected = Person;
@@ -364,7 +364,7 @@ type ConferenceQuery = {
   eventType: "conference";
 };
 
-type ConferenceResult = ResolveMatchOutput<ConferenceQuery, Event>;
+type ConferenceResult = ResolveMatchOutput<Event, ConferenceQuery>;
 
 type ConferenceExpected = {
   eventType: "conference";
@@ -381,7 +381,7 @@ type NestedUnionQuery = {
   "details.casual": true;
 };
 
-type NestedUnionResult = ResolveMatchOutput<NestedUnionQuery, Event>;
+type NestedUnionResult = ResolveMatchOutput<Event, NestedUnionQuery>;
 
 type NestedUnionExpected = {
   eventType: "meetup";
@@ -416,7 +416,7 @@ type ElectronicsQuery = {
   warranty: { $gte: 1 };
 };
 
-type ElectronicsResult = ResolveMatchOutput<ElectronicsQuery, Product>;
+type ElectronicsResult = ResolveMatchOutput<Product, ElectronicsQuery>;
 
 type ElectronicsExpected = {
   category: "electronics";
@@ -461,8 +461,8 @@ type PrettifyMatchSchema = {
 };
 type PrettifyMatchQuery = { a: 1; b: "x" };
 type PrettifyMatchResult = ResolveMatchOutput<
-  PrettifyMatchQuery,
-  PrettifyMatchSchema
+  PrettifyMatchSchema,
+  PrettifyMatchQuery
 >;
 type PrettifyMatchExpected = {
   a: number;

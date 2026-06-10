@@ -50,7 +50,11 @@ export type { ResolveSampleOutput, SampleQuery } from "./stages/sample";
 export type { ResolveCountOutput } from "./stages/count";
 
 // Stage option types
-export type { MergeOptions } from "./stages/merge";
+export type { MergeQuery } from "./stages/merge";
+
+// Deprecated aliases — index.ts is the only file permitted to import from
+// compat.ts (enforced by no-restricted-imports, see eslint.config.js)
+export type { MergeOptions } from "./compat";
 
 // Type assertion utilities (for testing type inference)
 export type {

@@ -9,7 +9,7 @@ import { FieldSelector, TopLevelField } from "../elements/fieldSelector";
  *
  * @see https://www.mongodb.com/docs/manual/reference/operator/aggregation/merge/
  */
-export type MergeOptions<TOutput extends Document> = {
+export type MergeQuery<TOutput extends Document> = {
   /**
    * The output collection.
    * Either a collection name in the current database, or a `{ db, coll }` pair

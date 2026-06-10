@@ -181,7 +181,7 @@ export type ExtractQueryFields<Q> = Omit<
 // cheap keyof check instead of the full `Query extends RawMatchQuery<Schema>`
 // structural re-match — the method's generic constraint already validated
 // Query at the parameter position.
-export type ResolveMatchOutput<Query, Schema extends Document> = PassThrough<
+export type ResolveMatchOutput<Schema extends Document, Query> = PassThrough<
   Schema,
   [keyof Query & ("$and" | "$or" | "$nor")] extends [never] ?
     Prettify<FilterUnion<Schema, Query>>
