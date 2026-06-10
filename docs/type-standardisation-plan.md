@@ -416,7 +416,98 @@ Where the rule applies beyond `InferExpression`:
 4. **Benchmark gate** catches reintroduced full-union dispatch as an
    instantiation-count regression.
 
-### 3.5 Utils split
+### 3.5 Hoisting computed types into generic parameters
+
+Two precedents already exist in the codebase and should become the standard:
+
+- `GetFieldTypeWithoutArrays<Schema, Path, FullPath = Path>` — an
+  **accumulator parameter** so the recursion doesn't recompute the original
+  path for the error message.
+- `Pipeline.lookup`'s `LocalFieldType extends GetFieldType<...>` — a
+  **method-level inferred parameter** computed once and shared by the
+  `ForeignField` constraint and the brand message.
+
+A note on what hoisting actually buys: TS caches instantiations by
+`(alias, type-args)`, so repeating an *identical* alias call is mostly cache
+hits, not full recomputation. The real wins are:
+
+1. **Depth**: every `X extends infer Y ? ...` aliasing trick adds a
+   conditional-nesting level toward the ~50 instantiation-depth limit (the
+   limit this library already fights with hand-rolled "batched" expansion).
+   A defaulted generic parameter is depth-free — the result is substituted.
+2. **Eager-once evaluation**: a defaulted parameter is computed once at
+   instantiation; each use site is then an O(1) reference instead of an
+   alias resolution + cache lookup.
+3. **Cache unification**: near-duplicate aliases (`HasInclusions` vs
+   `HasInclusionNonId`) can never share a cache entry; hoisting one computed
+   value into a shared parameter makes the sharing structural.
+4. **Cross-position sharing**: a method-level inferred/defaulted generic is
+   the only way for the *parameter* position (validate) and the *return*
+   position (resolve) to share one computation.
+
+#### Pattern A — method-level generics shared between validate and resolve
+
+`project` is the flagship: `HasInclusionNonId`/`HasExclusionNonId` (validate
+side) and `HasInclusions`/`HasExclusions` (resolve side) are near-duplicate
+pairs computed independently for every call. Consolidate to one pair and
+hoist the mode:
+
+```ts
+project<const P, IncMode extends boolean = HasInclusions<P>,
+                 ExcMode extends boolean = HasExclusions<P>>(
+  $project: ValidateProjectQuery<PreviousStageDocs, P, IncMode, ExcMode>
+): Pipeline<..., ResolveProjectOutput<PreviousStageDocs, P, IncMode, ExcMode>, ...>
+```
+
+One mode computation per call instead of four (two near-duplicated pairs).
+
+#### Pattern B — defaulted "cache" parameters on deep helpers
+
+| Site | Today | Hoist |
+| ---- | ----- | ----- |
+| `FieldReferencesThatInferTo<Schema, T>` (fieldReference.ts) | Re-maps the full `FieldReference<Schema>` union and re-filters per **each of ~10 distinct `T`** used across operands (`number`, `string`, `Date`, `unknown[]`, `number[]`, …) | `SchemaRefTypeMap<Schema> = { [K in FieldReference<Schema>]: InferFieldReference<Schema, K> }` computed **once per schema**; `FieldReferencesThatInferTo<Schema, T, M = SchemaRefTypeMap<Schema>>` filters the precomputed map. The single biggest recomputation sink in the library — every operand helper for every target type reuses one map. |
+| `ExpectedValue<Schema, QueryKey, QueryValue>` (match.ts) | `GetFieldType<Schema, QueryKey>` written in 4 arms | `ExpectedValue<…, FieldType = GetFieldType<Schema, QueryKey>>` |
+| `MergeSetPlainObjects<Base, Updates>` (utils/core.ts) | `ExcludeUndefined<Base>` written **8 times** | `MergeSetPlainObjects<Base, Updates, BaseObj = ExcludeUndefined<Base>>` |
+| `ResolveSetOutput` (set.ts) | `ResolveSetInlineSchema<Schema, Query>` written 3 times across branches | hoist as defaulted param on an inner alias |
+| `ResolveUnsetOutput` / `RemoveFieldPaths` (unset.ts) | `AllTopLevelPaths<Paths>` and `ExtractTopLevelKeys<Paths>` each computed in both the resolver and the helper | compute once in the resolver, pass down as parameters |
+| `RequiredUpdateKeys` / `OptionalUpdateKeys` (utils/core.ts) | Exact complements, each independently walking all of `Updates` | one walk producing a classification map; derive both key sets from it |
+
+Caveat: defaulted parameters are evaluated **eagerly** at instantiation, so
+they must sit *inside* the `PassThrough` happy path (an inner alias), never
+on the outer resolver — otherwise the error short-circuit pays for the
+computation it exists to skip.
+
+#### Pattern C — accumulator parameters to unlock tail-recursion elimination
+
+TS raises the recursion limit from ~50 to ~1000 for **tail-recursive**
+conditional types (the branch is directly the recursive reference). The
+hand-rolled "batched 2-levels-at-a-time" machinery (`ExpandDottedKeyBatched`,
+unset.ts's triple-nested base cases) exists purely to halve depth; an
+accumulator-parameter formulation removes the need:
+
+```ts
+type SplitPath<S extends string, Acc extends string[] = []> =
+  S extends `${infer Head}.${infer Tail}` ? SplitPath<Tail, [...Acc, Head]>
+  : [...Acc, S]; // tail-recursive: ~1000-depth budget
+```
+
+Split once, then build/consume the segment tuple iteratively. Candidates:
+`ExpandDottedKeyBatched` (+ its `PreservingOptional` variant),
+`RemoveFieldPathBatched` (unset.ts — the 70-line triple-nested type collapses
+to split + fold), `ExtractTopLevelKeys`/`ExtractNestedPathsForParent`.
+
+#### What NOT to hoist: the `Pipeline` class itself
+
+Tempting but rejected: caching `FieldSelector<PreviousStageDocs>` /
+`FieldReference<PreviousStageDocs>` as new `Pipeline` class generics.
+(a) Alias caching already makes the per-schema path enumeration a one-time
+cost — methods reusing `FieldSelector<S>` for the same `S` hit the cache;
+(b) every hover of a pipeline value would display the full path-union in the
+type arguments — a major DX regression; (c) every new class generic must be
+threaded through `_chain` and all ~20 method return types. Method-level
+generics (Pattern A) capture the benefit without the cost.
+
+### 3.6 Utils split
 
 `utils/core.ts` splits along its existing seams (pure moves, no logic change),
 plus the new `utils/dispatch.ts` from 3.4:
@@ -429,9 +520,32 @@ plus the new `utils/dispatch.ts` from 3.4:
 | `utils/merge.ts`    | `MergeNested`, `IsPlainObject`, `Prettify`, `UnionToIntersection`, `ExclusifyUnion` |
 | `stages/set.ts`     | `ApplySetUpdates` + its ~15 private helpers move next to their only consumer |
 
-`utils/core.ts` remains as a re-export barrel so nothing outside the package
-breaks (`Document`, `Prettify`, `PipeSafeError`, `IsPipeSafeError`,
-`PassThrough` are public API via `index.ts`).
+`utils/core.ts` is **deleted**, not kept as a barrel — internal imports are
+updated to the new modules, and anything needed for external compatibility
+moves to the compat file (3.7). (`Document`, `Prettify`, `PipeSafeError`,
+`IsPipeSafeError`, `PassThrough` are public API via `index.ts`, which simply
+re-points at the new module locations.)
+
+### 3.7 One compat file to delete at the next major
+
+Every backwards-compatibility export created by this plan — deprecated
+aliases for renamed/reordered types (`ResolveCountOutput<FieldName>` →
+`<Schema, FieldName>`, `MergeOptions` → `MergeQuery`, the old
+`Resolve*Output<Query, Schema>` parameter orders, old `utils/core` paths) —
+lives in **one file**: `src/compat.ts`.
+
+Rules:
+
+- Each alias carries `@deprecated` JSDoc naming its replacement and the
+  removal milestone (`v1.0.0`).
+- `index.ts` re-exports from `compat.ts` so the public surface is unchanged.
+- **Nothing inside the package may import from `compat.ts`** — internal code
+  uses only the new names. Enforced with an ESLint `no-restricted-imports`
+  rule so violations fail the pre-commit hook, plus a conformance assertion
+  that each alias stays identical to its replacement.
+- Removal at the next major is then a two-line change: delete `src/compat.ts`
+  and its `index.ts` re-export line, plus a `major` changeset listing the
+  removed names (generated from the file's own exports).
 
 ---
 
@@ -440,8 +554,8 @@ breaks (`Document`, `Prettify`, `PipeSafeError`, `IsPipeSafeError`,
 Each phase is a separate PR, gated by: `bun run build`, all
 `*.typeAssertions.ts` green, `Pipeline.callSite.typeAssertions.ts` untouched or
 strengthened (never weakened), and `packages/core/benchmarking` instantiation
-counts within noise of the previous baseline. Changesets: phases 1–4 are
-`patch` (internal); phase 5 is `minor` if any new public types are exported.
+counts within noise of the previous baseline. Changesets: phases 1–5 are
+`patch` (internal); phase 6 is `minor` if any new public types are exported.
 
 ### Phase 0 — Pin current behavior (the safety net)
 
@@ -485,14 +599,19 @@ counts within noise of the previous baseline. Changesets: phases 1–4 are
   `keyof Query & ("$and" | "$or" | "$nor")` split instead of the full
   `RawMatchQuery<Schema>` re-match. Both are hot paths; expect measurable
   instantiation-count improvements (record them against the baseline).
-- Execute the utils split (3.5) as pure moves with a re-export barrel.
+- Execute the utils split (3.6) as pure moves. Create `src/compat.ts` (3.7)
+  with its `no-restricted-imports` lint rule here; any old-path re-exports
+  needed for compatibility go in it from day one.
 
 ### Phase 3 — Stage trio standardization
 
 - Normalize names and parameter order (`<Schema, Q>`) across all stage files
   and their `Pipeline` call sites. All internal except the four exported
-  resolvers (`limit`, `skip`, `sample`, `count`) and `MergeOptions` — keep
-  deprecated aliases for those, remove at next major.
+  resolvers (`limit`, `skip`, `sample`, `count`) and `MergeOptions` —
+  deprecated aliases for those go into `src/compat.ts` (3.7).
+- Consolidate the duplicate projection-mode pairs and hoist the mode into
+  `Pipeline.project`'s method-level generics (3.5 Pattern A) — this phase
+  already touches every signature, so the hoist rides along.
 - Rename `StartingDocs` → `Schema` inside lookup/unionWith/graphLookup stage
   files (cosmetic, but it currently misstates which schema flows in).
 - Drop the redundant full `Query extends SetQuery<Schema>` /
@@ -518,7 +637,29 @@ counts within noise of the previous baseline. Changesets: phases 1–4 are
   way. (This may also unlock the documented `Pipeline.group` call-site brand
   limitation, but treat that as a stretch goal, not a gate.)
 
-### Phase 5 — Documentation
+### Phase 5 — Depth & recomputation (parameter hoisting, 3.5)
+
+Separate phase because each item is mechanical but must be individually
+benchmarked — hoisting is a performance refactor and lives or dies by the
+instantiation counts.
+
+- **Pattern B retrofits**, in expected-impact order:
+  `SchemaRefTypeMap` parameter on `FieldReferencesThatInferTo` (one
+  ref→type map per schema instead of a re-filter per target type);
+  `ExpectedValue`'s `FieldType` parameter; `MergeSetPlainObjects`'
+  `BaseObj` parameter; `ResolveSetOutput`'s hoisted inline schema;
+  unset's `AllTopLevelPaths`/`ExtractTopLevelKeys` passed down instead of
+  recomputed; merge `RequiredUpdateKeys`/`OptionalUpdateKeys` into one walk.
+- **Pattern C conversions**: tail-recursive `SplitPath` accumulator replacing
+  `ExpandDottedKeyBatched` (+ `PreservingOptional` variant) and unset's
+  `RemoveFieldPathBatched`; delete the hand-rolled batching machinery once
+  depth headroom is confirmed on the deep-nesting benchmark cases.
+- Keep defaults inside the `PassThrough` happy path (3.5 caveat) — add a
+  contract assertion that an error schema short-circuits without evaluating
+  the hoisted defaults (observable via instantiation counts on the error
+  path).
+
+### Phase 6 — Documentation
 
 - Replace the relevant CLAUDE.md sections with the conventions in section 3
   (trio naming, operand kernel, early-exit rules, registry pattern, and the
@@ -535,4 +676,5 @@ counts within noise of the previous baseline. Changesets: phases 1–4 are
 | Error/hover display regressions (the product) | Brand messages asserted byte-for-byte in typeAssertions; `callSite.typeAssertions.ts` never weakened; `inspect-types.ts` spot checks in Phase 4 review. |
 | Type-instantiation count regressions | Benchmark gate per phase against the Phase-0 baseline. |
 | Registry indirection worsening hovers | Registry is internal only — user-facing parameter types remain plain (`Expression<Schema>` stays a union alias); if a derived union displays worse than the hand-written one, fall back to hand-written union + registry-driven conformance assertion instead. |
-| Public API breakage | Only `limit`/`skip`/`sample`/`count` resolvers, `MergeOptions`, `SampleQuery` and the `utils/core` quintet are exported; all keep aliases until next major. |
+| Public API breakage | Only `limit`/`skip`/`sample`/`count` resolvers, `MergeOptions`, `SampleQuery` and the `utils/core` quintet are exported; all keep aliases until next major — isolated in `src/compat.ts` (3.7) so removal is a single file deletion. |
+| Hoisted defaults computed on error paths | 3.5 caveat: defaults live on inner aliases behind `PassThrough`; pinned by a contract assertion in Phase 5. |
