@@ -114,11 +114,9 @@ export type MatchQuery<Schema extends Document> =
 
 // Type narrowing utilities for match queries
 
-// Extract literal values from match operators.
-// No hoisted FieldType cache parameter (A/B comparison decision, spec §6):
-// each arm spells GetFieldType lazily — only the taken branch instantiates
-// it and repeats are alias-cached, so the hoist measured neutral and the
-// parameter was dropped.
+// Extract literal values from match operators. GetFieldType is spelled
+// per arm deliberately: conditional branches are lazy and repeats are
+// alias-cached, so a hoisted cache parameter would buy nothing.
 export type ExpectedValue<Schema, QueryKey extends string, QueryValue> =
   QueryValue extends (
     {
@@ -165,16 +163,13 @@ export type FilterUnion<Union extends Document, Query> =
     : never
   : never;
 
-// Main type resolution with proper narrowing
-// Takes the schema explicitly since inference from MatchQuery is unreliable
-// PassThrough short-circuits when Schema is already a PipeSafeError (e.g. an
-// earlier stage produced one). The match stage becomes a no-op so the user
-// sees the original upstream error verbatim instead of a fresh constraint mismatch.
+// Main type resolution with proper narrowing. PassThrough short-circuits
+// when Schema is already a PipeSafeError so the user sees the original
+// upstream error verbatim instead of a fresh constraint mismatch.
 //
-// Operator-key dispatch (spec §3.4): the logical-vs-raw split is decided by a
-// cheap keyof check instead of the full `Query extends RawMatchQuery<Schema>`
-// structural re-match — the method's generic constraint already validated
-// Query at the parameter position.
+// The logical-vs-raw split is a cheap keyof check, not a structural
+// `Query extends RawMatchQuery<Schema>` re-match — the method's generic
+// constraint already validated Query at the parameter position.
 export type ResolveMatchOutput<Schema extends Document, Query> = PassThrough<
   Schema,
   [keyof Query & LogicalMatchOperators] extends [never] ?

@@ -2,9 +2,8 @@
  * Compile-time error brand machinery.
  *
  * Everything user-facing about PipeSafe's type errors flows through the
- * `PipeSafeError` brand defined here; `PassThrough` is the tier-1 early exit
- * every stage resolver wraps itself in (see docs/type-standardisation-plan.md
- * §3.3/§3.4).
+ * `PipeSafeError` brand defined here; `PassThrough` is the first early exit
+ * every stage resolver wraps itself in.
  */
 
 /**

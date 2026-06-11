@@ -60,8 +60,7 @@ type HaveSameKeys<A, B> =
     : false
   : false;
 
-// The single spelling of the key-wise merge (previously duplicated across
-// all three MergeNested branches).
+// The single spelling of MergeNested's key-wise merge.
 type MergeAllKeys<A, B> = Prettify<{
   [K in keyof A | keyof B]: K extends keyof B ?
     K extends keyof A ?

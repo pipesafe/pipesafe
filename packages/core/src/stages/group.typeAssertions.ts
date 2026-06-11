@@ -673,7 +673,7 @@ export type {
 };
 
 // ============================================================================
-// Phase 1 — Prettify wrapping on ResolveGroupOutput's _id shape
+// Prettify wrapping on ResolveGroupOutput's _id shape
 // ============================================================================
 // When `_id` is a multi-field reference object, the resulting `_id` shape
 // must hover as a flat object, not as a chain of mapped-type applications.

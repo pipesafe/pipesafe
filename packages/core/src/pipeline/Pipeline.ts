@@ -408,10 +408,9 @@ export class Pipeline<
     ]);
   }
 
-  // No method-level mode hoist (A/B comparison decision, spec 6): the
-  // validate and resolve positions compute the projection modes via their
-  // own defaulted parameters — the second computation is an alias-cache hit,
-  // so hoisting saved nothing and added signature/inference complexity.
+  // The validate and resolve positions each compute the projection modes
+  // via their defaulted parameters; the second computation is an alias-cache
+  // hit, so hoisting them into method generics would buy nothing.
   project<const P>(
     $project: ValidateProjectQuery<PreviousStageDocs, P>
   ): Pipeline<

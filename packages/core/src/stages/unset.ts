@@ -10,10 +10,9 @@ export type UnsetQuery<Schema extends Document> =
 // Direct implementation to remove fields from schema without going through $set pipeline
 // This avoids unnecessary type instantiations and depth
 
-// Walk pre-split path segments and remove the leaf, preserving optionality at
-// every level (spec §3.5 Pattern C: parsing is done tail-recursively by
-// SplitPath; this fold descends one structural level per segment, replacing
-// the old hand-batched 2-levels-per-recursion implementation).
+// Walk pre-split path segments and remove the leaf, preserving optionality
+// at every level. Parsing is done tail-recursively by SplitPath; this fold
+// descends one structural level per segment.
 type RemoveAtSegments<Schema extends Document, Segs extends readonly string[]> =
   Segs extends [infer Only extends string] ?
     Only extends keyof Schema ?
@@ -123,9 +122,8 @@ type BatchRemoveNestedByParent<
 // Remove multiple field paths from schema
 // Optimization: Batch Omit for top-level paths, batch by parent for nested paths
 // This avoids deep recursion by grouping nested paths by their parent key.
-// TopOnly and Keys are hoisted cache parameters (spec §3.5 Pattern B):
-// previously AllTopLevelPaths was evaluated both here and by the caller, and
-// ExtractTopLevelKeys via two separate `extends infer` branches.
+// TopOnly and Keys are cache parameters shared with the caller so neither
+// is evaluated twice.
 type RemoveFieldPaths<
   Schema extends Document,
   Paths extends readonly string[],
@@ -167,8 +165,8 @@ type PreserveOptionality<Schema extends Document, Result extends Document> = {
   : never]?: Result[K];
 };
 
-// The old outer `Query extends UnsetQuery<Schema>` re-check is gone (spec
-// 3.4): it re-enumerated FieldPath<Schema> per call even though the method's
+// No outer `Query extends UnsetQuery<Schema>` re-check: it would
+// re-enumerate FieldPath<Schema> per call even though the method's
 // parameter position already validated the query. The cheap string/array
 // narrowing below is all the body needs.
 export type ResolveUnsetOutput<Schema extends Document, Query> = PassThrough<

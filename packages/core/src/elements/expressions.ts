@@ -16,14 +16,13 @@ import { AnyLiteral } from "./literals";
 // ============================================================================
 // MongoDB Expression Operators — registry edition
 // ============================================================================
-// `ExpressionSpec` is THE registration point (spec §2 recommendation 1):
-// one entry per operator holding its operand (input) shape and, for
-// fixed-return operators, its result type. Everything else — the
-// per-operator expression types, the category unions, the `Expression`
-// union, and the fixed-return arm of `InferExpression` — is derived
-// mechanically. Adding an operator = adding one registry entry (plus one
-// `InferDependentExpression` arm if its result depends on the literal
-// arguments).
+// `ExpressionSpec` is THE registration point: one entry per operator holds
+// its operand (input) shape and, for fixed-return operators, its result
+// type. Everything else — the per-operator expression types, the category
+// unions, the `Expression` union, and the fixed-return arm of
+// `InferExpression` — is derived mechanically. Adding an operator = one
+// registry entry (plus one `InferDependentExpression` arm if its result
+// depends on the literal arguments).
 
 // ----------------------------------------------------------------------------
 // Operand helpers (kernel one-liners; see elements/operands.ts)
@@ -86,22 +85,16 @@ type StringOperand<
   RequiresMsg<"Operator", Op, "a string operand">
 >;
 
-/**
- * Generic expression operands - can be any literal, null, field reference, or expression
- * Used for conditional operators like $ifNull and $cond that accept flexible types
- */
-/** The `[left, right]` pair shape shared by all binary comparison operators. */
-type ComparisonPair<Schema extends Document> = [
-  ComparisonOperand<Schema>,
-  ComparisonOperand<Schema>,
-];
-
 /** The `[left, right]` pair shape shared by the binary arithmetic operators. */
 type ArithmeticPair<Schema extends Document, Op extends string> = [
   ArithmeticOperand<Schema, Op>,
   ArithmeticOperand<Schema, Op>,
 ];
 
+/**
+ * Generic expression operands - can be any literal, null, field reference, or expression
+ * Used for conditional operators like $ifNull and $cond that accept flexible types
+ */
 type ConditionalOperand<Schema extends Document> =
   | null
   | AnyLiteral<Schema>
@@ -121,6 +114,12 @@ type ComparisonOperand<Schema extends Document> =
   | ArithmeticExpression<Schema>
   | StringExpression<Schema>
   | ConditionalExpression<Schema>;
+
+/** The `[left, right]` pair shape shared by all binary comparison operators. */
+type ComparisonPair<Schema extends Document> = [
+  ComparisonOperand<Schema>,
+  ComparisonOperand<Schema>,
+];
 
 /**
  * Time unit for date truncation/manipulation
@@ -537,7 +536,7 @@ export type Expression<Schema extends Document> = ExpressionFor<
 >;
 
 // ----------------------------------------------------------------------------
-// Inference — operator-key dispatch (spec §3.4)
+// Inference — operator-key dispatch
 // ----------------------------------------------------------------------------
 
 /**
@@ -665,8 +664,7 @@ type InferDependentExpression<Schema extends Document, Expr> =
   : never;
 
 /**
- * Infer the result type of any expression — THE single dispatch
- * (spec §3.4 ladder, tiers 2–4):
+ * Infer the result type of any expression — THE single dispatch:
  *
  *  - no `$`-prefixed key → `NotAnExpression` sentinel (the value is a
  *    literal; callers like InferNestedFieldReference treat it as such);

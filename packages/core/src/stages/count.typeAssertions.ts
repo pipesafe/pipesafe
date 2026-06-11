@@ -24,7 +24,7 @@ type SnakeCaseExpected = { my_count: number };
 type SnakeCaseTest = Assert<Equal<SnakeCaseOutput, SnakeCaseExpected>>;
 
 // Test 4: An upstream branded error is forwarded verbatim (PassThrough),
-// not replaced by the count document (spec F2 fix).
+// not replaced by the count document.
 type ErrSchema = PipeSafeError<"upstream">;
 type ErrCountOutput = ResolveCountOutput<ErrSchema, "total">;
 type ErrCountTest = Assert<Equal<ErrCountOutput, ErrSchema>>;

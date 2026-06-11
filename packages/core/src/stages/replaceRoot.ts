@@ -29,8 +29,8 @@ export type ReplaceRootQuery<Schema extends Document> = {
  * Resolves the output schema type for a $replaceRoot stage
  * The output is whatever newRoot resolves to.
  *
- * Narrowing uses a cheap single-key structural check (spec §3.4) instead of
- * the full `Query extends ReplaceRootQuery<Schema>` re-match — the method's
+ * Narrowing uses a cheap single-key structural check instead of a full
+ * `Query extends ReplaceRootQuery<Schema>` re-match — the method's
  * parameter position already validated the query.
  */
 export type ResolveReplaceRootOutput<

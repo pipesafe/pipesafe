@@ -21,15 +21,15 @@ export type ResolveSetQueryValueType<
   Key extends keyof Query,
 > =
   Query[Key] extends "$$REMOVE" ? never
-  : // InferNestedFieldReference key-dispatches expressions internally (spec
-    // §3.4) — the old `extends Expression<Schema>` structural pre-check
-    // instantiated the full expression union per value.
+  : // InferNestedFieldReference key-dispatches expressions internally; a
+    // structural `extends Expression<Schema>` pre-check here would
+    // instantiate the full expression union per value.
     InferNestedFieldReference<Schema, Query[Key]>;
 
 // ============================================================================
 // $set update machinery — applies a flattened update object to the schema
-// while preserving optionality semantics. Moved here from utils/core.ts:
-// set.ts is its only consumer (docs/type-standardisation-plan.md §3.6).
+// while preserving optionality semantics. Lives here because set.ts is its
+// only consumer.
 // ============================================================================
 
 // Extract ancestor paths from dotted keys
@@ -123,8 +123,7 @@ type PreservedBaseFields<Base, Updates extends Document> =
     : {}
   : {};
 
-// BaseObj is a hoisted cache parameter (spec §3.5 Pattern B): the
-// undefined-stripped base was previously re-spelled eight times below.
+// BaseObj caches the undefined-stripped base used throughout the body.
 type MergeSetPlainObjects<
   Base,
   Updates extends Document,
@@ -201,10 +200,8 @@ type RemoveNeverFields<T> =
       }
   : T; // Early exit: non-object types pass through unchanged
 
-// Single-walk classification of update keys (spec §3.5 Pattern B): the
-// required/optional key sets were previously computed by two independent,
-// exactly-complementary walks over Updates. One walk classifies; both key
-// sets derive from the (alias-cached) classification.
+// One walk classifies every update key; the required/optional key sets
+// both derive from the (alias-cached) classification.
 //
 // A key is required if it's a new field (not in Schema), was originally
 // required, or was originally optional but is being set to actual values
@@ -241,8 +238,7 @@ type OptionalUpdateKeys<
 // consistent ordering for better type inference and debugging
 // IMPORTANT: Preserves required/optional status from Output, not Schema
 // Conditional: only reorders if keys actually differ from schema order.
-// The single spelling of the reorder (previously duplicated in both
-// ReorderKeysToMatchSchema branches): schema-known keys first, then the rest.
+// Schema-known keys first, then the rest.
 type ReorderedKeys<Schema extends Document, Output extends Document> = Prettify<
   {
     [K in keyof Output as K extends keyof Schema ? K : never]: Output[K];
@@ -335,9 +331,8 @@ export type ResolveSetInlineSchema<Schema extends Document, Query> = {
   [Key in keyof Query]: ResolveSetQueryValueType<Schema, Query, Key>;
 };
 
-// Inner resolver with the inline schema hoisted to a parameter (spec §3.5
-// Pattern B) — previously spelled three times across the branches. Sits
-// INSIDE the PassThrough happy path so an upstream error never pays for it.
+// Inner resolver with the inline schema hoisted to a parameter. Sits INSIDE
+// the PassThrough happy path so an upstream error never pays for it.
 type ResolveSetOutputInner<Schema extends Document, Inline extends Document> =
   HasDottedKeys<Inline> extends true ?
     // Has dotted keys - flatten them into nested structure first
@@ -345,10 +340,9 @@ type ResolveSetOutputInner<Schema extends Document, Inline extends Document> =
   : // No dotted keys - skip FlattenDotSet entirely (Early Exit optimization)
     Prettify<ApplySetUpdates<Schema, Inline>>;
 
-// The old `Query extends SetQuery<Schema>` structural re-check is gone
-// (spec 3.4): Pipeline.set's generic constraint already validated the query
-// at the parameter position; re-proving it here instantiated the full
-// SetQuery mapped type (AnyLiteral + Expression unions) per call.
+// No `Query extends SetQuery<Schema>` re-check: Pipeline.set's generic
+// constraint already validated the query, and re-proving it would
+// instantiate the full SetQuery mapped type per call.
 export type ResolveSetOutput<Schema extends Document, Query> = PassThrough<
   Schema,
   ResolveSetOutputInner<Schema, ResolveSetInlineSchema<Schema, Query>>

@@ -448,7 +448,7 @@ export type {
 };
 
 // ============================================================================
-// Phase 1 — Prettify wrapping on ResolveMatchOutput
+// Prettify wrapping on ResolveMatchOutput
 // ============================================================================
 // Verifies that a multi-key match query against a multi-key schema resolves to
 // a flat object shape (no nested intersection chains in hover).
@@ -477,7 +477,7 @@ type PrettifyMatchTest = Assert<
 export type { PrettifyMatchTest };
 
 // ============================================================================
-// Phase 2 — Typed operator errors (Pilot A)
+// Typed operator errors
 // ============================================================================
 // `ComparatorMatchers<T>` now returns `PipeSafeError` in operand slot positions
 // when the operator is incompatible with the field type. The literal message

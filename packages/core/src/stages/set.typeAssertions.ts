@@ -1135,7 +1135,7 @@ export type {
 };
 
 // ============================================================================
-// Phase 1 — Prettify wrapping on ResolveSetOutput
+// Prettify wrapping on ResolveSetOutput
 // ============================================================================
 // Verifies that a multi-key set against a multi-key schema produces a flat
 // object shape, not nested intersection chains.

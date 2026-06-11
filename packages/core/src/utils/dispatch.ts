@@ -1,5 +1,5 @@
 /**
- * Operator-key dispatch kernel (docs/type-standardisation-plan.md §3.4).
+ * Operator-key dispatch kernel.
  *
  * The early-exit rule: decide what a value *is* from its `$`-prefixed keys
  * alone; only after dispatch, resolve and validate it against the schema.

@@ -861,7 +861,7 @@ export type {
 // Phase D — Typed projection errors
 // ============================================================================
 // `ResolveFieldValue` and `ResolveProjectOutput` now return branded
-// `PipeSafeError` types at three previously-silent failure sites:
+// `PipeSafeError` types at three otherwise-silent failure sites:
 //   1. Inclusion of a field that doesn't exist on the schema (`{ unknownKey: 1 }`).
 //   2. Invalid projection value (anything other than 0/1/ref/expr/object).
 //   3. Mixed inclusion and exclusion in the same projection.
