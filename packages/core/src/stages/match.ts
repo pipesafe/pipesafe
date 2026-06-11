@@ -104,12 +104,12 @@ export type RawMatchQuery<Schema extends Document> = {
   $expr?: unknown;
 };
 
+/** The top-level logical operators — single source for MatchQuery and the
+ * ResolveMatchOutput dispatch. */
+export type LogicalMatchOperators = "$and" | "$or" | "$nor";
+
 export type MatchQuery<Schema extends Document> =
-  | {
-      $and?: MatchQuery<Schema>[];
-      $or?: MatchQuery<Schema>[];
-      $nor?: MatchQuery<Schema>[];
-    }
+  | { [Op in LogicalMatchOperators]?: MatchQuery<Schema>[] }
   | RawMatchQuery<Schema>;
 
 // Type narrowing utilities for match queries
@@ -165,16 +165,6 @@ export type FilterUnion<Union extends Document, Query> =
     : never
   : never;
 
-// Extract only the query fields, removing MatchQuery intersection properties
-export type ExtractQueryFields<Q> = Omit<
-  Q,
-  | keyof MatchQuery<never> // Remove MatchQuery-specific properties
-  | "$and"
-  | "$or"
-  | "$nor"
-  | "$expr" // Remove logical operators
->;
-
 // Main type resolution with proper narrowing
 // Takes the schema explicitly since inference from MatchQuery is unreliable
 // PassThrough short-circuits when Schema is already a PipeSafeError (e.g. an
@@ -187,7 +177,7 @@ export type ExtractQueryFields<Q> = Omit<
 // Query at the parameter position.
 export type ResolveMatchOutput<Schema extends Document, Query> = PassThrough<
   Schema,
-  [keyof Query & ("$and" | "$or" | "$nor")] extends [never] ?
+  [keyof Query & LogicalMatchOperators] extends [never] ?
     Prettify<FilterUnion<Schema, Query>>
   : /* Logical operators - keep original schema */ Schema
 >;

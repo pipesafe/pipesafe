@@ -60,6 +60,17 @@ type HaveSameKeys<A, B> =
     : false
   : false;
 
+// The single spelling of the key-wise merge (previously duplicated across
+// all three MergeNested branches).
+type MergeAllKeys<A, B> = Prettify<{
+  [K in keyof A | keyof B]: K extends keyof B ?
+    K extends keyof A ?
+      MergeKeyValue<A[K], B[K]>
+    : B[K]
+  : K extends keyof A ? A[K]
+  : never;
+}>;
+
 // Conditional early exit: only check for identical types when keys match —
 // if keys differ the types can't be identical, so the expensive bidirectional
 // extends check is skipped.
@@ -69,28 +80,7 @@ export type MergeNested<A, B> =
     [A] extends [B] ?
       [B] extends [A] ?
         A // Early exit: types are exactly identical
-      : Prettify<{
-          [K in keyof A | keyof B]: K extends keyof B ?
-            K extends keyof A ?
-              MergeKeyValue<A[K], B[K]>
-            : B[K]
-          : K extends keyof A ? A[K]
-          : never;
-        }>
-    : Prettify<{
-        [K in keyof A | keyof B]: K extends keyof B ?
-          K extends keyof A ?
-            MergeKeyValue<A[K], B[K]>
-          : B[K]
-        : K extends keyof A ? A[K]
-        : never;
-      }>
+      : MergeAllKeys<A, B>
+    : MergeAllKeys<A, B>
   : // Keys differ - skip expensive check, go straight to merge
-    Prettify<{
-      [K in keyof A | keyof B]: K extends keyof B ?
-        K extends keyof A ?
-          MergeKeyValue<A[K], B[K]>
-        : B[K]
-      : K extends keyof A ? A[K]
-      : never;
-    }>;
+    MergeAllKeys<A, B>;

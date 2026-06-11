@@ -796,7 +796,11 @@ type CondBasicExpected = {
   email: string;
   age?: number;
   status: string;
-  displayName: string; // Both branches are string fields
+  // `$name` is optional: if $cond picks a missing field the result is
+  // missing, so the undefined survives (the old NonNullable stripping of
+  // $cond branch refs was a bug — $cond returns the branch verbatim,
+  // nulls/missing included; $ifNull is the operator that strips).
+  displayName: string | undefined;
 };
 
 type CondBasicTest = Assert<Equal<CondBasicResult, CondBasicExpected>>;

@@ -7,34 +7,15 @@ import {
 } from "../utils/objects";
 import { PassThrough, PipeSafeError } from "../utils/errors";
 import { HasOperatorKey } from "../utils/dispatch";
-import { ExpandDottedKey } from "../utils/paths";
+import { ExpandDottedKey, IsDottedKey } from "../utils/paths";
+import { WithoutDollar } from "../utils/strings";
 import {
   FieldReference,
-  InferFieldReference,
+  GetFieldTypeWithoutArrays,
   InferNestedFieldReference,
 } from "../elements/fieldReference";
 import { Expression, InferExpression } from "../elements/expressions";
 import { FieldSelector, GetFieldType } from "../elements/fieldSelector";
-
-// ============================================================================
-// Expression Operators for $project Stage
-// ============================================================================
-
-/**
- * Union of all expression operators for $project
- * Uses Expression which includes array expressions ($concatArrays, $size) and date expressions ($dateToString)
- * Extend this as we add more operators (e.g., string ops, math ops, etc.)
- */
-export type ProjectExpression<Schema extends Document> = Expression<Schema>;
-
-/**
- * Infer the result type of a project expression
- * Delegates to InferExpression which handles all expression operators
- */
-export type InferProjectExpression<
-  Schema extends Document,
-  Expr,
-> = InferExpression<Schema, Expr>;
 
 /**
  * $project stage query type
@@ -52,17 +33,17 @@ export type ProjectQuery<Schema extends Document> = {
     | true
     | false
     | FieldReference<Schema>
-    | ProjectExpression<Schema>
+    | Expression<Schema>
     | Document; // For nested object replacement
 };
 
 // ---------------------------------------------------------------------------
-// Projection mode — THE single pair (spec §3.5 Pattern A). `_id` is skipped
-// in both directions because it is MongoDB's sole exception to the no-mixing
-// rule (`{_id: 0, name: 1}` and `{_id: 1, name: 0}` are both valid).
-// Computed once per Pipeline.project call via method-level defaulted
-// generics and shared by the validate (parameter) and resolve (return)
-// positions. Uses `true extends {...}[keyof P]` (existential check) so a
+// Projection mode — THE single pair. `_id` is skipped in both directions
+// because it is MongoDB's sole exception to the no-mixing rule
+// (`{_id: 0, name: 1}` and `{_id: 1, name: 0}` are both valid). Both
+// ValidateProjectQuery and ResolveProjectOutput default their `Inc`/`Exc`
+// parameters from this pair (the second computation is an alias-cache hit;
+// see spec §6). Uses `true extends {...}[keyof P]` (existential check) so a
 // mixed query reports `true` for both — a naked indexed access would
 // collapse `true | false` to `boolean` and hide the mix.
 // ---------------------------------------------------------------------------
@@ -114,10 +95,8 @@ type ValidateProjectQueryKeys<Schema extends Document, P> = {
  * Schema-known keys pass through unchanged so chained-stage inference
  * via ResolveProjectOutput<Schema, P> sees the literal P.
  *
- * `Inc`/`Exc` are the hoisted projection modes (spec §3.5 Pattern A):
- * Pipeline.project computes them once as method-level defaulted generics
- * and passes them to both this type and ResolveProjectOutput. The defaults
- * make direct 2-arg annotation work too.
+ * `Inc`/`Exc` default from the consolidated NonId mode pair above; direct
+ * 2-arg annotation works thanks to the defaults.
  *
  * Cost: ~3,600 instantiations once at baseline; zero per-stage marginal
  * cost for valid inputs (TS folds the mapped type when shape matches).
@@ -145,10 +124,6 @@ export type ValidateProjectQuery<
     : ValidateProjectQueryKeys<Schema, P>
   : ValidateProjectQueryKeys<Schema, P>;
 
-// Helper: Check if a key contains dots (is a dotted key)
-type IsDottedKey<Key extends string> =
-  Key extends `${string}.${string}` ? true : false;
-
 // Helper: Resolve nested objects with field references and expressions.
 // InferNestedFieldReference key-dispatches expressions internally (spec
 // §3.4), so no separate ProjectExpression structural check is needed.
@@ -171,12 +146,14 @@ type ResolveFieldValue<Schema extends Document, Value, Key extends string> =
     // Exclusion - return never (field is excluded). Intentional: `never`
     // here means "the field is dropped from the output", which is correct.
     never
-  : Value extends FieldReference<Schema> ?
-    // Field reference - infer the referenced field type
-    InferFieldReference<Schema, Value>
+  : Value extends `$${string}` ?
+    // Field reference — cheap `$`-string dispatch (spec §3.4) instead of a
+    // full FieldReference<Schema> union membership test; unknown paths brand
+    // via GetFieldTypeWithoutArrays ("Field ... is not on the schema").
+    GetFieldTypeWithoutArrays<Schema, WithoutDollar<Value & string>>
   : HasOperatorKey<Value> extends true ?
     // $-keyed object = expression (operator-key dispatch, spec §3.4)
-    InferProjectExpression<Schema, Value>
+    InferExpression<Schema, Value>
   : Value extends Document ?
     // Nested object - recursively resolve field references and expressions within it
     ResolveNestedProjection<Schema, Value>
@@ -285,17 +262,19 @@ type ResolveExclusionMode<Schema extends Document, Query> = Prettify<
     [K in keyof Schema as K extends "_id" ? never
     : K extends keyof Query ?
       Query[K] extends 0 | false ? never
-      : Query[K] extends FieldReference<Schema> ?
+      : Query[K] extends `$${string}` ?
         never // Field references create new fields, don't exclude
       : Query[K] extends Document ?
-        never // Nested objects create new fields
+        never // Nested objects (incl. expressions) create new fields
       : K
     : K]: Schema[K];
   } & {
-    // Add fields from field references, expressions, and nested objects
+    // Add fields from field references, expressions, and nested objects.
+    // Cheap `$`-string / Document checks (spec §3.4) instead of full
+    // FieldReference/Expression union membership tests per key —
+    // ResolveFieldValue does the real dispatch and brands invalid values.
     [K in keyof Query as K extends "_id" ? never
-    : Query[K] extends FieldReference<Schema> ? K
-    : Query[K] extends ProjectExpression<Schema> ? K
+    : Query[K] extends `$${string}` ? K
     : Query[K] extends Document ? K
     : never]: ResolveFieldValue<Schema, Query[K], K & string>;
   }
@@ -305,8 +284,9 @@ type ResolveExclusionMode<Schema extends Document, Query> = Prettify<
  * Resolves the output schema type for a $project stage. PassThrough forwards
  * a branded `PipeSafeError` Schema unchanged so upstream errors short-circuit.
  *
- * `Inc`/`Exc` are the hoisted projection modes (spec §3.5 Pattern A) shared
- * with ValidateProjectQuery — computed once per Pipeline.project call. The
+ * `Inc`/`Exc` default from the consolidated NonId mode pair (the method-
+ * level hoist was dropped after the A/B comparison — the second computation
+ * is an alias-cache hit; see spec §6). The
  * `_id`-skipping semantics mean MongoDB's `_id` exception applies in both
  * directions: `{_id: 1, name: 0}` correctly dispatches to exclusion mode
  * (previously this falsely branded as mixed). Genuine non-`_id` mixing
