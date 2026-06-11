@@ -1,6 +1,6 @@
 import { FieldPath } from "../elements/fieldReference";
 import { Document, Prettify } from "../utils/objects";
-import { SplitPath } from "../utils/paths";
+import { IsDottedKey, SplitPath } from "../utils/paths";
 import { PassThrough } from "../utils/errors";
 
 export type UnsetQuery<Schema extends Document> =
@@ -38,15 +38,14 @@ type RemoveAtSegments<Schema extends Document, Segs extends readonly string[]> =
 // Remove a single field path from schema
 type RemoveFieldPath<Schema extends Document, Path extends string> =
   Path extends keyof Schema ? Omit<Schema, Path>
-  : Path extends `${string}.${string}` ?
-    RemoveAtSegments<Schema, SplitPath<Path>>
+  : IsDottedKey<Path> extends true ? RemoveAtSegments<Schema, SplitPath<Path>>
   : Schema;
 
 // Helper: Check if all paths are top-level (no dots) for early exit optimization
 type AllTopLevelPaths<Paths extends readonly string[]> =
   Paths extends readonly [infer First, ...infer Rest] ?
     First extends string ?
-      First extends `${string}.${string}` ?
+      IsDottedKey<First> extends true ?
         false // Found a dotted path
       : Rest extends readonly string[] ? AllTopLevelPaths<Rest>
       : true
@@ -57,7 +56,7 @@ type AllTopLevelPaths<Paths extends readonly string[]> =
 type ExtractTopLevelKeys<Paths extends readonly string[]> =
   Paths extends readonly [infer First, ...infer Rest] ?
     First extends string ?
-      First extends `${string}.${string}` ?
+      IsDottedKey<First> extends true ?
         // Dotted path - skip it
         Rest extends readonly string[] ?
           ExtractTopLevelKeys<Rest>

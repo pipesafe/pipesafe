@@ -9,7 +9,7 @@ import {
   Prettify,
   UnionToIntersection,
 } from "../utils/objects";
-import { FlattenDotSet, HasDottedKeys } from "../utils/paths";
+import { FlattenDotSet, HasDottedKeys, IsDottedKey } from "../utils/paths";
 
 export type SetQuery<Schema extends Document> = {
   [k: string]: AnyLiteral<Schema> | Expression<Schema> | "$$REMOVE";
@@ -37,7 +37,7 @@ export type ResolveSetQueryValueType<
 // This helps us only process relevant schema paths
 type ExtractAncestorPaths<T extends string> =
   T extends `${infer First}.${infer Rest}` ?
-    Rest extends `${string}.${string}` ?
+    IsDottedKey<Rest> extends true ?
       First | `${First}.${ExtractAncestorPaths<Rest>}`
     : First
   : never;
@@ -45,7 +45,7 @@ type ExtractAncestorPaths<T extends string> =
 // Get all ancestor paths from all dotted keys in a type
 type GetAllAncestorPaths<T> = {
   [K in keyof T]: K extends string ?
-    K extends `${string}.${string}` ?
+    IsDottedKey<K> extends true ?
       ExtractAncestorPaths<K>
     : never
   : never;
