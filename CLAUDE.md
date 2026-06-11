@@ -140,13 +140,12 @@ The type system is organized into modular building blocks located in `packages/c
   brand-carrying operand helpers are one-liners over these; messages are built with
   `RequiresMsg` (utils/errors.ts).
 
-- **expressions.ts**: hand-written per-operator types and unions, conformance-checked
-  against the `ExpressionSpec<Schema>` registry by
-  `expressions.conformance.typeAssertions.ts` (every hand-written type must equal its
-  registry-derived shape; the `Expression` union must cover exactly the registry keys;
-  fixed-return inference arms must match the registry's `returns`). Adding an operator =
-  hand-written type + registry entry + inference arm — the conformance file fails the
-  build if they drift.
+- **expressions.ts**: THE expression registry — `ExpressionSpec<Schema>` maps each
+  operator to `{ operand; returns }`. Per-operator types, category unions, `Expression`,
+  and the fixed-return arm of `InferExpression` are all derived. Adding an operator =
+  one registry entry (+ one `InferDependentExpression` arm if the result depends on the
+  literal arguments: `$concatArrays`, `$arrayElemAt`, `$filter`, `$ifNull`, `$cond`,
+  `$literal`).
 
 - **literals.ts**: Literal value type constraints
 
