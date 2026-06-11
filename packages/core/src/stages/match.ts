@@ -115,10 +115,10 @@ export type MatchQuery<Schema extends Document> =
 // Type narrowing utilities for match queries
 
 // Extract literal values from match operators.
-// ATTEMPT-B VARIATION 2: no hoisted FieldType cache parameter — each arm
-// spells GetFieldType lazily (only the taken branch instantiates it; repeat
-// hits are alias-cached). Measures the spec's "defaults evaluate eagerly"
-// caveat from the other direction vs attempt A's hoisted parameter.
+// No hoisted FieldType cache parameter (A/B comparison decision, spec §6):
+// each arm spells GetFieldType lazily — only the taken branch instantiates
+// it and repeats are alias-cached, so the hoist measured neutral and the
+// parameter was dropped.
 export type ExpectedValue<Schema, QueryKey extends string, QueryValue> =
   QueryValue extends (
     {

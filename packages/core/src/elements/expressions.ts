@@ -16,10 +16,11 @@ import { AnyLiteral } from "./literals";
 // ============================================================================
 // MongoDB Expression Operators — registry edition
 // ============================================================================
-// ATTEMPT-B VARIATION 1: `ExpressionSpec` is a CONFORMANCE registry — the
-// per-operator types, unions, and inference arms below are hand-written, and
+// `ExpressionSpec` is a CONFORMANCE registry (A/B comparison decision, spec
+// §6): the per-operator types, unions, and inference arms below are
+// hand-written — measurably cheaper than registry-derived mapped types — and
 // expressions.conformance.typeAssertions.ts asserts they stay in sync with
-// the registry. (Attempt A instead derives everything from the registry.)
+// the registry, so drift is a compile error.
 
 // ----------------------------------------------------------------------------
 // Operand helpers (kernel one-liners; see elements/operands.ts)
@@ -344,13 +345,13 @@ export interface ExpressionSpec<Schema extends Document> {
 }
 
 // ----------------------------------------------------------------------------
-// Hand-written expression types (ATTEMPT-B VARIATION 1)
+// Hand-written expression types (conformance-checked against the registry)
 // ----------------------------------------------------------------------------
-// Unlike attempt A (types derived from the registry via ExpressionFor), the
-// per-operator types and unions below are hand-written; ExpressionSpec above
-// is a CONFORMANCE CHECK only — expressions.conformance.typeAssertions.ts
+// The per-operator types and unions below are hand-written; ExpressionSpec
+// above is the conformance registry — expressions.conformance.typeAssertions.ts
 // asserts each hand-written type matches its registry entry, so drift is a
-// compile error instead of being structurally impossible.
+// compile error. (The registry-DERIVED alternative was measured ~6% more
+// expensive in whole-project instantiations; see spec §6.)
 
 /** Conformance helper: the registry-derived shape for one operator. */
 export type ExpressionFor<Schema extends Document, Op> =
@@ -977,8 +978,8 @@ export type InferExpression<Schema extends Document, Expr> =
     PipeSafeError<`Expression objects must have exactly one operator.`>
   : [OperatorKeyOf<Expr>] extends [LiteralDependentOps] ?
     InferDependentExpression<Schema, Expr>
-  : // ATTEMPT-B VARIATION 1: hand-written fixed-return arms instead of the
-  // registry's "returns" lookup (conformance assertions pin equivalence).
+  : // Hand-written fixed-return arms; conformance assertions pin their
+  // equivalence with the registry's "returns" entries.
   Expr extends { $size: any } ? number
   : Expr extends { $map: any } ? unknown[]
   : Expr extends { $sum: any } ? number
