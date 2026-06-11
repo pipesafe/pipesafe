@@ -90,6 +90,18 @@ type StringOperand<
  * Generic expression operands - can be any literal, null, field reference, or expression
  * Used for conditional operators like $ifNull and $cond that accept flexible types
  */
+/** The `[left, right]` pair shape shared by all binary comparison operators. */
+type ComparisonPair<Schema extends Document> = [
+  ComparisonOperand<Schema>,
+  ComparisonOperand<Schema>,
+];
+
+/** The `[left, right]` pair shape shared by the binary arithmetic operators. */
+type ArithmeticPair<Schema extends Document, Op extends string> = [
+  ArithmeticOperand<Schema, Op>,
+  ArithmeticOperand<Schema, Op>,
+];
+
 type ConditionalOperand<Schema extends Document> =
   | null
   | AnyLiteral<Schema>
@@ -256,10 +268,7 @@ export interface ExpressionSpec<Schema extends Document> {
   // --- Arithmetic operators (all return number) -----------------------------
   $add: { operand: ArithmeticOperand<Schema, "$add">[]; returns: number };
   $subtract: {
-    operand: [
-      ArithmeticOperand<Schema, "$subtract">,
-      ArithmeticOperand<Schema, "$subtract">,
-    ];
+    operand: ArithmeticPair<Schema, "$subtract">;
     returns: number;
   };
   $multiply: {
@@ -267,17 +276,11 @@ export interface ExpressionSpec<Schema extends Document> {
     returns: number;
   };
   $divide: {
-    operand: [
-      ArithmeticOperand<Schema, "$divide">,
-      ArithmeticOperand<Schema, "$divide">,
-    ];
+    operand: ArithmeticPair<Schema, "$divide">;
     returns: number;
   };
   $mod: {
-    operand: [
-      ArithmeticOperand<Schema, "$mod">,
-      ArithmeticOperand<Schema, "$mod">,
-    ];
+    operand: ArithmeticPair<Schema, "$mod">;
     returns: number;
   };
 
@@ -318,31 +321,31 @@ export interface ExpressionSpec<Schema extends Document> {
 
   // --- Comparison operators (all return boolean) ------------------------------
   $in: {
-    operand: [ComparisonOperand<Schema>, ComparisonOperand<Schema>];
+    operand: ComparisonPair<Schema>;
     returns: boolean;
   };
   $eq: {
-    operand: [ComparisonOperand<Schema>, ComparisonOperand<Schema>];
+    operand: ComparisonPair<Schema>;
     returns: boolean;
   };
   $ne: {
-    operand: [ComparisonOperand<Schema>, ComparisonOperand<Schema>];
+    operand: ComparisonPair<Schema>;
     returns: boolean;
   };
   $gt: {
-    operand: [ComparisonOperand<Schema>, ComparisonOperand<Schema>];
+    operand: ComparisonPair<Schema>;
     returns: boolean;
   };
   $gte: {
-    operand: [ComparisonOperand<Schema>, ComparisonOperand<Schema>];
+    operand: ComparisonPair<Schema>;
     returns: boolean;
   };
   $lt: {
-    operand: [ComparisonOperand<Schema>, ComparisonOperand<Schema>];
+    operand: ComparisonPair<Schema>;
     returns: boolean;
   };
   $lte: {
-    operand: [ComparisonOperand<Schema>, ComparisonOperand<Schema>];
+    operand: ComparisonPair<Schema>;
     returns: boolean;
   };
 }
@@ -539,7 +542,10 @@ export type Expression<Schema extends Document> = ExpressionFor<
 
 /**
  * Operators whose result type depends on the literal arguments rather than
- * being fixed in the registry.
+ * being fixed in the registry. KEEP IN LOCKSTEP with
+ * `InferDependentExpression`'s arms below — a missed entry degrades
+ * gracefully to the registry's declared (widest) `returns`, it does not
+ * produce a wrong type.
  */
 type LiteralDependentOps =
   | "$concatArrays"
@@ -585,38 +591,44 @@ type InferArrayElementType<Schema extends Document, ArraySource> =
   : unknown;
 
 /**
- * Helper to infer operand type for $ifNull (filters out null - $ifNull never
- * returns null literals). Non-expression operands are detected via the
- * NotAnExpression sentinel and treated as literals.
+ * Shared operand inference for the conditional operators. The only semantic
+ * difference between $ifNull and $cond is null handling, captured by
+ * `SwallowsNull`: $ifNull returns the first NON-null operand, so null
+ * literals contribute `never` and nullable field references are stripped;
+ * $cond returns whichever branch is chosen, nulls included. Non-expression
+ * operands are detected via the NotAnExpression sentinel and treated as
+ * literals.
  */
-type InferIfNullOperand<Schema extends Document, Operand> =
+type InferConditionalOperandValue<
+  Schema extends Document,
+  Operand,
+  SwallowsNull extends boolean,
+> =
   Operand extends null ?
-    never // $ifNull skips null literals, they're never returned
+    SwallowsNull extends true ?
+      never // $ifNull skips null literals, they're never returned
+    : null // $cond CAN return null if it's in a branch
   : Operand extends FieldReference<Schema> ?
-    NonNullable<InferFieldReference<Schema, Operand>>
+    SwallowsNull extends true ?
+      NonNullable<InferFieldReference<Schema, Operand>>
+    : InferFieldReference<Schema, Operand> // $cond keeps the field's null
   : Operand extends (infer T)[] ?
     T // Array literal
   : InferExpression<Schema, Operand> extends infer R ?
     [R] extends [NotAnExpression] ?
-      NonNullable<Operand> // Not an expression, treat as literal
+      Operand // Not an expression, treat as literal
     : R // Is an expression — single dispatch, no second inference path
   : never;
 
-/**
- * Helper to infer operand type for $cond (includes null - either branch can be returned)
- */
-type InferCondOperand<Schema extends Document, Operand> =
-  Operand extends null ?
-    null // $cond CAN return null if it's in a branch
-  : Operand extends FieldReference<Schema> ?
-    NonNullable<InferFieldReference<Schema, Operand>>
-  : Operand extends (infer T)[] ?
-    T // Array literal
-  : InferExpression<Schema, Operand> extends infer R ?
-    [R] extends [NotAnExpression] ?
-      NonNullable<Operand> // Not an expression, treat as literal
-    : R // Is an expression — single dispatch, no second inference path
-  : never;
+type InferIfNullOperand<
+  Schema extends Document,
+  Operand,
+> = InferConditionalOperandValue<Schema, Operand, true>;
+
+type InferCondOperand<
+  Schema extends Document,
+  Operand,
+> = InferConditionalOperandValue<Schema, Operand, false>;
 
 /**
  * Helper to infer the union of all operand types in $ifNull

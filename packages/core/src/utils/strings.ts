@@ -16,7 +16,6 @@ export type IndexStr<A extends unknown[]> =
   IsTuple<A> extends true ? `${TupleIndex<A> & number}` : `${number}`;
 
 // Define alphanumeric characters
-export type SpecialCharacters = " " | "." | "," | ";";
 export type Digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
 export type LowerAlphabet =
   | "a"

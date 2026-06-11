@@ -760,21 +760,31 @@ the spec flagged as having alternatives
 were fully green (per-package `tsc`, build, lint, 56/56 tests, identical brand
 messages and dispatch semantics, clean hovers).
 
-| Whole-project instantiations | anchor  | attempt A        | attempt B            |
-| ---------------------------- | ------- | ---------------- | -------------------- |
-|                              | 990,220 | 637,808 (−35.6%) | **598,225 (−39.6%)** |
+| Whole-project instantiations | anchor  | attempt A        | attempt B        | consolidated         |
+| ---------------------------- | ------- | ---------------- | ---------------- | -------------------- |
+|                              | 990,220 | 637,808 (−35.6%) | 598,225 (−39.6%) | **599,838 (−39.4%)** |
 
-**Consolidated tree = attempt B**, with these per-part verdicts:
+**Confounding correction**: the consolidated tree (registry-DERIVED types +
+B's variations 2–3) measures within noise of attempt B — so the A↔B gap was
+caused almost entirely by variations 2–3 (the eager `ExpectedValue` default
+and the method-level projection hoist, ~38K together), **not** by
+derived-vs-hand-written types (~+1.6K, ~0.3%, noise). Attempt B varied three
+things at once; the consolidated run is the controlled experiment.
 
-1. **Expression/accumulator types: hand-written + conformance registry** (the
-   risk table's pre-authorized fallback) beat registry-DERIVED types by ~6%
-   whole-project instantiations — `ExpressionFor`'s distributive mapped types
-   are paid per use, hand-written unions are direct references. The
-   conformance file (`expressions.conformance.typeAssertions.ts`, 34
-   assertions) downgrades drift-safety from "structurally impossible" to
-   "compile error", judged acceptable for the compile-cost win. §2
-   recommendation 1's derivation is therefore superseded; the registry remains
-   the single source of truth _for review_, enforced by assertion.
+**Consolidated tree = attempt A's registry derivation + attempt B's
+variations 2–3**, with these per-part verdicts:
+
+1. **Expression/accumulator types: registry-DERIVED (attempt A) — maintainer
+   decision, vindicated by the controlled measurement.** Initially the
+   hand-written + conformance variant appeared ~6% cheaper, but the
+   consolidated run shows that gap belonged to variations 2–3 (see the
+   correction above): derived-vs-hand-written is ~0.3% (noise). A depth probe
+   additionally showed zero depth cost (identical breaking depth of 50 in
+   validation; 999+ levels clean in inference — the derivation resolves once
+   per schema and is alias-cached). Deriving from the registry means one edit
+   site per operator and **no conformance file to keep up to date**, at
+   essentially no compile cost. The hand-written variant remains on
+   `claude/gallant-newton-yrvl9i-attempt-b` for the record.
 2. **Method-level projection-mode hoist (Pattern A): dropped.** Measured
    _worse_ than defaulted parameters on the two types: the cross-position
    sharing rationale was wrong — the resolve position's default is an

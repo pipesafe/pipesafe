@@ -11,24 +11,8 @@ import {
 } from "../utils/objects";
 import { FlattenDotSet, HasDottedKeys } from "../utils/paths";
 
-export type RemoveNever<T> = Prettify<{
-  [K in keyof T as [T[K]] extends [never] ? never : K]: T[K];
-}>;
-
-/**
- * Transformation expressions - aggregation operators that transform values
- * These are not literals, but expressions that compute new values
- * Uses Expression which includes array expressions and date expressions
- */
-export type TransformationExpression<Schema extends Document> =
-  Expression<Schema>;
-// Future: Add more transformation operators here (e.g., string ops, math ops, etc.)
-
 export type SetQuery<Schema extends Document> = {
-  [k: string]:
-    | AnyLiteral<Schema>
-    | TransformationExpression<Schema>
-    | "$$REMOVE";
+  [k: string]: AnyLiteral<Schema> | Expression<Schema> | "$$REMOVE";
 };
 
 export type ResolveSetQueryValueType<
@@ -257,6 +241,16 @@ type OptionalUpdateKeys<
 // consistent ordering for better type inference and debugging
 // IMPORTANT: Preserves required/optional status from Output, not Schema
 // Conditional: only reorders if keys actually differ from schema order.
+// The single spelling of the reorder (previously duplicated in both
+// ReorderKeysToMatchSchema branches): schema-known keys first, then the rest.
+type ReorderedKeys<Schema extends Document, Output extends Document> = Prettify<
+  {
+    [K in keyof Output as K extends keyof Schema ? K : never]: Output[K];
+  } & {
+    [K in keyof Output as K extends keyof Schema ? never : K]: Output[K];
+  }
+>;
+
 type ReorderKeysToMatchSchema<
   Schema extends Document,
   Output extends Document,
@@ -264,22 +258,8 @@ type ReorderKeysToMatchSchema<
   keyof Output extends keyof Schema ?
     keyof Schema extends keyof Output ?
       Output // Keys match exactly - no reordering needed
-    : {
-      // Keys differ - need reordering
-      [K in keyof Output as K extends keyof Schema ? K : never]: Output[K];
-    } & {
-      [K in keyof Output as K extends keyof Schema ? never : K]: Output[K];
-    } extends infer Reordered ?
-      Prettify<Reordered>
-    : never
-  : {
-    // Keys differ - need reordering
-    [K in keyof Output as K extends keyof Schema ? K : never]: Output[K];
-  } & {
-    [K in keyof Output as K extends keyof Schema ? never : K]: Output[K];
-  } extends infer Reordered ?
-    Prettify<Reordered>
-  : never;
+    : ReorderedKeys<Schema, Output>
+  : ReorderedKeys<Schema, Output>;
 
 // Selective path processing — only process schema paths that are ancestors of
 // dotted keys. Reduces type instantiation depth when the schema has many

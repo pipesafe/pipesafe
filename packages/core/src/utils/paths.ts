@@ -31,11 +31,14 @@ export type ExpandDottedKey<
   Value,
 > = BuildNestedFromSegments<SplitPath<Key>, Value>;
 
+/** THE dotted-key predicate — the single spelling of "does this key contain a dot". */
+export type IsDottedKey<Key> = Key extends `${string}.${string}` ? true : false;
+
 // Check if a type has any dotted keys (keys containing a dot)
 export type HasDottedKeys<T> =
   {
     [K in keyof T]: K extends string ?
-      K extends `${string}.${string}` ?
+      IsDottedKey<K> extends true ?
         true
       : never
     : never;
@@ -47,7 +50,7 @@ export type HasDottedKeys<T> =
 // Only keeps the non-dotted (plain) keys.
 export type RemoveDottedKeys<T> = {
   [K in keyof T as K extends string ?
-    K extends `${string}.${string}` ?
+    IsDottedKey<K> extends true ?
       never
     : K
   : K]: T[K];
