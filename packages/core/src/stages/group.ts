@@ -52,10 +52,10 @@ type FlexibleAccumulatorOperand<Schema extends Document> =
   | Expression<Schema>;
 
 /**
- * ATTEMPT-B VARIATION 1: AccumulatorSpec is a CONFORMANCE registry — the
+ * AccumulatorSpec is a CONFORMANCE registry (mirroring ExpressionSpec): the
  * hand-written AccumulatorFunction union and resolver arms below are checked
- * against it by expressions.conformance.typeAssertions.ts. (Attempt A
- * derives them from the registry instead.)
+ * against it by expressions.conformance.typeAssertions.ts, so drift is a
+ * compile error.
  */
 export interface AccumulatorSpec<Schema extends Document> {
   $sum: { operand: NumericAccumulatorOperand<Schema, "$sum">; returns: number };
@@ -80,7 +80,7 @@ export type AccumulatorFor<Schema extends Document, Op> =
     { [K in Op]: AccumulatorSpec<Schema>[K]["operand"] }
   : never;
 
-// Hand-written union (variation 1) — conformance-checked against the registry.
+// Hand-written union — conformance-checked against the registry.
 export type AccumulatorFunction<Schema extends Document> =
   | { $sum: NumericAccumulatorOperand<Schema, "$sum"> }
   | { $avg: NumericAccumulatorOperand<Schema, "$avg"> }
@@ -94,7 +94,7 @@ export type AccumulatorFunction<Schema extends Document> =
 
 /**
  * Key-dispatched accumulator result inference; fixed returns hand-written
- * (variation 1), operand-dependent arms explicit as in attempt A.
+ * (conformance-checked), operand-dependent arms explicit.
  */
 export type ResolveAccumulatorFunction<Schema extends Document, Accumulator> =
   Accumulator extends { $sum: any } ? number

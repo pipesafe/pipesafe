@@ -408,11 +408,10 @@ export class Pipeline<
     ]);
   }
 
-  // ATTEMPT-B VARIATION 3 (spec 3.5 Pattern A comparison): no method-level
-  // mode hoist — ValidateProjectQuery and ResolveProjectOutput each compute
-  // the projection modes via their own defaulted parameters (twice per call
-  // instead of once). Measures whether the hoist pays for its signature
-  // complexity.
+  // No method-level mode hoist (A/B comparison decision, spec 6): the
+  // validate and resolve positions compute the projection modes via their
+  // own defaulted parameters — the second computation is an alias-cache hit,
+  // so hoisting saved nothing and added signature/inference complexity.
   project<const P>(
     $project: ValidateProjectQuery<PreviousStageDocs, P>
   ): Pipeline<

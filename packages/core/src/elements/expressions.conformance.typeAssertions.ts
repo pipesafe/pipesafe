@@ -1,9 +1,10 @@
 /**
- * ATTEMPT-B VARIATION 1 conformance guard: the hand-written expression and
- * accumulator types must stay in sync with their registries
- * (`ExpressionSpec` / `AccumulatorSpec`). In attempt A this sync is
- * structural (everything is derived); here it is asserted, so drift is a
- * compile error rather than impossible.
+ * Conformance guard: the hand-written expression and accumulator types must
+ * stay in sync with their registries (`ExpressionSpec` / `AccumulatorSpec`).
+ * Hand-written types were chosen over registry-DERIVED ones after the A/B
+ * comparison (~6% fewer whole-project instantiations; see
+ * docs/type-standardisation-plan.md §6) — this file is what makes that
+ * choice safe: drift is a compile error rather than impossible.
  */
 
 import { Assert, Equal } from "../utils/tests";

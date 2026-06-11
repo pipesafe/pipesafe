@@ -1,6 +1,6 @@
 # Type System Standardisation Plan
 
-Status: proposal (not yet implemented)
+Status: IMPLEMENTED (see §6 for the A/B comparison decisions)
 Scope: `@pipesafe/core` type-level code — `src/elements/`, `src/stages/`, `src/utils/core.ts`, `src/pipeline/Pipeline.ts`.
 
 This document reviews the current type architecture, answers the question
@@ -748,3 +748,47 @@ instantiation counts.
 | Registry indirection worsening hovers         | Registry is internal only — user-facing parameter types remain plain (`Expression<Schema>` stays a union alias); if a derived union displays worse than the hand-written one, fall back to hand-written union + registry-driven conformance assertion instead.                                                                                     |
 | Public API breakage                           | Only `limit`/`skip`/`sample`/`count` resolvers, `MergeOptions`, `SampleQuery` and the `utils/core` quintet are exported. The quintet isn't renamed — `index.ts` just re-points at the new modules. The renamed/reordered ones keep `@deprecated` aliases until next major, isolated in `src/compat.ts` (3.7) so removal is a single file deletion. |
 | Hoisted defaults computed on error paths      | 3.5 caveat: defaults live on inner aliases behind `PassThrough`; pinned by a contract assertion in Phase 5.                                                                                                                                                                                                                                        |
+
+---
+
+## 6. Decisions from the A/B implementation comparison
+
+The plan was implemented twice — attempt A exactly as specified
+(`claude/gallant-newton-yrvl9i-attempt-a`), attempt B varying the three parts
+the spec flagged as having alternatives
+(`claude/gallant-newton-yrvl9i-attempt-b`) — then consolidated. Both attempts
+were fully green (per-package `tsc`, build, lint, 56/56 tests, identical brand
+messages and dispatch semantics, clean hovers).
+
+| Whole-project instantiations | anchor  | attempt A        | attempt B            |
+| ---------------------------- | ------- | ---------------- | -------------------- |
+|                              | 990,220 | 637,808 (−35.6%) | **598,225 (−39.6%)** |
+
+**Consolidated tree = attempt B**, with these per-part verdicts:
+
+1. **Expression/accumulator types: hand-written + conformance registry** (the
+   risk table's pre-authorized fallback) beat registry-DERIVED types by ~6%
+   whole-project instantiations — `ExpressionFor`'s distributive mapped types
+   are paid per use, hand-written unions are direct references. The
+   conformance file (`expressions.conformance.typeAssertions.ts`, 34
+   assertions) downgrades drift-safety from "structurally impossible" to
+   "compile error", judged acceptable for the compile-cost win. §2
+   recommendation 1's derivation is therefore superseded; the registry remains
+   the single source of truth _for review_, enforced by assertion.
+2. **Method-level projection-mode hoist (Pattern A): dropped.** Measured
+   _worse_ than defaulted parameters on the two types: the cross-position
+   sharing rationale was wrong — the resolve position's default is an
+   alias-cache hit of the validate position's computation. The consolidated
+   NonId mode pair (and its `{_id: 1, name: 0}` bugfix) stays.
+3. **`ExpectedValue` FieldType hoist (Pattern B row 2): dropped, measured
+   neutral.** Conditional arms are lazy and repeats alias-cached; the
+   parameter bought nothing.
+4. Everything else (phases 0–3, dispatch kernel and semantics, utils split,
+   operand kernel, post-distribution `SchemaRefTypeMap`, tail-recursive
+   `SplitPath`/`RemoveAtSegments`, set/unset hoists, compat rule, docs) was
+   identical in both attempts and carries through unchanged.
+
+Spec corrections discovered during implementation (amended in place above):
+the per-package `tsc` gate (§4), the count compat-alias impossibility (§3.7),
+the union-distribution unsoundness of defaulted schema-derived parameters
+(§3.5 — see `SchemaRefTypeMap`), and additional dead types (F5).
