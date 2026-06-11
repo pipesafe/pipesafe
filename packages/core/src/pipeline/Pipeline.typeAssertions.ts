@@ -151,7 +151,7 @@ export {
 };
 
 // ============================================================================
-// Phase 4 — Short-circuit propagation
+// Short-circuit propagation
 // ============================================================================
 // Each `Resolve<Stage>Output<Schema, ...>` is wrapped in `PassThrough<Schema,
 // ...>`. When Schema is already a branded `PipeSafeError`, every stage is a

@@ -1,6 +1,5 @@
 /**
- * Stage contract conformance assertions (Phase 0 of
- * docs/type-standardisation-plan.md).
+ * Stage contract conformance assertions.
  *
  * Pins the per-stage contract:
  *   1. Every non-terminal `Resolve*Output` forwards a `PipeSafeError` schema
@@ -10,20 +9,16 @@
  *      method-level matrix; it does not duplicate that block.
  *   2. Each Pipeline method's *return type* forwards an error schema —
  *      observable proof that the method is wired to its module's resolver.
- *   3. Dispatch semantics for expressions (operator-key dispatch, spec
- *      §3.4) — pinned as targets in Phase 0, delivered by Phase 4's
- *      registry rebuild.
+ *   3. Operator-key dispatch semantics for expressions (forgiving
+ *      inference, the NotAnExpression sentinel, the exactly-one-operator
+ *      brand).
  *
- * Known gaps recorded here (see spec §4 Phase 0):
- *   - count: resolver never saw the schema (F2) — FIXED in Phase 3
- *     (ResolveCountOutput<Schema, FieldName> + PassThrough); markers flipped
- *     to real assertions.
- *   - sort: Pipeline.sort didn't reference ResolveSortOutput, but the gap
- *     is behaviorally unobservable (ResolveSortOutput<S> ≡ S); the
- *     method-level assertion below passes either way. Wired in Phase 1.
- *   - unwind: the UnwindPath brand never fires at the chained call site;
- *     this is a hover-quality gap with no acceptance difference, pinned by
- *     a callSite fixture added in Phase 1 (Pipeline.callSite.typeAssertions.ts).
+ * Notes:
+ *   - sort's method-level assertion passes trivially because
+ *     ResolveSortOutput<S> ≡ S; it pins the wiring, not behavior.
+ *   - unwind's call-site brand is pinned by a fixture in
+ *     Pipeline.callSite.typeAssertions.ts (a hover-quality concern, with no
+ *     acceptance difference at the type level).
  */
 
 import { Pipeline, InferOutputType } from "../pipeline/Pipeline";
@@ -45,8 +40,8 @@ type _GraphLookupPassthrough = Assert<
   Equal<ResolveGraphLookupOutput<_Err, "related", { id: string }>, _Err>
 >;
 
-// count forwards an upstream error verbatim (F2 — fixed in Phase 3 when the
-// resolver gained its Schema parameter and PassThrough wrap).
+// count forwards an upstream error verbatim — its resolver takes the schema
+// precisely so PassThrough can do this.
 type _CountPassthrough = Assert<Equal<ResolveCountOutput<_Err, "total">, _Err>>;
 
 // ============================================================================
@@ -114,7 +109,7 @@ type _CountMethodForwards = Assert<
 >;
 
 // ============================================================================
-// 3. Dispatch semantics (spec §3.4) — delivered by the Phase-4 registry
+// 3. Operator-key dispatch semantics
 // ============================================================================
 
 type _DispatchSchema = { items: number[]; name: string };

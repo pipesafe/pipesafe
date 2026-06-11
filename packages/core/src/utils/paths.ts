@@ -11,10 +11,8 @@ import {
 } from "./objects";
 
 /**
- * Tail-recursive path splitter (spec §3.5 Pattern C): the accumulator makes
- * the recursion eligible for TS's tail-recursion elimination (~1000-depth
- * budget instead of ~50), so deep dotted paths no longer need hand-batched
- * 2-levels-per-step parsing.
+ * Tail-recursive path splitter: the accumulator makes the recursion eligible
+ * for TS's tail-recursion elimination (~1000-depth budget instead of ~50).
  */
 export type SplitPath<S extends string, Acc extends string[] = []> =
   S extends `${infer Head}.${infer Tail}` ? SplitPath<Tail, [...Acc, Head]>

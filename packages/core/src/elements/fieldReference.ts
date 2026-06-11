@@ -24,11 +24,11 @@ export type FieldPath<T> =
 
 export type FieldReference<T extends Document> = DollarPrefixed<FieldPath<T>>;
 
-// NOTE (F7 asymmetry, deliberate): unknown paths brand with PipeSafeError
-// here, while the field-selector twin (GetFieldType in fieldSelector.ts)
-// resolves them to `never` — its `never` is load-bearing for union
-// narrowing. FullPath is an accumulator parameter so recursion doesn't
-// lose the original path for the error message (spec §3.5 precedent).
+// Deliberate asymmetry: unknown paths brand with PipeSafeError here, while
+// the field-selector twin (GetFieldType in fieldSelector.ts) resolves them
+// to `never` — its `never` is load-bearing for union narrowing. FullPath is
+// an accumulator so recursion doesn't lose the original path for the
+// error message.
 export type GetFieldTypeWithoutArrays<
   Schema,
   Path extends string,
@@ -57,17 +57,14 @@ export type InferFieldReference<
 > = GetFieldTypeWithoutArrays<Schema, WithoutDollar<Ref>>;
 
 /**
- * One ref→type map per schema (spec §3.5 Pattern B, the library's biggest
- * recomputation sink): every field reference mapped to its inferred type,
- * computed once per (distributed) schema and alias-cached — so the ~10
- * distinct target types used across operand helpers all filter the same
- * precomputed map instead of re-running InferFieldReference per target.
+ * One ref→type map per schema: computed once per (distributed) schema member
+ * and alias-cached, so every target type used across operand helpers filters
+ * the same precomputed map instead of re-running InferFieldReference.
  *
- * NOTE: deliberately applied AFTER `Schema extends unknown` distribution in
- * the consumers below. A defaulted parameter (`M = SchemaRefTypeMap<Schema>`)
- * would be unsound: defaults substitute at instantiation, before the body's
- * conditional distributes a union schema, so the map would be built over the
- * whole union (per-path cross-member unions; brand-skip misfires).
+ * Deliberately applied AFTER `Schema extends unknown` distribution in the
+ * consumers below. A defaulted parameter (`M = SchemaRefTypeMap<Schema>`)
+ * would be unsound: defaults substitute before the body's conditional
+ * distributes a union schema, so the map would be built over the whole union.
  */
 type SchemaRefTypeMap<Schema extends Document> = {
   [K in FieldReference<Schema>]: InferFieldReference<Schema, K>;
@@ -131,14 +128,13 @@ export type InferNestedFieldReference<Schema extends Document, Obj> =
   : Obj extends unknown[] ? InferNestedFieldReferenceArray<Schema, Obj>
   : Obj extends object ?
     Obj extends NonExpandableTypes ? Obj
-    : // Tier-2 operator-key dispatch (spec §3.4): only objects carrying a
-    // `$`-prefixed key are candidates for expression inference — `$`-less
-    // objects are nested literals and never pay for expression dispatch.
-    // This is the hottest path in the library (every value of every
-    // $set/$project/$group literal flows through here). InferExpression is
-    // forgiving (registry dispatch): malformed operands keep the operator's
-    // declared result type while the operand brand reports the error at the
-    // input position.
+    : // Only objects carrying a `$`-prefixed key are candidates for
+    // expression inference — `$`-less objects are nested literals and never
+    // pay for expression dispatch. This is the hottest path in the library
+    // (every value of every $set/$project/$group literal flows through
+    // here). InferExpression is forgiving: malformed operands keep the
+    // operator's declared result type while the operand brand reports the
+    // error at the input position.
     HasOperatorKey<Obj> extends true ? InferExpression<Schema, Obj>
     : InferNestedFieldReferenceObject<Schema, Obj>
   : Obj; // Handles literals (string, number, boolean, null, undefined, etc.)

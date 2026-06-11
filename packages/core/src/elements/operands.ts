@@ -1,8 +1,6 @@
 /**
- * Operand kernel (docs/type-standardisation-plan.md §3.2).
- *
- * Two primitives back every brand-carrying operand helper in the library.
- * They encode the two distinct patterns identified in the spec:
+ * Operand kernel — two primitives back every brand-carrying operand helper
+ * in the library:
  *
  * 1. `FieldOperand` — *field-position* check (e.g. `$gte` under a field
  *    selector in `$match`): given the field's already-resolved type `T`,

@@ -344,7 +344,7 @@ type ErrorSchema = {
 
 // Error cases — InferFieldReference's `Ref extends FieldReference<Schema>`
 // constraint still rejects bad paths at the call site, so these are still
-// `@ts-expect-error`. Phase 3 (Pilot B) adds a separate signal: when the
+// `@ts-expect-error`. A separate signal exists too: when the
 // underlying `GetFieldTypeWithoutArrays` is invoked WITHOUT the constraint
 // (e.g. through widened generics, casts, or downstream consumers), the leaf
 // resolves to a branded `PipeSafeError` carrying the offending segment + full
@@ -369,7 +369,7 @@ type _InvalidField5 = InferFieldReference<ErrorSchema, "$array.nonexistent">;
 type _InvalidField6 = InferFieldReference<ErrorSchema, "$a.b.c.d.e.f">;
 
 // ---------------------------------------------------------------------------
-// Phase 3 — Branded error fires from the unconstrained helper
+// Branded error fires from the unconstrained helper
 // ---------------------------------------------------------------------------
 // `GetFieldTypeWithoutArrays<S, P>` doesn't constrain P; when P is invalid
 // the leaf resolves to a `PipeSafeError` whose message names the failed

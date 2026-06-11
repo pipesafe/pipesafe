@@ -52,8 +52,8 @@ type FlexibleAccumulatorOperand<Schema extends Document> =
   | Expression<Schema>;
 
 /**
- * Accumulator registry (spec §2 recommendation 2, mirroring ExpressionSpec):
- * one entry per accumulator holding its operand shape and, for fixed-return
+ * Accumulator registry (mirroring ExpressionSpec): one entry per
+ * accumulator holding its operand shape and, for fixed-return
  * accumulators ($sum/$avg/$count), its result type. `AccumulatorFunction`
  * and the fixed arms of `ResolveAccumulatorFunction` are derived from it —
  * adding an accumulator means adding one entry (plus one dependent arm if

@@ -201,16 +201,17 @@ TODO: Document the rest of the stages
 ### Workflow for Type Assertions
 
 1. **Use IDE/LSP for fast iteration** - The TypeScript LSP provides instant feedback without running builds
-2. **When types don't match**, use `inspect-types.ts` to see the actual inferred type:
+2. **The real type gate is per-package**: `cd packages/core && bunx tsc --noEmit` (same for manifold, after a fresh core `bun run build`). The root `bun run typecheck` resolves project references to built `dist/` declarations and does NOT re-check `packages/*/src` — including the `*.typeAssertions.ts` files
+3. **When types don't match**, use `inspect-types.ts` to see the actual inferred type:
    ```bash
    bun run tsx .claude/inspect-types.ts <variableName> [fileName]
    # Example:
    bun run tsx .claude/inspect-types.ts IfNullStringResult src/stages/set.typeAssertions.ts
    ```
-3. **Compare actual vs expected** and determine which is correct:
+4. **Compare actual vs expected** and determine which is correct:
    - If the **actual type is correct** → update the test expectation
    - If the **expected type is correct** → fix the implementation
-4. **Run `bun run build`** for final validation before committing
+5. **Run `bun run build`** for final validation before committing
 
 ### Local MongoDB Testing
 
@@ -284,7 +285,7 @@ from `RequiresMsg` (utils/errors.ts):
 Different stages need different patterns to make brands fire at the chained call site:
 
 - **Direct typing** (`(\$q: Q<Schema>)` — no generic): `sort`. Use when the query type is a finite-key mapped type and the return type doesn't need the literal query.
-- **Validation-mapped wrapper** (`<const P, IncMode = ..., ExcMode = ...>(\$q: ValidateXQuery<Schema, P, IncMode, ExcMode>)`): `project`. Use for stages with `[key: string]:` index signatures where direct typing alone wouldn't trigger excess-property checking. Output type still uses the literal `P` for narrowing. The defaulted trailing generics are _hoisted_ computations (see Hoisting patterns) shared by the parameter and return positions.
+- **Validation-mapped wrapper** (`<const P>(\$q: ValidateXQuery<Schema, P>)`): `project`. Use for stages with `[key: string]:` index signatures where direct typing alone wouldn't trigger excess-property checking. Output type still uses the literal `P` for narrowing. The validate and resolve types each default their mode parameters from the same alias — the second computation is an alias-cache hit, so the modes are NOT hoisted into method generics.
 - **Generic constraint** (`<const M extends Q<Schema>>(\$q: M)`): `match`, `set`, `group`, `replaceRoot`, `facet`. Default pattern. Inner-value brands (e.g. `$gte` on a string) fire from the constraint check; call-site excess-property checking is suppressed but the resulting "is not assignable to PipeSafeError" message is still readable.
 
 ### Error code: prefer TS2322 over TS2353
@@ -353,13 +354,14 @@ Inference is **forgiving**: a malformed operand does not change the inferred kin
 
 ### Hoisting patterns (depth & recomputation)
 
-- **Method-level defaulted generics** share one computation between the parameter
-  (validate) and return (resolve) positions — see `Pipeline.project`'s
-  `IncMode`/`ExcMode`.
-- **Defaulted cache parameters** on deep helpers replace re-spelled subexpressions
-  (`ExpectedValue`'s `FieldType`, `MergeSetPlainObjects`' `BaseObj`,
-  `RemoveFieldPaths`' `TopOnly`/`Keys`). Keep them on inner aliases _behind_
-  `PassThrough` — defaults evaluate eagerly.
+- **Don't hoist what the alias cache already shares**: identical alias calls
+  (same type args) are cache hits, so a computation used at both the parameter
+  and return positions costs once either way. Method-level hoisted generics and
+  an `ExpectedValue` cache parameter were both measured neutral and removed.
+- **Defaulted cache parameters** on deep helpers replace re-spelled
+  subexpressions that are NOT identical alias calls (`MergeSetPlainObjects`'
+  `BaseObj`, `RemoveFieldPaths`' `TopOnly`/`Keys`). Keep them on inner aliases
+  _behind_ `PassThrough` — defaults evaluate eagerly.
 - **Distribution caveat**: a defaulted parameter computed from `Schema` is unsound if
   the body distributes a union schema (defaults substitute before distribution).
   Distribute first, then apply a cached helper alias per member — see
