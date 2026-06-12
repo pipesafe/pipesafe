@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { Collection, useMemoryMongo } from "@pipesafe/core";
+import { Collection } from "@pipesafe/core";
+import { useMemoryMongo } from "../../../core/src/utils/useMemoryMongo";
 import { Model } from "../model/Model";
 import { Project } from "./Project";
 // ============================================================================
