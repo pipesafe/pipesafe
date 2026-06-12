@@ -25,7 +25,7 @@
     },
     "packages/core": {
       "name": "@pipesafe/core",
-      "version": "0.8.0",
+      "version": "1.1.0",
       "devDependencies": {
         "typescript": "^5.9.3",
       },
@@ -35,13 +35,13 @@
     },
     "packages/manifold": {
       "name": "@pipesafe/manifold",
-      "version": "0.8.0",
+      "version": "1.0.0",
       "devDependencies": {
         "@pipesafe/core": "workspace:*",
         "typescript": "^5.9.3",
       },
       "peerDependencies": {
-        "@pipesafe/core": ">=0.5.0 <1.0.0",
+        "@pipesafe/core": ">=1.0.0",
         "mongodb": "^6.17.0",
       },
     },
