@@ -1,0 +1,63 @@
+# 01 — Current State and Gaps
+
+PipeSafe today is a compile-time type system for MongoDB aggregation pipelines with a deliberately thin runtime, split across two packages: `@pipesafe/core` 1.1.0 (Apache-2.0) and `@pipesafe/manifold` 1.0.0 (ELv2). The type layer — 18 stage modules, branded compile errors, union narrowing, ~6,900 lines of type assertions as the test suite — is mature and performance-engineered. The runtime layer is honest but minimal: pipeline JSON assembly, a typed cursor, raw-driver CRUD passthrough, and a working (but subtly buggy) DAG orchestrator. This document is the factual baseline for the roadmap docs that follow (02-competitive-landscape, 03-orm-roadmap, 04-transform-roadmap, 05-orchestration-el-roadmap, 06-packaging-licensing).
+
+## 1. What PipeSafe is today
+
+**Two packages.** `@pipesafe/core` contains the `Pipeline` builder, the type system, `Collection`/`Database`/`Source`, and a singleton connection. `@pipesafe/manifold` peer-depends on core (`>=1.0.0`, packages/manifold/package.json:42) and adds `Model` + `Project`. Core never imports manifold; the seam is the `Source<T>` interface (packages/core/src/source/Source.ts) plus a `Mode extends "runtime" | "model"` generic on `Pipeline` (packages/core/src/pipeline/Pipeline.ts:110-128) that widens `lookup`/`unionWith`/`graphLookup` sources from `Collection` to any `Source`.
+
+**Stages.** 18 stage modules in packages/core/src/stages/: `match`, `set`, `unset`, `project`, `group`, `lookup`, `graphLookup`, `unionWith`, `facet`, `replaceRoot`, `sort`, `limit`, `skip`, `sample`, `count`, `unwind`, `out`, `merge`. Each transforms the schema type: `$match` narrows unions via `FilterUnion` (match.ts:155), `$set` deep-merges dotted keys with optionality semantics, `$lookup` appends `{ [as]: ForeignOutput[] }` with local/foreign field type-compatibility checking, `$unwind` unrolls `T[] → T`. Sub-pipeline stage restrictions (no `$out` inside `$lookup`, etc.) are encoded as phantom `UsedStages` unions (Pipeline.ts:85-108). Sixteen stages are explicitly unimplemented (`KnownUnimplementedStages`, Pipeline.ts:68, plus seven — `$densify`, `$fill`, `$bucket`, `$bucketAuto`, `$setWindowFields`, `$redact`, `$sortByCount` — absent even from that list). `custom()` (Pipeline.ts:191) is the escape hatch: raw stages, asserted output, zero validation.
+
+**Type-system architecture.** `PipeSafeError<Msg>` (packages/core/src/utils/core.ts:21) is a single-parameter branded interface with a fixed message grammar (Operator/Accumulator/Stage/Field/Foreign collection). Brands sit at operand positions so TS reports TS2322 against the offending value; `PassThrough<Schema, Result>` (core.ts:33-42) short-circuits every stage's output resolver so an upstream error propagates verbatim rather than cascading. Call-site firing behavior per stage is pinned by `@ts-expect-error` directives in Pipeline.callSite.typeAssertions.ts. Compile performance is a first-class concern: batched dotted-key recursion, early-exit merges, and a tsc-instantiation-count benchmark harness (packages/core/benchmarking/) whose findings are recorded in core.ts comments.
+
+**Runtime surface (thin but real).** `Collection` (packages/core/src/collection/Collection.ts, 288 lines) passes the full driver CRUD/index surface through with the driver's own types (`Filter<Docs>` etc.) — PipeSafe's path/brand validation applies only to aggregation. `Pipeline.execute()` (Pipeline.ts:667) resolves a client (arg → constructor → singleton) and returns the driver's `AggregationCursor<Output>`, so inferred types reach runtime results. Connection management is a minimal singleton (`pipesafe.connect()` throws on double-connect; no pooling config, sessions, or transactions).
+
+**Manifold.** `Model<TName, TInput, TOutput, TMat>` (packages/manifold/src/model/Model.ts) is a named, lazily-built, materializable pipeline: `view`, or `collection` via `$out`/`$merge` with presets `Model.Mode.Replace`/`Upsert`/`Append` (Model.ts:138) and typed time-series options. `Project` (packages/manifold/src/project/Project.ts) auto-discovers dependencies — users list only leaf models; `from` chains and `lookup`/`graphLookup`/`unionWith`/`facet` ancestors (tracked by `Pipeline._ancestorsFromStages`) are added recursively (Project.ts:118-131). It validates at construction (duplicates, missing refs, `from`-cycle detection), plans Kahn-style parallel stages, renders `toString()`/`toMermaid()` lineage, and `run()` executes stages sequentially with intra-stage `Promise.allSettled`, `targets`/`exclude`, `dryRun`, and per-model callbacks. Real-Mongo tests cover linear DAGs, model-to-model lookups, facet, graphLookup, and target selection.
+
+## 2. Design strengths to preserve
+
+1. **Aggregation-native literal syntax.** Stage payloads are MongoDB JSON verbatim — `.match({ status: "active" })` emits `{ $match: ... }`. No invented DSL; shell snippets copy-paste in. Every roadmap feature should keep this property.
+2. **Inference, no codegen.** Types flow from hand-written schemas through every stage (`InferOutputType`). There is no generate step, no build artifact, no drift between generated client and schema — a structural advantage over Prisma to protect (see 03-orm-roadmap).
+3. **Compile-time error branding.** The `PipeSafeError` grammar, TS2322-over-TS2353 placement discipline, `PassThrough` short-circuiting, and the call-site regression guard make type errors a designed product surface, not an accident.
+4. **Compile-perf discipline.** Instantiation-count benchmarking with baselines, batched recursion, documented measurements. Any new type machinery (CRUD typing, incremental predicates) must go through this harness.
+5. **The Source/Mode seam and ancestor auto-discovery.** License boundary intact, "just specify leaves" DX, lineage for free from ordinary pipeline building.
+
+## 3. Gap analysis vs ORM (Mongoose, Prisma, Drizzle)
+
+Legend: **TL** = type-level only; **RT** = runtime exists; **—** = absent.
+
+| Capability            | Status                       | Notes                                                                                                                                                |
+| --------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Schema definition     | **TL**                       | Plain TS generics. No runtime schema object, defaults, or metadata.                                                                                  |
+| Runtime validation    | **—**                        | Nothing validates documents on write or read; no `$jsonSchema` generation. Wrong-shaped documents flow silently.                                     |
+| CRUD typing           | **RT** (untyped by PipeSafe) | Full driver surface, but `find({ naem: "x" })` compiles — raw `Filter<Docs>`, no branded path checking. Two divergent typing regimes in one library. |
+| Hooks/middleware      | **—**                        | No pre/post save/find hooks. (`onModel*` callbacks are orchestration observability, not data hooks.)                                                 |
+| Transactions/sessions | **—**                        | No `withTransaction` surface; singleton has no session story.                                                                                        |
+| Migrations            | **—**                        | No migration files, runner, or diffing; index management is manual runtime methods only.                                                             |
+| Connection management | **RT** (minimal)             | Singleton or DI'd client; throws on double-connect; no pooling config, retries, or multi-tenant registry.                                            |
+| Relations/populate    | **TL/RT hybrid**             | `$lookup` is typed and executed, but no relation declaration layer.                                                                                  |
+| Introspection/codegen | **—**                        | Cannot derive types from a live database; types are trusted, never verified.                                                                         |
+
+## 4. Gap analysis vs ETL/orchestration (dbt, Dagster, Fivetran)
+
+| Capability                      | Status           | Notes                                                                                                                                                             |
+| ------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DAG definition + topo execution | **RT**           | Works, including parallel stages and auto-discovery — modulo the graph bug in §5.                                                                                 |
+| Incremental models              | **—**            | `Upsert`/`Append` merge full recomputation; no since-last-run predicate, high-watermark, or state.                                                                |
+| Run state persistence           | **—**            | `ProjectRunResult` is in-memory and discarded; no runs collection, freshness data, or resume-from-failure.                                                        |
+| Data testing framework          | **—**            | No not_null/unique/relationship tests on materialized output.                                                                                                     |
+| Scheduling/retries              | **—**            | `run()` is manual; failures stop remaining stages with no retry/timeout.                                                                                          |
+| Selectors/defer                 | **RT** (minimal) | Exact-name `targets`/`exclude` only; no `+model+` graph selectors.                                                                                                |
+| Connectors/CDC                  | **—**            | MongoDB-only by design; no external sources/sinks, no change streams.                                                                                             |
+| Observability/lineage           | **RT** (partial) | Callbacks + `durationMs`; Mermaid/text lineage. No doc counts (cursors drained uncounted), structured logs, metrics, column-level lineage, or docs-site artifact. |
+| CLI                             | **—**            | Library API only; no `pipesafe run` binary.                                                                                                                       |
+
+## 5. Prerequisite fixes and debts
+
+These block or complicate roadmap work and should land first.
+
+1. **`Project.buildDependencyGraph` correctness bug** (Project.ts:474-490). Dependency _discovery_ includes lookup/unionWith ancestors, but the execution graph adds only the `getUpstreamModel()` (`from`) edge. Verified consequences: (a) a model that `lookup`s a non-depth-0 model can be scheduled before or concurrently with it — a race; (b) `getModelsToRun` with `targets` (Project.ts:443-462) walks only the `from` chain, so targeted runs miss lookup dependencies; (c) `validate()` cannot detect cycles through lookup edges. Current tests pass only because lookup targets happen to be depth-0. This is the single most concrete correctness bug and gates all of 05-orchestration-el-roadmap.
+2. **`$group` call-site brand hole.** `$sum: "$stringField"` compiles at the chained call site because `GroupQuery`'s index signature suppresses operand validation (documented in CLAUDE.md; pinned in Pipeline.callSite.typeAssertions.ts).
+3. **Silent `unknown` escape hatches.** `$expr` (match.ts:102), `$filter.cond`/`$map.in`, and `$let` type as `unknown` — no scoped `$$var` tracking — and `custom()` does not thread ancestors, silently breaking lineage.
+4. **TS2589 depth-limit risk.** A `$set` typo case already trips the instantiation depth limit (Pipeline.callSite.typeAssertions.ts:35); large schemas and long chains are a live ceiling, which is why the benchmark harness exists.
+5. **Docs drift.** CLAUDE.md states the peer range as `>=0.5.0 <1.0.0` vs actual `>=1.0.0` (packages/manifold/package.json:42) and versions 1.1.0/1.0.0 vs the documented 0.x framing; README's stage list (README.md:73) omits `merge`, `sample`, and `count`, which are implemented; CLAUDE.md's stage docs still say "TODO: Document the rest of the stages". Also note duplicated inference logic in expressions.ts (`InferExpressionType` vs `InferExpression`) as a maintenance hazard before the operator surface grows.
