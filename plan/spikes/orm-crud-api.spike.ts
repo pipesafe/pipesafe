@@ -37,14 +37,14 @@ interface PipeSafeError<Msg extends string> {
  * full operator set, full-depth dotted FieldSelector paths (vs Mongoose v9's
  * one-level WithLevel1NestedPaths), operand brands (NumericOperand etc.).
  */
-type MatchQuery<Schema extends Document> = Record<string, unknown>; // real: match.ts:105
+type MatchQuery<_Schema extends Document> = Record<string, unknown>; // real: match.ts:105
 
 /** Stand-in for match.ts ResolveMatchOutput — union narrowing via FilterUnion. */
-type ResolveMatchOutput<Query, Schema extends Document> = Schema;
+type ResolveMatchOutput<_Query, Schema extends Document> = Schema;
 
 /** Stand-ins for fieldSelector.ts path machinery. */
-type FieldSelector<Schema extends Document> = string;
-type FieldSelectorsThatInferTo<Schema extends Document, T> = string;
+type FieldSelector<_Schema extends Document> = string;
+type FieldSelectorsThatInferTo<_Schema extends Document, _T> = string;
 
 /* ------------------------------------------------------------------ */
 /* 1. Typed update operators (new, but formulaic)                      */
@@ -301,4 +301,4 @@ async function demo(userInput: unknown) {
 }
 
 export { demo, TypedCollection };
-export type { UpdateQuery, CollectionExtension };
+export type { UpdateQuery, CollectionExtension, PipeSafeError };

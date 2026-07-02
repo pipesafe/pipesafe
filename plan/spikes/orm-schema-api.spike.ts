@@ -32,9 +32,7 @@ interface StandardSchemaV1<Input = unknown, Output = Input> {
   readonly "~standard": {
     readonly version: 1;
     readonly vendor: string; // "zod" | "valibot" | "arktype" | ...
-    readonly validate: (
-      value: unknown
-    ) =>
+    readonly validate: (value: unknown) =>
       | { value: Output; issues?: undefined }
       | {
           issues: ReadonlyArray<{
@@ -214,4 +212,4 @@ declare class PipeSafeValidationError extends Error {
 type ExampleBrand = PipeSafeError<"Field 'emial' is not on the schema.">;
 
 export type { User, ExampleBrand };
-export { users, derived };
+export { users, derived, PipeSafeValidationError };

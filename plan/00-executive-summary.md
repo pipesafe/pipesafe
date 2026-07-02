@@ -1,0 +1,51 @@
+# 00 — Executive Summary
+
+PipeSafe today is the best typed MongoDB aggregation builder shipping: stage-by-stage schema rewriting, union narrowing through `$match`, typed `$lookup`, curated compile-time errors — plus a working DAG materializer in manifold. This plan evolves it into two products sharing one type system: **(a) the daily-driver MongoDB data layer** — the Mongoose/Prisma alternative, surrounding the typed-pipeline core with typed CRUD, runtime validation, hooks, transactions, and migrations — and **(b) the typed transform, orchestration, and EL layer for MongoDB** — the dbt/Fivetran/orchestrator alternative, with incremental models, persisted run state, tests, state-aware selection, and typed connectors. The same TypeScript types span application reads and analytics materializations, from `find()` filter to `$merge` target: a position no incumbent holds, because every incumbent lives on exactly one side of that line.
+
+## Three strategic facts
+
+1. **Mongoose ceded typed aggregation.** `Model.aggregate<R = any>` types results as whatever the user hopes, and its docs concede pipelines are neither typed nor cast by design. The moment a Mongoose app needs `$group`/`$lookup`/`$project`, all safety evaporates — and that is precisely where PipeSafe starts.
+2. **Prisma vacated MongoDB, then re-entered through the one contested lane.** Prisma 7's flagship Rust-free architecture excludes MongoDB entirely (Mongo users pinned to v6.19, `aggregateRaw` returning untyped `JsonObject`). Meanwhile **Prisma Next** — Apache-2.0, built with MongoDB Inc. — ships a typed Mongo pipeline builder in Early Access: a near-clone of PipeSafe's surface, but with a callback DSL, contract-emit codegen friction, declared (not inferred) polymorphism, and documented type holes. Its roadmap GAs Postgres first (Prisma 8, mid-2026); Mongo GA is plausibly 2027. **The window is now → Prisma 8's Mongo GA**: mindshare for "the typed Mongo pipeline tool" gets decided in that gap, and every quarter of this roadmap is scheduled against that clock.
+3. **dbt Fusion is third-party validation that typed transforms win.** dbt Labs spent an acquisition and a multi-year Rust rewrite — including a type checker bolted onto Jinja — to buy static comprehension of its transformation language. PipeSafe's pipelines are typed TypeScript data structures; the same comprehension is native, stronger, and free. Our job is to surface it as features (state selection, lineage, grain inference), not leave it implicit in `tsc`.
+
+## The wedges
+
+- **vs. Mongoose:** "PipeSafe is what `Model.aggregate()` should have been."
+- **vs. Prisma:** "Everything past `findMany`, typed."
+- **vs. dbt:** "dbt for MongoDB, without Jinja."
+- **vs. orchestrators and Orchestra:** "The typed, TS-native asset layer that any scheduler can host and any control plane can read" — while keeping the skip-state in the product.
+
+Uncontested lanes reinforce these: MongoDB as an EL _destination_ has no serious incumbent, change-stream-driven materialization has none, and typed unit-test fixtures checked against `TInput`/`TOutput` at compile time are structurally impossible for dbt.
+
+## Integrated phased roadmap
+
+**Wave 1 (P0) — correctness and the two keystones.** The lookup-edge graph fix comes first: manifold's execution graph adds only `from` edges while discovery follows lookup/unionWith ancestors, producing scheduling races, targeted runs that miss dependencies, and undetected cycles — it gates everything in docs 04 and 05. On the ORM side: typed CRUD (reusing `MatchQuery`/projection machinery verbatim for `find`/`update`/`delete`, with branded update operators and union-narrowing results) and Standard Schema interop with insert-time validation. On the transform side: `Model.Mode.Incremental` (typed watermark context + `$merge` strategies) and durable orchestration — the `_manifold` event log, the ready-queue executor replacing level-based stages, per-Model retries with backoff, and `resumeFrom`. The event log is the keystone dependency: staleness, retry, resume, and observability are all derived queries over it.
+
+**Wave 2 (P1) — the workflows that make it sticky.** Microbatch (independent, idempotent time-window batches, retrying only failed windows); manifest + run-results artifacts enabling `state:modified`, `defer`, and `retry` — the slim-CI recipe that is dbt's stickiest workflow, built on semantic pipeline hashes rather than dbt's raw-text comparison; data tests plus typed unit fixtures (the flagship differentiator); typed query interceptors (hooks) for soft delete/tenancy/timestamps; transactions with `AsyncLocalStorage` session propagation; `$jsonSchema` derivation and sync; `onlyStale` freshness probes plus the CLI/host seam (NDJSON events, stable manifest — the seam that made dbt ubiquitous); and graph selectors. Hooks depend on typed CRUD; state selection and selectors depend on the Wave 1 graph fix and manifest.
+
+**Wave 3 (P2+) — surface area and moats.** Relations sugar (`find` + `$lookup` include-style option); declarative `db sync` and `Migration<Start, End>` typed data migrations; snapshots (SCD2 with type-visible meta-fields); typed connectors (`ExternalSource<T>` with Fivetran's op vocabulary, change-stream CDC both directions, one Parquet egress path); grain inference (auto-derive `$merge on:` from the terminal `$group`); OTel-based observability and run-history queries; static field-level lineage; and composable automation conditions (P3, only if a hosted product needs them). Explicitly not built: a scheduler daemon, a connector catalog, hydration/casting machinery, codegen.
+
+## Packaging and licensing
+
+Everything a developer runs in the inner loop is Apache: `@pipesafe/core` (types + builder), a new `@pipesafe/orm` (runtime validation, hooks, transactions), `@pipesafe/connectors-*`, and the openly published manifest/run-artifact schemas; `@pipesafe/manifold` (incremental materialization, event log, tests, CLI runner state) stays ELv2. The commercial line sits above the open artifacts — a managed, state-aware manifold runner (the Orchestra-validated "30–75% fewer builds" pitch) with anti-MAR, infrastructure-shaped pricing — and a published license covenant fixes which surfaces are permanently Apache before any optics problem can arise.
+
+## Success criteria
+
+Three head-to-head demos, built inside the window: **union narrowing vs. `Mongoose.aggregate<R = any>`** (the same pipeline, typed vs. hoped); **typed pipeline vs. Prisma Next's `mongo-blog-leaderboard` example app** (inference + literal syntax + zero emit vs. callback DSL + contract codegen); and **slim CI vs. full rebuilds** (`state:modified+` with defer, measured as build-time/cost reduction on a realistic DAG). Adoption metrics: npm downloads and dependent-repo growth for core/orm; conversion of Mongoose/Prisma/dbt migration-guide traffic; manifold projects with persisted run state (the moat metric); external consumers of the manifest artifact (the seam metric); and compile-perf budgets held via the instantiation-count CI gate. Ship P0/P1 while "the typed Mongo data layer" is uncontested; measure everything against the Prisma 8 clock.
+
+## Document index
+
+| Document                                 | One-liner                                                                                              |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `01-current-state-and-gaps.md`           | Factual baseline: what exists, design strengths to preserve, gap tables, prerequisite fixes and debts. |
+| `02-competitive-landscape.md`            | Market map: Mongoose/Prisma/Prisma Next, dbt/Fusion, Fivetran/Airbyte/dlt, orchestrators, Orchestra.   |
+| `03-orm-roadmap.md`                      | Daily-driver data layer: typed CRUD, Standard Schema validation, hooks, transactions, migrations.      |
+| `04-transform-roadmap.md`                | Manifold as dbt for MongoDB: incremental, microbatch, manifest/state selection, tests, snapshots.      |
+| `05-orchestration-and-el-roadmap.md`     | Run execution: event log, ready-queue executor, retries/resume, staleness, CLI seam, typed connectors. |
+| `06-architecture-packaging-licensing.md` | Package/license placement, business model, MongoDB Inc. stance, ecosystem and DX investments.          |
+| `spikes/orm-crud-api.spike.ts`           | Typed CRUD surface: MatchQuery filters, branded update operators, interceptors, ALS transactions.      |
+| `spikes/orm-schema-api.spike.ts`         | Standard Schema interop and `$jsonSchema` derivation, type-visible timestamps, null-vs-missing.        |
+| `spikes/incremental-model-api.spike.ts`  | `Model.Mode.Incremental`/`Microbatch`: typed watermark context and `$merge` strategies.                |
+| `spikes/manifest-artifact.spike.ts`      | Manifest/run-results schemas, canonical pipeline hash, `state:modified`/defer/retry selection.         |
+| `spikes/run-event-log.spike.ts`          | `_manifold` append-only event log + derived model summary; resume and staleness as queries.            |
+| `spikes/source-connector-api.spike.ts`   | `ExternalSource<T>` connector contract: Fivetran ops, checkpointed state, change-stream CDC.           |

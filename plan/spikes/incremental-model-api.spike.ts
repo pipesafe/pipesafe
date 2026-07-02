@@ -12,8 +12,6 @@
  *            (all referenced types are stubbed inline below).
  */
 
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
 // ============================================================================
 // Inline stubs standing in for @pipesafe/core types (NOT the real ones)
 // ============================================================================
