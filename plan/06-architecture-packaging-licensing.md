@@ -1,0 +1,46 @@
+# 06 — Architecture, Packaging, Licensing, and Business Model
+
+This document maps the roadmap capabilities (03-orm-roadmap, 04-transform-roadmap, 05-orchestration-el-roadmap) onto packages and licenses, and sets the commercial thesis. The governing lessons from research: the community tolerance line is _"the thing I run every day must be OSS"_ (dbt's Fusion-under-ELv2 backlash forced an Apache re-license in June 2026); the durably monetizable asset in orchestration is not the runner but the **state that decides work can be skipped** (Orchestra built a business on dbt Core's open artifacts); and usage-based pricing that surprises people (Fivetran MAR) is the loudest churn driver in the adjacent market. PipeSafe's existing split — Apache core, ELv2 manifold — is directionally right; the work is placing the new surfaces on the correct side of that line before they exist.
+
+## 1. Package architecture for the roadmap
+
+**`@pipesafe/core` (Apache) stays the type system + pipeline builder** — stages, elements, `Collection`/`Source`/`Database`, singleton. The compile-perf benchmark harness stays here and becomes a hard CI gate (instantiation-count regression vs baseline), because every roadmap feature adds type machinery to this package's hot path.
+
+**The ORM runtime layer (doc 03) ships Apache — recommended: a new `@pipesafe/orm` package.** Schema objects, branded CRUD typing, hooks, runtime validation, and transactions are daily-driver surfaces; putting any of them behind ELv2 repeats dbt's mistake. The case for a separate package rather than growing core: core's identity is "zero-runtime types" and its tsdown bundle should stay near-empty; the ORM layer carries real runtime (validation, hook dispatch, session management) on a different maturity curve. Branded _typing_ of `Collection.find()` filters can land in core (it's type-only and fixes the two-regimes debt from 01-current-state-and-gaps §5); everything with runtime weight goes in `@pipesafe/orm`, peer-depending on core.
+
+**`@pipesafe/manifold` (ELv2) absorbs the transform/orchestration roadmap**: incremental materialization, the event log and persisted run state, data tests, partitions, selectors, and the CLI (doc 04, doc 05). One deliberate carve-out: the **manifest and run-artifact schemas are published openly** (spec + TS types in core or a tiny Apache `@pipesafe/artifacts` package), so third-party orchestrators and control planes can consume manifold's output without touching ELv2 code — the seam that made dbt ubiquitous.
+
+**Connectors (doc 05 §6): `@pipesafe/connectors-*`, Apache.** Connectors are commodity top-of-funnel; Airbyte kept most connectors MIT even after the platform moved to ELv2, and Fivetran's moat is catalog breadth PipeSafe cannot contest. The `Source`/`ExternalSource` interface lives in core; the ≤5 exemplar connectors (Mongo change streams, Postgres CDC, REST toolkit, files) are separate packages so their dependency weight (drivers, SDKs) never touches core.
+
+**Versioning and release flow.** Keep changesets; extend the `linked` group to `core + orm` (they share the type system and should move together), let connectors version independently, and widen manifold's peer range on core to `>=1.x <2` so a core patch never forces a manifold release. Fix the stale CLAUDE.md peer-range note as part of this. Pre-1.0 packages (`orm`, connectors) enter the workspace as `0.x` with explicit "experimental" labeling so semver discipline on core/manifold stays credible.
+
+## 2. Licensing strategy
+
+Apply the researched rules directly:
+
+- **Apache for everything a developer touches in the inner loop**: core, orm, connectors, artifact schemas, the docs. This is where dbt landed after the backlash and where Prisma has always been; deviating costs adoption at OSS-only procurement gates.
+- **ELv2 is defensible for manifold** because ELv2 permits free daily use — it forbids only offering the software _as a managed service_. That is precisely the Orchestra threat model: a hosted control plane wrapping manifold's runner and state layer. The dbt lesson is subtler than "ELv2 bad": dbt got burned putting the _engine_ (the thing that replaced Core) under ELv2. Manifold is additive, not a replacement for core — closer to the tolerated dbt-Cloud-style split. Expect pressure at the boundary anyway (§5).
+- **The commercial line sits above the open artifacts**: a managed, state-aware manifold runner (scheduling, retries, the skip-decision state store, freshness sensors); hosted lineage/observability UI; control-plane integrations; and support/SLAs. Crucially, the _skip-state design_ (event log + pipeline hash + source freshness) should consume manifold's own persisted state so the highest-value feature stays inside the product rather than being rebuilt above it by an Orchestra.
+
+## 3. Business model options
+
+**Primary: open-core with a hosted runner** — the dbt Cloud analog, scoped to what manifold uniquely knows: state-aware runs ("30–75% fewer builds" is the Orchestra-validated pitch), run history, alerting, CI defer/slim-builds.
+
+**Pricing: be the anti-MAR.** Never per-row or per-document. Infrastructure-shaped pricing — per-model, per-seat, or flat capacity tiers — is both honest and a marketing weapon against Fivetran-style bill shock. Prisma's operations-based billing (a query = one op) is the acceptable usage-based variant if metering is needed, but predictability should be the headline.
+
+**MongoDB Inc. needs an explicit stance.** They are partnering with Prisma on Prisma Next's Mongo support, which risks an "official ORM" blessing going elsewhere. Recommended posture: _partner where cheap, differentiate where it counts_. Pursue Atlas marketplace listing, driver-metadata cooperation (PipeSafe already tags the client handshake), and design-partner conversations — while positioning on what Prisma Next lacks and MongoDB gains nothing by suppressing: literal aggregation syntax, union narrowing, and manifold's DAG (no Prisma analog, and MongoDB has no dbt-equivalent story of its own). Coexistence is realistic; dependence is not.
+
+## 4. Ecosystem and DX investments
+
+- **Docs site** on the existing `website/` foundation: stage reference, the typed-errors showcase as an interactive demo, and the DAG/lineage story.
+- **Migration guides in the incumbents' vocabulary** (the adopt-their-names lesson): "PipeSafe for Mongoose users" (schema, hooks, populate → lookup), "for Prisma users" (select/include → project, `aggregateRaw` → typed pipeline), and manifold docs that say _model, incremental, full refresh, snapshot, seed_ — dbt migration should feel like translation, not education.
+- **Agent-native assets**: Prisma Next ships `SKILL.md` files into `.claude/skills/` as a headline feature. PipeSafe should ship equivalents — a repo primer, per-workflow skills, and machine-readable error documentation; the `PipeSafeError` message grammar is already structured input for agents.
+- **Standard Schema interop** as ecosystem glue: accept any Standard Schema validator (Zod, Valibot, ArkType) as the runtime-validation source in `@pipesafe/orm`, so PipeSafe joins an ecosystem instead of inventing a schema language.
+
+## 5. Risks and open questions
+
+- **License-change optics.** Any future Apache→ELv2 move of an existing surface is dbt-Fusion-shaped news. Publish a license covenant now stating which surfaces are permanently Apache.
+- **Contributor friction.** ELv2 manifold deters external contributions and requires a CLA; accept that manifold is company-built and concentrate community energy on core/orm/connectors.
+- **The CLI's license is the sharpest open question.** It is a daily-run artifact (dbt's tolerance line) but also the runner a hosted competitor needs. Option: Apache CLI shell invoking ELv2 manifold, mirroring how ELv2's daily-use grant actually works in practice. Decide before doc 05 ships it.
+- **Trademark and namespace**: register "PipeSafe", secure the npm scope and domains before marketing spend.
+- **Prisma Next timing.** The mindshare window runs roughly now → Prisma 8's Mongo GA (plausibly 2027). Packaging and docs work in §1/§4 is only valuable if it lands inside that window; sequence it ahead of speculative connector breadth.
