@@ -1,0 +1,56 @@
+# 07 — Open PR Review
+
+Four open feature PRs (#99 depth-viewer, #101 `$function`, #102 type-system standardization, #104 expression operators) plus the routine changesets release PR (#105) were reviewed in depth against origin/main (fbf7b47), each in an isolated worktree with the full gate suite (`build`, per-package `tsc --noEmit`, `test:ci`, `lint`, `git merge-tree`), independent measurement of every performance claim, and reproduction of every suspected bug. This document records the verdicts, required changes, merge order, and two cross-cutting hygiene findings; [trd/README.md](trd/README.md) § Open-PR alignment lists the ticket-level consequences, [01-current-state-and-gaps.md](01-current-state-and-gaps.md) §5 marks which debts these PRs would close, and [06-architecture-packaging-licensing.md](06-architecture-packaging-licensing.md) §5 absorbs the packaging lesson from #101.
+
+## PR #102 — Type-system standardization
+
+**Change.** A large refactor following its own committed spec (`docs/type-standardisation-plan.md`): splits `utils/core.ts` into `errors`/`strings`/`objects`/`paths`/`dispatch` modules, introduces an operand kernel (`elements/operands.ts`) and an operator-key dispatch kernel, rebuilds `expressions.ts`/`group.ts` around derived registries (`ExpressionSpec`/`AccumulatorSpec`), normalizes every stage to a Schema-first Query/Validate/Resolve trio, and fixes four real bugs.
+
+**Verification.** All gates pass (56/56 tests, lint clean, both packages typecheck); merge vs main is clean. Instantiation counts reproduced with fresh `tsc --extendedDiagnostics`: `tsconfig.benchmark.json` (the claim's basis) 988,155 → 560,234 (**−43.3%**, beating the claimed −39.4%); core src-only −47.2%; core check time 2.74 s → 1.95 s. All four claimed bug fixes verified real by probe: `$count` PassThrough forwarding (pinned), the `{_id: 1, name: 0}` legal-projection rejection (fixed but **unpinned**), `$cond` null preservation (pinned), the `$unwind` call-site brand (weakly pinned).
+
+**Findings conditioning the verdict.** (F1) The projection fix has no regression pin — a future edit to the `HasInclusionsNonId`/`HasExclusionsNonId` pair reverts it with zero test signal. (F5) The changeset's user-facing perf figure is stale ("~34% (990k → 652k)" vs measured 560,234). Non-blocking follow-ups: `MergeOptions ≡ MergeQuery` conformance assertion, an "unknown operator" brand for the `never` fallthrough, a lockstep guard on the category key sets, documenting the `Document`-fallthrough masking gap (pre-existing on main).
+
+**Verdict: MERGE WITH CHANGES, land first.** Required: (1) a typeAssertion pinning `{_id: 1, name: 0}` → exclusion mode with `_id` kept; (2) corrected instantiation figures in `.changeset/type-standardisation.md`.
+
+## PR #104 — $reduce, set operators, scoped `$$this` inference
+
+**Change.** ~650 lines, all in core: `$reduce`, `$setUnion`/`$setIntersection`/`$setDifference` with a shared operand brand, a scoped-inference subsystem resolving `$$this`/`$$value` in `$map.in`/`$reduce.in`, optional `as` on `$map`/`$filter`, `let` bindings on both `lookup` overloads (typed against the local schema), and `DeepWritable` fixing readonly leakage into `$project` outputs — plus ~330 lines of non-vacuous type assertions.
+
+**Verification.** All gates pass; clean merge vs main. Instantiations 751,508 → 959,651 (+28%, mostly the new assertion code itself — no per-call blowup; `DeepWritable`'s stop-set correctly excludes Date/BSON/Function). Three bugs reproduced by probe: (1) object-literal `$map.in` infers the _raw literal_ (`{key: "$$this.id"}[]` instead of `{key: string}[]`) — an actively wrong type flowing into every downstream stage; (2) the new set-operator brands never fire at any chained call site — `.project({ out: { $setUnion: ["$name"] } })` compiles silently with no callSite pins and no CLAUDE.md limitation entry; (3) `$$this` is bound even when a custom `as` replaces the default binding (compiles, MongoDB errors at runtime). Structurally the PR adds a **third** parallel inference chain to the duplication plan/01 §5.5 already flags — exactly what #102's registry deletes — and merge-tree vs #102 shows four conflicts including a modify/delete on `utils/core.ts`.
+
+**Verdict: MERGE WITH CHANGES, reworked on top of #102 as registry entries (~0.5–1 day).** The four operators become `ExpressionSpec` entries (`$reduce` and the set operators are literal-dependent → `LiteralDependentOps` + one `InferDependentExpression` arm each); the scoped-`$$this` inference re-hangs off `InferDependentExpression`; `DeepWritable` relocates into the utils split; the three bugs are fixed in the rework — object-literal `in` resolved recursively or degraded to `unknown` (never wrong-confident), set-operator silent acceptance pinned in `Pipeline.callSite.typeAssertions.ts` and documented, `as` respected when binding `$$this`. Its ~330 assertion lines carry over nearly untouched as the spec the port must keep green.
+
+## PR #99 — depth-viewer
+
+**Change.** A TS2589 diagnosis toolchain under `tools/depth-viewer/`: a depth-stats-patched `tsc` capturing all three ceiling triggers (`instantiationDepth` 100, `tailCount` 1000, `instantiationCount` 5M) per call expression via un-sampled traces, a per-symbol dataset builder, a query CLI, a React viewer, stress fixtures, and runbooks — plus a small bundled core perf change (redundant `Prettify` wraps removed) with its own changeset.
+
+**Verification.** Lint/build/`test:ci` pass (69/69, including 13 new patch-tsc tests with a byte-determinism check). Dataset build works end-to-end: 1,630 symbols across 75 files, 41,185 of 272,960 registry entries attributed; `Pipeline` tops the ranking at 8,959 entries created; `Prettify` at 3,037 — matching the bundled changeset's post-optimization figure exactly, corroborating the perf change. Ceiling capture verified on the committed fixture (`depth: 100` + `count: 5,000,356` + both limit flags). One real blocker: the committed stress fixtures (`packages/core/examples/_stress-pipelines.ts`) are excluded from ESLint and Prettier but **not** the root tsconfig, adding 5 TS2589 errors to `bun run typecheck` — the blocking CI job, already red on main (see Hygiene). Also `bun.lock` conflicts with main and was regenerated with a different bun.
+
+**Verdict: MERGE WITH CHANGES, independent of the others.** Required: (1) add `packages/core/examples/_*.ts` to root `tsconfig.json` `exclude`; (2) rebase and regenerate `bun.lock` with the CI-pinned bun. Follow-ups: derive the hard-coded SyntaxKind numbers from `ts.SyntaxKind`, stop leaking trace dirs into the system tmpdir, and promote the `compare` subcommand (before/after per-symbol dataset diff with budget thresholds) to a plan ticket — the concrete enabler for plan/06 §1's instantiation-count CI gate and plan/00's compile-perf success criterion.
+
+## PR #101 — $function
+
+**Change.** 3,559 lines: a typed `$function` operator with args→body-parameter correlation, an acorn-based free-variable check that serializes bodies at stage-add time inside `Pipeline._chain`, an ESLint rule as a `@pipesafe/core/eslint-plugin` subpath export, and a new `@pipesafe/function-bundler` package (esbuild) for file-based bodies via `serverFn()`. All gates pass (90/90 tests including 29 `$function` runtime tests and e2e against memory MongoDB); the engineering quality is high.
+
+**Findings.** The initial review's strategic objection (MongoDB 8.0 deprecates `$function`) is **withdrawn**: the _upcoming_ (9.0) manual presents `$function` as standard with no deprecation notice, and maintainers have confirmed the direction with MongoDB contacts. The technical findings stand: (S2) acorn becomes core's first hard runtime dependency, imported unconditionally at module load — against plan/06 §1's "core stays near-zero-runtime" identity. (S5) `serverFn()` resolves source files at runtime, so file-based bodies fail in any bundled production deploy. (S3, reproduced) `let`/`const` directly in a `switch` case is falsely rejected as a free variable — while the ESLint rule scopes correctly, so lint passes and runtime throws. (S4) the server-globals allowlist rejects valid MozJS globals (`Uint8Array`, `globalThis`, `Reflect`, …). Atlas M0/Flex/serverless still reject the operator; the PR documents neither this nor the scripting prerequisite. Positively: typed `$function` bodies are a differentiator neither Mongoose nor Prisma Next has, and serialize-at-stage-add feeds EPIC-F's hash design (see trd/EPIC-F § STATE-2 addendum).
+
+**Verdict: MERGE WITH CHANGES, reworked after #102.** Required: (1) acorn must not be an import-time hard dependency of Apache core — lazy `import()` at first `$function` use, or move the serializer/ESLint rule/bundler into separate opt-in package(s) per plan/06's packaging principle; (2) a build-time bundling story for `serverFn()`, or loudly documented "source files must ship to production" constraints; (3) fix the switch-case scoping bug and the allowlist gaps, with tests; (4) land after #102, re-expressing the `expressions.ts` additions as registry entries (as with #104 — `$function` is one entry plus one literal-dependent arm); (5) document (not block on) the Atlas tier restriction, the 8.0-deprecation → 9.0-supported history, and the scripting prerequisite.
+
+## PR #105 — changesets release
+
+Routine version-bump PR maintained by the changesets bot. Merge **last**, when ready to cut a release, after #102/#104/#101/#99 land so their changesets (including #102's corrected figures) ride the same release train.
+
+## Recommended merge order
+
+1. **#102 first.** Rebasing an A/B-benchmarked architectural rewrite around freshly added operators means redoing and re-measuring it; porting operators forward into the registry is the mechanical work the registry exists for.
+2. **#104 second**, reworked on top as registry entries (~0.5–1 day, required fixes folded in). Its assertions are the port's spec.
+3. **#101 third**, reworked per its five conditions — its `$function` inference becomes a registry entry, and #101/#104 touch disjoint operators once both sit on the registry.
+4. **#99 any time** after its two required fixes — no file overlap with the other branches beyond `bun.lock`.
+5. **#105 last**, at release time.
+
+## Hygiene follow-ups
+
+Two cross-cutting findings, independent of any single PR, phrased as tickets:
+
+- **HYG-1 — Add per-package `tsc --noEmit` to lefthook and CI.** Neither the pre-commit hooks nor CI runs `tsc --noEmit -p packages/core` / `-p packages/manifold`, so the `*.typeAssertions.ts` **sources** — the repo's actual type test suite — are never validated automatically (#102's own description flags this); every review above ran it manually. Acceptance: both commands in `lefthook.yml` and the CI test job; a deliberately broken assertion fails the pipeline.
+- **HYG-2 — Fix main's red root `typecheck`.** `bun run typecheck` exits 2 on clean main with 27 pre-existing errors in `packages/core/examples/*` and `packages/manifold/examples/model-dag-example.ts` — independent of all four PRs — so the blocking `typecheck` CI job is signal-free (which is how #99's fixture leak went unnoticed). Acceptance: root typecheck green on main (fix the examples or align the root tsconfig `include` with what the job should gate), so the job actually blocks.

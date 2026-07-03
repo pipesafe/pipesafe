@@ -71,6 +71,14 @@ The authoritative list of what the **executed** spikes changed versus the phase-
 
 Minor refinements that are recorded in TRDs but did not require phase-2 doc edits: `getPipeline()` returns a live, shared internal array (STATE-1 adds `toStages()`); Standard Schema `codeName` is `undefined` on 121 write errors (SCHEMA-7 maps codes itself); `validationAction: "warn"` violations are client-invisible (SCHEMA-7 docs); driver transaction retry is time-bounded (~120 s) with no backoff (HOOKS-3); `not_null` tests on non-nullable fields need internal raw-stage construction (TEST-2); core cannot strip `_id` in-pipeline when the schema omits it (H5b — core follow-up outside EPIC-H); manifold lacks an `InferModelInput` export (TEST-4).
 
+### Open-PR alignment (2026-07)
+
+Four open PRs (#99, #101, #102, #104) plus release PR #105 were reviewed; verdicts, required changes, and merge order are recorded in [../07-open-pr-review.md](../07-open-pr-review.md). Unlike the ledger items above, these are **pending** — conditional on the PRs landing as recommended, not merged facts. Ticket-relevant consequences:
+
+1. **EPIC-B file/target updates, conditional on #102.** `utils/core.ts` splits into `errors`/`strings`/`objects`/`paths`/`dispatch`; resolvers become Schema-first (CRUD-5's `ProjectedResult` sketch updated); match.ts operand helpers become `FieldOperand`-kernel specializations in `elements/operands.ts`, collapsing CRUD-4 to a one-line kernel fix; CRUD-2 names its type `ValidateMatchQuery` per the trio convention; CRUD-8 gains `depth-view:query` measurement, conditional on #99. All annotated in place in [EPIC-B-typed-crud.md](EPIC-B-typed-crud.md).
+2. **EPIC-F canonical-hash nuance from #101.** `$function` bodies are serialized to strings at stage-add, so they reach hashing as deterministic strings within a build — but the text is transpiler-dependent across toolchains, a `state:modified` false-positive risk needing normalization or a documented caveat. Throw-on-function stands for raw functions. STATE-2 carries the addendum in [EPIC-F-state-artifacts-selectors.md](EPIC-F-state-artifacts-selectors.md).
+3. **Two new hygiene tickets** (plan/07 § Hygiene follow-ups): per-package `tsc --noEmit` in lefthook/CI (HYG-1) and fixing main's red root `typecheck` (HYG-2) — listed under Open decisions/next actions below.
+
 ## Standardized decisions (cross-epic)
 
 These were divergent across docs/TRDs and are now fixed project-wide:
@@ -92,3 +100,8 @@ Items the TRDs explicitly flag as needing a human call before the affected surfa
 6. **Connector-runner package placement.** CONN-1: core vs manifold vs a small Apache `@pipesafe/connectors-runtime` (licensing follows plan/06 §1 — connectors Apache).
 7. **Incremental state-collection naming.** EPIC-E INC-8 says `_manifold_state`; EPIC-F STATE-7 says `_manifold.state` (db.collection). Align when INC-8 lands (lean: a collection inside the `_manifold` database, consistent with `events`/`models`/`sourceState`).
 8. **`validationAction: "warn"` messaging.** Warn-mode violations are server-log-only (client-invisible, spike-proven) — sign off on documenting this loudly rather than attempting in-process surfacing (SCHEMA-7).
+
+Next actions from the open-PR reviews (not decisions — just unowned work; see [../07-open-pr-review.md](../07-open-pr-review.md) § Hygiene follow-ups):
+
+9. **HYG-1 — per-package `tsc --noEmit` in lefthook and CI.** The `*.typeAssertions.ts` sources — the repo's actual type test suite — are never validated automatically; add `tsc --noEmit -p packages/core` and `-p packages/manifold` to `lefthook.yml` and the CI test job.
+10. **HYG-2 — fix main's red root `typecheck`.** `bun run typecheck` exits 2 on clean main (27 pre-existing errors in `packages/*/examples`), making the blocking CI job signal-free; fix the examples or align the root tsconfig with what the job should gate.
