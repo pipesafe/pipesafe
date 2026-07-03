@@ -1,3 +1,4 @@
+// SUPERSEDED in part by the executed typed-crud-real.spike.ts (EPIC-B): the plain generic-constraint filter pattern and the key-restricted update operators sketched here were disproven — see plan/trd/README.md reconciliation ledger.
 /**
  * SPIKE: Typed CRUD, hooks, and transactions API (roadmap doc: plan/03-orm-roadmap.md, sections 2, 4, 5)
  *

@@ -1,3 +1,4 @@
+// SUPERSEDED in part by the executed event-log-exec.spike.ts (EPIC-G): this sketch's skip-propagation recipe wrongly releases grandchildren, and its transactional summary write was dropped — see plan/trd/README.md reconciliation ledger.
 /**
  * SPIKE: manifold run-state — append-only event log + derived model summary.
  *

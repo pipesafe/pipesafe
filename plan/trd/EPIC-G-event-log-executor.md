@@ -4,6 +4,8 @@
 
 **Plan docs:** [05 — Orchestration & EL roadmap §2–4](../05-orchestration-and-el-roadmap.md) (P0/P1 scope), [01 — Current state §5.1](../01-current-state-and-gaps.md) (lookup-edge graph bug that gates the executor). **Spikes:** [event-log-exec.spike.ts](../spikes/event-log-exec.spike.ts) (EXECUTED — this TRD's evidence), refining the illustrative sketch [run-event-log.spike.ts](../spikes/run-event-log.spike.ts) (unmodified). **Sibling TRDs (parallel):** EPIC-A (graph fix — hard dependency of the executor), EPIC-E (incremental models / watermarks — consumes `inputFingerprints`), EPIC-F (manifest & run-results artifacts), EPIC-I (CLI — consumes the NDJSON event stream).
 
+**Integrator note (cross-epic standardization).** The `ManifoldEvent` union (LOG-1) gains a `v` schema-version field, required by EPIC-I's NDJSON contract (CLI-3) — the union is the single shared contract for the log document, the CLI stream, and run-results rows, so the field and its bump rules are owned here (LOG-1/LOG-8). See [README.md](README.md) § Standardized decisions.
+
 ## Spike findings
 
 `bun run tsx plan/spikes/event-log-exec.spike.ts` — replset up in 1.2 s (binary cached), full spike ~6 s.

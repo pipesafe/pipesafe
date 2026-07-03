@@ -1,3 +1,4 @@
+// SUPERSEDED in part by the executed pipeline-hash.spike.ts (EPIC-F): the Date-only canonicalize() here silently collides on RegExp/functions, and the manifest filename is now manifold-manifest.json — see plan/trd/README.md reconciliation ledger.
 /**
  * SPIKE: Manifest & run-results state artifacts for @pipesafe/manifold
  *

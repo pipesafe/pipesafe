@@ -8,6 +8,8 @@ Links: `plan/04-transform-roadmap.md` §4, §7, §9; `plan/05-orchestration-and-
 
 Parallel TRDs referenced below: **EPIC-A graph fix** (lookup edges become real dependency edges), **EPIC-E incremental** (watermark context, microbatch), **EPIC-G event log** (`_manifold.events` run-state), **EPIC-H testing** (test nodes appear in the manifest), **EPIC-I CLI**.
 
+**Integrator note (cross-epic standardization).** The manifest filename is standardized to **`manifold-manifest.json`** at the project root (decided in EPIC-I, which reconciled this TRD's `.manifold/manifest.json`, plan/05's `manifold.json`, and the sketch); run-results stays `.manifold/run-results.json`. STATE-3's writer should target the standardized name. See [README.md](README.md) § Standardized decisions.
+
 ## Spike findings
 
 `bun run tsx plan/spikes/pipeline-hash.spike.ts` — all 22 checks pass. Highlights (F-numbers match the spike header):
