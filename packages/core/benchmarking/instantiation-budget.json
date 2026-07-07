@@ -1,0 +1,5 @@
+{
+  "maxInstantiations": 900000,
+  "lastMeasured": 850648,
+  "note": "Whole-project type instantiations for tsconfig.benchmark.json (src + examples + benchmarking, dist built). Deterministic for a pinned TypeScript version. If check-instantiation-budget fails: investigate the regression first (tools from PR #99 attribute per-symbol cost); raise the budget only as a deliberate, reviewed decision \u2014 update lastMeasured and note the cause here."
+}
