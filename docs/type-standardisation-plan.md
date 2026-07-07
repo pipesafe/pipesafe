@@ -1,6 +1,7 @@
 # Type System Standardisation Plan
 
-Status: IMPLEMENTED (see §6 for the A/B comparison decisions)
+Status: IMPLEMENTED (see §6 for the A/B comparison decisions); §7 records
+the post-review follow-up plan (maintainer decisions from the PR #102 review)
 Scope: `@pipesafe/core` type-level code — `src/elements/`, `src/stages/`, `src/utils/core.ts`, `src/pipeline/Pipeline.ts`.
 
 This document reviews the current type architecture, answers the question
@@ -279,16 +280,17 @@ types at the user-facing boundary.** Concretely:
 
 Every file in `stages/` exports, with **Schema always the first parameter**:
 
-| Export                        | Required                                                         | Notes                                                                                                                            |
-| ----------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `XxxQuery<Schema>`            | yes (unless the stage takes a scalar, e.g. `limit`)              | Rename `MergeOptions` → `MergeQuery` (public `MergeOptions` alias kept in compat, 3.7); fold `UnwindOptions` into `UnwindQuery`. |
-| `ValidateXxxQuery<Schema, Q>` | only when the stage uses the validation-mapped signature pattern | Currently only `project`; `group`'s known limitation (CLAUDE.md) is the candidate follow-up.                                     |
-| `ResolveXxxOutput<Schema, Q>` | yes                                                              | Must wrap its body in `PassThrough<Schema, ...>`. Terminal stages (`out`, `merge`) are exempt and say so in a doc comment.       |
+| Export                        | Required                                                         | Notes                                                                                                                                                                                                                                                                                                                                                 |
+| ----------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `XxxQuery<Schema>`            | **yes — all stages, including scalar ones** (amended in §7.2)    | Rename `MergeOptions` → `MergeQuery` (public `MergeOptions` alias kept in compat, 3.7); fold `UnwindOptions` into `UnwindQuery`. Scalar stages export a schema-free alias (`LimitQuery = number`, `SkipQuery = number`, `CountQuery = string`) and the Pipeline method's parameter references it — never an inline scalar.                            |
+| `ValidateXxxQuery<Schema, Q>` | only when the stage uses the validation-mapped signature pattern | Currently only `project`. **Expected to grow per-stage as feature adds** (§7.2): `group` first (§7.4), expression-position operand validation for `set`/`project` after §7.3. Validate members are DERIVED from the stage's Query building blocks and the operand kernel — they re-USE `NumericAccumulatorOperand` etc., never re-spell a constraint. |
+| `ResolveXxxOutput<Schema, Q>` | yes                                                              | Must wrap its body in `PassThrough<Schema, ...>`. Terminal stages (`out`, `merge`) are exempt and say so in a doc comment.                                                                                                                                                                                                                            |
 
 Standard generic names: `Schema` for the incoming docs (replace
 `StartingDocs`/`PreviousStageDocs` inside stage files), `Q` for the literal
 query, `Foreign` for joined schemas. Two sanctioned deviations: schema-free
-queries (e.g. `SampleQuery`) take no `Schema` parameter, and trailing
+queries (scalar stages and e.g. `SampleQuery`) take no `Schema` parameter —
+but they still export the `XxxQuery` name (§7.2) — and trailing
 defaulted/hoisted parameters per 3.5 may extend any trio signature.
 
 ### 3.2 Operand kernel — new `elements/operands.ts`
@@ -802,3 +804,199 @@ Spec corrections discovered during implementation (amended in place above):
 the per-package `tsc` gate (§4), the count compat-alias impossibility (§3.7),
 the union-distribution unsoundness of defaulted schema-derived parameters
 (§3.5 — see `SchemaRefTypeMap`), and additional dead types (F5).
+
+---
+
+## 7. Post-review follow-up plan
+
+Decisions from the independent review of PR #102 (July 2026). The review
+reproduced the §6 numbers (base 988,155 / attempt A 637,808 exact / attempt B
+598,225 exact / derived flip 599,838 exact; final head 560,234 = −43.3%,
+better than the claimed −39.4% thanks to the post-consolidation review
+commits) and stress-tested the four core decisions with built-and-measured
+alternatives. All measurements below are from real runs on TS 5.9.3
+(`tsc --noEmit -p tsconfig.benchmark.json --extendedDiagnostics`, dist built;
+instantiation counts were deterministic across runs; wall times on the review
+box carry ±0.5s noise).
+
+Priority order: 7.1 (CI gate) → 7.5 (missing pins) → 7.3 (ObjectLiteral bug)
+→ 7.4 (group validation) → 7.2 (trio completion, rides along with 7.3/7.4).
+
+### 7.1 CI gate — make the regression net automatic (BLOCKING follow-up)
+
+**Finding**: neither CI nor the lefthook pre-commit executes the
+`*.typeAssertions.ts` files. `bun run build` is tsdown (a bundler, no full
+type check), root `bun run typecheck` resolves project references to built
+`dist`, and the tests are runtime-only. Proven end-to-end during review: a
+brand-message edit ("a numeric or date field" → "a number or date field")
+passed build, lint, root typecheck, and all 56 tests; only per-package
+`tsc --noEmit` caught it. Every "enforced by assertions" claim in this
+document is conditional on a command that today runs only when a developer
+remembers to type it.
+
+Work items:
+
+1. Add a CI job (and a lefthook command) running per-package `tsc --noEmit`
+   for core, and for manifold after a fresh core build (the §4 gate
+   mechanics, automated).
+2. Optional but recommended: a benchmark budget check — fail CI if
+   whole-project instantiations exceed ~600k + agreed slack. This is the only
+   automatic enforcement the §3.4 dispatch standard can have: the review
+   showed that re-introducing a single full-union membership test on the hot
+   path (`Obj extends Expression<Schema>` in `InferNestedFieldReference`)
+   costs +44,659 instantiations (+8.0%) while the entire assertion suite
+   stays green — grep and review are currently the only guards.
+
+### 7.2 Trio completion — Query everywhere, Validate as a growth axis
+
+Maintainer decision: the trio should be uniformly present, DRY, with the
+missing members added as future feature work rather than left as sanctioned
+gaps.
+
+1. **`XxxQuery` for scalar stages.** `limit`, `skip`, and `count` currently
+   take inline scalars. Each stage module exports its Query alias
+   (`LimitQuery = number`, `SkipQuery = number`, `CountQuery = string` — no
+   `Schema` parameter, per the amended 3.1 table) and the Pipeline method
+   parameter references the module's type. Add "method uses the module's
+   Query type" wiring pins to `stages.contract.typeAssertions.ts` for the
+   scalar stages (same drift class as F2/F5's sort/unwind gaps).
+2. **`ValidateXxxQuery` members are planned feature adds, not exceptions.**
+   The validation layer grows per stage by _pulling from_ the existing Query
+   building blocks and the operand kernel — a Validate member re-uses the
+   same operand types the Query/registry declares (e.g. §7.4's
+   `ValidateAccumulator` re-uses `NumericAccumulatorOperand`), so the
+   constraint is written once and both the acceptance surface and the
+   branded-rejection surface derive from it. Never re-spell a constraint
+   inside a Validate type.
+3. Order of addition: `group` (§7.4, fixes the documented known limitation),
+   then expression-position operand validation for `set`/`project` — whose
+   feasible strictness depends on the §7.3 outcome.
+
+### 7.3 `ObjectLiteral` accepts `$`-keyed objects — existing bug, fix it
+
+**Finding (pre-existing at the PR's base, confirmed by probe)**: a
+`$`-keyed object is vacuously assignable to `ObjectLiteral` because its
+mapped key is the template pattern `NoDollarString` — TS does not constrain
+properties that don't match a pattern index signature. Consequences,
+all verified on head:
+
+- `.set({ total: { $add: ["$name", 1] } })` (bad operand) compiles silently —
+  the expression fails the `Expression<Schema>` arm and falls into the
+  literal arm. The `ExpressionOperand` brands are therefore unreachable from
+  chained `$set`/`$project`/`$group` call sites; they fire only under
+  explicit annotation (match's field-position brands are unaffected).
+- **Valid nested expressions ride on the same hole**:
+  `.set({ meta: { computed: { $add: ["$age", 1] } } })` type-checks _only_
+  because of the vacuous path — `ObjectLiteral`'s value union does not
+  include `Expression<Schema>`. Any fix must add a legitimate route for
+  nested computed values or it breaks working code.
+
+Maintainer decision: treat as a bug; the `$`-keyed object must not be
+accepted as a literal itself. Two fix shapes were prototyped and measured
+(both: full assertion suite green after moving one `@ts-expect-error` in
+`Pipeline.examples.ts` whose error position shifts one line; 56/56 tests):
+
+| Option         | Shape                                                                                                | Cost vs head (560,234) | Semantics                                                                                                                                               |
+| -------------- | ---------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A — strict     | `ObjectLiteral` value union += `Expression<Schema>`; intersect `& { [K in \`$${string}\`]?: never }` | **+149,279 (+26.6%)**  | Bad operands rejected at every depth today                                                                                                              |
+| B — structural | value union += `ExpressionShaped` (`{ [K in \`$${string}\`]: unknown }`); same `$`-key guard         | **+69,757 (+12.5%)**   | Top-level bad expressions rejected (strict union check); nested bad _operands_ still pass structurally — validation deferred to the §7.2 Validate layer |
+
+Recommendation: **option B** as the bug fix (it closes "a `$`-keyed object
+is a literal" at every depth, at half the cost), with operand strictness
+arriving via the Validate layer rather than the recursive literal union —
+that matches the §3.4 philosophy (classify by key cheaply; validate
+separately). Option A is the fallback if per-stage Validate members stall.
+
+Open items for the implementing PR:
+
+- Spike a cheaper encoding before settling: a single mapped type over
+  `NoDollarString | \`$${string}\`` with a key-conditional value type may
+  relate cheaper than the intersection; also consider hoisting strictness
+  into the stage Query value unions instead of the recursive literal.
+- Error quality on rejection is rough: the bad value reports against the
+  full `"$$REMOVE" | AnyLiteral | Expression` union and can surface as
+  TS2589 (excessively deep) on the statement — same class as the documented
+  `$naem` behavior in `Pipeline.callSite.typeAssertions.ts`. Acceptable for
+  the bug fix (silent acceptance is worse); brands come with the Validate
+  layer.
+- Add callSite pins: bad-top-level-expression and bad-nested-expression
+  cases for `set` (and project), marked TODO where option B intentionally
+  defers them.
+- `ResolveToPrimitiveObject` (group `_id` position) needs the same audit.
+
+### 7.4 Group accumulator validation — fix the known limitation
+
+Maintainer decision: fix it. Review findings that reframe the CLAUDE.md
+"known limitation" paragraph (update it when this lands):
+
+- The PR head itself type-checks clean; compound-`_id` was never broken on
+  the branch. The breakage appears only when `Pipeline.group`'s parameter is
+  _wrapped_ — re-verified unconfounded on pristine head.
+- The **project-style wrapper** (`$group: ValidateGroupQuery<S, G>`) breaks
+  compound-`_id` exactly as documented (TS2589 + the `_id` value failing
+  `AnyLiteral | Expression | null` once contextual typing is lost). A
+  variant giving `_id` a concrete contextual type
+  (`K extends "_id" ? AnyLiteral<Schema> | Expression<Schema> | null : ...`)
+  **also fails** — recorded so nobody re-tries it naively.
+- The **intersection form works**:
+
+  ```ts
+  group<const G extends GroupQuery<PreviousStageDocs>>(
+    $group: G & ValidateGroupQuery<PreviousStageDocs, G>
+  )
+  ```
+
+  With `ValidateAccumulator` re-using `NumericAccumulatorOperand` and
+  branding the offending value
+  (`Type '"$name"' is not assignable to type '"$name" &
+PipeSafeError<"Accumulator '$sum' requires a numeric operand.">'`),
+  compound-`_id` keeps compiling, the full suite stays green, 56/56 tests.
+  **Cost**: +48k instantiations (+8.6%) but **check time 3.7s → 11s and
+  memory 290MB → 670MB** — instantiation counts and wall time diverge badly
+  on intersections of large literal types; do not gate this work on
+  instantiations alone.
+
+Spike list to kill the time/memory blowup (acceptance gate: brand fires,
+compound-`_id` compiles, whole-project check time within ~10% of baseline,
+suite green):
+
+1. Attribute first: `tsc --generateTrace` on the intersection variant to
+   find where the 7s go (suspect: relating every group literal against the
+   intersection re-explores `FieldReferencesThatInferTo` per call).
+2. Early exit: only wrap when validation can matter —
+   `HasNumericAccumulatorKey<G> extends true ? G & ValidateGroupQuery<...> : G`
+   at the parameter, or key-remap the Validate type to touch only
+   `$sum`/`$avg`-carrying keys and intersect with the untouched remainder.
+3. Hoist a per-schema precomputed operand union (the `SchemaRefTypeMap`
+   pattern, §3.5) so the per-call relation is against an alias-cached union.
+4. Fallback if parameter-position stays too expensive: brand at the
+   _return_ position (resolver yields `PipeSafeError` output for an invalid
+   operand — surfaces on the next chained call; weaker UX, zero
+   parameter-position cost).
+
+### 7.5 Missing assertions found by the review
+
+1. **Hot-path forgiving dispatch is unpinned**: reverting
+   `InferNestedFieldReference` to the full-union style left the entire suite
+   green (only the benchmark moved). Add an assertion that a malformed
+   expression _nested in a `$set` value_ still infers the operator's declared
+   result kind (e.g. `{ n: { $dateToString: { format: 1, date: "$ts" } } }`
+   resolves `n: string`).
+2. **Compat-alias equality** (§3.7 promised it; it was never written): assert
+   `Equal<MergeOptions<T>, MergeQuery<T>>` so the alias can't drift.
+3. **Expression-position callSite pins** (§7.3): today's silent acceptances
+   documented as TODO pins so the guard file is honest about what fires.
+
+### 7.6 Alternatives tested and REJECTED during the review (decision log)
+
+Recorded so future refactors don't re-litigate them without new evidence.
+Baseline: head 560,234 instantiations.
+
+| Alternative                                                                                         | Result                                                                                                                            | Verdict                                                                                                                                                            |
+| --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Container record per stage (`MatchStage<S, Q>["query"/"output"]`, match + project)                  | +224 (+0.04%); call-site errors and hovers byte-identical                                                                         | The §2 rejection stands, but for the right reasons: it buys no reuse without HKTs and rags across stages — the predicted perf/diagnostics costs do NOT materialize |
+| Hand-written expression unions + conformance file (attempt B variant)                               | −1,613 (−0.27%); 5 registration sites + 180-line conformance file vs 1 registry entry                                             | §6 verdict re-confirmed by single-commit isolation (fbdac84 → 32b9bde)                                                                                             |
+| Key-remapped mapped-type dispatch in `InferExpression` (`{ [K in OperatorKeyOf<Expr>]: ... }[...]`) | **−53,222 (−9.5%)**, full parity on errors/hovers/tests — but nested-`$cond` depth budget HALVED (breaks ~17–20 vs ~31–33 levels) | Rejected: depth is scarcer than instantiations here. Any future dispatch-encoding change must include a depth probe                                                |
+| Same mapped encoding for `ResolveAccumulatorFunction`                                               | +28k over the expression-only variant                                                                                             | The win is site-specific, not a general rule                                                                                                                       |
+| `infer Op extends keyof Spec` ladder variant                                                        | −604 (noise)                                                                                                                      | No reason to change                                                                                                                                                |
+| Unified single operand primitive (mode-flag merge of `FieldOperand`/`ExpressionOperand`)            | +47 (noise)                                                                                                                       | Two primitives are the honest factoring; a mode flag replaces two good names with one worse one                                                                    |
