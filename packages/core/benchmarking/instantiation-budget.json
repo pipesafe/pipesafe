@@ -1,5 +1,5 @@
 {
-  "maxInstantiations": 900000,
-  "lastMeasured": 850648,
-  "note": "Whole-project type instantiations for tsconfig.benchmark.json (src + examples + benchmarking, dist built). Deterministic for a pinned TypeScript version. If check-instantiation-budget fails: investigate the regression first (tools from PR #99 attribute per-symbol cost); raise the budget only as a deliberate, reviewed decision \u2014 update lastMeasured and note the cause here."
+  "maxInstantiations": 975000,
+  "lastMeasured": 919425,
+  "note": "Whole-project type instantiations for tsconfig.benchmark.json (src + examples + benchmarking, dist built). Deterministic for a pinned TypeScript version. History: 850,648 after the nested-validation layer; raised to 919,425 by the review-round correctness fixes (registry-derived ExpressionsReturning operand arms, array-element walking, comparable $min/$max \u2014 accepting valid MongoDB costs acceptance-surface instantiations; still below pre-standardization main's 988k, and check time ~4.2s vs 4.9s). If this check fails: investigate the regression first (PR #99's depth-viewer attributes per-symbol cost); raise the budget only as a deliberate, reviewed decision \u2014 update lastMeasured and note the cause here."
 }

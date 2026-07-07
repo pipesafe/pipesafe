@@ -757,7 +757,7 @@ type _MinOperand_HasBrand = MinOperand<AccumulatorTestSchema>;
 type _Assert_MinBrand = Assert<
   AssertPipeSafeError<
     Extract<_MinOperand_HasBrand, PipeSafeError<string>>,
-    "Accumulator '$min' requires a numeric or date operand."
+    "Accumulator '$min' requires a comparable (number, date, or string) operand."
   >
 >;
 
@@ -765,7 +765,7 @@ type _MaxOperand_HasBrand = MaxOperand<AccumulatorTestSchema>;
 type _Assert_MaxBrand = Assert<
   AssertPipeSafeError<
     Extract<_MaxOperand_HasBrand, PipeSafeError<string>>,
-    "Accumulator '$max' requires a numeric or date operand."
+    "Accumulator '$max' requires a comparable (number, date, or string) operand."
   >
 >;
 

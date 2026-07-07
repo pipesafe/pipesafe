@@ -7,6 +7,7 @@ import {
   Document,
   ExcludeUndefined,
   IsPlainObject,
+  OmitNeverValues,
   Prettify,
   UnionToIntersection,
 } from "../utils/objects";
@@ -18,8 +19,13 @@ import { FlattenDotSet, HasDottedKeys, IsDottedKey } from "../utils/paths";
  * Rejecting them through the deep `AnyLiteral | Expression` union instead
  * accumulates relation depth on the shared call-checking stack and surfaced
  * spurious statement-level TS2589s next to the real error (plan §7.3
- * addendum). `Expression<Schema>` stays in the union for IDE autocomplete
- * and as the short-circuit for valid expressions.
+ * addendum).
+ *
+ * `Expression<Schema>` and `"$$REMOVE"` are AUTOCOMPLETE-ONLY members:
+ * for checking they are subsumed by `ExpressionShaped` and `` `$${string}` ``
+ * respectively (every valid expression is expression-shaped; "$$REMOVE" is
+ * a $-string), so neither can decide acceptance — do not "fix" acceptance
+ * bugs by editing them.
  */
 export type SetQuery<Schema extends Document> = {
   [k: string]:
@@ -31,24 +37,27 @@ export type SetQuery<Schema extends Document> = {
 };
 
 /**
- * Per-value re-check: `"$$REMOVE"` is set-specific and valid; everything
- * else delegates to the shared nested-validation kernel
- * (`elements/validation.ts`), which walks refs, expressions, and plain
- * objects at any depth.
- */
-type ValidateSetValue<Schema extends Document, V> =
-  V extends "$$REMOVE" ? never : ValidateNestedValue<Schema, V>;
-
-/**
  * Key-filtered validation wrapper for `Pipeline.set` (§3.8 rule 5):
- * a fully-valid query validates against `{}` so the intersection at the
- * parameter position (`$set: S & ValidateSetQuery<Schema, S>`) costs
- * nothing on the happy path; only offending keys survive the `as` filter.
+ * OmitNeverValues drops valid keys, so a fully-valid query validates
+ * against `{}` and the `$set: Q & ValidateSetQuery<Schema, Q>` intersection
+ * costs nothing on the happy path; only offending keys survive, mapped to
+ * the kernel's replacement so TS2322 lands at the offending value. The
+ * `string extends keyof Q` guard skips validation entirely when Q is not a
+ * literal query (the constraint-failure fallback instantiates the wrapper
+ * with SetQuery<Schema> itself — walking its wide value unions would brand
+ * valid keys and overflow the instantiation depth on top of the real
+ * error). `"$$REMOVE"` needs no special case: the kernel accepts the
+ * `$$`-system-variable namespace.
  */
-export type ValidateSetQuery<Schema extends Document, S> = {
-  [K in keyof S as [ValidateSetValue<Schema, S[K]>] extends [never] ? never
-  : K]: ValidateSetValue<Schema, S[K]>;
-};
+export type ValidateSetQuery<Schema extends Document, Q> =
+  // Schema wide-guard: a degenerate/index-signature schema (e.g. from an
+  // upstream inference gap) cannot be meaningfully validated against —
+  // skip rather than brand valid queries (forgiving, like the registry).
+  string extends keyof Schema ? {}
+  : string extends keyof Q ? {}
+  : OmitNeverValues<{
+      [K in keyof Q]: ValidateNestedValue<Schema, Q[K]>;
+    }>;
 
 export type ResolveSetQueryValueType<
   Schema extends Document,

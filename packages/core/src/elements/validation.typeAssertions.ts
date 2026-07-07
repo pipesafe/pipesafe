@@ -62,10 +62,36 @@ type _MultiKey = Assert<
     PipeSafeError<"Expression objects must have exactly one operator.">
   >
 >;
-type _UnknownOp = Assert<
+// Unknown operators are VALID — the registry covers a subset of MongoDB's
+// 100+ operators, and branding unregistered ones would reject working
+// pipelines ($toUpper, $switch, ...). Typos share this leniency by design.
+type _UnknownOpForgiven = Assert<
+  Equal<ValidateExpressionValue<User, { $toUpper: "$name" }>, never>
+>;
+
+// An operator key alongside plain keys is malformed (MongoDB: "an
+// expression specification must contain exactly one field").
+type _MixedKeys = Assert<
   Equal<
-    ValidateExpressionValue<User, { $sizee: "$tags" }>,
-    PipeSafeError<"Operator '$sizee' is not a known expression operator.">
+    ValidateExpressionValue<User, { $add: ["$age", 1]; extra: 1 }>,
+    PipeSafeError<"Expression objects must have exactly one operator.">
+  >
+>;
+
+// MongoDB system variables ($$-prefix) are not field references — valid.
+type _SystemVariable = Assert<Equal<ValidateNestedValue<User, "$$NOW">, never>>;
+type _SystemVariableNested = Assert<
+  Equal<ValidateNestedValue<User, { a: "$$ROOT" }>, never>
+>;
+
+// Arrays walk their elements: a bad ref inside an array literal brands at
+// the element position; valid arrays are never.
+type _BadRefInArray = Assert<
+  Equal<
+    ValidateNestedValue<User, { list: [{ x: "$naem" }] }>,
+    {
+      list: [{ x: PipeSafeError<"Field 'naem' is not on the schema."> }];
+    }
   >
 >;
 type _BadOperand = Assert<
@@ -101,7 +127,11 @@ export type {
   _ValidNestedTree,
   _BadRef,
   _MultiKey,
-  _UnknownOp,
+  _UnknownOpForgiven,
+  _MixedKeys,
+  _SystemVariable,
+  _SystemVariableNested,
+  _BadRefInArray,
   _BadOperand,
   _ReplacementTree,
 };

@@ -13,54 +13,71 @@
  * Contract shared by every helper: `never` means "valid — nothing to
  * report"; anything else is the replacement type the wrapper maps the key
  * to. Constraints are never re-spelled here (§3.8 rule 3): field
- * references check against `FieldReference<Schema>`, expression operands
- * against the registry's `ExpressionFor<Schema, Op>` — the brand the user
- * sees at an invalid operand IS the operand kernel's brand.
+ * references resolve through `GetFieldTypeWithoutArrays` (the same
+ * authority inference uses, so acceptance and inference cannot disagree
+ * and the Field brand is spelled once), expression operands check against
+ * the registry's `ExpressionFor<Schema, Op>`.
+ *
+ * Deliberately FORGIVING where the registry is incomplete: MongoDB has
+ * 100+ expression operators and the registry covers a subset, so an
+ * unknown single-operator key is treated as VALID (it was accepted before
+ * the §7.3 guard closed the literal hole, and rejecting it would break
+ * real pipelines). Only structurally malformed shapes brand: multi-
+ * operator objects, operator keys mixed with plain keys, and known
+ * operators with invalid operands.
  */
 
 import { Document, NonExpandableTypes } from "../utils/objects";
-import { PipeSafeError } from "../utils/errors";
-import {
-  HasOperatorKey,
-  HasSingleOperatorKey,
-  OperatorKeyOf,
-} from "../utils/dispatch";
-import { ExpressionFor } from "./expressions";
-import { FieldReference } from "./fieldReference";
+import { IsPipeSafeError, MultiOperatorError } from "../utils/errors";
+import { HasOperatorKey, OperatorKeyOf } from "../utils/dispatch";
+import { UnionToIntersection } from "../utils/objects";
+import { ExpressionFor, ExpressionSpec } from "./expressions";
+import { GetFieldTypeWithoutArrays } from "./fieldReference";
 import { WithoutDollar } from "../utils/strings";
 
 /**
  * Re-check for a `$`-keyed (expression-shaped) value:
  *
- * - multi-`$`-key object → the exactly-one-operator brand
- * - unknown operator → `Operator '...' is not a known expression operator.`
+ * - operator key(s) mixed with plain keys, or more than one operator key →
+ *   the exactly-one-operator brand (MongoDB: "an expression specification
+ *   must contain exactly one field")
  * - known operator, invalid operand → the registry's expected shape, so
  *   TS reports TS2322 at the offending operand against the operand
  *   kernel's branded union
+ * - unknown operator → valid (see the forgiving-registry note above)
  * - valid → `never`
  */
 export type ValidateExpressionValue<Schema extends Document, V> =
-  HasSingleOperatorKey<V> extends false ?
-    PipeSafeError<`Expression objects must have exactly one operator.`>
-  : [V] extends [ExpressionFor<Schema, OperatorKeyOf<V>>] ? never
-  : [ExpressionFor<Schema, OperatorKeyOf<V>>] extends [never] ?
-    PipeSafeError<`Operator '${OperatorKeyOf<V> & string}' is not a known expression operator.`>
-  : ExpressionFor<Schema, OperatorKeyOf<V>>;
+  [Exclude<keyof V & string, `$${string}`>] extends [never] ?
+    [OperatorKeyOf<V>] extends [UnionToIntersection<OperatorKeyOf<V>>] ?
+      [OperatorKeyOf<V>] extends [keyof ExpressionSpec<Schema>] ?
+        [V] extends [ExpressionFor<Schema, OperatorKeyOf<V>>] ?
+          never
+        : ExpressionFor<Schema, OperatorKeyOf<V>>
+      : never // unknown operator — forgiving (partial registry)
+    : MultiOperatorError
+  : MultiOperatorError; // operator key alongside plain keys
 
 /**
- * Recursive walk over a literal value tree. Handles the three `$`-shapes
- * the Query layer accepts structurally (field-reference strings, expression
- * objects, and plain objects containing either at any depth). Arrays are
- * left to the Query layer (their element unions are finite and shallow);
- * non-expandable objects (Date, ObjectId, RegExp, ...) are always valid.
+ * Recursive walk over a literal value tree. `$$`-prefixed strings are
+ * MongoDB SYSTEM VARIABLES ($$NOW, $$ROOT, $$REMOVE, $$this, ...), not
+ * field references — they are accepted as-is (rejecting them would reject
+ * valid MongoDB; their inference is not yet modeled). Single-`$` strings
+ * are field references and resolve through the same authority inference
+ * uses. Arrays walk their elements (a bad ref inside an array literal is
+ * as wrong as one outside it); non-expandable objects (Date, ObjectId,
+ * RegExp, ...) are always valid.
  */
 export type ValidateNestedValue<Schema extends Document, V> =
-  V extends `$${string}` ?
-    V extends FieldReference<Schema> ?
-      never
-    : PipeSafeError<`Field '${WithoutDollar<V & `$${string}`>}' is not on the schema.`>
+  V extends `$$${string}` ? never
+  : V extends `$${string}` ?
+    GetFieldTypeWithoutArrays<Schema, WithoutDollar<V>> extends infer R ?
+      IsPipeSafeError<R> extends true ?
+        R
+      : never
+    : never
   : HasOperatorKey<V> extends true ? ValidateExpressionValue<Schema, V>
-  : V extends readonly unknown[] ? never
+  : V extends readonly unknown[] ? ValidateArrayValue<Schema, V>
   : V extends object ?
     V extends NonExpandableTypes ?
       never
@@ -86,5 +103,24 @@ type ValidateObjectValue<Schema extends Document, V> =
     {
       [K in keyof V]: [ValidateNestedValue<Schema, V[K]>] extends [never] ? V[K]
       : ValidateNestedValue<Schema, V[K]>;
+    }
+  : never;
+
+/**
+ * Array/tuple arm: same never-or-replacement contract, element-wise. A
+ * mapped type over an array type maps its element positions, so tuples
+ * keep their shape and the error lands on the offending element.
+ */
+type ValidateArrayValue<Schema extends Document, V extends readonly unknown[]> =
+  true extends (
+    {
+      [I in keyof V]: [ValidateNestedValue<Schema, V[I]>] extends [never] ?
+        never
+      : true;
+    }[number]
+  ) ?
+    {
+      [I in keyof V]: [ValidateNestedValue<Schema, V[I]>] extends [never] ? V[I]
+      : ValidateNestedValue<Schema, V[I]>;
     }
   : never;

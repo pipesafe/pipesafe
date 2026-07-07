@@ -1,6 +1,11 @@
 import { Document } from "../utils/objects";
-import { PipeSafeError, RequiresMsg } from "../utils/errors";
 import {
+  MultiOperatorError,
+  PipeSafeError,
+  RequiresMsg,
+} from "../utils/errors";
+import {
+  HasOperatorKey,
   HasSingleOperatorKey,
   NotAnExpression,
   OperatorKeyOf,
@@ -367,6 +372,26 @@ export type ExpressionFor<Schema extends Document, Op> =
     { [K in Op]: ExpressionSpec<Schema>[K]["operand"] }
   : never;
 
+/**
+ * Registry keys whose declared `returns` is assignable to `T` — derived, so
+ * a new registry entry joins automatically. Used to build "any expression
+ * producing a T" operand arms (e.g. numeric accumulators accepting
+ * `{ $size: ... }`).
+ */
+type OpsReturning<Schema extends Document, T> = {
+  [K in keyof ExpressionSpec<Schema>]: ExpressionSpec<Schema>[K]["returns"] extends (
+    T
+  ) ?
+    K
+  : never;
+}[keyof ExpressionSpec<Schema>];
+
+/** Union of expression shapes whose declared result is assignable to `T`. */
+export type ExpressionsReturning<Schema extends Document, T> = ExpressionFor<
+  Schema,
+  OpsReturning<Schema, T>
+>;
+
 // Category key sets — the registry's table of contents.
 type ArrayOps =
   | "$concatArrays"
@@ -579,6 +604,16 @@ type GetArrayElement<Schema extends Document, Item> =
     InferFieldReference<Schema, Item> extends (infer T)[] ?
       T // Field reference to array - extract element type
     : never
+  : HasOperatorKey<Item> extends true ?
+    // Array-producing expression item ($filter/$concatArrays/$map/...):
+    // route through the single dispatch and unwrap. Without this arm the
+    // item's elements silently vanished from the result — a WRONG type,
+    // violating the degrade-to-widest contract.
+    InferExpression<Schema, Item> extends infer R ?
+      R extends (infer T)[] ?
+        T
+      : unknown
+    : never
   : never;
 
 /**
@@ -682,8 +717,7 @@ type InferDependentExpression<Schema extends Document, Expr> =
  */
 export type InferExpression<Schema extends Document, Expr> =
   [OperatorKeyOf<Expr>] extends [never] ? NotAnExpression
-  : HasSingleOperatorKey<Expr> extends false ?
-    PipeSafeError<`Expression objects must have exactly one operator.`>
+  : HasSingleOperatorKey<Expr> extends false ? MultiOperatorError
   : [OperatorKeyOf<Expr>] extends [LiteralDependentOps] ?
     InferDependentExpression<Schema, Expr>
   : [OperatorKeyOf<Expr>] extends [keyof ExpressionSpec<Schema>] ?

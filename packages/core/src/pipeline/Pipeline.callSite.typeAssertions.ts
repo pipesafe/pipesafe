@@ -73,6 +73,22 @@ const _set_bad_nested_ref = new Pipeline<User>().set({ meta: { userName: "$naem"
 // prettier-ignore
 const _set_good_nested_ref = new Pipeline<User>().set({ meta: { userName: "$name", info: { plain: 1 } } });
 
+// set — an operator key mixed with plain keys is malformed (MongoDB: "an
+// expression specification must contain exactly one field").
+// @ts-expect-error  expression objects must have exactly one operator
+// prettier-ignore
+const _set_bad_mixed_keys = new Pipeline<User>().set({ y: { $add: ["$age", 1], extra: 1 } });
+
+// set — UNREGISTERED operators are valid MongoDB the registry doesn't model
+// ($toUpper, $switch, ...); they must keep compiling (typos share this
+// leniency — the partial-registry trade-off, elements/validation.ts).
+// prettier-ignore
+const _set_unknown_op_ok = new Pipeline<User>().set({ upper: { $toUpper: "$name" } });
+
+// set — `$$`-system variables are not field references; they are accepted.
+// prettier-ignore
+const _set_system_var_ok = new Pipeline<User>().set({ a: { b: "$$REMOVE" }, now: "$$NOW" });
+
 // group — accumulator operand brands now fire at the chained call site via
 // the key-filtered ValidateGroupQuery intersection (§7.4; GroupQuery's
 // `[key: string]:` index signature suppresses the in-Query brands, §3.8
@@ -81,14 +97,24 @@ const _set_good_nested_ref = new Pipeline<User>().set({ meta: { userName: "$name
 // prettier-ignore
 const _group_bad_sum = new Pipeline<User>().group({ _id: null, total: { $sum: "$name" } });
 
-// group — $min/$max accept numeric OR date operands; a string field brands.
-// @ts-expect-error  '$name' is a string field; $min requires a numeric or date operand
+// group — $min/$max accept BSON-comparable operands (number, date, AND
+// string: `$min: "$name"` is valid MongoDB — lexicographic min); a boolean
+// literal is not modeled as comparable and brands.
 // prettier-ignore
-const _group_bad_min = new Pipeline<User>().group({ _id: null, first: { $min: "$name" } });
+const _group_min_string_ok = new Pipeline<User>().group({ _id: null, first: { $min: "$name" } });
 
-// @ts-expect-error  '$name' is a string field; $max requires a numeric or date operand
+// @ts-expect-error  booleans are not a modeled comparable for $min
 // prettier-ignore
-const _group_bad_max = new Pipeline<User>().group({ _id: null, last: { $max: "$name" } });
+const _group_bad_min = new Pipeline<User>().group({ _id: null, first: { $min: true } });
+
+// @ts-expect-error  booleans are not a modeled comparable for $max
+// prettier-ignore
+const _group_bad_max = new Pipeline<User>().group({ _id: null, last: { $max: true } });
+
+// group — numeric-RETURNING expressions are valid $sum operands (registry-
+// derived ExpressionsReturning arm): `$sum: { $size: ... }` is idiomatic.
+// prettier-ignore
+const _group_sum_size_ok = new Pipeline<User>().group({ _id: null, n: { $sum: { $size: "$tags" } } });
 
 // group — the compound-_id pattern must KEEP compiling under the wrapper
 // (the reason the intersection form is required; plan §7.4), and the valid
@@ -107,10 +133,12 @@ const _group_compound_id = new Pipeline<User>().group({
 // prettier-ignore
 const _group_bad_id_nested = new Pipeline<User>().group({ _id: { calc: { $add: ["$name", 1] } }, count: { $sum: 1 } });
 
-// group — a $-keyed non-accumulator value brands as an unknown accumulator.
-// @ts-expect-error  '$sum2' is not a known accumulator
+// group — UNREGISTERED accumulators are accepted structurally: MongoDB has
+// accumulators the registry doesn't model ($stdDevPop, $top, ...), and
+// branding them would reject valid pipelines with errors on the wrong keys.
+// Typos share this leniency by design (partial-registry trade-off).
 // prettier-ignore
-const _group_unknown_accum = new Pipeline<User>().group({ _id: null, v: { $sum2: "$age" } });
+const _group_unknown_accum_ok = new Pipeline<User>().group({ _id: null, dev: { $stdDevPop: "$age" } });
 
 // project — an invalid expression value fails (ValidateProjectQuery routes
 // values through the ValidateNestedValue walk).
@@ -123,14 +151,22 @@ const _project_bad_expr = new Pipeline<User>().project({ total: { $add: ["$name"
 // @ts-expect-error  '$naem' is not a valid field reference on User
 const _project_bad_ref = new Pipeline<User>().project({ display: "$naem" });
 
-// project — valid computed values (rename, expression, nested object) must
-// not brand.
+// project — valid computed values (rename, expression, nested object,
+// plain-string literal assignment, system variable) must not brand.
 const _project_good_computed = new Pipeline<User>().project({
   name: 1,
   display: "$name",
   total: { $add: ["$age", 1] },
   meta: { userName: "$name" },
+  greeting: "hello",
+  root: "$$ROOT",
 });
+
+// project — a bad ref inside an ARRAY under a nested object brands at the
+// element (the walk covers array elements).
+// @ts-expect-error  '$naem' is not a valid field reference on User
+// prettier-ignore
+const _project_bad_ref_in_array = new Pipeline<User>().project({ name: 1, meta: { list: [{ x: "$naem" }] } });
 
 // project — mixed inclusion/exclusion should fail.
 // @ts-expect-error  cannot mix inclusion and exclusion
@@ -168,16 +204,22 @@ export {
   _set_bad_nested,
   _set_bad_nested_ref,
   _set_good_nested_ref,
+  _set_bad_mixed_keys,
+  _set_unknown_op_ok,
+  _set_system_var_ok,
   _unset_bad,
   _group_bad_sum,
+  _group_min_string_ok,
   _group_bad_min,
   _group_bad_max,
+  _group_sum_size_ok,
+  _group_unknown_accum_ok,
   _group_compound_id,
   _group_bad_id_nested,
-  _group_unknown_accum,
   _project_bad_expr,
   _project_bad_ref,
   _project_good_computed,
+  _project_bad_ref_in_array,
   _project_mixed,
   _project_unknown,
   _replaceRoot_bad,

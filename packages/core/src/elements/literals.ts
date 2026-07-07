@@ -1,5 +1,5 @@
 import { ObjectId } from "mongodb";
-import { Document } from "../utils/objects";
+import { Document, ForbidKeys } from "../utils/objects";
 import { NoDollarString } from "../utils/strings";
 import { FieldReferencesThatInferTo } from "./fieldReference";
 
@@ -30,13 +30,11 @@ export type ArrayLiterals<Schema extends Document> =
  */
 export type ExpressionShaped = {
   [K in `$${string}`]: unknown;
-} & {
-  // Load-bearing guard: a pattern index signature constrains only MATCHING
-  // keys, so without this every plain object is VACUOUSLY expression-shaped
-  // and this arm would swallow all nested literal checking (the same bug
-  // class as the pre-§7.3 ObjectLiteral hole, one level up).
-  [K in NoDollarString]?: never;
-};
+  // ForbidKeys is load-bearing: without it every plain object is VACUOUSLY
+  // expression-shaped (pattern indexes constrain only matching keys) and
+  // this arm would swallow all nested literal checking — the same bug class
+  // as the pre-§7.3 ObjectLiteral hole, one level up.
+} & ForbidKeys<NoDollarString>;
 
 /**
  * The `$`-key guard: a `$`-prefixed key on the object itself disqualifies
@@ -56,9 +54,7 @@ export type ObjectLiteral<Schema extends Document> = {
     // unknown paths, which the Validate walk brands (rejecting them here
     // would go through the deep refs union; §3.8 rule 6).
     | `$${string}`;
-} & {
-  [K in `$${string}`]?: never;
-};
+} & ForbidKeys<`$${string}`>;
 
 export type AnyLiteral<Schema extends Document> =
   | ResolveToPrimitive<Schema>
