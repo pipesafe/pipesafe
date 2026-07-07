@@ -41,6 +41,27 @@ const _set_bad = new Pipeline<User>().set({ display: "$naem" });
 // @ts-expect-error  'naem' is not a field of User
 const _unset_bad = new Pipeline<User>().unset("naem");
 
+// set — a TOP-LEVEL invalid expression must fail: the ObjectLiteral $-key
+// guard (elements/literals.ts, §7.3) stops it from slipping through the
+// literal arm, so it must pass Expression<User> or be rejected.
+// @ts-expect-error  '$name' is a string field; $add requires numeric operands
+// prettier-ignore
+const _set_bad_expr = new Pipeline<User>().set({ total: { $add: ["$name", 1] } });
+
+// set — a VALID expression nested inside an object literal must keep
+// compiling (accepted via ObjectLiteral's expression-shaped arm; before the
+// $-key guard this only worked through the vacuous-assignability bug).
+// prettier-ignore
+const _set_good_nested = new Pipeline<User>().set({ meta: { computed: { $add: ["$age", 1] } } });
+
+// TODO(§7.3 option B): a NESTED invalid expression is still accepted —
+// ObjectLiteral's expression-shaped arm checks only the `$`-key shape, not
+// operand validity; strictness for nested operand errors arrives with the
+// per-stage Validate layer (§7.2). When that lands, convert this to a real
+// expect-error pin.
+// prettier-ignore
+const _set_bad_nested_TODO = new Pipeline<User>().set({ meta: { computed: { $add: ["$name", 1] } } });
+
 // group — call-site brand surfacing for `$sum: '$stringField'` is a
 // known limitation. The brand exists in the type system (covered by
 // group.typeAssertions.ts) but doesn't fire at the chained call site
@@ -81,6 +102,9 @@ export {
   _match_bad,
   _sort_bad,
   _set_bad,
+  _set_bad_expr,
+  _set_good_nested,
+  _set_bad_nested_TODO,
   _unset_bad,
   _project_mixed,
   _project_unknown,
