@@ -25,7 +25,9 @@ import { Pipeline, InferOutputType } from "../pipeline/Pipeline";
 import { Assert, Equal } from "../utils/tests";
 import { NotAnExpression } from "../utils/dispatch";
 import { PipeSafeError } from "../utils/errors";
-import { ResolveCountOutput } from "./count";
+import { CountQuery, ResolveCountOutput } from "./count";
+import { LimitQuery } from "./limit";
+import { SkipQuery } from "./skip";
 import { ResolveGraphLookupOutput } from "./graphLookup";
 import { InferExpression } from "../elements/expressions";
 import { InferNestedFieldReference } from "../elements/fieldReference";
@@ -138,6 +140,25 @@ type _DispatchMultiOperator = Assert<
   >
 >;
 
+// ============================================================================
+// 4. Scalar-stage Query wiring (§7.2)
+// ============================================================================
+// Every stage exports its Query type — scalar stages as schema-free aliases —
+// and the Pipeline method's parameter references the module's type. These
+// pins break if a method's parameter drifts from its module's Query alias
+// (e.g. widening to `number | string`); identical-alias drift is caught by
+// review/grep, which is why the aliases exist at all.
+
+type _LimitUsesModuleQuery = Assert<
+  Equal<Parameters<Pipeline<Document>["limit"]>[0], LimitQuery>
+>;
+type _SkipUsesModuleQuery = Assert<
+  Equal<Parameters<Pipeline<Document>["skip"]>[0], SkipQuery>
+>;
+type _CountUsesModuleQuery = Assert<
+  Equal<Parameters<Pipeline<Document>["count"]>[0], CountQuery>
+>;
+
 // (d) Forgiving dispatch holds through the NESTED-VALUE hot path
 // (InferNestedFieldReference), not just direct InferExpression calls. The
 // PR #102 review showed that reverting InferNestedFieldReference to a
@@ -189,4 +210,7 @@ export type {
   _DispatchLiteralSentinel,
   _DispatchMultiOperator,
   _NestedForgiving,
+  _LimitUsesModuleQuery,
+  _SkipUsesModuleQuery,
+  _CountUsesModuleQuery,
 };
