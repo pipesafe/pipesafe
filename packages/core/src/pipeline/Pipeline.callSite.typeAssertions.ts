@@ -55,13 +55,23 @@ const _set_bad_expr = new Pipeline<User>().set({ total: { $add: ["$name", 1] } }
 // prettier-ignore
 const _set_good_nested = new Pipeline<User>().set({ meta: { computed: { $add: ["$age", 1] } } });
 
-// TODO(§7.3 option B): a NESTED invalid expression is still accepted —
-// ObjectLiteral's expression-shaped arm checks only the `$`-key shape, not
-// operand validity; strictness for nested operand errors arrives with the
-// per-stage Validate layer (§7.2). When that lands, convert this to a real
-// expect-error pin.
+// set — a NESTED invalid expression fails: the ValidateNestedValue walk
+// (elements/validation.ts) re-checks expression-shaped values at any depth
+// and maps the offending node to the registry's expected operand shape.
+// @ts-expect-error  '$name' is a string field; $add requires numeric operands
 // prettier-ignore
-const _set_bad_nested_TODO = new Pipeline<User>().set({ meta: { computed: { $add: ["$name", 1] } } });
+const _set_bad_nested = new Pipeline<User>().set({ meta: { computed: { $add: ["$name", 1] } } });
+
+// set — a NESTED unknown field reference fails with the Field brand (the
+// walk checks `$`-strings at any depth; ObjectLiteral accepts them
+// structurally so the rejection stays shallow).
+// @ts-expect-error  '$naem' is not a valid field reference on User
+// prettier-ignore
+const _set_bad_nested_ref = new Pipeline<User>().set({ meta: { userName: "$naem" } });
+
+// set — nested VALID refs and deep literals must not brand.
+// prettier-ignore
+const _set_good_nested_ref = new Pipeline<User>().set({ meta: { userName: "$name", info: { plain: 1 } } });
 
 // group — accumulator operand brands now fire at the chained call site via
 // the key-filtered ValidateGroupQuery intersection (§7.4; GroupQuery's
@@ -89,6 +99,37 @@ const _group_compound_id = new Pipeline<User>().group({
   avgAge: { $avg: "$age" },
   firstSeen: { $min: "$joinedAt" },
   maxAge: { $max: "$age" },
+});
+
+// group — a nested invalid expression inside compound _id fails (the _id
+// position gets the ValidateNestedValue walk).
+// @ts-expect-error  '$name' is a string field; $add requires numeric operands
+// prettier-ignore
+const _group_bad_id_nested = new Pipeline<User>().group({ _id: { calc: { $add: ["$name", 1] } }, count: { $sum: 1 } });
+
+// group — a $-keyed non-accumulator value brands as an unknown accumulator.
+// @ts-expect-error  '$sum2' is not a known accumulator
+// prettier-ignore
+const _group_unknown_accum = new Pipeline<User>().group({ _id: null, v: { $sum2: "$age" } });
+
+// project — an invalid expression value fails (ValidateProjectQuery routes
+// values through the ValidateNestedValue walk).
+// @ts-expect-error  '$name' is a string field; $add requires numeric operands
+// prettier-ignore
+const _project_bad_expr = new Pipeline<User>().project({ total: { $add: ["$name", 1] } });
+
+// project — an unknown field reference value fails with the Field brand at
+// the call site (previously it only surfaced in the OUTPUT schema).
+// @ts-expect-error  '$naem' is not a valid field reference on User
+const _project_bad_ref = new Pipeline<User>().project({ display: "$naem" });
+
+// project — valid computed values (rename, expression, nested object) must
+// not brand.
+const _project_good_computed = new Pipeline<User>().project({
+  name: 1,
+  display: "$name",
+  total: { $add: ["$age", 1] },
+  meta: { userName: "$name" },
 });
 
 // project — mixed inclusion/exclusion should fail.
@@ -124,12 +165,19 @@ export {
   _set_bad,
   _set_bad_expr,
   _set_good_nested,
-  _set_bad_nested_TODO,
+  _set_bad_nested,
+  _set_bad_nested_ref,
+  _set_good_nested_ref,
   _unset_bad,
   _group_bad_sum,
   _group_bad_min,
   _group_bad_max,
   _group_compound_id,
+  _group_bad_id_nested,
+  _group_unknown_accum,
+  _project_bad_expr,
+  _project_bad_ref,
+  _project_good_computed,
   _project_mixed,
   _project_unknown,
   _replaceRoot_bad,

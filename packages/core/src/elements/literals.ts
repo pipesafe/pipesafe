@@ -30,6 +30,12 @@ export type ArrayLiterals<Schema extends Document> =
  */
 export type ExpressionShaped = {
   [K in `$${string}`]: unknown;
+} & {
+  // Load-bearing guard: a pattern index signature constrains only MATCHING
+  // keys, so without this every plain object is VACUOUSLY expression-shaped
+  // and this arm would swallow all nested literal checking (the same bug
+  // class as the pre-§7.3 ObjectLiteral hole, one level up).
+  [K in NoDollarString]?: never;
 };
 
 /**
@@ -45,7 +51,11 @@ export type ObjectLiteral<Schema extends Document> = {
     | ResolveToPrimitive<Schema>
     | ArrayLiterals<Schema>
     | ObjectLiteral<Schema>
-    | ExpressionShaped;
+    | ExpressionShaped
+    // Structural acceptance of nested field-reference strings — including
+    // unknown paths, which the Validate walk brands (rejecting them here
+    // would go through the deep refs union; §3.8 rule 6).
+    | `$${string}`;
 } & {
   [K in `$${string}`]?: never;
 };

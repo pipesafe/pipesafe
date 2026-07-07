@@ -29,16 +29,20 @@ import { AnyLiteral } from "./literals";
 // ----------------------------------------------------------------------------
 
 /**
- * Array operand — accepts a field reference to an array field, or an array
- * literal of any element type. The branded `PipeSafeError` arm surfaces in
- * IDE hovers when a user passes a non-array value (e.g. a string field
- * reference) where an array is required. Specialized rather than an
- * `ExpressionOperand` one-liner because the literal arm is `AnyLiteral[]`
- * while the reference arm targets `unknown[]`.
+ * Array operand — accepts a field reference to an array field, an array
+ * literal of any element type, or an array-producing expression
+ * ($concatArrays/$arrayElemAt/$filter/$map — e.g. `$size: { $filter: … }`).
+ * The branded `PipeSafeError` arm surfaces in IDE hovers when a user passes
+ * a non-array value (e.g. a string field reference) where an array is
+ * required. Specialized rather than an `ExpressionOperand` one-liner
+ * because the literal arm is `AnyLiteral[]` while the reference arm targets
+ * `unknown[]`.
  */
 type ArrayOperand<Schema extends Document, Op extends string> =
   | FieldReferencesThatInferTo<Schema, unknown[]>
   | AnyLiteral<Schema>[]
+  | ArrayProducingExpression<Schema>
+  | MapExpression<Schema>
   | PipeSafeError<RequiresMsg<"Operator", Op, "an array operand">>;
 
 /**
@@ -184,11 +188,12 @@ export interface ExpressionSpec<Schema extends Document> {
     ];
     returns: unknown;
   };
-  /** Filters an array by a condition (cond uses $$var references). */
+  /** Filters an array by a condition (cond uses $$var references; `as`
+   *  defaults to `$$this` in MongoDB, so it is optional). */
   $filter: {
     operand: {
       input: ArrayOperand<Schema, "$filter">;
-      as: string;
+      as?: string;
       cond: unknown;
       limit?: number;
     };
