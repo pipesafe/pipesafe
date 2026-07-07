@@ -33,10 +33,10 @@ import {
 import { ResolveUnionWithOutput } from "../stages/unionWith";
 import { SortQuery, ResolveSortOutput } from "../stages/sort";
 import { ResolveUnwindOutput, UnwindPath, UnwindQuery } from "../stages/unwind";
-import { ResolveLimitOutput } from "../stages/limit";
-import { ResolveSkipOutput } from "../stages/skip";
+import { LimitQuery, ResolveLimitOutput } from "../stages/limit";
+import { SkipQuery, ResolveSkipOutput } from "../stages/skip";
 import { ResolveSampleOutput, SampleQuery } from "../stages/sample";
-import { ResolveCountOutput } from "../stages/count";
+import { CountQuery, ResolveCountOutput } from "../stages/count";
 import { OutQuery } from "../stages/out";
 import { MergeQuery } from "../stages/merge";
 import { AggregationCursor, MongoClient } from "mongodb";
@@ -468,7 +468,7 @@ export class Pipeline<
    * @example .limit(10)
    */
   limit(
-    n: number
+    n: LimitQuery
   ): Pipeline<
     StartingDocs,
     ResolveLimitOutput<PreviousStageDocs>,
@@ -485,7 +485,7 @@ export class Pipeline<
    * @example .skip(20).limit(10)
    */
   skip(
-    n: number
+    n: SkipQuery
   ): Pipeline<
     StartingDocs,
     ResolveSkipOutput<PreviousStageDocs>,
@@ -519,7 +519,7 @@ export class Pipeline<
    * under the given field name.
    * @example .count("total") // → { total: number }
    */
-  count<F extends string>(
+  count<F extends CountQuery>(
     fieldName: F
   ): Pipeline<
     StartingDocs,

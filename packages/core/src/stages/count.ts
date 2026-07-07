@@ -2,6 +2,13 @@ import { PassThrough } from "../utils/errors";
 import { Document } from "../utils/objects";
 
 /**
+ * `$count` takes the output field's name. Schema-free scalar Query
+ * (§3.1/§7.2): exported so `Pipeline.count` references the module's type
+ * rather than an inline `string`.
+ */
+export type CountQuery = string;
+
+/**
  * `$count` produces a single document with one numeric field whose
  * name is the string passed to the stage.
  *
