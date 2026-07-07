@@ -80,16 +80,14 @@ const concatPipeline = new Pipeline<TestDoc>()
 export type ConcatOutputType = InferOutputType<typeof concatPipeline>;
 // Should be: { items: string[], numbers: number[], tags: ("a" | "b" | "c")[], name: string }
 
-// Type validation test: This should cause a type error
-// Note: Currently "$name" is treated as a string literal, not a field reference
-// Since the ObjectLiteral $-key guard, the rejection reports on the property
-// (TS2322 against the value union) and can also surface a statement-level
-// TS2589 while TS explores the union — both are the expected failure.
-// @ts-expect-error - depth blowup (TS2589) while rejecting the invalid expression
+// Type validation test: This should cause a type error. ValidateSetQuery
+// maps the offending key to the registry's expected shape, so the rejection
+// is a single TS2322 against ArrayOperand at the operand — no spurious
+// statement-level TS2589 (plan §7.3 addendum).
 export const _invalidPipeline = new Pipeline<TestDoc>().set({
-  // @ts-expect-error - ERROR: $name is string, not array
   items: {
-    $concatArrays: ["$name", ["test"]], // ERROR: $name is string, not array
+    // @ts-expect-error - ERROR: $name is string, not array
+    $concatArrays: ["$name", ["test"]],
   },
 });
 

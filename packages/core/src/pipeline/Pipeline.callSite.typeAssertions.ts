@@ -31,9 +31,10 @@ const _match_bad = new Pipeline<User>().match({ name: { $gte: "Alice" } });
 // @ts-expect-error  'naem' is not a field of User
 const _sort_bad = new Pipeline<User>().sort({ naem: 1 });
 
-// set — typo'd field reference should fail. (Note: the `$naem` typo
-// also currently triggers TS2589 depth limit, which counts as "fails to
-// compile" for our purposes.)
+// set — typo'd field reference should fail. ValidateSetQuery brands it
+// (`Field 'naem' is not on the schema.`) — previously this rejected through
+// the deep AnyLiteral | Expression union and surfaced a spurious TS2589
+// next to the error (plan §7.3 addendum).
 // @ts-expect-error  '$naem' is not a valid field reference on User
 const _set_bad = new Pipeline<User>().set({ display: "$naem" });
 
