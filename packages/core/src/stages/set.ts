@@ -1,7 +1,16 @@
-import { InferNestedFieldReference } from "../elements/fieldReference";
-import { Expression } from "../elements/expressions";
-import { AnyLiteral } from "../elements/literals";
-import { PassThrough } from "../utils/errors";
+import {
+  FieldReference,
+  InferNestedFieldReference,
+} from "../elements/fieldReference";
+import { Expression, ExpressionFor } from "../elements/expressions";
+import { AnyLiteral, ExpressionShaped } from "../elements/literals";
+import { PassThrough, PipeSafeError } from "../utils/errors";
+import {
+  HasOperatorKey,
+  HasSingleOperatorKey,
+  OperatorKeyOf,
+} from "../utils/dispatch";
+import { WithoutDollar } from "../utils/strings";
 import {
   Document,
   ExcludeUndefined,
@@ -11,8 +20,62 @@ import {
 } from "../utils/objects";
 import { FlattenDotSet, HasDottedKeys, IsDottedKey } from "../utils/paths";
 
+/**
+ * `$`-shaped values (`$`-strings, `$`-keyed objects) are accepted
+ * STRUCTURALLY here and re-checked by `ValidateSetQuery` (§3.8 rule 2/6).
+ * Rejecting them through the deep `AnyLiteral | Expression` union instead
+ * accumulates relation depth on the shared call-checking stack and surfaced
+ * spurious statement-level TS2589s next to the real error (plan §7.3
+ * addendum). `Expression<Schema>` stays in the union for IDE autocomplete
+ * and as the short-circuit for valid expressions.
+ */
 export type SetQuery<Schema extends Document> = {
-  [k: string]: AnyLiteral<Schema> | Expression<Schema> | "$$REMOVE";
+  [k: string]:
+    | AnyLiteral<Schema>
+    | Expression<Schema>
+    | `$${string}`
+    | ExpressionShaped
+    | "$$REMOVE";
+};
+
+/**
+ * Per-value re-check for the structurally-accepted `$`-shapes. `never`
+ * means "valid — nothing to report"; anything else is the branded (or
+ * expected-shape) replacement `ValidateSetQuery` maps the key to:
+ *
+ * - unknown field reference  → the `Field '...' is not on the schema.` brand
+ * - multi-`$`-key object     → the exactly-one-operator brand
+ * - unknown operator         → `Operator '...' is not a known expression
+ *                              operator.`
+ * - known operator, invalid operand → the registry's expected shape
+ *   (`ExpressionFor<Schema, Op>`), so TS reports TS2322 at the offending
+ *   operand against the operand kernel's branded union (§3.8 rule 3 —
+ *   the constraint stays spelled once, in the registry).
+ */
+type ValidateSetValue<Schema extends Document, V> =
+  V extends "$$REMOVE" ? never
+  : V extends `$${string}` ?
+    V extends FieldReference<Schema> ?
+      never
+    : PipeSafeError<`Field '${WithoutDollar<V & `$${string}`>}' is not on the schema.`>
+  : HasOperatorKey<V> extends true ?
+    HasSingleOperatorKey<V> extends false ?
+      PipeSafeError<`Expression objects must have exactly one operator.`>
+    : [V] extends [ExpressionFor<Schema, OperatorKeyOf<V>>] ? never
+    : [ExpressionFor<Schema, OperatorKeyOf<V>>] extends [never] ?
+      PipeSafeError<`Operator '${OperatorKeyOf<V> & string}' is not a known expression operator.`>
+    : ExpressionFor<Schema, OperatorKeyOf<V>>
+  : never;
+
+/**
+ * Key-filtered validation wrapper for `Pipeline.set` (§3.8 rule 5):
+ * a fully-valid query validates against `{}` so the intersection at the
+ * parameter position (`$set: S & ValidateSetQuery<Schema, S>`) costs
+ * nothing on the happy path; only offending keys survive the `as` filter.
+ */
+export type ValidateSetQuery<Schema extends Document, S> = {
+  [K in keyof S as [ValidateSetValue<Schema, S[K]>] extends [never] ? never
+  : K]: ValidateSetValue<Schema, S[K]>;
 };
 
 export type ResolveSetQueryValueType<

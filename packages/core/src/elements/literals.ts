@@ -28,7 +28,7 @@ export type ArrayLiterals<Schema extends Document> =
  * paying full `Expression<Schema>` union membership at every literal value
  * (measured +26.6% whole-project instantiations vs +12.5% for this shape).
  */
-type ExpressionShaped = {
+export type ExpressionShaped = {
   [K in `$${string}`]: unknown;
 };
 

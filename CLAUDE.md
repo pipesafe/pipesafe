@@ -251,10 +251,12 @@ All brand messages follow one skeleton, keyed off MongoDB nomenclature:
 
 ```
 Operator           '$op' requires <constraint>.
+Operator           '$op' is not a known expression operator.
 Accumulator        '$op' requires <constraint>.
 Stage              '$stage' <constraint>.
 Field              'name' is not on the schema.
 Foreign collection has no <constraint>.
+Expression objects must have exactly one operator.
 ```
 
 Conventions:

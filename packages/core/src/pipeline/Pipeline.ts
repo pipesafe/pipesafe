@@ -3,7 +3,7 @@ import { tagClient } from "../singleton/tagClient";
 import { Document } from "../utils/objects";
 import { WithoutDollar } from "../utils/strings";
 import { MatchQuery, ResolveMatchOutput } from "../stages/match";
-import { ResolveSetOutput, SetQuery } from "../stages/set";
+import { ResolveSetOutput, SetQuery, ValidateSetQuery } from "../stages/set";
 import { ResolveUnsetOutput, UnsetQuery } from "../stages/unset";
 import {
   FieldPath,
@@ -212,7 +212,7 @@ export class Pipeline<
   }
 
   set<const S extends SetQuery<PreviousStageDocs>>(
-    $set: S
+    $set: S & ValidateSetQuery<PreviousStageDocs, S>
   ): Pipeline<
     StartingDocs,
     ResolveSetOutput<PreviousStageDocs, S>,

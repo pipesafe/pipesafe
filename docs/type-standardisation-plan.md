@@ -981,6 +981,39 @@ Open items for the implementing PR:
   defers them.
 - `ResolveToPrimitiveObject` (group `_id` position) needs the same audit.
 
+#### 7.3 addendum (implemented): the TS2589 rejection noise, root-caused and fixed
+
+The "rejections can surface as TS2589" caveat was root-caused with bisection
+probes and PR #99's depth-viewer, then fixed:
+
+- **Root cause**: no single type was too deep. The resolver applied to the
+  const-inferred literal, the resolver applied to the widened constraint,
+  and every union-member relation were each individually clean; the TS2589
+  appeared only in the real failing call's context, where inference,
+  constraint elaboration through the deep `AnyLiteral | Expression` union,
+  and return-type instantiation share ONE cumulative instantiation stack.
+  (Empirically it required: `const` generic + `ResolveSetOutput` in the
+  return type + the failing relation — remove any one and the 2589
+  vanishes.)
+- **Fix (§3.8 rules 2/5/6 applied to `set`)**: `SetQuery` accepts
+  `$`-strings and `$`-keyed objects STRUCTURALLY (shallow — nothing deep to
+  explore on failure), and the key-filtered `ValidateSetQuery` intersection
+  re-checks them: unknown refs brand with the existing Field message,
+  multi-`$`-key objects with the exactly-one-operator brand, unknown
+  operators with `Operator '<op>' is not a known expression operator.`, and
+  known-operator/invalid-operand values are mapped to the registry's
+  expected shape (`ExpressionFor<Schema, Op>`) so TS reports TS2322 at the
+  offending operand against the operand kernel's branded union.
+- **Result**: zero TS2589 across all rejection probes; every `set`
+  rejection is now a single correctly-positioned TS2322 (previously: a
+  union-wall TS2322 plus a spurious statement-level TS2589). Cost:
+  +42,860 whole-project instantiations (+6.6%), check time unchanged
+  (~3.1s); depth-viewer attribution: `ValidateSetQuery` 182 +
+  `ValidateSetValue` 86 owned registry entries, `ExpressionFor` +1.
+- **Remaining**: `project` should get the same treatment when its
+  expression-position Validate member lands (§7.2); nested-in-literal
+  operand strictness is still the standing TODO pin.
+
 ### 7.4 Group accumulator validation — fix the known limitation
 
 Maintainer decision: fix it. Review findings that reframe the CLAUDE.md
