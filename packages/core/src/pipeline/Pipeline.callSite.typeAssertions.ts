@@ -71,12 +71,24 @@ const _set_bad_nested_TODO = new Pipeline<User>().set({ meta: { computed: { $add
 // prettier-ignore
 const _group_bad_sum = new Pipeline<User>().group({ _id: null, total: { $sum: "$name" } });
 
+// group — $min/$max accept numeric OR date operands; a string field brands.
+// @ts-expect-error  '$name' is a string field; $min requires a numeric or date operand
+// prettier-ignore
+const _group_bad_min = new Pipeline<User>().group({ _id: null, first: { $min: "$name" } });
+
+// @ts-expect-error  '$name' is a string field; $max requires a numeric or date operand
+// prettier-ignore
+const _group_bad_max = new Pipeline<User>().group({ _id: null, last: { $max: "$name" } });
+
 // group — the compound-_id pattern must KEEP compiling under the wrapper
-// (the reason the intersection form is required; plan §7.4).
+// (the reason the intersection form is required; plan §7.4), and the valid
+// accumulators — including Date-typed $min/$max — must not brand.
 const _group_compound_id = new Pipeline<User>().group({
   _id: { day: { $dateToString: { format: "%Y-%m-%d", date: "$joinedAt" } } },
   count: { $sum: 1 },
   avgAge: { $avg: "$age" },
+  firstSeen: { $min: "$joinedAt" },
+  maxAge: { $max: "$age" },
 });
 
 // project — mixed inclusion/exclusion should fail.
@@ -115,6 +127,8 @@ export {
   _set_bad_nested_TODO,
   _unset_bad,
   _group_bad_sum,
+  _group_bad_min,
+  _group_bad_max,
   _group_compound_id,
   _project_mixed,
   _project_unknown,

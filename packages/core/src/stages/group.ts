@@ -117,14 +117,39 @@ export type GroupQuery<Schema extends Document> = {
 };
 
 /**
- * The brand an invalid numeric-accumulator operand is replaced with by
- * `ValidateGroupQuery`. Reuses the registry's operand type for the re-check
- * (§3.8 rule 3 — the constraint is spelled once, in
- * `NumericAccumulatorOperand`).
+ * The branded replacement `ValidateGroupQuery` maps an invalid accumulator
+ * to. Message via `RequiresMsg` so the skeleton stays enforced.
  */
-type BrandedNumericAccumulator<Op extends "$sum" | "$avg"> = {
-  [K in Op]: PipeSafeError<RequiresMsg<"Accumulator", Op, "a numeric operand">>;
+type BrandedAccumulator<Op extends string, What extends string> = {
+  [K in Op]: PipeSafeError<RequiresMsg<"Accumulator", Op, What>>;
 };
+
+/**
+ * Per-value accumulator re-check: `never` means "valid — nothing to
+ * report"; anything else is the branded replacement. Re-uses the registry's
+ * operand types for the checks (§3.8 rule 3 — each constraint is spelled
+ * once, in `NumericAccumulatorOperand` / `MinMaxAccumulatorOperand`). The
+ * flexible accumulators ($push/$addToSet/$first/$last) accept any
+ * literal/ref/expression by design and are not re-checked.
+ */
+type ValidateAccumulatorValue<Schema extends Document, A> =
+  A extends { $sum: infer O } ?
+    [O] extends [NumericAccumulatorOperand<Schema, "$sum">] ?
+      never
+    : BrandedAccumulator<"$sum", "a numeric operand">
+  : A extends { $avg: infer O } ?
+    [O] extends [NumericAccumulatorOperand<Schema, "$avg">] ?
+      never
+    : BrandedAccumulator<"$avg", "a numeric operand">
+  : A extends { $min: infer O } ?
+    [O] extends [MinMaxAccumulatorOperand<Schema, "$min">] ?
+      never
+    : BrandedAccumulator<"$min", "a numeric or date operand">
+  : A extends { $max: infer O } ?
+    [O] extends [MinMaxAccumulatorOperand<Schema, "$max">] ?
+      never
+    : BrandedAccumulator<"$max", "a numeric or date operand">
+  : never;
 
 /**
  * Key-filtered validation wrapper for `Pipeline.group` (§7.4). GroupQuery's
@@ -144,16 +169,8 @@ type BrandedNumericAccumulator<Op extends "$sum" | "$avg"> = {
  */
 export type ValidateGroupQuery<Schema extends Document, G> = {
   [K in keyof G as K extends "_id" ? never
-  : G[K] extends { $sum: infer O } ?
-    [O] extends [NumericAccumulatorOperand<Schema, "$sum">] ?
-      never
-    : K
-  : G[K] extends { $avg: infer O } ?
-    [O] extends [NumericAccumulatorOperand<Schema, "$avg">] ?
-      never
-    : K
-  : never]: G[K] extends { $sum: unknown } ? BrandedNumericAccumulator<"$sum">
-  : BrandedNumericAccumulator<"$avg">;
+  : [ValidateAccumulatorValue<Schema, G[K]>] extends [never] ? never
+  : K]: ValidateAccumulatorValue<Schema, G[K]>;
 };
 
 export type ResolveGroupOutput<
