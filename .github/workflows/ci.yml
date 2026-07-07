@@ -86,6 +86,13 @@ jobs:
       - name: Type check
         run: bun run typecheck
 
+      # The root typecheck resolves project references to built dist and does
+      # NOT re-check package sources — this step is what actually validates
+      # the *.typeAssertions.ts regression net (core needs no build; manifold
+      # type-checks against the core dist built above).
+      - name: Type check package sources (assertion gate)
+        run: bun run typecheck:packages
+
   changeset:
     runs-on: ubuntu-latest
 
