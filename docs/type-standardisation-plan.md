@@ -593,6 +593,62 @@ Rules:
   `index.ts` re-export line, and add a `major` changeset listing the removed
   names (generated from the file's own exports).
 
+### 3.8 Where a constraint lives: Query vs Validate
+
+The trio gives every stage two places to check a query's validity. The
+division of labor (each principle below traces to a measured behavior from
+the PR #102 review; see §7.3/§7.4 for the numbers):
+
+> **Query answers "what can I write?" — Validate answers "what did you get
+> wrong?".** Query is the acceptance surface: permissive, cheap, and
+> contextual-typing-friendly, because it is related against on EVERY call —
+> including the all-valid common case — and it is what powers IDE
+> autocomplete. Validate is the rejection surface: it re-checks the inferred
+> literal and replaces offending values with brands.
+
+Rules, in decision order:
+
+1. **Check in the Query type when the key set is finite and schema-derived**
+   (a mapped type over `FieldSelector<Schema>` etc.). TS's normal relation
+   then lands on each value position, so value-position brands fire for free
+   with no wrapper — this is the `match` model (`ComparatorMatchers`), and it
+   is the cheapest strictness available. Prefer it wherever it works.
+2. **Move the check to Validate when the Query type needs an index
+   signature, a pattern index signature, or a permissive union arm to stay
+   writable.** Those constructs suppress per-value checking _structurally_
+   (`group`'s `[key: string]` index signature; `set`/`project` literals'
+   `ObjectLiteral` pattern index — the §7.3 bug). No amount of brand-in-union
+   inside the Query fixes that; the Query stays permissive by design and the
+   Validate wrapper carries all the strictness for those positions.
+3. **A constraint is spelled once — in the operand kernel — and referenced
+   from both sides.** Query members reference the operand type for
+   acceptance; Validate members reference the _same_ operand type for the
+   `[Operand] extends [...]` re-check and build the brand from the same
+   `RequiresMsg`. Never re-spell a constraint in a Validate type.
+4. **Validate must not replace the inference/contextual-typing position.**
+   The safe signature shapes are the generic constraint plus intersection
+   (`<const Q extends XxxQuery<S>>($q: Q & ValidateXxxQuery<S, Q>)`) or
+   `project`'s bare-wrapper form — the latter ONLY when the wrapper is
+   homomorphic and no member depends on contextual typing (group's
+   compound-`_id` is the counterexample: both bare-wrapper variants break it,
+   §7.4).
+5. **Validate pays only on failure.** Aim for "valid input maps to itself" —
+   or better, key-filter so a fully-valid query validates against `{}` —
+   so the happy-path relation short-circuits. The naive full-map
+   intersection cost 3× whole-project check time (§7.4); that cost is a
+   Validate-design smell, not an inherent price.
+6. **Query types own the depth/instantiation budget.** They instantiate per
+   call and recurse (`AnyLiteral`), so no full-union arms in deep recursive
+   positions (`Expression<Schema>` inside `ObjectLiteral` = +26.6%
+   whole-project, §7.3); use structural key-based acceptance
+   (`ExpressionShaped`) at depth and leave operand strictness to the top
+   level or the Validate layer.
+
+Litmus test when adding a stage or operator: "does a wrong value produce a
+brand at the chained call site?" If yes via the Query type alone, done (rule
+1). If not, the strictness belongs in Validate (rule 2) — never in a more
+permissive Query arm.
+
 ---
 
 ## 4. Phased execution plan
@@ -867,7 +923,8 @@ gaps.
    `ValidateAccumulator` re-uses `NumericAccumulatorOperand`), so the
    constraint is written once and both the acceptance surface and the
    branded-rejection surface derive from it. Never re-spell a constraint
-   inside a Validate type.
+   inside a Validate type. §3.8 records the full Query-vs-Validate division
+   of labor these additions must follow.
 3. Order of addition: `group` (§7.4, fixes the documented known limitation),
    then expression-position operand validation for `set`/`project` — whose
    feasible strictness depends on the §7.3 outcome.
