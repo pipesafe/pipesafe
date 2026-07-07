@@ -9,7 +9,7 @@ import {
   ArithmeticExpression,
 } from "../elements/expressions";
 import { Document, Prettify } from "../utils/objects";
-import { PassThrough, RequiresMsg } from "../utils/errors";
+import { PassThrough, PipeSafeError, RequiresMsg } from "../utils/errors";
 import { ExpressionOperand } from "../elements/operands";
 
 /**
@@ -114,6 +114,46 @@ export type GroupQuery<Schema extends Document> = {
   _id: AnyLiteral<Schema> | Expression<Schema> | null;
 } & {
   [key: string]: AnyLiteral<Schema> | AccumulatorFunction<Schema> | null;
+};
+
+/**
+ * The brand an invalid numeric-accumulator operand is replaced with by
+ * `ValidateGroupQuery`. Reuses the registry's operand type for the re-check
+ * (§3.8 rule 3 — the constraint is spelled once, in
+ * `NumericAccumulatorOperand`).
+ */
+type BrandedNumericAccumulator<Op extends "$sum" | "$avg"> = {
+  [K in Op]: PipeSafeError<RequiresMsg<"Accumulator", Op, "a numeric operand">>;
+};
+
+/**
+ * Key-filtered validation wrapper for `Pipeline.group` (§7.4). GroupQuery's
+ * `[key: string]` index signature suppresses per-value operand checks at
+ * the call site (§3.8 rule 2), so the accumulator brands never fired from
+ * chained calls. This wrapper re-checks the inferred literal at the
+ * parameter position via intersection (`$group: G & ValidateGroupQuery<…>`
+ * — the intersection form is REQUIRED: replacing the raw `G` parameter
+ * breaks contextual typing of compound `_id` expressions, in both the bare
+ * and concrete-`_id` variants; see plan §7.4).
+ *
+ * Cost control (§3.8 rule 5): keys whose accumulator is valid are filtered
+ * OUT by the `as` clause, so a fully-valid query — the common case —
+ * validates against `{}` and the intersection relation short-circuits.
+ * Only offending keys survive, mapped to the branded accumulator so TS
+ * reports TS2322 at the bad operand value.
+ */
+export type ValidateGroupQuery<Schema extends Document, G> = {
+  [K in keyof G as K extends "_id" ? never
+  : G[K] extends { $sum: infer O } ?
+    [O] extends [NumericAccumulatorOperand<Schema, "$sum">] ?
+      never
+    : K
+  : G[K] extends { $avg: infer O } ?
+    [O] extends [NumericAccumulatorOperand<Schema, "$avg">] ?
+      never
+    : K
+  : never]: G[K] extends { $sum: unknown } ? BrandedNumericAccumulator<"$sum">
+  : BrandedNumericAccumulator<"$avg">;
 };
 
 export type ResolveGroupOutput<

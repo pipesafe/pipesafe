@@ -62,14 +62,21 @@ const _set_good_nested = new Pipeline<User>().set({ meta: { computed: { $add: ["
 // prettier-ignore
 const _set_bad_nested_TODO = new Pipeline<User>().set({ meta: { computed: { $add: ["$name", 1] } } });
 
-// group — call-site brand surfacing for `$sum: '$stringField'` is a
-// known limitation. The brand exists in the type system (covered by
-// group.typeAssertions.ts) but doesn't fire at the chained call site
-// because GroupQuery's `[key: string]:` index signature suppresses
-// excess-property and operand-validation checks. Wrapping
-// Pipeline.group's parameter in a validation mapped type interferes
-// with TS's resolution of the legitimate compound-_id pattern
-// (e.g. `_id: { date: { $dateToString: ... } }`). Filed as a follow-up.
+// group — accumulator operand brands now fire at the chained call site via
+// the key-filtered ValidateGroupQuery intersection (§7.4; GroupQuery's
+// `[key: string]:` index signature suppresses the in-Query brands, §3.8
+// rule 2).
+// @ts-expect-error  '$name' is a string field; $sum requires a numeric operand
+// prettier-ignore
+const _group_bad_sum = new Pipeline<User>().group({ _id: null, total: { $sum: "$name" } });
+
+// group — the compound-_id pattern must KEEP compiling under the wrapper
+// (the reason the intersection form is required; plan §7.4).
+const _group_compound_id = new Pipeline<User>().group({
+  _id: { day: { $dateToString: { format: "%Y-%m-%d", date: "$joinedAt" } } },
+  count: { $sum: 1 },
+  avgAge: { $avg: "$age" },
+});
 
 // project — mixed inclusion/exclusion should fail.
 // @ts-expect-error  cannot mix inclusion and exclusion
@@ -106,6 +113,8 @@ export {
   _set_good_nested,
   _set_bad_nested_TODO,
   _unset_bad,
+  _group_bad_sum,
+  _group_compound_id,
   _project_mixed,
   _project_unknown,
   _replaceRoot_bad,
