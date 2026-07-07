@@ -28,6 +28,7 @@ import { PipeSafeError } from "../utils/errors";
 import { ResolveCountOutput } from "./count";
 import { ResolveGraphLookupOutput } from "./graphLookup";
 import { InferExpression } from "../elements/expressions";
+import { InferNestedFieldReference } from "../elements/fieldReference";
 
 type _Err = PipeSafeError<"upstream">;
 
@@ -137,6 +138,25 @@ type _DispatchMultiOperator = Assert<
   >
 >;
 
+// (d) Forgiving dispatch holds through the NESTED-VALUE hot path
+// (InferNestedFieldReference), not just direct InferExpression calls. The
+// PR #102 review showed that reverting InferNestedFieldReference to a
+// full-union `Obj extends Expression<Schema>` membership test left every
+// assertion green while costing +8% whole-project instantiations AND
+// changing this semantics: a malformed-but-keyed expression would fall
+// through to literal treatment instead of keeping its operator's declared
+// result kind. This pin makes that revert a compile failure.
+type _NestedDispatchSchema = { ts: Date; n: number };
+type _NestedForgiving = Assert<
+  Equal<
+    InferNestedFieldReference<
+      _NestedDispatchSchema,
+      { out: { $dateToString: { format: 1; date: "$ts" } } }
+    >,
+    { out: string }
+  >
+>;
+
 export {
   _errMatch,
   _errSet,
@@ -168,4 +188,5 @@ export type {
   _DispatchForgiving,
   _DispatchLiteralSentinel,
   _DispatchMultiOperator,
+  _NestedForgiving,
 };
