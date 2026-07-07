@@ -93,6 +93,13 @@ jobs:
       - name: Type check package sources (assertion gate)
         run: bun run typecheck:packages
 
+      # The assertion files pin type-system SEMANTICS; this pins COST. A
+      # reintroduced full-union dispatch keeps every assertion green while
+      # regressing instantiations (+8% measured in the PR #102 review) —
+      # the budget is the only automatic enforcement of plan §3.4's rule.
+      - name: Instantiation budget (perf gate)
+        run: bun run budget:check
+
   changeset:
     runs-on: ubuntu-latest
 
