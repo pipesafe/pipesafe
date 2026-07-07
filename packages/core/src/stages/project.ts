@@ -16,6 +16,7 @@ import {
 } from "../elements/fieldReference";
 import { Expression, InferExpression } from "../elements/expressions";
 import { FieldSelector, GetFieldType } from "../elements/fieldSelector";
+import { ValidateNestedValue } from "../elements/validation";
 
 /**
  * $project stage query type
@@ -34,6 +35,10 @@ export type ProjectQuery<Schema extends Document> = {
     | false
     | FieldReference<Schema>
     | Expression<Schema>
+    // Structural acceptance of `$`-strings (§3.8 rule 6): unknown refs are
+    // branded by ValidateProjectQuery's value walk instead of rejecting
+    // through the FieldReference union on the constraint path.
+    | `$${string}`
     | Document; // For nested object replacement
 };
 
@@ -72,11 +77,22 @@ export type HasExclusionsNonId<P> =
     true
   : false;
 
+/**
+ * Value re-check via the shared nested-validation kernel
+ * (`elements/validation.ts`): identity for valid values (1/0/booleans and
+ * plain literals fall out of the walk as valid), the branded/expected-shape
+ * replacement for invalid refs, expressions, or nested objects.
+ */
+type ValidateProjectValue<Schema extends Document, V> =
+  [ValidateNestedValue<Schema, V>] extends [never] ? V
+  : ValidateNestedValue<Schema, V>;
+
 type ValidateProjectQueryKeys<Schema extends Document, P> = {
-  [K in keyof P]: K extends FieldSelector<Schema> ? P[K]
+  [K in keyof P]: K extends FieldSelector<Schema> ?
+    ValidateProjectValue<Schema, P[K]>
   : P[K] extends 1 | 0 | true | false ?
     PipeSafeError<`Field '${K & string}' is not on the schema.`>
-  : P[K];
+  : ValidateProjectValue<Schema, P[K]>;
 };
 
 /**

@@ -1,4 +1,5 @@
 import { InferNestedFieldReference } from "../elements/fieldReference";
+import { ValidateNestedValue } from "../elements/validation";
 import {
   AnyLiteral,
   LiteralOrFieldReferenceInferringTo,
@@ -9,6 +10,7 @@ import {
   ArithmeticExpression,
 } from "../elements/expressions";
 import { Document, Prettify } from "../utils/objects";
+import { HasSingleOperatorKey, OperatorKeyOf } from "../utils/dispatch";
 import { PassThrough, PipeSafeError, RequiresMsg } from "../utils/errors";
 import { ExpressionOperand } from "../elements/operands";
 
@@ -152,6 +154,23 @@ type ValidateAccumulatorValue<Schema extends Document, A> =
   : never;
 
 /**
+ * Per-key group re-check. `_id` is an expression/literal position — it gets
+ * the shared nested-validation walk (`elements/validation.ts`), including
+ * compound-`_id` objects. Non-`_id` keys are accumulator positions:
+ * `$`-keyed values must be a single known accumulator (with a valid operand
+ * for the numeric family); `$`-less values are plain literals and get the
+ * nested walk.
+ */
+type ValidateGroupValue<Schema extends Document, K, V> =
+  K extends "_id" ? ValidateNestedValue<Schema, V>
+  : [OperatorKeyOf<V>] extends [never] ? ValidateNestedValue<Schema, V>
+  : HasSingleOperatorKey<V> extends false ?
+    PipeSafeError<`Expression objects must have exactly one operator.`>
+  : [OperatorKeyOf<V>] extends [keyof AccumulatorSpec<Schema>] ?
+    ValidateAccumulatorValue<Schema, V>
+  : PipeSafeError<`Accumulator '${OperatorKeyOf<V> & string}' is not a known accumulator.`>;
+
+/**
  * Key-filtered validation wrapper for `Pipeline.group` (§7.4). GroupQuery's
  * `[key: string]` index signature suppresses per-value operand checks at
  * the call site (§3.8 rule 2), so the accumulator brands never fired from
@@ -161,16 +180,16 @@ type ValidateAccumulatorValue<Schema extends Document, A> =
  * breaks contextual typing of compound `_id` expressions, in both the bare
  * and concrete-`_id` variants; see plan §7.4).
  *
- * Cost control (§3.8 rule 5): keys whose accumulator is valid are filtered
- * OUT by the `as` clause, so a fully-valid query — the common case —
- * validates against `{}` and the intersection relation short-circuits.
- * Only offending keys survive, mapped to the branded accumulator so TS
- * reports TS2322 at the bad operand value.
+ * Cost control (§3.8 rule 5): keys whose value is valid are filtered OUT by
+ * the `as` clause — including a valid (compound) `_id`, so its contextual
+ * typing is untouched on the happy path. A fully-valid query — the common
+ * case — validates against `{}` and the intersection relation
+ * short-circuits. Only offending keys survive, mapped to their branded
+ * replacement so TS reports TS2322 at the bad value.
  */
 export type ValidateGroupQuery<Schema extends Document, G> = {
-  [K in keyof G as K extends "_id" ? never
-  : [ValidateAccumulatorValue<Schema, G[K]>] extends [never] ? never
-  : K]: ValidateAccumulatorValue<Schema, G[K]>;
+  [K in keyof G as [ValidateGroupValue<Schema, K, G[K]>] extends [never] ? never
+  : K]: ValidateGroupValue<Schema, K, G[K]>;
 };
 
 export type ResolveGroupOutput<

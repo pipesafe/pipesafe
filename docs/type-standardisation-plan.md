@@ -626,12 +626,13 @@ Rules, in decision order:
    `[Operand] extends [...]` re-check and build the brand from the same
    `RequiresMsg`. Never re-spell a constraint in a Validate type.
 4. **Validate must not replace the inference/contextual-typing position.**
-   The safe signature shapes are the generic constraint plus intersection
-   (`<const Q extends XxxQuery<S>>($q: Q & ValidateXxxQuery<S, Q>)`) or
-   `project`'s bare-wrapper form — the latter ONLY when the wrapper is
-   homomorphic and no member depends on contextual typing (group's
-   compound-`_id` is the counterexample: both bare-wrapper variants break it,
-   §7.4).
+   The safe signature shape is the generic constraint plus intersection
+   (`<const Q extends XxxQuery<S>>($q: Q & ValidateXxxQuery<S, Q>)`) —
+   `set`, `project`, and `group` all use it. The bare-wrapper form
+   (`project`'s original) is only safe while the wrapper's value arms are
+   identity-like; once they become conditionals, reverse-mapped inference
+   degrades for nested expression literals (group's compound-`_id` is the
+   canonical counterexample, §7.4) — prefer the intersection everywhere.
 5. **Validate pays only on failure.** Aim for "valid input maps to itself" —
    or better, key-filter so a fully-valid query validates against `{}` —
    so the happy-path relation short-circuits. The naive full-map

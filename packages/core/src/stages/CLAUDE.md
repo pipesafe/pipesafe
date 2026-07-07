@@ -9,11 +9,11 @@ Every stage module exports, with **Schema always the first type parameter**:
   `CountQuery = string`) — the Pipeline method references the module's
   type, never an inline scalar (wiring pinned in
   `stages.contract.typeAssertions.ts`).
-- `ValidateXxxQuery<Schema, Q, ...>` — only when the stage needs a mapped
-  validation wrapper at the parameter position (currently `project`, and
-  `group` via the key-filtered intersection). Validate members grow
-  per-stage as feature adds; they must re-use the Query/operand-kernel
-  building blocks, never re-spell a constraint (plan §3.8).
+- `ValidateXxxQuery<Schema, Q, ...>` — the rejection surface (`set`,
+  `project`, `group` — all via the `Q & ValidateXxxQuery<Schema, Q>`
+  intersection at the parameter position). Validate members re-use the
+  Query/operand-kernel building blocks and the shared nested walk in
+  `elements/validation.ts`, never re-spelling a constraint (plan §3.8).
 - `ResolveXxxOutput<Schema, Q>` — the output schema. MUST wrap its body in
   `PassThrough<Schema, ...>` so upstream `PipeSafeError`s forward verbatim
   (terminal stages `out`/`merge` have no resolver and are exempt).
