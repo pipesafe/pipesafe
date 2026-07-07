@@ -45,7 +45,7 @@ import { AnyLiteral } from "./literals";
  */
 type ArrayOperand<Schema extends Document, Op extends string> =
   | FieldReferencesThatInferTo<Schema, unknown[]>
-  | AnyLiteral<Schema>[]
+  | readonly AnyLiteral<Schema>[]
   | ArrayProducingExpression<Schema>
   | MapExpression<Schema>
   | PipeSafeError<RequiresMsg<"Operator", Op, "an array operand">>;
@@ -95,7 +95,7 @@ type StringOperand<
 >;
 
 /** The `[left, right]` pair shape shared by the binary arithmetic operators. */
-type ArithmeticPair<Schema extends Document, Op extends string> = [
+type ArithmeticPair<Schema extends Document, Op extends string> = readonly [
   ArithmeticOperand<Schema, Op>,
   ArithmeticOperand<Schema, Op>,
 ];
@@ -125,7 +125,7 @@ type ComparisonOperand<Schema extends Document> =
   | ConditionalExpression<Schema>;
 
 /** The `[left, right]` pair shape shared by all binary comparison operators. */
-type ComparisonPair<Schema extends Document> = [
+type ComparisonPair<Schema extends Document> = readonly [
   ComparisonOperand<Schema>,
   ComparisonOperand<Schema>,
 ];
@@ -175,19 +175,25 @@ export type ArrayInput<Schema extends Document> =
  *
  * Being an interface, members resolve lazily and mutual recursion with the
  * derived `Expression` union is safe.
+ *
+ * Operand ARRAY positions are `readonly`: a readonly target accepts both
+ * mutable and `as const` (readonly) user operands — both valid MongoDB —
+ * so the Validate re-checks need no per-literal readonly stripping (a
+ * DeepMutable approach measured +280k instantiations / 2x check time by
+ * defeating the relation cache).
  */
 export interface ExpressionSpec<Schema extends Document> {
   // --- Array operators -----------------------------------------------------
   /** Concatenates arrays. Result element type depends on the literal args. */
   $concatArrays: {
-    operand: ArrayOperand<Schema, "$concatArrays">[];
+    operand: readonly ArrayOperand<Schema, "$concatArrays">[];
     returns: unknown[];
   };
   /** Returns the size of an array. */
   $size: { operand: ArrayOperand<Schema, "$size">; returns: number };
   /** Element at index (0-based; negative counts from the end). */
   $arrayElemAt: {
-    operand: [
+    operand: readonly [
       ArrayOperand<Schema, "$arrayElemAt">,
       number | FieldReferencesThatInferTo<Schema, number>,
     ];
@@ -218,7 +224,7 @@ export interface ExpressionSpec<Schema extends Document> {
       | FieldReferencesThatInferTo<Schema, number[]>
       | ArrayProducingExpression<Schema>
       | MapExpression<Schema>
-      | number[];
+      | readonly number[];
     returns: number;
   };
 
@@ -275,13 +281,16 @@ export interface ExpressionSpec<Schema extends Document> {
   $toDate: { operand: ArithmeticOperand<Schema, "$toDate">; returns: Date };
 
   // --- Arithmetic operators (all return number) -----------------------------
-  $add: { operand: ArithmeticOperand<Schema, "$add">[]; returns: number };
+  $add: {
+    operand: readonly ArithmeticOperand<Schema, "$add">[];
+    returns: number;
+  };
   $subtract: {
     operand: ArithmeticPair<Schema, "$subtract">;
     returns: number;
   };
   $multiply: {
-    operand: ArithmeticOperand<Schema, "$multiply">[];
+    operand: readonly ArithmeticOperand<Schema, "$multiply">[];
     returns: number;
   };
   $divide: {
@@ -295,12 +304,15 @@ export interface ExpressionSpec<Schema extends Document> {
 
   // --- String operators ------------------------------------------------------
   /** Concatenates strings. */
-  $concat: { operand: StringOperand<Schema, "$concat">[]; returns: string };
+  $concat: {
+    operand: readonly StringOperand<Schema, "$concat">[];
+    returns: string;
+  };
 
   // --- Conditional operators (results depend on the literal args) -----------
   /** First non-null operand. */
   $ifNull: {
-    operand: [
+    operand: readonly [
       ConditionalOperand<Schema>,
       ConditionalOperand<Schema>,
       ...ConditionalOperand<Schema>[],
@@ -309,7 +321,7 @@ export interface ExpressionSpec<Schema extends Document> {
   };
   /** Ternary: [condition, thenValue, elseValue]. */
   $cond: {
-    operand: [
+    operand: readonly [
       ConditionalOperand<Schema>,
       ConditionalOperand<Schema>,
       ConditionalOperand<Schema>,
@@ -723,7 +735,12 @@ export type InferExpression<Schema extends Document, Expr> =
   : [OperatorKeyOf<Expr>] extends [keyof ExpressionSpec<Schema>] ?
     ExpressionSpec<Schema>[OperatorKeyOf<Expr> &
       keyof ExpressionSpec<Schema>]["returns"]
-  : never;
+  : // Unknown operator: degrade to `unknown`, never to a dropped field. The
+    // registry covers a subset of MongoDB's operators; acceptance is
+    // forgiving (elements/validation.ts), so inference must keep the field
+    // usable downstream — `never` here made the resolvers DROP it, and a
+    // later stage reading it errored with a misleading Field-not-on-schema.
+    unknown;
 
 // ----------------------------------------------------------------------------
 // Category inference views — kept for assertion-level use; all key-dispatched

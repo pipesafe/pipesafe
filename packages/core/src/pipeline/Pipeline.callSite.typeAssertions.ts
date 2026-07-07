@@ -97,19 +97,24 @@ const _set_system_var_ok = new Pipeline<User>().set({ a: { b: "$$REMOVE" }, now:
 // prettier-ignore
 const _group_bad_sum = new Pipeline<User>().group({ _id: null, total: { $sum: "$name" } });
 
-// group — $min/$max accept BSON-comparable operands (number, date, AND
-// string: `$min: "$name"` is valid MongoDB — lexicographic min); a boolean
-// literal is not modeled as comparable and brands.
+// group — $min/$max accept BSON-comparable operands (number, date, string,
+// boolean: `$min: "$name"` is lexicographic min, `$max: true` is "any
+// true" — all valid MongoDB); arrays are not modeled as comparable and
+// brand, and a `$`-typo ref still brands (the string arm is NoDollarString,
+// so refs stay routed through the schema check).
 // prettier-ignore
 const _group_min_string_ok = new Pipeline<User>().group({ _id: null, first: { $min: "$name" } });
 
-// @ts-expect-error  booleans are not a modeled comparable for $min
 // prettier-ignore
-const _group_bad_min = new Pipeline<User>().group({ _id: null, first: { $min: true } });
+const _group_max_bool_ok = new Pipeline<User>().group({ _id: null, any: { $max: true } });
 
-// @ts-expect-error  booleans are not a modeled comparable for $max
+// @ts-expect-error  array literals are not a modeled comparable for $min
 // prettier-ignore
-const _group_bad_max = new Pipeline<User>().group({ _id: null, last: { $max: true } });
+const _group_bad_min = new Pipeline<User>().group({ _id: null, first: { $min: ["$age"] } });
+
+// @ts-expect-error  '$naem' is not a valid field reference on User
+// prettier-ignore
+const _group_bad_max = new Pipeline<User>().group({ _id: null, last: { $max: "$naem" } });
 
 // group — numeric-RETURNING expressions are valid $sum operands (registry-
 // derived ExpressionsReturning arm): `$sum: { $size: ... }` is idiomatic.
@@ -210,6 +215,7 @@ export {
   _unset_bad,
   _group_bad_sum,
   _group_min_string_ok,
+  _group_max_bool_ok,
   _group_bad_min,
   _group_bad_max,
   _group_sum_size_ok,

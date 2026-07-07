@@ -1,4 +1,7 @@
-import { InferNestedFieldReference } from "../elements/fieldReference";
+import {
+  FieldReferencesThatInferTo,
+  InferNestedFieldReference,
+} from "../elements/fieldReference";
 import { ValidateNestedValue } from "../elements/validation";
 import {
   AnyLiteral,
@@ -11,7 +14,12 @@ import {
   ExpressionsReturning,
 } from "../elements/expressions";
 import { Document, OmitNeverValues, Prettify } from "../utils/objects";
-import { HasSingleOperatorKey, OperatorKeyOf } from "../utils/dispatch";
+import { NoDollarString } from "../utils/strings";
+import {
+  HasOperatorKey,
+  HasSingleOperatorKey,
+  OperatorKeyOf,
+} from "../utils/dispatch";
 import {
   MultiOperatorError,
   PassThrough,
@@ -48,14 +56,19 @@ type NumericAccumulatorOperand<Schema extends Document, Op extends string> =
 type MinMaxAccumulatorOperand<Schema extends Document, Op extends string> =
   | ExpressionOperand<
       Schema,
-      number | Date | string,
+      // The ref side accepts every modeled comparable; the LITERAL string
+      // arm is narrowed to NoDollarString below — a bare `string` here
+      // would swallow `$`-typo refs and make the brand unreachable.
+      number | Date | boolean,
       RequiresMsg<
         "Accumulator",
         Op,
-        "a comparable (number, date, or string) operand"
+        "a comparable (number, date, string, or boolean) operand"
       >
     >
-  | ExpressionsReturning<Schema, number | Date | string>
+  | NoDollarString
+  | FieldReferencesThatInferTo<Schema, string>
+  | ExpressionsReturning<Schema, number | Date | string | boolean>
   | ConditionalExpression<Schema>;
 
 /**
@@ -124,6 +137,10 @@ export type ResolveAccumulatorFunction<Schema extends Document, Accumulator> =
     InferNestedFieldReference<Schema, A>
   : Accumulator extends { $last: infer A } ?
     InferNestedFieldReference<Schema, A>
+  : // Unregistered accumulators are ACCEPTED structurally (GroupQuery's
+  // ExpressionShaped arm; valid MongoDB the registry doesn't model) — so
+  // their result degrades to `unknown`, never to a `never`-poisoned field.
+  HasOperatorKey<Accumulator> extends true ? unknown
   : never;
 
 export type GroupQuery<Schema extends Document> = {
@@ -160,7 +177,26 @@ type CheckedAccumulatorOps = "$sum" | "$avg" | "$min" | "$max";
  * rule 3).
  */
 type ValidateAccumulatorValue<Schema extends Document, A> =
-  OperatorKeyOf<A> extends infer Op extends CheckedAccumulatorOps ?
+  // Schema-FREE fast-accept: literal operands that are valid regardless of
+  // the schema. Besides skipping the registry work for the common
+  // `$sum: 1` case, this arm RESOLVES for unresolved generic schemas —
+  // without it, generic-schema pipeline helpers
+  // (`<D extends Document>(p: Pipeline<D, D>) => p.group(...)`) fail on
+  // deferred conditionals even for schema-independent operands.
+  [A] extends (
+    [
+      | { $sum: number }
+      | { $avg: number }
+      | { $min: number | Date | boolean | NoDollarString }
+      | { $max: number | Date | boolean | NoDollarString },
+    ]
+  ) ?
+    never
+  : string extends keyof Schema ?
+    never // operand checks are meaningless on a wide/index-signature schema
+  : OperatorKeyOf<A> extends infer Op extends CheckedAccumulatorOps ?
+    // Readonly-tolerant via the registry's readonly operand positions
+    // (see ExpressionSpec).
     [A] extends [AccumulatorFor<Schema, Op>] ?
       never
     : {
@@ -213,11 +249,12 @@ type ValidateGroupValue<Schema extends Document, K, V> =
  * constraint error.
  */
 export type ValidateGroupQuery<Schema extends Document, Q> =
-  // Schema wide-guard: a degenerate/index-signature schema (e.g. from an
-  // upstream inference gap) cannot be meaningfully validated against —
-  // skip rather than brand valid queries (forgiving, like the registry).
-  string extends keyof Schema ? {}
-  : string extends keyof Q ? {}
+  // Wide-QUERY guard: on constraint failure TS re-instantiates this wrapper
+  // with Q = GroupQuery<Schema> itself — skip entirely. Schema-DEPENDENT
+  // checks guard themselves (ValidateAccumulatorValue / the kernel's
+  // ref/operand arms), so shape checks still run on index-signature
+  // schemas.
+  string extends keyof Q ? {}
   : OmitNeverValues<{
       [K in keyof Q]: ValidateGroupValue<Schema, K, Q[K]>;
     }>;

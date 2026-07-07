@@ -1,7 +1,10 @@
 # elements/ — type-system building blocks
 
 Schema-parameterized primitives consumed by every stage: field selectors/
-references, literals, the operand kernel, and the expression registry.
+references, literals, the operand kernel, the expression registry, and the
+nested-validation kernel (`validation.ts` — THE rejection surface for
+structurally-accepted `$`-shapes; `never` = valid, anything else is the
+branded replacement; unregistered operators are FORGIVEN by design).
 
 ## The expression registry (expressions.ts)
 

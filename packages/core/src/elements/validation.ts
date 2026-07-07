@@ -29,8 +29,11 @@
 
 import { Document, NonExpandableTypes } from "../utils/objects";
 import { IsPipeSafeError, MultiOperatorError } from "../utils/errors";
-import { HasOperatorKey, OperatorKeyOf } from "../utils/dispatch";
-import { UnionToIntersection } from "../utils/objects";
+import {
+  HasOperatorKey,
+  HasSingleOperatorKey,
+  OperatorKeyOf,
+} from "../utils/dispatch";
 import { ExpressionFor, ExpressionSpec } from "./expressions";
 import { GetFieldTypeWithoutArrays } from "./fieldReference";
 import { WithoutDollar } from "../utils/strings";
@@ -49,13 +52,17 @@ import { WithoutDollar } from "../utils/strings";
  */
 export type ValidateExpressionValue<Schema extends Document, V> =
   [Exclude<keyof V & string, `$${string}`>] extends [never] ?
-    [OperatorKeyOf<V>] extends [UnionToIntersection<OperatorKeyOf<V>>] ?
-      [OperatorKeyOf<V>] extends [keyof ExpressionSpec<Schema>] ?
-        [V] extends [ExpressionFor<Schema, OperatorKeyOf<V>>] ?
-          never
-        : ExpressionFor<Schema, OperatorKeyOf<V>>
-      : never // unknown operator — forgiving (partial registry)
-    : MultiOperatorError
+    HasSingleOperatorKey<V> extends false ? MultiOperatorError
+    : string extends keyof Schema ?
+      never // schema-dependent operand check is meaningless on a wide schema
+    : [OperatorKeyOf<V>] extends [keyof ExpressionSpec<Schema>] ?
+      // Readonly-tolerant WITHOUT per-literal transformation: the
+      // registry's operand array positions are `readonly`, so mutable and
+      // `as const` operands both relate directly.
+      [V] extends [ExpressionFor<Schema, OperatorKeyOf<V>>] ?
+        never
+      : ExpressionFor<Schema, OperatorKeyOf<V>>
+    : never // unknown operator — forgiving (partial registry)
   : MultiOperatorError; // operator key alongside plain keys
 
 /**
@@ -71,16 +78,19 @@ export type ValidateExpressionValue<Schema extends Document, V> =
 export type ValidateNestedValue<Schema extends Document, V> =
   V extends `$$${string}` ? never
   : V extends `$${string}` ?
-    GetFieldTypeWithoutArrays<Schema, WithoutDollar<V>> extends infer R ?
+    string extends keyof Schema ?
+      never // ref resolution is meaningless on a wide/index-signature schema
+    : GetFieldTypeWithoutArrays<Schema, WithoutDollar<V>> extends infer R ?
       IsPipeSafeError<R> extends true ?
         R
       : never
     : never
-  : HasOperatorKey<V> extends true ? ValidateExpressionValue<Schema, V>
   : V extends readonly unknown[] ? ValidateArrayValue<Schema, V>
   : V extends object ?
-    V extends NonExpandableTypes ?
-      never
+    V extends NonExpandableTypes ? never
+    : string extends keyof V ?
+      never // widened object type (Record/Document) — not a literal; skip
+    : HasOperatorKey<V> extends true ? ValidateExpressionValue<Schema, V>
     : ValidateObjectValue<Schema, V>
   : never;
 

@@ -883,17 +883,25 @@ type _Assert_UnknownInclusion = Assert<
   >
 >;
 
-// 2. Invalid projection value (anything other than 0/1/ref/expr/object)
-//    produces a branded error on the offending key.
-type _InvalidValueResult = ResolveProjectOutput<
+// 2. Any number is a valid projection FLAG (MongoDB: nonzero includes), so
+//    `bogus: 99` on an UNKNOWN key brands as an unknown field — not as an
+//    invalid value — and on a known key it includes the field.
+type _NonZeroFlagUnknownKey = ResolveProjectOutput<
   ProjectErrorSchema,
   { name: 1; bogus: 99 }
 >;
-type _Assert_InvalidValue = Assert<
+type _Assert_NonZeroFlagUnknownKey = Assert<
   AssertPipeSafeError<
-    _InvalidValueResult["bogus"],
-    "Invalid projection value for field 'bogus'."
+    _NonZeroFlagUnknownKey["bogus"],
+    "Field 'bogus' is not on the schema."
   >
+>;
+type _NonZeroFlagKnownKey = ResolveProjectOutput<
+  ProjectErrorSchema,
+  { name: 99 }
+>;
+type _Assert_NonZeroFlagIncludes = Assert<
+  Equal<_NonZeroFlagKnownKey["name"], ProjectErrorSchema["name"]>
 >;
 
 // 3. Mixed inclusion and exclusion produces a branded error on the result
@@ -921,7 +929,8 @@ type _Assert_ValidInclusion = Assert<
 
 export type {
   _Assert_UnknownInclusion,
-  _Assert_InvalidValue,
+  _Assert_NonZeroFlagUnknownKey,
+  _Assert_NonZeroFlagIncludes,
   _Assert_MixedMode,
   _Assert_ValidInclusion,
 };

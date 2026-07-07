@@ -9,7 +9,9 @@ Five small modules with strict boundaries — do not grow a grab-bag here:
   `HasOperatorKey`, `HasSingleOperatorKey`, `NotAnExpression`). Values are
   classified by `$`-key BEFORE any schema-parameterized work.
 - **strings.ts** — dollar prefixing, path joining, character unions.
-- **objects.ts** — `Document`, `Prettify`, union combinators, `MergeNested`.
+- **objects.ts** — `Document`, `Prettify`, union combinators, `MergeNested`,
+  `OmitNeverValues` (THE Validate key-filter), `ForbidKeys` (the pattern-
+  index vacuity guard), `DeepReadonly` (readonly-tolerant re-checks).
 - **paths.ts** — dotted-path machinery. `SplitPath` is deliberately
   tail-recursive (accumulator parameter → ~1000-depth budget instead of
   ~50); parse paths with it, then fold the segments.

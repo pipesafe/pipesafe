@@ -16,9 +16,10 @@ pre-commit:
 
 # The assertion regression net (two full tsc passes) runs before anything
 # leaves the machine rather than on every commit — CI enforces it too.
-# Manifold type-checks against core's dist, which pre-commit's build keeps
-# fresh.
+# The build is part of the hook: manifold type-checks against core's dist,
+# and pushes from fresh clones / after rebase / after --no-verify commits
+# cannot rely on a pre-commit build having run (stale dist = false result).
 pre-push:
   commands:
     typecheck-packages:
-      run: bun run typecheck:packages
+      run: bun run build && bun run typecheck:packages

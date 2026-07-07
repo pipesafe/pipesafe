@@ -1000,11 +1000,29 @@ probes and PR #99's depth-viewer, then fixed:
   `$`-strings and `$`-keyed objects STRUCTURALLY (shallow — nothing deep to
   explore on failure), and the key-filtered `ValidateSetQuery` intersection
   re-checks them: unknown refs brand with the existing Field message,
-  multi-`$`-key objects with the exactly-one-operator brand, unknown
-  operators with `Operator '<op>' is not a known expression operator.`, and
+  malformed expression objects (multiple operator keys, or operator keys
+  mixed with plain keys) with the exactly-one-operator brand, and
   known-operator/invalid-operand values are mapped to the registry's
   expected shape (`ExpressionFor<Schema, Op>`) so TS reports TS2322 at the
   offending operand against the operand kernel's branded union.
+
+  **Review-round correction (amended in place, like §6):** the original
+  addendum also branded UNKNOWN operators
+  (`Operator '<op>' is not a known expression operator.`). That was
+  reverted: the registry covers a subset of MongoDB's 100+ operators, so
+  branding unregistered ones rejected valid pipelines ($toUpper, $switch,
+  $stdDevPop as an accumulator, ...) with no escape hatch. Validation is
+  FORGIVING where the registry is incomplete (typos share the leniency —
+  the partial-registry trade-off), and inference degrades unknown
+  operators to `unknown` instead of `never` so the field stays usable
+  downstream. The same review round widened $min/$max to BSON-comparable
+  operands (number/date/string/boolean — `$min: "$name"` is valid
+  lexicographic min), derived numeric-accumulator expression acceptance
+  from the registry (`ExpressionsReturning<Schema, T>`), made operand
+  re-checks readonly-tolerant (`DeepReadonly` — `as const` tuples are
+  valid MongoDB), walked array elements, and guarded prototype-key paths
+  (`"$name.length"`) in `GetFieldTypeWithoutArrays`.
+
 - **Result**: zero TS2589 across all rejection probes; every `set`
   rejection is now a single correctly-positioned TS2322 (previously: a
   union-wall TS2322 plus a spurious statement-level TS2589). Cost:

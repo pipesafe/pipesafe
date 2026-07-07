@@ -33,6 +33,12 @@ export type ProjectQuery<Schema extends Document> = {
     | 0
     | true
     | false
+    // Widened flags: MongoDB treats any nonzero number as inclusion, so a
+    // `number`/`boolean`-typed variable is a valid projection value even
+    // though its literal can't be known at compile time. Rejecting it went
+    // through the deep value union with a spurious TS2589.
+    | number
+    | boolean
     // Structural acceptance of `$`-strings (§3.8 rule 6): unknown refs are
     // branded by ValidateProjectQuery's value walk instead of rejecting
     // through the deep refs union on the constraint path. NOTE: a
@@ -92,9 +98,10 @@ export type HasExclusionsNonId<P> =
  * goes through the shared nested-validation kernel.
  */
 type ValidateProjectKey<Schema extends Document, P, K extends keyof P> =
-  P[K] extends 1 | 0 | true | false ?
-    K extends FieldSelector<Schema> ?
-      never
+  [P[K]] extends [number | boolean] ?
+    string extends keyof Schema ?
+      never // unknown-key detection is meaningless on a wide schema
+    : K extends FieldSelector<Schema> ? never
     : PipeSafeError<`Field '${K & string}' is not on the schema.`>
   : ValidateNestedValue<Schema, P[K]>;
 
@@ -133,14 +140,13 @@ export type ValidateProjectQuery<
   Inc extends boolean = HasInclusionsNonId<P>,
   Exc extends boolean = HasExclusionsNonId<P>,
 > =
-  // Schema wide-guard: a degenerate/index-signature schema (e.g. from an
-  // upstream inference gap) cannot be meaningfully validated against —
-  // skip rather than brand valid queries (forgiving, like the registry).
-  string extends keyof Schema ? {}
-  : // Wide-query guard: on constraint failure TS re-instantiates this wrapper
+  // Wide-QUERY guard: on constraint failure TS re-instantiates this wrapper
   // with P = ProjectQuery<Schema> (index signature ⇒ `keyof P` includes
   // string); validating the wide value unions would brand valid keys and
-  // overflow depth on top of the real error.
+  // overflow depth on top of the real error. The mixed-mode check below is
+  // deliberately NOT schema-guarded — it is schema-independent, so it fires
+  // on index-signature schemas too (the per-key/value checks guard
+  // themselves).
   string extends keyof P ? {}
   : Inc extends true ?
     Exc extends true ?
@@ -166,19 +172,20 @@ type ResolveNestedProjection<Schema extends Document, Obj extends Document> = {
 
 // Helper: Resolve a single field value (handles both regular and dotted keys)
 type ResolveFieldValue<Schema extends Document, Value, Key extends string> =
-  Value extends 1 | true ?
-    // Inclusion - get field type from schema. If the key isn't on the schema,
-    // surface a branded error rather than silently producing `never` (which
-    // would just drop the key from the output without any signal).
+  Value extends 0 | false ?
+    // Exclusion - return never (field is excluded). Intentional: `never`
+    // here means "the field is dropped from the output", which is correct.
+    never
+  : [Value] extends [number | boolean] ?
+    // Inclusion — literal 1/true, or a WIDENED number/boolean (MongoDB:
+    // any nonzero number includes; compile time can't know the runtime
+    // value, so degrade to inclusion). If the key isn't on the schema,
+    // surface a branded error rather than silently producing `never`.
     IsDottedKey<Key> extends true ?
       // Dotted key - get nested field type
       GetFieldType<Schema, Key>
     : Key extends keyof Schema ? Schema[Key]
     : PipeSafeError<`Field '${Key}' is not on the schema.`>
-  : Value extends 0 | false ?
-    // Exclusion - return never (field is excluded). Intentional: `never`
-    // here means "the field is dropped from the output", which is correct.
-    never
   : Value extends `$${string}` ?
     // Field reference — a `$`-string check is far cheaper than FieldReference
     // union membership; unknown paths brand via GetFieldTypeWithoutArrays.
@@ -189,6 +196,8 @@ type ResolveFieldValue<Schema extends Document, Value, Key extends string> =
   : Value extends Document ?
     // Nested object - recursively resolve field references and expressions within it
     ResolveNestedProjection<Schema, Value>
+  : [Value] extends [string] ?
+    Value // plain-string literal assignment (valid MongoDB; $-refs handled above)
   : PipeSafeError<`Invalid projection value for field '${Key}'.`>;
 
 // Helper: Create flat map of dotted keys to their types (only include keys with 1/true values)

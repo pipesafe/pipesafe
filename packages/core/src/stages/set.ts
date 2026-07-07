@@ -50,11 +50,12 @@ export type SetQuery<Schema extends Document> = {
  * `$$`-system-variable namespace.
  */
 export type ValidateSetQuery<Schema extends Document, Q> =
-  // Schema wide-guard: a degenerate/index-signature schema (e.g. from an
-  // upstream inference gap) cannot be meaningfully validated against —
-  // skip rather than brand valid queries (forgiving, like the registry).
-  string extends keyof Schema ? {}
-  : string extends keyof Q ? {}
+  // Wide-QUERY guard: on constraint failure TS re-instantiates this wrapper
+  // with Q = SetQuery<Schema> itself — skip entirely. Schema-DEPENDENT
+  // checks guard themselves inside the kernel (ref/operand arms), so the
+  // schema-free shape checks (multi-operator, mixed keys) still run on
+  // index-signature schemas.
+  string extends keyof Q ? {}
   : OmitNeverValues<{
       [K in keyof Q]: ValidateNestedValue<Schema, Q[K]>;
     }>;
