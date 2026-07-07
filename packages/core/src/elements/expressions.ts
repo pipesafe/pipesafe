@@ -600,8 +600,11 @@ type LiteralDependentOps =
  * Helper to get union of all array element types
  * Recursively processes each array in the concat list
  */
-type UnionArrayElements<Schema extends Document, Arrays extends unknown[]> =
-  Arrays extends [infer First, ...infer Rest] ?
+type UnionArrayElements<
+  Schema extends Document,
+  Arrays extends readonly unknown[],
+> =
+  Arrays extends readonly [infer First, ...infer Rest] ?
     GetArrayElement<Schema, First> | UnionArrayElements<Schema, Rest>
   : never;
 
@@ -610,7 +613,7 @@ type UnionArrayElements<Schema extends Document, Arrays extends unknown[]> =
  * Handles both field references and array literals
  */
 type GetArrayElement<Schema extends Document, Item> =
-  Item extends (infer E)[] ?
+  Item extends readonly (infer E)[] ?
     E // Array literal - extract element type
   : Item extends FieldReference<Schema> ?
     InferFieldReference<Schema, Item> extends (infer T)[] ?
@@ -633,7 +636,7 @@ type GetArrayElement<Schema extends Document, Item> =
  */
 type InferArrayElementType<Schema extends Document, ArraySource> =
   // Array literal - extract element type
-  ArraySource extends (infer E)[] ? E
+  ArraySource extends readonly (infer E)[] ? E
   : // Field reference to array - get element type
   ArraySource extends FieldReference<Schema> ?
     InferFieldReference<Schema, ArraySource> extends (infer T)[] ?
@@ -663,7 +666,7 @@ type InferConditionalOperandValue<
     SwallowsNull extends true ?
       NonNullable<InferFieldReference<Schema, Operand>>
     : InferFieldReference<Schema, Operand> // $cond keeps the field's null
-  : Operand extends (infer T)[] ?
+  : Operand extends readonly (infer T)[] ?
     T // Array literal
   : InferExpression<Schema, Operand> extends infer R ?
     [R] extends [NotAnExpression] ?
@@ -687,30 +690,36 @@ type InferCondOperand<
  */
 type UnionIfNullOperandTypes<
   Schema extends Document,
-  Operands extends unknown[],
+  Operands extends readonly unknown[],
 > =
-  Operands extends [infer First, ...infer Rest] ?
+  Operands extends readonly [infer First, ...infer Rest] ?
     InferIfNullOperand<Schema, First> | UnionIfNullOperandTypes<Schema, Rest>
   : never;
 
 /**
  * Hand-written inference arms for the literal-dependent operators — the only
  * per-operator inference code left after the registry rebuild.
+ *
+ * All array/tuple PATTERNS here are `readonly`: since the registry's operand
+ * positions became readonly, `<const>` call sites infer readonly tuples, and
+ * a readonly pattern matches both mutabilities while a mutable pattern
+ * matches neither (a mutable-pattern arm silently falls through and the
+ * resolver DROPS the field — a real bug caught in review round 3).
  */
 type InferDependentExpression<Schema extends Document, Expr> =
   Expr extends { $concatArrays: infer Arrays } ?
-    Arrays extends unknown[] ?
+    Arrays extends readonly unknown[] ?
       UnionArrayElements<Schema, Arrays>[]
     : never
-  : Expr extends { $arrayElemAt: [infer ArraySource, unknown] } ?
+  : Expr extends { $arrayElemAt: readonly [infer ArraySource, unknown] } ?
     InferArrayElementType<Schema, ArraySource>
   : Expr extends { $filter: { input: infer ArraySource } } ?
     InferArrayElementType<Schema, ArraySource>[]
   : Expr extends { $ifNull: infer Operands } ?
-    Operands extends unknown[] ?
+    Operands extends readonly unknown[] ?
       UnionIfNullOperandTypes<Schema, Operands>
     : never
-  : Expr extends { $cond: [unknown, infer TrueVal, infer FalseVal] } ?
+  : Expr extends { $cond: readonly [unknown, infer TrueVal, infer FalseVal] } ?
     InferCondOperand<Schema, TrueVal> | InferCondOperand<Schema, FalseVal>
   : Expr extends { $literal: infer Value } ? Value
   : never;

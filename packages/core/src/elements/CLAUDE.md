@@ -13,6 +13,12 @@ branded replacement; unregistered operators are FORGIVEN by design).
 1. Add one registry entry: `$op: { operand: <shape>; returns: <type> }`.
    Build operand shapes from the kernel (`ExpressionOperand`/`ArrayOperand`/
    `ArithmeticPair`/...) so the brand message comes via `RequiresMsg`.
+   Operand ARRAY/TUPLE positions must be `readonly` (mutable AND `as const`
+   operands both relate to a readonly target; a mutable position makes
+   const-typed operands fail the Validate re-check). If the operator gets
+   an `InferDependentExpression` arm, its tuple PATTERNS must be readonly
+   too, or `<const>`-inferred readonly literals fall through the arm and
+   the resolver silently drops the field.
 2. If the operator belongs in a category union (`StringExpression` etc.),
    add its key to the matching key-set alias (`StringOps` etc.).
 3. Only if the RESULT depends on the literal arguments: add the key to

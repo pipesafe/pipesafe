@@ -39,9 +39,9 @@ export type GetFieldTypeWithoutArrays<
     // the brand, not get wrapped into `brand[]` (which would read as a
     // valid array type to IsPipeSafeError-based callers).
     GetFieldTypeWithoutArrays<U, Path, FullPath> extends infer R ?
-      R extends PipeSafeError<string> ?
+      [R] extends [PipeSafeError<string>] ?
         R
-      : R[]
+      : R[] // non-distributive: union elements stay (A | B)[], not A[] | B[]
     : never
   : // null/undefined branches of nullable unions silently fall through so
   // distributing over `T | null` doesn't leak the brand into a result

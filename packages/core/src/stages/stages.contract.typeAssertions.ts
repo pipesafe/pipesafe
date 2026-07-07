@@ -178,7 +178,30 @@ type _NestedForgiving = Assert<
   >
 >;
 
+// (e) Literal-dependent inference survives `<const>` READONLY tuple
+// inference at chained call sites: the registry's operand positions are
+// readonly, so const call sites infer readonly operand tuples — the
+// dependent arms' patterns must be readonly too, or the arm silently
+// falls through and the RESOLVER DROPS THE FIELD (caught in review round
+// 3: .set({ flag: { $cond: [...] } }) compiled with `flag` missing from
+// the output schema).
+const _condPipeline = new Pipeline<{ age: number }>().set({
+  flag: { $cond: [{ $gt: ["$age", 18] }, "adult", "minor"] },
+});
+type _CondFieldSurvives = Assert<
+  Equal<InferOutputType<typeof _condPipeline>["flag"], "adult" | "minor">
+>;
+
+const _ifNullPipeline = new Pipeline<{ n?: number }>().set({
+  v: { $ifNull: ["$n", 0] },
+});
+type _IfNullFieldSurvives = Assert<
+  Equal<InferOutputType<typeof _ifNullPipeline>["v"], number | 0>
+>;
+
 export {
+  _condPipeline,
+  _ifNullPipeline,
   _errMatch,
   _errSet,
   _errProject,
@@ -213,4 +236,6 @@ export type {
   _LimitUsesModuleQuery,
   _SkipUsesModuleQuery,
   _CountUsesModuleQuery,
+  _CondFieldSurvives,
+  _IfNullFieldSurvives,
 };

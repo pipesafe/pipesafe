@@ -1019,9 +1019,14 @@ probes and PR #99's depth-viewer, then fixed:
   operands (number/date/string/boolean — `$min: "$name"` is valid
   lexicographic min), derived numeric-accumulator expression acceptance
   from the registry (`ExpressionsReturning<Schema, T>`), made operand
-  re-checks readonly-tolerant (`DeepReadonly` — `as const` tuples are
-  valid MongoDB), walked array elements, and guarded prototype-key paths
-  (`"$name.length"`) in `GetFieldTypeWithoutArrays`.
+  re-checks readonly-tolerant via READONLY operand positions in the
+  registry itself (`as const` tuples are valid MongoDB; per-literal
+  DeepMutable/DeepReadonly wrappers were measured at +280k instantiations
+  / 2× check time — relation-cache defeat — and rejected; the dependent
+  INFERENCE arms' tuple patterns are readonly for the same reason, or the
+  arm falls through and the resolver silently drops the field), walked
+  array elements, and guarded prototype-key paths (`"$name.length"`) in
+  `GetFieldTypeWithoutArrays`.
 
 - **Result**: zero TS2589 across all rejection probes; every `set`
   rejection is now a single correctly-positioned TS2322 (previously: a

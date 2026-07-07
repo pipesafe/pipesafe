@@ -121,6 +121,17 @@ const _group_bad_max = new Pipeline<User>().group({ _id: null, last: { $max: "$n
 // prettier-ignore
 const _group_sum_size_ok = new Pipeline<User>().group({ _id: null, n: { $sum: { $size: "$tags" } } });
 
+// group — non-alphanumeric-leading strings are valid comparables (round-3
+// fix: NoDollarString can't express "string minus $-prefix").
+// prettier-ignore
+const _group_min_underscore_ok = new Pipeline<User>().group({ _id: null, m: { $min: "_pending" } });
+
+// group — an accumulator key mixed with plain keys is malformed (MongoDB:
+// "The field must specify one accumulator").
+// @ts-expect-error  accumulator objects must have exactly one operator
+// prettier-ignore
+const _group_bad_mixed_accum = new Pipeline<User>().group({ _id: null, n: { $sum: 1, extra: true } });
+
 // group — the compound-_id pattern must KEEP compiling under the wrapper
 // (the reason the intersection form is required; plan §7.4), and the valid
 // accumulators — including Date-typed $min/$max — must not brand.
@@ -217,6 +228,8 @@ export {
   _group_min_string_ok,
   _group_max_bool_ok,
   _group_bad_min,
+  _group_min_underscore_ok,
+  _group_bad_mixed_accum,
   _group_bad_max,
   _group_sum_size_ok,
   _group_unknown_accum_ok,

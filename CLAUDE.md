@@ -227,7 +227,7 @@ Uses `mongodb-memory-server` for isolated testing with pre-seeded test data.
 
 - **`never` type in pipeline stages**: Usually indicates impossible type conditions in match operations
 - **Union type filtering**: Check `FilterUnion` in `packages/core/src/stages/match.ts`
-- **Dotted field inference**: Use `FlattenDotSet` from `packages/core/src/utils/core.ts`
+- **Dotted field inference**: Use `FlattenDotSet` from `packages/core/src/utils/paths.ts`
 
 ### TypeScript Config
 
@@ -243,7 +243,7 @@ interface PipeSafeError<Msg extends string> {
 }
 ```
 
-Defined in `packages/core/src/utils/core.ts`. Single type parameter — the literal `Msg` is the entire surface area. Embed dynamic context (operator names, key names, path segments) into the message via template literals; do not add a separate `Ctx` parameter.
+Defined in `packages/core/src/utils/errors.ts`. Single type parameter — the literal `Msg` is the entire surface area. Embed dynamic context (operator names, key names, path segments) into the message via template literals; do not add a separate `Ctx` parameter.
 
 ### Message format
 

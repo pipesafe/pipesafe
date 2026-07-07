@@ -1,5 +1,5 @@
 {
-  "maxInstantiations": 975000,
-  "lastMeasured": 894464,
-  "note": "Whole-project type instantiations for tsconfig.benchmark.json (src + examples + benchmarking, dist built). Deterministic for a pinned TypeScript version. History: 850,648 after the nested-validation layer; 919,425 after review round 1 (operand widenings, array walk); 894,464 after review round 2 (readonly operand positions in the registry replaced a DeepMutable re-check that measured +280k/2x check time; forgiving unknown operators; comparable $min/$max). Still below pre-standardization main's 988k, check ~3.7s vs 4.9s. If this check fails: investigate the regression first (PR #99's depth-viewer attributes per-symbol cost); raise the budget only as a deliberate, reviewed decision \u2014 update lastMeasured and note the cause here."
+  "maxInstantiations": 1030000,
+  "lastMeasured": 972749,
+  "note": "Whole-project type instantiations for tsconfig.benchmark.json (src + examples + benchmarking, dist built). Deterministic for a pinned TypeScript version. History: 850,648 nested-validation layer; 919,425 round-1 correctness (operand widenings, array walk); 894,464 round-2 (registry-readonly replaced a DeepMutable re-check measured at +280k/2x); 972,749 round-3 (readonly dependent-inference patterns \u2014 fixes silent field drops for $cond/$ifNull/$arrayElemAt/$concatArrays under const inference \u2014 plus non-$ string comparables and new regression pins). Check ~3.9s vs pre-standardization main's 988k/4.9s. If this check fails: investigate first (PR #99's depth-viewer attributes per-symbol cost); raise the budget only as a deliberate, reviewed decision \u2014 update lastMeasured and note the cause here."
 }

@@ -13,7 +13,8 @@ schema). Validation is deliberately forgiving where the registry is
 incomplete: unregistered operators and accumulators ($toUpper, $switch,
 $stdDevPop, ...) are valid MongoDB and keep compiling, as do `$$`-system
 variables ($$NOW, $$ROOT). Operand semantics were corrected along the way:
-$min/$max accept BSON-comparable operands (number, date, or string —
+$min/$max accept BSON-comparable operands (number, date, string, or
+boolean —
 `$min: "$name"` is valid), numeric accumulators accept any
 numeric-returning registry expression (`$sum: { $size: ... }`), `$size`
 and friends accept array-producing expressions, `$concatArrays` infers

@@ -176,6 +176,17 @@ type CheckedAccumulatorOps = "$sum" | "$avg" | "$min" | "$max";
  * NumericAccumulatorOperand/MinMaxAccumulatorOperand's RequiresMsg (§3.8
  * rule 3).
  */
+/** The registry operand's own brand, extracted — spelled once (§3.8 rule 3). */
+type BrandedAccumulatorFor<
+  Schema extends Document,
+  Op extends CheckedAccumulatorOps,
+> = {
+  [K in Op]: Extract<
+    AccumulatorSpec<Schema>[K]["operand"],
+    PipeSafeError<string>
+  >;
+};
+
 type ValidateAccumulatorValue<Schema extends Document, A> =
   // Schema-FREE fast-accept: literal operands that are valid regardless of
   // the schema. Besides skipping the registry work for the common
@@ -195,16 +206,23 @@ type ValidateAccumulatorValue<Schema extends Document, A> =
   : string extends keyof Schema ?
     never // operand checks are meaningless on a wide/index-signature schema
   : OperatorKeyOf<A> extends infer Op extends CheckedAccumulatorOps ?
-    // Readonly-tolerant via the registry's readonly operand positions
+    // $min/$max: ANY non-`$` string literal is a comparable. The union
+    // relation below can't express "string minus `$`-prefix" (NoDollarString
+    // only covers alphanumeric-leading strings, falsely rejecting "", "_x",
+    // "(none)"), so accept it here; `$`-strings fall through to the union,
+    // where the refs arm checks them against the schema.
+    Op extends "$min" | "$max" ?
+      A[Op & keyof A] extends `$${string}` ?
+        [A] extends [AccumulatorFor<Schema, Op>] ?
+          never
+        : BrandedAccumulatorFor<Schema, Op>
+      : A[Op & keyof A] extends string ? never
+      : [A] extends [AccumulatorFor<Schema, Op>] ? never
+      : BrandedAccumulatorFor<Schema, Op>
+    : // Readonly-tolerant via the registry's readonly operand positions
     // (see ExpressionSpec).
-    [A] extends [AccumulatorFor<Schema, Op>] ?
-      never
-    : {
-        [K in Op]: Extract<
-          AccumulatorSpec<Schema>[K]["operand"],
-          PipeSafeError<string>
-        >;
-      }
+    [A] extends [AccumulatorFor<Schema, Op>] ? never
+    : BrandedAccumulatorFor<Schema, Op>
   : never;
 
 /**
@@ -223,7 +241,11 @@ type ValidateGroupValue<Schema extends Document, K, V> =
     K extends "_id" ? ValidateNestedValue<Schema, V>
     : [OperatorKeyOf<V>] extends [never] ? ValidateNestedValue<Schema, V>
     : HasSingleOperatorKey<V> extends false ? MultiOperatorError
-    : ValidateAccumulatorValue<Schema, V>
+    : [Exclude<keyof V & string, `$${string}`>] extends [never] ?
+      ValidateAccumulatorValue<Schema, V>
+    : // Accumulator key mixed with plain keys — MongoDB: "The field must
+      // specify one accumulator" (mirrors ValidateExpressionValue's guard).
+      MultiOperatorError
   : never;
 
 /**

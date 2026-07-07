@@ -11,7 +11,10 @@ Five small modules with strict boundaries — do not grow a grab-bag here:
 - **strings.ts** — dollar prefixing, path joining, character unions.
 - **objects.ts** — `Document`, `Prettify`, union combinators, `MergeNested`,
   `OmitNeverValues` (THE Validate key-filter), `ForbidKeys` (the pattern-
-  index vacuity guard), `DeepReadonly` (readonly-tolerant re-checks).
+  index vacuity guard). Readonly tolerance for operand re-checks lives in
+  the REGISTRY (readonly operand positions in ExpressionSpec) — a
+  Deep-Readonly/Mutable wrapper here was measured at +280k instantiations
+  and rejected.
 - **paths.ts** — dotted-path machinery. `SplitPath` is deliberately
   tail-recursive (accumulator parameter → ~1000-depth budget instead of
   ~50); parse paths with it, then fold the segments.
