@@ -141,14 +141,17 @@ The type system is organized into modular building blocks located in `packages/c
   `RequiresMsg` (utils/errors.ts).
 
 - **expressions.ts**: THE expression registry — `ExpressionSpec<Schema>` maps each
-  operator to `{ operand; returns; category }`. Per-operator types, category key sets
-  and unions (derived from the per-entry `category`), `Expression`, and the
-  fixed-return arm of `InferExpression` are all derived. Valid-but-unmodeled operators
-  are allow-listed by name in `UnimplementedExpressionOps` (never widen it to
-  `` `$${string}` ``). Adding an operator = one registry entry + deleting its
-  allow-list line (+ one `InferDependentExpression` arm if the result depends on the
-  literal arguments: `$concatArrays`, `$arrayElemAt`, `$filter`, `$ifNull`, `$cond`,
-  `$literal`).
+  operator to `{ operand; returns; category }`, where `returns` is present only on
+  fixed-return operators: OMITTING it declares the result literal-dependent
+  (`LiteralDependentOps` is derived from the omission) and the inference lives in a
+  matching `InferDependentExpression` arm (`$concatArrays`, `$arrayElemAt`, `$filter`,
+  `$ifNull`, `$cond`, `$literal`; a missing arm degrades to `unknown`). Per-operator
+  types, category key sets and unions (derived from the per-entry `category`),
+  `Expression`, and the fixed-return arm of `InferExpression` are all derived.
+  Valid-but-unmodeled operators are allow-listed by name in
+  `UnimplementedExpressionOps` (never widen it to `` `$${string}` ``). Adding an
+  operator = one registry entry + deleting its allow-list line (+ one dependent arm
+  if applicable).
 
 - **literals.ts**: Literal value type constraints
 

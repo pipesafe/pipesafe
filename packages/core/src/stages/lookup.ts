@@ -1,11 +1,21 @@
 import { Document, Prettify } from "../utils/objects";
 import { PassThrough, PipeSafeError } from "../utils/errors";
 import { FieldPathsThatInferToForLookup } from "../elements/fieldReference";
+import { FlattenDotSet, IsDottedKey } from "../utils/paths";
+import { ApplySetUpdates } from "./set";
 
-// TODO (pre-existing, #55): a dotted `as` path ("user.orders") nests in
-// MongoDB, but this resolver types it as a flat literal key
-// ("user.orders": Output[]). Fix = ExpandDottedKey + MergeNested on the
-// NewKey segments, mirroring $set's dotted-key handling.
+/**
+ * A dotted `as` path NESTS in MongoDB — `as: "user.orders"` writes
+ * `{ user: { orders: [...] } }`, preserving `user`'s sibling fields and
+ * overwriting only the target path — exactly the semantics of a `$set` on
+ * that path. The resolver therefore reuses $set's machinery (FlattenDotSet
+ * to expand the dotted key, ApplySetUpdates to merge — mirroring
+ * ResolveSetOutputInner's early-exit split) instead of re-spelling the
+ * expand-and-merge. A FLAT key keeps the cheap `Omit & { [NewKey]: ... }`
+ * form: routing it through ApplySetUpdates gave the same output but was
+ * measured at ~+65k whole-project instantiations (every lookup call site
+ * paid the $set merge machinery for a single top-level key).
+ */
 export type ResolveLookupOutput<
   Schema extends Document,
   NewKey extends string,
@@ -14,7 +24,12 @@ export type ResolveLookupOutput<
   Schema,
   // distribute over union schemas
   Schema extends unknown ?
-    Prettify<Omit<Schema, NewKey> & { [K in NewKey]: PipelineOutput[] }>
+    IsDottedKey<NewKey> extends true ?
+      ApplySetUpdates<
+        Schema,
+        FlattenDotSet<{ [K in NewKey]: PipelineOutput[] }>
+      >
+    : Prettify<Omit<Schema, NewKey> & { [K in NewKey]: PipelineOutput[] }>
   : never
 >;
 

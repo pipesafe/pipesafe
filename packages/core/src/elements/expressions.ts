@@ -170,15 +170,16 @@ export type ArrayInput<Schema extends Document> =
  * operator that CAN be declared as data:
  *
  * - `operand`: the input shape (carrying the operand brands).
- * - `returns`: the result type for fixed-return operators. A LITERAL-
- *   DEPENDENT operator (its result derives from its arguments — $cond's
- *   branches, $concatArrays' element types, ...) declares its WIDEST
- *   correct type here (`unknown`/`unknown[]`), and its real inference
+ * - `returns`: the result type — PRESENT only on fixed-return operators.
+ *   A LITERAL-DEPENDENT operator (its result derives from its arguments —
+ *   $cond's branches, $concatArrays' element types, ...) OMITS `returns`:
+ *   the omission is the entry's own declaration of dependence
+ *   (`LiteralDependentOps` is derived from it), and the real inference
  *   lives as an arm of `InferDependentExpression` below — TypeScript has
  *   no type-level lambdas, so a parameterized "how to compute the result"
  *   cannot be stored in a registry entry; the hand-written arm is the
- *   irreducible per-operator inference code, kept in lockstep via
- *   `LiteralDependentOps`.
+ *   irreducible per-operator inference code. A missing arm degrades to
+ *   `unknown`, never to a wrong type or a dropped field.
  * - `category`: the operator's category — the category key sets and
  *   unions (`ArrayExpression`, ...) are DERIVED from this field, so the
  *   category is declared exactly once (pinned by `_EveryOpCategorized`).
@@ -197,7 +198,6 @@ export interface ExpressionSpec<Schema extends Document> {
   /** Concatenates arrays. Result element type depends on the literal args. */
   $concatArrays: {
     operand: readonly ArrayOperand<Schema, "$concatArrays">[];
-    returns: unknown[];
     category: "array";
   };
   /** Returns the size of an array. */
@@ -212,7 +212,6 @@ export interface ExpressionSpec<Schema extends Document> {
       ArrayOperand<Schema, "$arrayElemAt">,
       number | FieldReferencesThatInferTo<Schema, number>,
     ];
-    returns: unknown;
     category: "array";
   };
   /** Filters an array by a condition (cond uses $$var references; `as`
@@ -224,7 +223,6 @@ export interface ExpressionSpec<Schema extends Document> {
       cond: unknown;
       limit?: number;
     };
-    returns: unknown[];
     category: "array";
   };
   /**
@@ -350,7 +348,6 @@ export interface ExpressionSpec<Schema extends Document> {
       ConditionalOperand<Schema>,
       ...ConditionalOperand<Schema>[],
     ];
-    returns: unknown;
     category: "conditional";
   };
   /** Ternary: [condition, thenValue, elseValue]. */
@@ -360,7 +357,6 @@ export interface ExpressionSpec<Schema extends Document> {
       ConditionalOperand<Schema>,
       ConditionalOperand<Schema>,
     ];
-    returns: unknown;
     category: "conditional";
   };
 
@@ -374,7 +370,7 @@ export interface ExpressionSpec<Schema extends Document> {
 
   // --- Literal ----------------------------------------------------------------
   /** Returns the value without parsing; result is the literal's own type. */
-  $literal: { operand: unknown; returns: unknown; category: "literal" };
+  $literal: { operand: unknown; category: "literal" };
 
   // --- Comparison operators (all return boolean) ------------------------------
   $in: {
@@ -578,11 +574,13 @@ export type ExpressionFor<Schema extends Document, Op> =
  * `{ $size: ... }`).
  */
 type OpsReturning<Schema extends Document, T> = {
-  [K in keyof ExpressionSpec<Schema>]: ExpressionSpec<Schema>[K]["returns"] extends (
-    T
+  [K in keyof ExpressionSpec<Schema>]: ExpressionSpec<Schema>[K] extends (
+    { returns: infer R }
   ) ?
-    K
-  : never;
+    R extends T ?
+      K
+    : never
+  : never; // literal-dependent (no declared `returns`) — never in a fixed set
 }[keyof ExpressionSpec<Schema>];
 
 /** Union of expression shapes whose declared result is assignable to `T`. */
@@ -785,18 +783,21 @@ export type Expression<Schema extends Document> = ExpressionFor<
 
 /**
  * Operators whose result type depends on the literal arguments rather than
- * being fixed in the registry. KEEP IN LOCKSTEP with
- * `InferDependentExpression`'s arms below — a missed entry degrades
- * gracefully to the registry's declared (widest) `returns`, it does not
- * produce a wrong type.
+ * being fixed in the registry — DERIVED: an entry declares this by
+ * OMITTING `returns` (fixed-return operators declare one), which co-locates
+ * the "my result is argument-dependent" fact on the entry itself. Each such
+ * operator needs a matching `InferDependentExpression` arm; a missing arm
+ * degrades gracefully to `unknown` (the dispatch tail), it does not produce
+ * a wrong type or drop the field. Pinned by `_DerivedLiteralDependentOps`
+ * (expressions.typeAssertions.ts).
  */
-type LiteralDependentOps =
-  | "$concatArrays"
-  | "$arrayElemAt"
-  | "$filter"
-  | "$ifNull"
-  | "$cond"
-  | "$literal";
+export type LiteralDependentOps = {
+  [K in keyof ExpressionSpec<Document>]: ExpressionSpec<Document>[K] extends (
+    { returns: unknown }
+  ) ?
+    never
+  : K;
+}[keyof ExpressionSpec<Document>];
 
 /**
  * Helper to get union of all array element types
@@ -924,7 +925,10 @@ type InferDependentExpression<Schema extends Document, Expr> =
   : Expr extends { $cond: readonly [unknown, infer TrueVal, infer FalseVal] } ?
     InferCondOperand<Schema, TrueVal> | InferCondOperand<Schema, FalseVal>
   : Expr extends { $literal: infer Value } ? Value
-  : never;
+  : // No matching arm (out-of-lockstep operator, or a malformed operand
+    // shape the patterns don't match): degrade to `unknown`, mirroring the
+    // dispatch tail — `never` here would DROP the field from resolvers.
+    unknown;
 
 /**
  * Infer the result type of any expression — THE single dispatch:
@@ -936,7 +940,8 @@ type InferDependentExpression<Schema extends Document, Expr> =
  *  - known fixed-return operator → the registry's `returns` (FORGIVING:
  *    a malformed operand does not change the inferred kind — the operand
  *    brand reports the error at the input position);
- *  - unknown `$` operator → `never`.
+ *  - unregistered `$` operator (allow-listed or typo) → `unknown`;
+ *    validation, not inference, rejects the typos.
  */
 export type InferExpression<Schema extends Document, Expr> =
   [OperatorKeyOf<Expr>] extends [never] ? NotAnExpression
@@ -944,8 +949,14 @@ export type InferExpression<Schema extends Document, Expr> =
   : [OperatorKeyOf<Expr>] extends [LiteralDependentOps] ?
     InferDependentExpression<Schema, Expr>
   : [OperatorKeyOf<Expr>] extends [keyof ExpressionSpec<Schema>] ?
+    // Declared `returns` of a registered operator; a dependent entry the
+    // arm dispatch missed degrades to `unknown` (never a dropped field).
+    // (Hoisting this into a cached alias measured neutral — the alias
+    // cache already shares it; see the hoisting rules in CLAUDE.md.)
     ExpressionSpec<Schema>[OperatorKeyOf<Expr> &
-      keyof ExpressionSpec<Schema>]["returns"]
+      keyof ExpressionSpec<Schema>] extends { returns: infer R } ?
+      R
+    : unknown
   : // Unregistered operator: degrade to `unknown`, never to a dropped
     // field — `never` here made the resolvers DROP it, and a later stage
     // reading it errored with a misleading Field-not-on-schema. Inference

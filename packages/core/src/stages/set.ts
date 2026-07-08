@@ -305,7 +305,10 @@ type ReorderKeysToMatchSchema<
 // Selective path processing — only process schema paths that are ancestors of
 // dotted keys. Reduces type instantiation depth when the schema has many
 // nested objects but the query has only a few dotted keys.
-type ApplySetUpdates<Schema extends Document, Updates extends Document> =
+// Exported for ResolveLookupOutput (stages/lookup.ts): a dotted $lookup
+// `as` path nests exactly like a $set of that path, so lookup reuses this
+// machinery instead of re-spelling the merge.
+export type ApplySetUpdates<Schema extends Document, Updates extends Document> =
   HasDottedKeys<Updates> extends true ?
     // Has dotted keys - use selective schema extraction
     ReorderKeysToMatchSchema<Schema, ApplySetUpdatesSelective<Schema, Updates>>

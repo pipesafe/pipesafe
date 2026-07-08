@@ -27,12 +27,12 @@ brand as typos).
 2. Declare the entry's `category` — the category key sets and unions
    (`StringExpression` etc.) are DERIVED from it (`OpsInCategory`), and
    `_EveryOpCategorized` fails the build if it's missing.
-3. Only if the RESULT depends on the literal arguments: add the key to
-   `LiteralDependentOps` AND an arm to `InferDependentExpression` (keep them
-   in lockstep; a missed entry degrades to the registry's declared
-   `returns`, never to a wrong type). Declare the widest correct `returns`
-   on the entry — TS has no type-level lambdas, so the arm is the
-   irreducible per-operator inference code.
+3. Only if the RESULT depends on the literal arguments: OMIT `returns`
+   from the entry (the omission IS the declaration — `LiteralDependentOps`
+   is derived from it) and add an arm to `InferDependentExpression`. TS
+   has no type-level lambdas, so the arm is the irreducible per-operator
+   inference code; a missing arm degrades to `unknown`, never to a wrong
+   type or a dropped field. `_DerivedLiteralDependentOps` pins the set.
 
 Everything else (per-operator types, `Expression`, fixed-return inference)
 derives automatically. Do NOT hand-write expression object types.

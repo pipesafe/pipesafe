@@ -84,26 +84,27 @@ type FlexibleAccumulatorOperand<Schema extends Document> =
 /**
  * Accumulator registry (mirroring ExpressionSpec): one entry per
  * accumulator holding its operand shape and, for fixed-return
- * accumulators ($sum/$avg/$count), its result type. `AccumulatorFunction`
- * and the fixed arms of `ResolveAccumulatorFunction` are derived from it —
- * adding an accumulator means adding one entry (plus one dependent arm if
- * its result derives from the operand).
+ * accumulators ($sum/$avg/$count), its result type. Operand-DEPENDENT
+ * accumulators OMIT `returns` (the omission is the declaration, matching
+ * the expression registry's encoding) and get an explicit inference arm
+ * in `ResolveAccumulatorFunction`. `AccumulatorFunction` and the fixed
+ * arms are derived from the registry — adding an accumulator means adding
+ * one entry (plus one dependent arm if its result derives from the
+ * operand).
  */
 export interface AccumulatorSpec<Schema extends Document> {
   $sum: { operand: NumericAccumulatorOperand<Schema, "$sum">; returns: number };
   $avg: { operand: NumericAccumulatorOperand<Schema, "$avg">; returns: number };
-  /** Result mirrors the operand's inferred type (dependent). */
-  $min: { operand: MinMaxAccumulatorOperand<Schema, "$min">; returns: unknown };
-  $max: { operand: MinMaxAccumulatorOperand<Schema, "$max">; returns: unknown };
+  /** Operand-dependent results (like the expression registry, dependence
+   *  is declared by OMITTING `returns`; inference lives in
+   *  ResolveAccumulatorFunction's explicit arms). */
+  $min: { operand: MinMaxAccumulatorOperand<Schema, "$min"> };
+  $max: { operand: MinMaxAccumulatorOperand<Schema, "$max"> };
   $count: { operand: {}; returns: number };
-  /** Result is an array of the operand's inferred type (dependent). */
-  $push: { operand: FlexibleAccumulatorOperand<Schema>; returns: unknown[] };
-  $addToSet: {
-    operand: FlexibleAccumulatorOperand<Schema>;
-    returns: unknown[];
-  };
-  $first: { operand: FlexibleAccumulatorOperand<Schema>; returns: unknown };
-  $last: { operand: FlexibleAccumulatorOperand<Schema>; returns: unknown };
+  $push: { operand: FlexibleAccumulatorOperand<Schema> };
+  $addToSet: { operand: FlexibleAccumulatorOperand<Schema> };
+  $first: { operand: FlexibleAccumulatorOperand<Schema> };
+  $last: { operand: FlexibleAccumulatorOperand<Schema> };
 }
 
 /**

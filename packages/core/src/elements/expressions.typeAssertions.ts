@@ -5,6 +5,7 @@ import type {
   ExpressionSpec,
   ExpressionCategory,
   OpsInCategory,
+  LiteralDependentOps,
   AddExpression,
   SubtractExpression,
   MultiplyExpression,
@@ -278,7 +279,25 @@ type _EveryOpCategorized = Assert<
   >
 >;
 
+// The literal-dependent set is DERIVED from `returns`-omission on registry
+// entries. This pin (a) documents the current set and (b) catches both
+// drift directions: an entry that accidentally drops its `returns` joins
+// this union and fails here; a dependent entry that accidentally gains a
+// `returns` leaves it and fails here.
+type _DerivedLiteralDependentOps = Assert<
+  Equal<
+    LiteralDependentOps,
+    | "$concatArrays"
+    | "$arrayElemAt"
+    | "$filter"
+    | "$ifNull"
+    | "$cond"
+    | "$literal"
+  >
+>;
+
 export type {
+  _DerivedLiteralDependentOps,
   _EveryOpCategorized,
   _Assert_AddBrand,
   _Assert_SubtractBrand,
