@@ -1,6 +1,6 @@
 ---
 "@pipesafe/core": major
-"@pipesafe/manifold": minor
+"@pipesafe/manifold": major
 ---
 
 Type-system standardisation. Every stage now follows one convention —
@@ -30,7 +30,9 @@ chained call sites; `$`-keyed objects no longer pass as object literals;
 type-check (readonly operand positions); dotted `$lookup` `as` paths nest
 in the output schema.
 
-Breaking: `ResolveCountOutput` gained a `Schema` first type parameter;
+Breaking: `@pipesafe/manifold` now requires `@pipesafe/core` 2.x
+(peer dependency `>=2.0.0 <3.0.0`); `ResolveCountOutput` gained a `Schema`
+first type parameter;
 `MergeOptions` is deprecated in favor of `MergeQuery` (alias retained in
 `compat.ts`); several internal type names changed (deprecated aliases
 retained where signatures allow). Whole-project type instantiations drop

@@ -41,7 +41,8 @@ pipesafe/
 
 ### Package Dependencies
 
-- `@pipesafe/manifold` has `@pipesafe/core` as a **peer dependency** (`>=0.5.0 <1.0.0`)
+- `@pipesafe/manifold` has `@pipesafe/core` as a **peer dependency** pinned to core's
+  current major (`>=2.0.0 <3.0.0`); widen it whenever core takes a major bump
 - During development, `workspace:*` links them locally
 - Users install both packages explicitly
 
