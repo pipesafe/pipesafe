@@ -1,6 +1,6 @@
-import { Document, Prettify } from "../utils/core";
+import { Document, Prettify } from "../utils/objects";
 import { ResolveLookupOutput } from "./lookup";
-import { MatchQuery, ResolveMatchOutput } from "./match";
+import { ResolveMatchOutput } from "./match";
 
 /**
  * Augments a document type with a depth field when depthField is provided.
@@ -13,14 +13,16 @@ type GraphLookupElement<Doc extends Document, DepthField extends string> =
 
 /**
  * Narrows the foreign doc type when restrictSearchWithMatch is provided.
- * When RestrictMatch is `never` (default), returns ForeignDoc unchanged.
- * Otherwise applies the same union-narrowing logic as $match.
+ * When RestrictMatch is `never` (default), returns Foreign unchanged.
+ * Otherwise applies the same union-narrowing logic as $match. No
+ * `extends MatchQuery` re-prove: Pipeline.graphLookup's constraint already
+ * validated RestrictMatch (re-proving here re-instantiated the full
+ * MatchQuery union per call and silently fell back to the UNFILTERED
+ * Foreign on mismatch instead of branding).
  */
-type NarrowForeignDoc<ForeignDoc extends Document, RestrictMatch> =
-  [RestrictMatch] extends [never] ? ForeignDoc
-  : RestrictMatch extends MatchQuery<ForeignDoc> ?
-    ResolveMatchOutput<RestrictMatch, ForeignDoc>
-  : ForeignDoc;
+type NarrowForeignDoc<Foreign extends Document, RestrictMatch> =
+  [RestrictMatch] extends [never] ? Foreign
+  : ResolveMatchOutput<Foreign, RestrictMatch>;
 
 /**
  * Resolve the output type of a $graphLookup stage.
@@ -28,20 +30,20 @@ type NarrowForeignDoc<ForeignDoc extends Document, RestrictMatch> =
  * Reuses ResolveLookupOutput from lookup.ts — additions are
  * element-level depthField augmentation and restrictSearchWithMatch narrowing.
  *
- * @template StartingDocs - The current pipeline document schema
+ * @template Schema - The current pipeline document schema
  * @template NewKey - The "as" field name where results are stored
- * @template ForeignDoc - The document type of the foreign collection
+ * @template Foreign - The document type of the foreign collection
  * @template DepthField - Optional depth tracking field name (defaults to never)
  * @template RestrictMatch - Optional restrictSearchWithMatch query (defaults to never)
  */
 export type ResolveGraphLookupOutput<
-  StartingDocs extends Document,
+  Schema extends Document,
   NewKey extends string,
-  ForeignDoc extends Document,
+  Foreign extends Document,
   DepthField extends string = never,
   RestrictMatch = never,
 > = ResolveLookupOutput<
-  StartingDocs,
+  Schema,
   NewKey,
-  GraphLookupElement<NarrowForeignDoc<ForeignDoc, RestrictMatch>, DepthField>
+  GraphLookupElement<NarrowForeignDoc<Foreign, RestrictMatch>, DepthField>
 >;

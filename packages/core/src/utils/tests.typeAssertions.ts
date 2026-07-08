@@ -1,4 +1,4 @@
-import { IsPipeSafeError, PassThrough, PipeSafeError } from "./core";
+import { IsPipeSafeError, PassThrough, PipeSafeError } from "./errors";
 import { Assert, AssertPipeSafeError, Equal } from "./tests";
 
 /**

@@ -39,7 +39,7 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@pipesafe/core": ">=1.0.0",
+    "@pipesafe/core": ">=2.0.0 <3.0.0",
     "mongodb": "^6.17.0"
   },
   "devDependencies": {

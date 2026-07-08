@@ -1,4 +1,5 @@
-import { Document, PassThrough, Prettify } from "../utils/core";
+import { Document, Prettify } from "../utils/objects";
+import { PassThrough } from "../utils/errors";
 
 /**
  * Resolves the output schema type for a $unionWith stage
@@ -6,13 +7,13 @@ import { Document, PassThrough, Prettify } from "../utils/core";
  * If the schemas are structurally identical, returns just one schema (collapses the union).
  */
 export type ResolveUnionWithOutput<
-  StartingDocs extends Document,
-  PipelineOutput extends Document,
+  Schema extends Document,
+  Foreign extends Document,
 > = PassThrough<
-  StartingDocs,
-  [StartingDocs] extends [PipelineOutput] ?
-    [PipelineOutput] extends [StartingDocs] ?
-      Prettify<StartingDocs> // Schemas are identical - collapse to single type
-    : Prettify<StartingDocs | PipelineOutput> // Different schemas - union
-  : Prettify<StartingDocs | PipelineOutput> // Different schemas - union
+  Schema,
+  [Schema] extends [Foreign] ?
+    [Foreign] extends [Schema] ?
+      Prettify<Schema> // Schemas are identical - collapse to single type
+    : Prettify<Schema | Foreign> // Different schemas - union
+  : Prettify<Schema | Foreign> // Different schemas - union
 >;

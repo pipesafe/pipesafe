@@ -446,6 +446,9 @@ void _reuseInLookup;
 
 // Satisfy linting by exporting all test types
 export type {
+  _DottedAsNests,
+  _DottedAsOverwrites,
+  _DottedAsDeep,
   SimpleLookupTest,
   LookupPurchasesTest,
   ReplacementTest,
@@ -598,7 +601,7 @@ void _callsite_dotted_array_to_scalar;
 
 import type { LookupForeignFieldOrError } from "./lookup";
 import type { AssertPipeSafeError } from "../utils/tests";
-import type { PipeSafeError } from "../utils/core";
+import type { PipeSafeError } from "../utils/errors";
 
 // Foreign collection has only string-typed fields …
 type _OnlyStringsForeign = { _id: string; tag: string };
@@ -673,6 +676,42 @@ type _PassthroughLocal = LookupForeignFieldOrError<
 >;
 type _Assert_PassthroughLocal = Assert<
   AssertPipeSafeError<_PassthroughLocal, "upstream error in local schema">
+>;
+
+// ---------------------------------------------------------------------------
+// Dotted `as` paths NEST (MongoDB writes the path like a $set): sibling
+// fields of the traversed objects are preserved, the target path is
+// overwritten, and flat keys keep the previous behavior. The resolver
+// reuses $set's FlattenDotSet + ApplySetUpdates.
+// ---------------------------------------------------------------------------
+
+type _DottedAsSchema = { user: { name: string }; x: number };
+
+type _DottedAsNests = Assert<
+  Equal<
+    ResolveLookupOutput<_DottedAsSchema, "user.orders", { id: string }>,
+    { user: { name: string; orders: { id: string }[] }; x: number }
+  >
+>;
+
+// Overwrites only the target path; nested siblings survive.
+type _DottedAsOverwrites = Assert<
+  Equal<
+    ResolveLookupOutput<
+      { user: { orders: string; keep: boolean } },
+      "user.orders",
+      { id: string }
+    >,
+    { user: { orders: { id: string }[]; keep: boolean } }
+  >
+>;
+
+// Multi-segment paths nest all the way down.
+type _DottedAsDeep = Assert<
+  Equal<
+    ResolveLookupOutput<{ a: { b: { c: number } } }, "a.b.rel", { z: 1 }>,
+    { a: { b: { c: number; rel: { z: 1 }[] } } }
+  >
 >;
 
 export type {

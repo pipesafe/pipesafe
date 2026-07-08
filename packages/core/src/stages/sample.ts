@@ -1,4 +1,5 @@
-import { Document, PassThrough } from "../utils/core";
+import { Document } from "../utils/objects";
+import { PassThrough } from "../utils/errors";
 
 /**
  * Options for `$sample`. Mirrors the MongoDB shape so values can be

@@ -1,5 +1,5 @@
 import { Assert, Equal } from "../utils/tests";
-import type { Document } from "../utils/core";
+import type { Document } from "../utils/objects";
 import { ResolveFacetOutput } from "./facet";
 import type {
   PipelineBuilder,
@@ -181,12 +181,13 @@ const _lookupSubFacet = (p: Pipeline<Product, Product, "runtime", never>) =>
   });
 
 // $facet inside $facet sub-pipeline — blocked ("$facet" not in FacetAllowedStages)
-// The error fires inside the arrow body where p.facet() is called, so we wrap
-// the const annotation in a single-line statement to make the directive apply
-// to the entire assignment expression.
-// prettier-ignore
-// @ts-expect-error - $facet not allowed in facet sub-pipelines
-const _facetSubFacet: FacetBuilder<{ x: Product[] }> = (p) => p.facet({ x: (q: Pipeline<Product, Product, "runtime", never>) => q.limit(1) });
+// The error fires inside the arrow body where p.facet() is called, so the
+// directive sits on the call expression's line.
+const _facetSubFacet: FacetBuilder<{ x: Product[] }> = (p) =>
+  // @ts-expect-error - $facet not allowed in facet sub-pipelines
+  p.facet({
+    x: (q: Pipeline<Product, Product, "runtime", never>) => q.limit(1),
+  });
 
 // ============================================================================
 // Test 9: Standalone builder reuse across contexts

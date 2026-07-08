@@ -1,6 +1,13 @@
 import { Assert, AssertPipeSafeError, Equal } from "../utils/tests";
-import type { Document, PipeSafeError } from "../utils/core";
-import { AccumulatorFunction, ResolveGroupOutput } from "./group";
+import type { Document } from "../utils/objects";
+import type { PipeSafeError } from "../utils/errors";
+import {
+  AccumulatorFunction,
+  AccumulatorSpec,
+  CheckedAccumulatorOps,
+  ResolveGroupOutput,
+  UnimplementedAccumulators,
+} from "./group";
 
 /**
  * Type Resolution Behaviors for $group Stage:
@@ -672,7 +679,7 @@ export type {
 };
 
 // ============================================================================
-// Phase 1 — Prettify wrapping on ResolveGroupOutput's _id shape
+// Prettify wrapping on ResolveGroupOutput's _id shape
 // ============================================================================
 // When `_id` is a multi-field reference object, the resulting `_id` shape
 // must hover as a flat object, not as a chain of mapped-type applications.
@@ -751,12 +758,12 @@ type _Assert_AvgBrand = Assert<
   >
 >;
 
-// $min/$max permit Date and so carry the wider message.
+// $min/$max permit BSON-comparables and so carry the wider message.
 type _MinOperand_HasBrand = MinOperand<AccumulatorTestSchema>;
 type _Assert_MinBrand = Assert<
   AssertPipeSafeError<
     Extract<_MinOperand_HasBrand, PipeSafeError<string>>,
-    "Accumulator '$min' requires a numeric or date operand."
+    "Accumulator '$min' requires a comparable (number, date, string, or boolean) operand."
   >
 >;
 
@@ -764,7 +771,7 @@ type _MaxOperand_HasBrand = MaxOperand<AccumulatorTestSchema>;
 type _Assert_MaxBrand = Assert<
   AssertPipeSafeError<
     Extract<_MaxOperand_HasBrand, PipeSafeError<string>>,
-    "Accumulator '$max' requires a numeric or date operand."
+    "Accumulator '$max' requires a comparable (number, date, string, or boolean) operand."
   >
 >;
 
@@ -795,6 +802,49 @@ type _Assert_MinValid = Assert<
   Equal<_MinValidResult, { _id: string; earliest: Date }>
 >;
 
+// ---------------------------------------------------------------------------
+// `$$`-system variables in _id/accumulator positions: accepted, and their
+// inference degrades to `unknown` ($push wraps it in an array) — never to a
+// dropped field or a brand.
+// ---------------------------------------------------------------------------
+
+type _SystemVarGroupResult = ResolveGroupOutput<
+  { a: string },
+  { _id: "$$NOW"; latest: { $max: "$$NOW" }; docs: { $push: "$$ROOT" } }
+>;
+type _Assert_SystemVarGroup = Assert<
+  Equal<
+    _SystemVarGroupResult,
+    { _id: unknown; latest: unknown; docs: unknown[] }
+  >
+>;
+
+// ---------------------------------------------------------------------------
+// Registry lockstep pins (mirroring expressions.typeAssertions.ts)
+// ---------------------------------------------------------------------------
+
+// Registry/allow-list DISJOINTNESS: validation checks AccumulatorSpec before
+// UnimplementedAccumulators, so an accumulator in both is dead allow-list
+// weight — and a forgotten DELETE step after registering one would sit
+// silently. Compile failure instead.
+type _AccumulatorAllowListDisjoint = Assert<
+  Equal<
+    Extract<keyof AccumulatorSpec<Document>, UnimplementedAccumulators>,
+    never
+  >
+>;
+
+// CheckedAccumulatorOps is DERIVED in group.ts (registry entries whose
+// operand union carries a PipeSafeError brand arm). This pin documents the
+// current set and catches both drift directions — an operand losing its
+// brand arm drops out of validation coverage and fails here; a flexible
+// accumulator gaining a brand (or the IsAny guard breaking) joins and
+// fails here. (Mirrors the _DerivedLiteralDependentOps pin in
+// expressions.typeAssertions.ts.)
+type _DerivedCheckedAccumulatorOps = Assert<
+  Equal<CheckedAccumulatorOps, "$sum" | "$avg" | "$min" | "$max">
+>;
+
 export type {
   _Assert_SumBrand,
   _Assert_AvgBrand,
@@ -802,4 +852,7 @@ export type {
   _Assert_MaxBrand,
   _Assert_SumValid,
   _Assert_MinValid,
+  _Assert_SystemVarGroup,
+  _AccumulatorAllowListDisjoint,
+  _DerivedCheckedAccumulatorOps,
 };

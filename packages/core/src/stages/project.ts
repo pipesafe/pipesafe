@@ -1,40 +1,22 @@
 import {
   Document,
-  PassThrough,
-  PipeSafeError,
+  OmitNeverValues,
   Prettify,
-  ExpandDottedKey,
   UnionToIntersection,
   MergeNested,
   IsPlainObject,
-} from "../utils/core";
+} from "../utils/objects";
+import { PassThrough, PipeSafeError, UnknownFieldError } from "../utils/errors";
+import { HasOperatorKey } from "../utils/dispatch";
+import { ExpandDottedKey, IsDottedKey } from "../utils/paths";
+import { NoDollarString, WithoutDollar } from "../utils/strings";
 import {
-  FieldReference,
-  InferFieldReference,
+  GetFieldTypeWithoutArrays,
   InferNestedFieldReference,
 } from "../elements/fieldReference";
 import { Expression, InferExpression } from "../elements/expressions";
-import { FieldSelector, GetFieldType } from "../elements/fieldSelector";
-
-// ============================================================================
-// Expression Operators for $project Stage
-// ============================================================================
-
-/**
- * Union of all expression operators for $project
- * Uses Expression which includes array expressions ($concatArrays, $size) and date expressions ($dateToString)
- * Extend this as we add more operators (e.g., string ops, math ops, etc.)
- */
-export type ProjectExpression<Schema extends Document> = Expression<Schema>;
-
-/**
- * Infer the result type of a project expression
- * Delegates to InferExpression which handles all expression operators
- */
-export type InferProjectExpression<
-  Schema extends Document,
-  Expr,
-> = InferExpression<Schema, Expr>;
+import { FieldSelector, GetFieldTypeOrError } from "../elements/fieldSelector";
+import { ValidateNestedValue } from "../elements/validation";
 
 /**
  * $project stage query type
@@ -46,19 +28,49 @@ export type InferProjectExpression<
  * - Nested reshaping: { nested: { a: "$field1", b: "$field2" } }
  */
 export type ProjectQuery<Schema extends Document> = {
-  [key: string]:
-    | 1
-    | 0
-    | true
-    | false
-    | FieldReference<Schema>
-    | ProjectExpression<Schema>
-    | Document; // For nested object replacement
+  [
+    key: string
+  ]: // Inclusion/exclusion flags (1/0/true/false). `number | boolean` IS the
+    // literal set: TS normalizes `1 | 0 | number` to `number` and
+    // `true | false` to `boolean` at union creation, so spelling the
+    // literals adds nothing. The wide types are also required on their own
+    // terms — MongoDB treats any nonzero number as inclusion, so a
+    // `number`/`boolean`-typed VARIABLE is a valid projection value even
+    // though its literal can't be known at compile time (rejecting it
+    // would go through the deep value union and surface a spurious
+    // TS2589).
+    | number
+    | boolean
+    // Structural acceptance of `$`-strings: unknown refs are
+    // branded by ValidateProjectQuery's value walk instead of rejecting
+    // through the deep refs union on the constraint path. NOTE: a
+    // FieldReference<Schema> member here would be ABSORBED by this template
+    // under union normalization (verified) — it would cost the full path
+    // union per schema and buy nothing, so it is deliberately absent.
+    | `$${string}`
+    // Plain string values are valid MongoDB literal assignments in $project
+    // (only numeric/boolean literals require $literal).
+    | NoDollarString
+    // Nested object replacement AND expression shapes. Expression<Schema>
+    // below is AUTOCOMPLETE-ONLY: Document subsumes every object for
+    // checking — do not "fix" acceptance bugs by editing it.
+    | Document
+    | Expression<Schema>;
 };
 
-// Detects whether P (a $project literal) has any non-_id key with an
-// inclusion value (1 | true).
-type HasInclusionNonId<P> =
+// ---------------------------------------------------------------------------
+// Projection mode — THE single pair. `_id` is skipped in both directions
+// because it is MongoDB's sole exception to the no-mixing rule
+// (`{_id: 0, name: 1}` and `{_id: 1, name: 0}` are both valid). Both
+// ValidateProjectQuery and ResolveProjectOutput default their `Inc`/`Exc`
+// parameters from this pair; the second computation is an alias-cache hit.
+// Uses `true extends {...}[keyof P]` (existential check) so a
+// mixed query reports `true` for both — a naked indexed access would
+// collapse `true | false` to `boolean` and hide the mix.
+// ---------------------------------------------------------------------------
+
+/** Does P have any non-_id key with an inclusion value (1 | true)? */
+export type HasInclusionsNonId<P> =
   true extends (
     {
       [K in keyof P]: K extends "_id" ? never
@@ -69,10 +81,8 @@ type HasInclusionNonId<P> =
     true
   : false;
 
-// Detects whether P has any non-_id key with an exclusion value
-// (0 | false). Excluding `_id` is the only allowed mix in MongoDB so
-// it's intentionally not counted as exclusion-mode.
-type HasExclusionNonId<P> =
+/** Does P have any non-_id key with an exclusion value (0 | false)? */
+export type HasExclusionsNonId<P> =
   true extends (
     {
       [K in keyof P]: K extends "_id" ? never
@@ -83,12 +93,31 @@ type HasExclusionNonId<P> =
     true
   : false;
 
-type ValidateProjectQueryKeys<Schema extends Document, P> = {
-  [K in keyof P]: K extends FieldSelector<Schema> ? P[K]
-  : P[K] extends 1 | 0 | true | false ?
-    PipeSafeError<`Field '${K & string}' is not on the schema.`>
-  : P[K];
-};
+/**
+ * The mixed-mode brand, spelled once: fired at the call site by
+ * ValidateProjectQuery and at the resolver by ResolveProjectOutput for the
+ * same user error.
+ */
+type MixedProjectionError =
+  PipeSafeError<`Stage '$project' cannot mix inclusion 1/true and exclusion 0/false.`>;
+
+/**
+ * Per-key project re-check: `never` = valid (key is filtered out by the
+ * wrapper). Inclusion/exclusion flags exit in one arm (the dominant
+ * projection value); unknown keys carrying a flag brand; every other value
+ * goes through the shared nested-validation kernel.
+ */
+type ValidateProjectKey<Schema extends Document, P, K extends keyof P> =
+  [P[K]] extends [number | boolean] ?
+    string extends keyof Schema ?
+      never // unknown-key detection is meaningless on a wide schema
+    : K extends FieldSelector<Schema> ? never
+    : UnknownFieldError<K & string>
+  : ValidateNestedValue<Schema, P[K]>;
+
+type ValidateProjectQueryKeys<Schema extends Document, P> = OmitNeverValues<{
+  [K in keyof P]: ValidateProjectKey<Schema, P, K>;
+}>;
 
 /**
  * Validation wrapper for $project queries used at Pipeline.project's
@@ -104,105 +133,77 @@ type ValidateProjectQueryKeys<Schema extends Document, P> = {
  *    that's the legitimate "rename / compute new field" case.
  *
  * Schema-known keys pass through unchanged so chained-stage inference
- * via ResolveProjectOutput<P, Schema> sees the literal P.
+ * via ResolveProjectOutput<Schema, P> sees the literal P.
  *
- * Cost: ~3,600 instantiations once at baseline; zero per-stage marginal
- * cost for valid inputs (TS folds the mapped type when shape matches).
- * An `Exclude<keyof P, FieldSelector<Schema>> extends never ? P : ...`
- * early-exit was tried and adds ~600 instantiations without helping
- * the per-stage cost — left out.
+ * `Inc`/`Exc` default from the NonId mode pair above; direct 2-arg
+ * annotation works thanks to the defaults.
  */
-export type ValidateProjectQuery<Schema extends Document, P> =
-  HasInclusionNonId<P> extends true ?
-    HasExclusionNonId<P> extends true ?
+export type ValidateProjectQuery<
+  Schema extends Document,
+  P,
+  Inc extends boolean = HasInclusionsNonId<P>,
+  Exc extends boolean = HasExclusionsNonId<P>,
+> =
+  // Wide-QUERY guard: on constraint failure TS re-instantiates this wrapper
+  // with P = ProjectQuery<Schema> (index signature ⇒ `keyof P` includes
+  // string); validating the wide value unions would brand valid keys and
+  // overflow depth on top of the real error. The mixed-mode check below is
+  // deliberately NOT schema-guarded — it is schema-independent, so it fires
+  // on index-signature schemas too (the per-key/value checks guard
+  // themselves).
+  string extends keyof P ? {}
+  : Inc extends true ?
+    Exc extends true ?
       // Mixed mode: brand each non-_id exclusion VALUE so TS reports
       // TS2322 ("Type 0 is not assignable to PipeSafeError<...>") at
-      // the offending 0/false rather than TS2353 on a valid key.
-      {
-        [K in keyof P]: K extends "_id" ? P[K]
-        : P[K] extends 0 | false ?
-          PipeSafeError<`Stage '$project' cannot mix inclusion 1/true and exclusion 0/false.`>
-        : P[K];
-      }
+      // the offending 0/false rather than TS2353 on a valid key. Key-
+      // filtered: only the offending exclusion keys survive.
+      OmitNeverValues<{
+        [K in keyof P]: K extends "_id" ? never
+        : P[K] extends 0 | false ? MixedProjectionError
+        : never;
+      }>
     : ValidateProjectQueryKeys<Schema, P>
   : ValidateProjectQueryKeys<Schema, P>;
 
-// Helper: Check if a value is an inclusion (1 or true)
-type IsInclusion<T> = T extends 1 | true ? true : false;
-
-// Helper: Check if a value is an exclusion (0 or false)
-type IsExclusion<T> = T extends 0 | false ? true : false;
-
-// Helper: Check if projection is in inclusion mode (has any 1 or true values).
-// Uses `true extends {...}[keyof Q]` (existential check) so that mixed-mode
-// queries like `{ name: 1; age: 0 }` correctly report `true` for both
-// HasInclusions and HasExclusions — without this, the union `true | false`
-// collapses to `boolean` and `boolean extends true` is false, hiding the
-// mix from the dispatch logic in `ResolveProjectOutput`.
-type HasInclusions<Query extends Record<string, unknown>> =
-  true extends (
-    {
-      [K in keyof Query]: IsInclusion<Query[K]>;
-    }[keyof Query]
-  ) ?
-    true
-  : false;
-
-// Helper: Check if projection is in exclusion mode (has any 0 or false values, excluding _id)
-type HasExclusions<Query extends Record<string, unknown>> =
-  true extends (
-    {
-      [K in keyof Query]: K extends "_id" ? false : IsExclusion<Query[K]>;
-    }[keyof Query]
-  ) ?
-    true
-  : false;
-
-// Helper: Check if a key contains dots (is a dotted key)
-type IsDottedKey<Key extends string> =
-  Key extends `${string}.${string}` ? true : false;
-
-// Helper: Resolve nested objects with field references and expressions
-// Uses InferNestedFieldReference for field references, but also handles ProjectExpression
+// Helper: Resolve nested objects with field references and expressions.
+// InferNestedFieldReference key-dispatches expressions internally, so no
+// separate expression structural check is needed.
 type ResolveNestedProjection<Schema extends Document, Obj extends Document> = {
-  [K in keyof Obj]: Obj[K] extends ProjectExpression<Schema> ?
-    // Expression operator - infer the expression result type
-    InferProjectExpression<Schema, Obj[K]>
-  : // Use InferNestedFieldReference for everything else (field refs, nested objects, literals)
-    InferNestedFieldReference<Schema, Obj[K]>;
+  [K in keyof Obj]: InferNestedFieldReference<Schema, Obj[K]>;
 };
 
 // Helper: Resolve a single field value (handles both regular and dotted keys)
 type ResolveFieldValue<Schema extends Document, Value, Key extends string> =
-  Value extends 1 | true ?
-    // Inclusion - get field type from schema. If the key isn't on the schema,
-    // surface a branded error rather than silently producing `never` (which
-    // would just drop the key from the output without any signal).
-    IsDottedKey<Key> extends true ?
-      // Dotted key - get nested field type
-      GetFieldType<Schema, Key>
-    : Key extends keyof Schema ? Schema[Key]
-    : PipeSafeError<`Field '${Key}' is not on the schema.`>
-  : Value extends 0 | false ?
+  Value extends 0 | false ?
     // Exclusion - return never (field is excluded). Intentional: `never`
     // here means "the field is dropped from the output", which is correct.
     never
-  : Value extends FieldReference<Schema> ?
-    // Field reference - infer the referenced field type
-    InferFieldReference<Schema, Value>
-  : Value extends ProjectExpression<Schema> ?
-    // Expression operator - infer the expression result type
-    InferProjectExpression<Schema, Value>
+  : [Value] extends [number | boolean] ?
+    // Inclusion — literal 1/true, or a WIDENED number/boolean (MongoDB:
+    // any nonzero number includes; compile time can't know the runtime
+    // value, so degrade to inclusion). If the key isn't on the schema,
+    // surface a branded error rather than silently producing `never`.
+    // GetFieldTypeOrError handles dotted and plain keys alike and brands
+    // unknown paths - a bare GetFieldType here silently produced a `never`
+    // leaf for unknown DOTTED keys, contradicting this comment.
+    GetFieldTypeOrError<Schema, Key>
+  : Value extends `$${string}` ?
+    // Field reference — a `$`-string check is far cheaper than FieldReference
+    // union membership; unknown paths brand via GetFieldTypeWithoutArrays.
+    GetFieldTypeWithoutArrays<Schema, WithoutDollar<Value & string>>
+  : HasOperatorKey<Value> extends true ?
+    // $-keyed object = expression
+    InferExpression<Schema, Value>
   : Value extends Document ?
     // Nested object - recursively resolve field references and expressions within it
     ResolveNestedProjection<Schema, Value>
-  : PipeSafeError<`Invalid projection value for field '${Key}'.`>;
+  : [Value] extends [string] ?
+    Value // plain-string literal assignment (valid MongoDB; $-refs handled above)
+  : PipeSafeError<`Stage '$project' requires a valid projection value for field '${Key}'.`>;
 
 // Helper: Create flat map of dotted keys to their types (only include keys with 1/true values)
-type DottedKeyFlatMap<
-  Schema extends Document,
-  Query extends ProjectQuery<Schema>,
-> = Prettify<{
+type DottedKeyFlatMap<Schema extends Document, Query> = Prettify<{
   [K in keyof Query as K extends string ?
     IsDottedKey<K> extends true ?
       Query[K] extends 1 | true ?
@@ -211,7 +212,7 @@ type DottedKeyFlatMap<
     : never
   : never]: K extends keyof Query ?
     Query[K] extends 1 | true ?
-      GetFieldType<Schema, K & string>
+      GetFieldTypeOrError<Schema, K & string>
     : never
   : never;
 }>;
@@ -220,10 +221,7 @@ type DottedKeyFlatMap<
 // Similar to FlattenDotSet pattern: expand first, then merge with MergeNested to deeply merge nested intersections
 // Don't apply Prettify here - let MergeNested deeply merge nested intersections first
 // Prettify will be applied at the ResolveInclusionMode level
-type ExpandDottedProjection<
-  Schema extends Document,
-  Query extends ProjectQuery<Schema>,
-> =
+type ExpandDottedProjection<Schema extends Document, Query> =
   keyof DottedKeyFlatMap<Schema, Query> extends never ? {}
   : MergeNested<
       {},
@@ -237,7 +235,7 @@ type ExpandDottedProjection<
     >;
 
 // Helper: Extract non-dotted keys from query
-type NonDottedKeys<Query extends Record<string, unknown>> = {
+type NonDottedKeys<Query> = {
   [K in keyof Query as K extends string ?
     IsDottedKey<K> extends true ?
       never
@@ -263,10 +261,7 @@ type DeepMergeProjection<T> =
 
 // Helper: Resolve inclusion mode projection
 // Use MergeNested to deeply merge nested intersections (e.g., { user: { name } } & { user: { email } })
-type ResolveInclusionMode<
-  Schema extends Document,
-  Query extends ProjectQuery<Schema>,
-> = Prettify<
+type ResolveInclusionMode<Schema extends Document, Query> = Prettify<
   DeepMergeProjection<
     MergeNested<
       {},
@@ -280,23 +275,23 @@ type ResolveInclusionMode<
           : K // Include _id by default in inclusion mode
         : never]: Schema[K];
       } & {
-        // Include non-dotted fields specified in query
+        // Include non-dotted fields specified in query. Keys with invalid
+        // values (not 1/true, ref, expression, or object) are deliberately
+        // KEPT so ResolveFieldValue brands them ("Stage '$project' requires
+        // a valid projection value for field...") instead of silently
+        // dropping the key — exclusion
+        // values can't reach the fallthrough because genuine mixing already
+        // branded at dispatch.
         [K in keyof NonDottedKeys<Query> as K extends "_id" ? never
-        : Query[K] extends 1 | true ? K
-        : Query[K] extends FieldReference<Schema> ? K
-        : Query[K] extends ProjectExpression<Schema> ? K
-        : Query[K] extends Document ? K
-        : never]: ResolveFieldValue<Schema, Query[K], K & string>;
+        : Query[K] extends 0 | false ? never
+        : K]: ResolveFieldValue<Schema, Query[K], K & string>;
       } & ExpandDottedProjection<Schema, Query>
     >
   >
 >;
 
 // Helper: Resolve exclusion mode projection
-type ResolveExclusionMode<
-  Schema extends Document,
-  Query extends ProjectQuery<Schema>,
-> = Prettify<
+type ResolveExclusionMode<Schema extends Document, Query> = Prettify<
   {
     // Always include _id unless explicitly excluded (only if _id exists in schema)
     [K in "_id" as K extends keyof Schema ?
@@ -311,17 +306,19 @@ type ResolveExclusionMode<
     [K in keyof Schema as K extends "_id" ? never
     : K extends keyof Query ?
       Query[K] extends 0 | false ? never
-      : Query[K] extends FieldReference<Schema> ?
+      : Query[K] extends `$${string}` ?
         never // Field references create new fields, don't exclude
       : Query[K] extends Document ?
-        never // Nested objects create new fields
+        never // Nested objects (incl. expressions) create new fields
       : K
     : K]: Schema[K];
   } & {
-    // Add fields from field references, expressions, and nested objects
+    // Add fields from field references, expressions, and nested objects.
+    // `$`-string / Document checks are far cheaper per key than full
+    // FieldReference/Expression union membership tests; ResolveFieldValue
+    // does the real dispatch and brands invalid values.
     [K in keyof Query as K extends "_id" ? never
-    : Query[K] extends FieldReference<Schema> ? K
-    : Query[K] extends ProjectExpression<Schema> ? K
+    : Query[K] extends `$${string}` ? K
     : Query[K] extends Document ? K
     : never]: ResolveFieldValue<Schema, Query[K], K & string>;
   }
@@ -331,25 +328,30 @@ type ResolveExclusionMode<
  * Resolves the output schema type for a $project stage. PassThrough forwards
  * a branded `PipeSafeError` Schema unchanged so upstream errors short-circuit.
  *
- * Mixing inclusion (1/true) and exclusion (0/false) in the same projection
- * is forbidden by MongoDB (the only exception is excluding `_id` while
- * otherwise including, which `HasExclusions` already handles by skipping
- * `_id`). When both modes appear on non-`_id` fields, surface a branded
- * error rather than silently dispatching to one mode and dropping the
- * conflicting key.
+ * `Inc`/`Exc` default from the NonId mode pair. The `_id`-skipping
+ * semantics mean MongoDB's `_id` exception applies in both directions:
+ * `{_id: 1, name: 0}` dispatches to exclusion mode. Genuine non-`_id`
+ * mixing brands rather than silently dropping the conflicting key.
+ *
+ * No `Query extends ProjectQuery<Schema>` re-check: Pipeline.project's
+ * parameter position already validated the query, and re-proving it would
+ * cost a full mapped-type instantiation per call.
  */
-export type ResolveProjectOutput<Query, Schema extends Document> = PassThrough<
+export type ResolveProjectOutput<
+  Schema extends Document,
+  Query,
+  Inc extends boolean = HasInclusionsNonId<Query>,
+  Exc extends boolean = HasExclusionsNonId<Query>,
+> = PassThrough<
   Schema,
-  Query extends ProjectQuery<Schema> ?
-    HasInclusions<Query> extends true ?
-      HasExclusions<Query> extends true ?
-        PipeSafeError<`Stage '$project' cannot mix inclusion 1/true and exclusion 0/false.`>
-      : // Inclusion mode
-        ResolveInclusionMode<Schema, Query>
-    : HasExclusions<Query> extends true ?
-      // Exclusion mode
-      ResolveExclusionMode<Schema, Query>
-    : // Default: inclusion mode (when only field references or nested objects)
+  Inc extends true ?
+    Exc extends true ?
+      MixedProjectionError
+    : // Inclusion mode
       ResolveInclusionMode<Schema, Query>
-  : never
+  : Exc extends true ?
+    // Exclusion mode
+    ResolveExclusionMode<Schema, Query>
+  : // Default: inclusion mode (when only field references or nested objects)
+    ResolveInclusionMode<Schema, Query>
 >;

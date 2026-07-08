@@ -1,5 +1,7 @@
 import { FieldPath } from "../elements/fieldReference";
-import { Document, PassThrough, Prettify } from "../utils/core";
+import { Document, Prettify } from "../utils/objects";
+import { IsDottedKey, SplitPath } from "../utils/paths";
+import { PassThrough } from "../utils/errors";
 
 export type UnsetQuery<Schema extends Document> =
   | FieldPath<Schema>
@@ -8,93 +10,41 @@ export type UnsetQuery<Schema extends Document> =
 // Direct implementation to remove fields from schema without going through $set pipeline
 // This avoids unnecessary type instantiations and depth
 
-// Optimization: Batch process nested paths - process 2 levels at a time to reduce recursion depth
-// Similar to ExpandDottedKeyBatched for set operations (reduces depth by ~50% for deeply nested paths)
-type RemoveFieldPathBatched<Schema extends Document, Path extends string> =
-  Path extends `${infer First}.${infer Second}.${infer Rest}` ?
-    // Process 2 levels at once if more levels exist
-    Rest extends `${string}.${string}` ?
-      First extends keyof Schema ?
-        Exclude<Schema[First], undefined> extends infer NestedValue ?
-          NestedValue extends Document ?
-            {
-              [K in keyof Schema]: K extends First ?
-                undefined extends Schema[K] ?
-                  | RemoveFieldPathBatched<NestedValue, `${Second}.${Rest}`>
-                  | undefined
-                : RemoveFieldPathBatched<NestedValue, `${Second}.${Rest}`>
-              : Schema[K];
-            }
-          : Schema
-        : Schema
-      : Schema
-    : // Base case: last 3 segments - process all at once (no more recursion)
-    First extends keyof Schema ?
-      Exclude<Schema[First], undefined> extends infer NestedValue ?
+// Walk pre-split path segments and remove the leaf, preserving optionality
+// at every level. Parsing is done tail-recursively by SplitPath; this fold
+// descends one structural level per segment.
+type RemoveAtSegments<Schema extends Document, Segs extends readonly string[]> =
+  Segs extends [infer Only extends string] ?
+    Only extends keyof Schema ?
+      Omit<Schema, Only>
+    : Schema
+  : Segs extends [infer Head extends string, ...infer Rest extends string[]] ?
+    Head extends keyof Schema ?
+      Exclude<Schema[Head], undefined> extends infer NestedValue ?
         NestedValue extends Document ?
-          Second extends keyof NestedValue ?
-            Exclude<NestedValue[Second], undefined> extends infer DeepValue ?
-              DeepValue extends Document ?
-                Rest extends keyof DeepValue ?
-                  {
-                    [K in keyof Schema]: K extends First ?
-                      undefined extends Schema[K] ?
-                        | {
-                            [K2 in keyof NestedValue]: K2 extends Second ?
-                              undefined extends NestedValue[K2] ?
-                                Omit<DeepValue, Rest> | undefined
-                              : Omit<DeepValue, Rest>
-                            : NestedValue[K2];
-                          }
-                        | undefined
-                      : {
-                          [K2 in keyof NestedValue]: K2 extends Second ?
-                            undefined extends NestedValue[K2] ?
-                              Omit<DeepValue, Rest> | undefined
-                            : Omit<DeepValue, Rest>
-                          : NestedValue[K2];
-                        }
-                    : Schema[K];
-                  }
-                : Schema
-              : Schema
-            : Schema
-          : Schema
+          {
+            [K in keyof Schema]: K extends Head ?
+              undefined extends Schema[K] ?
+                RemoveAtSegments<NestedValue, Rest> | undefined
+              : RemoveAtSegments<NestedValue, Rest>
+            : Schema[K];
+          }
         : Schema
       : Schema
     : Schema
-  : Path extends `${infer First}.${infer Rest}` ?
-    // Base case: 2 segments - process both at once (no more recursion)
-    First extends keyof Schema ?
-      Exclude<Schema[First], undefined> extends infer NestedValue ?
-        NestedValue extends Document ?
-          Rest extends keyof NestedValue ?
-            {
-              [K in keyof Schema]: K extends First ?
-                undefined extends Schema[K] ?
-                  Omit<NestedValue, Rest> | undefined
-                : Omit<NestedValue, Rest>
-              : Schema[K];
-            }
-          : Schema
-        : Schema
-      : Schema
-    : Schema
-  : // Top-level field - remove it directly
-  Path extends keyof Schema ? Omit<Schema, Path>
   : Schema;
 
-// Remove a single field path from schema (uses batched processing for nested paths)
-type RemoveFieldPath<
-  Schema extends Document,
-  Path extends string,
-> = RemoveFieldPathBatched<Schema, Path>;
+// Remove a single field path from schema
+type RemoveFieldPath<Schema extends Document, Path extends string> =
+  Path extends keyof Schema ? Omit<Schema, Path>
+  : IsDottedKey<Path> extends true ? RemoveAtSegments<Schema, SplitPath<Path>>
+  : Schema;
 
 // Helper: Check if all paths are top-level (no dots) for early exit optimization
 type AllTopLevelPaths<Paths extends readonly string[]> =
   Paths extends readonly [infer First, ...infer Rest] ?
     First extends string ?
-      First extends `${string}.${string}` ?
+      IsDottedKey<First> extends true ?
         false // Found a dotted path
       : Rest extends readonly string[] ? AllTopLevelPaths<Rest>
       : true
@@ -105,7 +55,7 @@ type AllTopLevelPaths<Paths extends readonly string[]> =
 type ExtractTopLevelKeys<Paths extends readonly string[]> =
   Paths extends readonly [infer First, ...infer Rest] ?
     First extends string ?
-      First extends `${string}.${string}` ?
+      IsDottedKey<First> extends true ?
         // Dotted path - skip it
         Rest extends readonly string[] ?
           ExtractTopLevelKeys<Rest>
@@ -171,34 +121,30 @@ type BatchRemoveNestedByParent<
 
 // Remove multiple field paths from schema
 // Optimization: Batch Omit for top-level paths, batch by parent for nested paths
-// This avoids deep recursion by grouping nested paths by their parent key
+// This avoids deep recursion by grouping nested paths by their parent key.
+// TopOnly and Keys are cache parameters shared with the caller so neither
+// is evaluated twice.
 type RemoveFieldPaths<
   Schema extends Document,
   Paths extends readonly string[],
+  TopOnly = AllTopLevelPaths<Paths>,
+  Keys = ExtractTopLevelKeys<Paths>,
 > =
-  AllTopLevelPaths<Paths> extends true ?
-    // All paths are top-level - extract all keys and batch Omit in one operation
-    ExtractTopLevelKeys<Paths> extends infer KeysToRemove ?
-      [KeysToRemove] extends [never] ?
-        // No keys to remove
-        Schema
-      : [KeysToRemove] extends [keyof Schema] ?
-        // All keys are valid - batch Omit them all at once
-        // Use tuple check [KeysToRemove] extends [keyof Schema] to avoid distribution
-        Omit<Schema, KeysToRemove>
-      : Schema
+  TopOnly extends true ?
+    // All paths are top-level - batch Omit them in one operation
+    [Keys] extends [never] ?
+      // No keys to remove
+      Schema
+    : [Keys] extends [keyof Schema] ?
+      // All keys are valid - batch Omit them all at once
+      // Use tuple check [Keys] extends [keyof Schema] to avoid distribution
+      Omit<Schema, Keys & keyof Schema>
     : Schema
-  : // Has nested paths - separate top-level and nested, process separately
-  ExtractTopLevelKeys<Paths> extends infer TopLevelKeys ?
-    // First remove top-level keys
-    [TopLevelKeys] extends [never] ?
-      // No top-level keys - process nested paths grouped by parent
-      BatchRemoveNestedByParent<Schema, Paths>
-    : [TopLevelKeys] extends [keyof Schema] ?
-      // Remove top-level keys first, then process nested paths
-      BatchRemoveNestedByParent<Omit<Schema, TopLevelKeys>, Paths>
-    : BatchRemoveNestedByParent<Schema, Paths>
-  : Schema;
+  : // Has nested paths - remove top-level keys first, then process nested
+  [Keys] extends [never] ? BatchRemoveNestedByParent<Schema, Paths>
+  : [Keys] extends [keyof Schema] ?
+    BatchRemoveNestedByParent<Omit<Schema, Keys & keyof Schema>, Paths>
+  : BatchRemoveNestedByParent<Schema, Paths>;
 
 // Preserve optionality when removing nested fields from optional parents
 // Optimization: Avoid Prettify wrapper to reduce depth
@@ -219,21 +165,23 @@ type PreserveOptionality<Schema extends Document, Result extends Document> = {
   : never]?: Result[K];
 };
 
-export type ResolveUnsetOutput<Query, Schema extends Document> = PassThrough<
+// No outer `Query extends UnsetQuery<Schema>` re-check: it would
+// re-enumerate FieldPath<Schema> per call even though the method's
+// parameter position already validated the query. The cheap string/array
+// narrowing below is all the body needs.
+export type ResolveUnsetOutput<Schema extends Document, Query> = PassThrough<
   Schema,
   Prettify<
-    Query extends UnsetQuery<Schema> ?
-      Query extends string ?
-        // Single field path
-        RemoveFieldPath<Schema, Query>
-      : Query extends readonly string[] ?
-        // Array of field paths
-        AllTopLevelPaths<Query> extends true ?
-          // All top-level - batched Omit result
-          RemoveFieldPaths<Schema, Query>
-        : // Has nested paths - PreserveOptionality needed to flatten intersection
-          PreserveOptionality<Schema, RemoveFieldPaths<Schema, Query>>
-      : never
+    Query extends string ?
+      // Single field path
+      RemoveFieldPath<Schema, Query>
+    : Query extends readonly string[] ?
+      // Array of field paths
+      AllTopLevelPaths<Query> extends true ?
+        // All top-level - batched Omit result
+        RemoveFieldPaths<Schema, Query>
+      : // Has nested paths - PreserveOptionality needed to flatten intersection
+        PreserveOptionality<Schema, RemoveFieldPaths<Schema, Query>>
     : never
   >
 >;

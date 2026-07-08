@@ -80,12 +80,13 @@ const concatPipeline = new Pipeline<TestDoc>()
 export type ConcatOutputType = InferOutputType<typeof concatPipeline>;
 // Should be: { items: string[], numbers: number[], tags: ("a" | "b" | "c")[], name: string }
 
-// Type validation test: This should cause a type error
-// Note: Currently "$name" is treated as a string literal, not a field reference
-// @ts-expect-error - ERROR: $name is string, not array
-const _invalidPipeline = new Pipeline<TestDoc>().set({
+// Type validation test: This should cause a type error. ValidateSetQuery
+// maps the offending key to the registry's expected shape, so the rejection
+// is a single TS2322 against ArrayOperand at the operand.
+export const _invalidPipeline = new Pipeline<TestDoc>().set({
   items: {
-    $concatArrays: ["$name", ["test"]], // ERROR: $name is string, not array
+    // @ts-expect-error - ERROR: $name is string, not array
+    $concatArrays: ["$name", ["test"]],
   },
 });
 

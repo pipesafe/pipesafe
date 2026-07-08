@@ -36,8 +36,8 @@ type BasicIncludeProject = {
 };
 
 type BasicIncludeResult = ResolveProjectOutput<
-  BasicIncludeProject,
-  BasicIncludeSchema
+  BasicIncludeSchema,
+  BasicIncludeProject
 >;
 
 type BasicIncludeExpected = {
@@ -61,8 +61,8 @@ type BasicExcludeProject = {
 };
 
 type BasicExcludeResult = ResolveProjectOutput<
-  BasicExcludeProject,
-  BasicExcludeSchema
+  BasicExcludeSchema,
+  BasicExcludeProject
 >;
 
 type BasicExcludeExpected = {
@@ -85,7 +85,7 @@ type RenameProject = {
   last: "$lastName";
 };
 
-type RenameResult = ResolveProjectOutput<RenameProject, RenameSchema>;
+type RenameResult = ResolveProjectOutput<RenameSchema, RenameProject>;
 
 type RenameExpected = {
   first: string;
@@ -116,8 +116,8 @@ type DotKeyAssignProject = {
 };
 
 type DotKeyAssignResult = ResolveProjectOutput<
-  DotKeyAssignProject,
-  DotKeyAssignSchema
+  DotKeyAssignSchema,
+  DotKeyAssignProject
 >;
 
 type DotKeyAssignExpected = {
@@ -131,12 +131,10 @@ type DotKeyAssignTest = Assert<Equal<DotKeyAssignResult, DotKeyAssignExpected>>;
 // ============================================================================
 // Test 4: Mixed inclusion and exclusion — rejected (MongoDB forbids this)
 // ============================================================================
-// Previously this test asserted that `{ id: 1, fullName: "$name", email: false }`
-// produced `{ id: string; fullName: string }` (exclusion of `email` plus
-// inclusion of `id` and computed `fullName`). MongoDB actually rejects this
-// at runtime: you can only mix when excluding `_id` from an otherwise-
-// inclusion projection. With the typed-error rollout the dispatch now
-// produces a branded `PipeSafeError` instead of silently picking a mode.
+// MongoDB rejects mixed inclusion/exclusion at runtime (you can only mix
+// when excluding `_id` from an otherwise-inclusion projection), so the
+// dispatch produces a branded `PipeSafeError` instead of silently picking
+// a mode.
 type MixedSchema = {
   id: string;
   name: string;
@@ -150,7 +148,7 @@ type MixedProject = {
   email: false;
 };
 
-type MixedResult = ResolveProjectOutput<MixedProject, MixedSchema>;
+type MixedResult = ResolveProjectOutput<MixedSchema, MixedProject>;
 
 type MixedTest = Assert<
   AssertPipeSafeError<
@@ -164,8 +162,8 @@ type MixedTest = Assert<
 type IdExclusionSchema = { _id: string; name: string; age: number };
 type IdExclusionProject = { name: 1; age: 1; _id: 0 };
 type IdExclusionResult = ResolveProjectOutput<
-  IdExclusionProject,
-  IdExclusionSchema
+  IdExclusionSchema,
+  IdExclusionProject
 >;
 type IdExclusionTest = Assert<
   Equal<IdExclusionResult, { name: string; age: number }>
@@ -189,7 +187,7 @@ type NestedProject = {
   status: 1;
 };
 
-type NestedResult = ResolveProjectOutput<NestedProject, NestedSchema>;
+type NestedResult = ResolveProjectOutput<NestedSchema, NestedProject>;
 
 type NestedExpected = {
   user: {
@@ -219,8 +217,8 @@ type NestedReplaceProject = {
 };
 
 type NestedReplaceResult = ResolveProjectOutput<
-  NestedReplaceProject,
-  NestedReplaceSchema
+  NestedReplaceSchema,
+  NestedReplaceProject
 >;
 
 type NestedReplaceExpected = {
@@ -248,7 +246,7 @@ type IdIncludeProject = {
   name: 1;
 };
 
-type IdIncludeResult = ResolveProjectOutput<IdIncludeProject, IdIncludeSchema>;
+type IdIncludeResult = ResolveProjectOutput<IdIncludeSchema, IdIncludeProject>;
 
 type IdIncludeExpected = {
   _id: string;
@@ -272,7 +270,7 @@ type IdExcludeProject = {
   age: 1;
 };
 
-type IdExcludeResult = ResolveProjectOutput<IdExcludeProject, IdExcludeSchema>;
+type IdExcludeResult = ResolveProjectOutput<IdExcludeSchema, IdExcludeProject>;
 
 type IdExcludeExpected = {
   name: string;
@@ -297,8 +295,8 @@ type IdImplicitIncludeProject = {
 };
 
 type IdImplicitIncludeResult = ResolveProjectOutput<
-  IdImplicitIncludeProject,
-  IdImplicitIncludeSchema
+  IdImplicitIncludeSchema,
+  IdImplicitIncludeProject
 >;
 
 type IdImplicitIncludeExpected = {
@@ -327,8 +325,8 @@ type IdExcludeWithRenameProject = {
 };
 
 type IdExcludeWithRenameResult = ResolveProjectOutput<
-  IdExcludeWithRenameProject,
-  IdExcludeWithRenameSchema
+  IdExcludeWithRenameSchema,
+  IdExcludeWithRenameProject
 >;
 
 type IdExcludeWithRenameExpected = {
@@ -354,8 +352,8 @@ type IdIncludeBooleanProject = {
 };
 
 type IdIncludeBooleanResult = ResolveProjectOutput<
-  IdIncludeBooleanProject,
-  IdIncludeBooleanSchema
+  IdIncludeBooleanSchema,
+  IdIncludeBooleanProject
 >;
 
 type IdIncludeBooleanExpected = {
@@ -443,8 +441,8 @@ type SizeExpressionProject = {
 };
 
 type SizeExpressionResult = ResolveProjectOutput<
-  SizeExpressionProject,
-  SizeExpressionSchema
+  SizeExpressionSchema,
+  SizeExpressionProject
 >;
 
 type SizeExpressionExpected = {
@@ -463,8 +461,8 @@ type SizeLiteralProject = {
 };
 
 type SizeLiteralResult = ResolveProjectOutput<
-  SizeLiteralProject,
-  SizeExpressionSchema
+  SizeExpressionSchema,
+  SizeLiteralProject
 >;
 
 type SizeLiteralExpected = {
@@ -482,8 +480,8 @@ type SizeMixedProject = {
 };
 
 type SizeMixedResult = ResolveProjectOutput<
-  SizeMixedProject,
-  SizeExpressionSchema & { _id: string; name: string }
+  SizeExpressionSchema & { _id: string; name: string },
+  SizeMixedProject
 >;
 
 type SizeMixedExpected = {
@@ -509,8 +507,8 @@ type ConcatProject = {
 };
 
 type ConcatProjectResult = ResolveProjectOutput<
-  ConcatProject,
-  ConcatProjectSchema
+  ConcatProjectSchema,
+  ConcatProject
 >;
 
 type ConcatProjectExpected = {
@@ -545,8 +543,8 @@ type NestedFieldRefProject = {
 };
 
 type NestedFieldRefResult = ResolveProjectOutput<
-  NestedFieldRefProject,
-  NestedFieldRefSchema
+  NestedFieldRefSchema,
+  NestedFieldRefProject
 >;
 
 type NestedFieldRefExpected = {
@@ -574,8 +572,8 @@ type NestedFieldRefExprProject = {
 };
 
 type NestedFieldRefExprResult = ResolveProjectOutput<
-  NestedFieldRefExprProject,
-  NestedFieldRefSchema & { items: string[]; name: string }
+  NestedFieldRefSchema & { items: string[]; name: string },
+  NestedFieldRefExprProject
 >;
 
 type NestedFieldRefExprExpected = {
@@ -617,8 +615,8 @@ type DateToStringProject = {
 };
 
 type DateToStringResult = ResolveProjectOutput<
-  DateToStringProject,
-  DateToStringSchema
+  DateToStringSchema,
+  DateToStringProject
 >;
 
 type DateToStringExpected = {
@@ -639,8 +637,8 @@ type DateToStringNestedProject = {
 };
 
 type DateToStringNestedResult = ResolveProjectOutput<
-  DateToStringNestedProject,
-  DateToStringSchema
+  DateToStringSchema,
+  DateToStringNestedProject
 >;
 
 type DateToStringNestedExpected = {
@@ -665,8 +663,8 @@ type DateToStringMixedProject = {
 };
 
 type DateToStringMixedResult = ResolveProjectOutput<
-  DateToStringMixedProject,
-  DateToStringSchema & { _id: string; name: string }
+  DateToStringSchema & { _id: string; name: string },
+  DateToStringMixedProject
 >;
 
 type DateToStringMixedExpected = {
@@ -706,8 +704,8 @@ type DateTruncProject = {
 };
 
 type DateTruncProjectResult = ResolveProjectOutput<
-  DateTruncProject,
-  DateTruncProjectSchema
+  DateTruncProjectSchema,
+  DateTruncProject
 >;
 
 type DateTruncProjectExpected = {
@@ -741,8 +739,8 @@ type DateAddSubtractProject = {
 };
 
 type DateAddSubtractProjectResult = ResolveProjectOutput<
-  DateAddSubtractProject,
-  DateTruncProjectSchema
+  DateTruncProjectSchema,
+  DateAddSubtractProject
 >;
 
 type DateAddSubtractProjectExpected = {
@@ -773,8 +771,8 @@ type AddProject = {
 };
 
 type AddProjectResult = ResolveProjectOutput<
-  AddProject,
-  ArithmeticProjectSchema
+  ArithmeticProjectSchema,
+  AddProject
 >;
 
 type AddProjectExpected = {
@@ -791,8 +789,8 @@ type DivideNestedProject = {
 };
 
 type DivideNestedProjectResult = ResolveProjectOutput<
-  DivideNestedProject,
-  ArithmeticProjectSchema
+  ArithmeticProjectSchema,
+  DivideNestedProject
 >;
 
 type DivideNestedProjectExpected = {
@@ -812,8 +810,8 @@ type MultipleArithmeticProject = {
 };
 
 type MultipleArithmeticProjectResult = ResolveProjectOutput<
-  MultipleArithmeticProject,
-  ArithmeticProjectSchema & { _id: string }
+  ArithmeticProjectSchema & { _id: string },
+  MultipleArithmeticProject
 >;
 
 type MultipleArithmeticProjectExpected = {
@@ -861,9 +859,12 @@ export type {
 // Phase D — Typed projection errors
 // ============================================================================
 // `ResolveFieldValue` and `ResolveProjectOutput` now return branded
-// `PipeSafeError` types at three previously-silent failure sites:
-//   1. Inclusion of a field that doesn't exist on the schema (`{ unknownKey: 1 }`).
-//   2. Invalid projection value (anything other than 0/1/ref/expr/object).
+// `PipeSafeError` types at three otherwise-silent failure sites:
+//   1. Inclusion of a field that doesn't exist on the schema (`{ unknownKey: 1 }`)
+//      — including via a widened number/boolean flag (any number is a valid
+//      FLAG per MongoDB's nonzero-includes rule, so a bad KEY is the error).
+//   2. A value that is none of flag/ref/expression/object/string —
+//      `Invalid projection value for field '...'.` (e.g. null/undefined).
 //   3. Mixed inclusion and exclusion in the same projection.
 
 type ProjectErrorSchema = {
@@ -873,8 +874,8 @@ type ProjectErrorSchema = {
 
 // 1. Including a key not on the schema produces a branded error at that key.
 type _UnknownInclusionResult = ResolveProjectOutput<
-  { name: 1; unknownKey: 1 },
-  ProjectErrorSchema
+  ProjectErrorSchema,
+  { name: 1; unknownKey: 1 }
 >;
 type _Assert_UnknownInclusion = Assert<
   AssertPipeSafeError<
@@ -883,24 +884,62 @@ type _Assert_UnknownInclusion = Assert<
   >
 >;
 
-// 2. Invalid projection value (anything other than 0/1/ref/expr/object)
-//    produces a branded error on the offending key.
-type _InvalidValueResult = ResolveProjectOutput<
-  { name: 1; bogus: 99 },
-  ProjectErrorSchema
+// 2. Any number is a valid projection FLAG (MongoDB: nonzero includes), so
+//    `bogus: 99` on an UNKNOWN key brands as an unknown field — not as an
+//    invalid value — and on a known key it includes the field.
+type _NonZeroFlagUnknownKey = ResolveProjectOutput<
+  ProjectErrorSchema,
+  { name: 1; bogus: 99 }
 >;
-type _Assert_InvalidValue = Assert<
+type _Assert_NonZeroFlagUnknownKey = Assert<
   AssertPipeSafeError<
-    _InvalidValueResult["bogus"],
-    "Invalid projection value for field 'bogus'."
+    _NonZeroFlagUnknownKey["bogus"],
+    "Field 'bogus' is not on the schema."
+  >
+>;
+type _NonZeroFlagKnownKey = ResolveProjectOutput<
+  ProjectErrorSchema,
+  { name: 99 }
+>;
+type _Assert_NonZeroFlagIncludes = Assert<
+  Equal<_NonZeroFlagKnownKey["name"], ProjectErrorSchema["name"]>
+>;
+
+// The Invalid-value brand itself stays pinned (resolver-level: null is not
+// a valid projection value; the Query constraint rejects it before the
+// resolver in the chained API, but the message must not drift silently).
+type _InvalidValueStillBranded = ResolveProjectOutput<
+  ProjectErrorSchema,
+  { name: 1; bogus: null }
+>;
+type _Assert_InvalidValueBrand = Assert<
+  AssertPipeSafeError<
+    _InvalidValueStillBranded["bogus"],
+    "Stage '$project' requires a valid projection value for field 'bogus'."
+  >
+>;
+
+// Unknown DOTTED inclusion keys brand at the resolver too (via
+// GetFieldTypeOrError) — previously they silently resolved to a `never`
+// leaf while plain unknown keys branded, and the resolver's own comment
+// promised otherwise. The chained API already rejects them at the
+// parameter position; this pins the resolver-level authority.
+type _UnknownDottedInclusion = ResolveProjectOutput<
+  ProjectErrorSchema,
+  { name: 1; "user.nam": 1 }
+>;
+type _Assert_UnknownDottedInclusionBrand = Assert<
+  AssertPipeSafeError<
+    _UnknownDottedInclusion["user"]["nam"],
+    "Field 'user.nam' is not on the schema."
   >
 >;
 
 // 3. Mixed inclusion and exclusion produces a branded error on the result
 //    type (MongoDB rejects this at runtime; only `_id` exclusion is allowed).
 type _MixedModeResult = ResolveProjectOutput<
-  { name: 1; age: 0 },
-  ProjectErrorSchema
+  ProjectErrorSchema,
+  { name: 1; age: 0 }
 >;
 type _Assert_MixedMode = Assert<
   AssertPipeSafeError<
@@ -912,8 +951,8 @@ type _Assert_MixedMode = Assert<
 // 4. Positive sweep — a fully valid inclusion still produces the expected
 //    structural output (no brand leakage). Note: _id is dropped, not `never`.
 type _ValidInclusionResult = ResolveProjectOutput<
-  { name: 1 },
-  ProjectErrorSchema
+  ProjectErrorSchema,
+  { name: 1 }
 >;
 type _Assert_ValidInclusion = Assert<
   Equal<_ValidInclusionResult, { name: string }>
@@ -921,7 +960,10 @@ type _Assert_ValidInclusion = Assert<
 
 export type {
   _Assert_UnknownInclusion,
-  _Assert_InvalidValue,
+  _Assert_NonZeroFlagUnknownKey,
+  _Assert_NonZeroFlagIncludes,
+  _Assert_InvalidValueBrand,
+  _Assert_UnknownDottedInclusionBrand,
   _Assert_MixedMode,
   _Assert_ValidInclusion,
 };

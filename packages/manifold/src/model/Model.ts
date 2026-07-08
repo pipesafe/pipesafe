@@ -14,7 +14,7 @@ import {
   FieldSelector,
   FieldSelectorsThatInferTo,
   TopLevelField,
-  MergeOptions,
+  MergeQuery,
 } from "@pipesafe/core";
 
 // ============================================================================
@@ -44,13 +44,13 @@ export type TypedTimeSeriesOptions<TDoc extends Document> = Omit<
 /**
  * Materialization mode for collection-typed models.
  *
- * Note: `MergeOptions` here omits `into` because the model owns its output
+ * Note: `MergeQuery` here omits `into` because the model owns its output
  * collection name and database (via `name` and `materialize.db`). The `into`
  * field is filled in automatically when building the output stage.
  */
 export type CollectionMode<TOutput extends Document> =
   | { $out: Record<string, never> }
-  | { $merge: Omit<MergeOptions<TOutput>, "into"> };
+  | { $merge: Omit<MergeQuery<TOutput>, "into"> };
 
 // ============================================================================
 // Materialization Configuration

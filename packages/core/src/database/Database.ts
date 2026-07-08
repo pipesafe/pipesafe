@@ -7,7 +7,7 @@ import {
   DbStatsOptions,
   RunCommandOptions,
 } from "mongodb";
-import { Document } from "../utils/core";
+import { Document } from "../utils/objects";
 import { Collection } from "../collection/Collection";
 import { pipesafe } from "../singleton/pipesafe";
 import { tagClient } from "../singleton/tagClient";

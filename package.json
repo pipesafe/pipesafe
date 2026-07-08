@@ -54,6 +54,8 @@
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
     "typecheck": "tsc --noEmit --project tsconfig.json",
+    "typecheck:packages": "bun run --filter @pipesafe/core typecheck && bun run --filter @pipesafe/manifold typecheck",
+    "budget:check": "cd packages/core && bun run benchmarking/check-instantiation-budget.ts",
     "website:dev": "bun run --filter @pipesafe/website dev",
     "website:build": "bun run --filter @pipesafe/website build",
     "website:preview": "bun run --filter @pipesafe/website preview"

@@ -36,8 +36,8 @@ type BasicOptionalFieldSet = {
 };
 
 type BasicOptionalFieldResult = ResolveSetOutput<
-  BasicOptionalFieldSet,
-  BasicOptionalFieldSchema
+  BasicOptionalFieldSchema,
+  BasicOptionalFieldSet
 >;
 
 type BasicOptionalFieldExpected = {
@@ -62,8 +62,8 @@ type NestedOptionalSet = {
 };
 
 type NestedOptionalResult = ResolveSetOutput<
-  NestedOptionalSet,
-  NestedOptionalSchema
+  NestedOptionalSchema,
+  NestedOptionalSet
 >;
 
 type NestedOptionalExpected = {
@@ -91,8 +91,8 @@ type NestedPreserveExistingSet = {
 };
 
 type NestedPreserveExistingResult = ResolveSetOutput<
-  NestedPreserveExistingSet,
-  NestedPreserveExistingSchema
+  NestedPreserveExistingSchema,
+  NestedPreserveExistingSet
 >;
 
 type NestedPreserveExistingExpected = {
@@ -118,8 +118,8 @@ type NestedFullPreserveExistingSet = {
 };
 
 type NestedFullPreserveExistingResult = ResolveSetOutput<
-  NestedFullPreserveExistingSet,
-  NestedFullPreserveExistingSchema
+  NestedFullPreserveExistingSchema,
+  NestedFullPreserveExistingSet
 >;
 
 type NestedFullPreserveExistingExpected = {
@@ -143,7 +143,7 @@ type AddNewFieldSet = {
   b: 42;
 };
 
-type AddNewFieldResult = ResolveSetOutput<AddNewFieldSet, AddNewFieldSchema>;
+type AddNewFieldResult = ResolveSetOutput<AddNewFieldSchema, AddNewFieldSet>;
 
 type AddNewFieldExpected = {
   a: number;
@@ -165,8 +165,8 @@ type ArrayElemAtOptionalSet = {
 };
 
 type ArrayElemAtOptionalResult = ResolveSetOutput<
-  ArrayElemAtOptionalSet,
-  ArrayElemAtOptionalSchema
+  ArrayElemAtOptionalSchema,
+  ArrayElemAtOptionalSet
 >;
 
 type ArrayElemAtOptionalExpected = {
@@ -202,8 +202,8 @@ type ArrayElemAtNestedOptionalSet = {
 };
 
 type ArrayElemAtNestedOptionalResult = ResolveSetOutput<
-  ArrayElemAtNestedOptionalSet,
-  ArrayElemAtNestedOptionalSchema
+  ArrayElemAtNestedOptionalSchema,
+  ArrayElemAtNestedOptionalSet
 >;
 
 type ArrayElemAtNestedOptionalExpected = {
@@ -242,7 +242,7 @@ type ArrayConcatSet = {
   };
 };
 
-type ArrayConcatResult = ResolveSetOutput<ArrayConcatSet, ArrayConcatSchema>;
+type ArrayConcatResult = ResolveSetOutput<ArrayConcatSchema, ArrayConcatSet>;
 
 type ArrayConcatExpected = {
   nums: (1 | 2 | 3)[];
@@ -265,8 +265,8 @@ type SizeExpressionSet = {
 };
 
 type SizeExpressionResult = ResolveSetOutput<
-  SizeExpressionSet,
-  SizeExpressionSchema
+  SizeExpressionSchema,
+  SizeExpressionSet
 >;
 
 type SizeExpressionExpected = {
@@ -288,7 +288,7 @@ type SizeLiteralSet = {
   fixedSize: { $size: [1, 2, 3, 4, 5] };
 };
 
-type SizeLiteralResult = ResolveSetOutput<SizeLiteralSet, SizeExpressionSchema>;
+type SizeLiteralResult = ResolveSetOutput<SizeExpressionSchema, SizeLiteralSet>;
 
 type SizeLiteralExpected = {
   items: string[];
@@ -306,7 +306,7 @@ type SizeNestedSet = {
   categoryCount: { $size: "$metadata.categories" };
 };
 
-type SizeNestedResult = ResolveSetOutput<SizeNestedSet, SizeExpressionSchema>;
+type SizeNestedResult = ResolveSetOutput<SizeExpressionSchema, SizeNestedSet>;
 
 type SizeNestedExpected = {
   items: string[];
@@ -337,7 +337,7 @@ type AddSet = {
   totalEngagement: { $add: ["$totalLikes", "$totalComments"] };
 };
 
-type AddResult = ResolveSetOutput<AddSet, ArithmeticSchema>;
+type AddResult = ResolveSetOutput<ArithmeticSchema, AddSet>;
 
 type AddExpected = {
   totalLikes: number;
@@ -357,7 +357,7 @@ type DivideSet = {
   engagementRate: { $divide: ["$totalLikes", "$totalViews"] };
 };
 
-type DivideResult = ResolveSetOutput<DivideSet, ArithmeticSchema>;
+type DivideResult = ResolveSetOutput<ArithmeticSchema, DivideSet>;
 
 type DivideExpected = {
   totalLikes: number;
@@ -380,8 +380,8 @@ type NestedArithmeticSet = {
 };
 
 type NestedArithmeticResult = ResolveSetOutput<
-  NestedArithmeticSet,
-  ArithmeticSchema
+  ArithmeticSchema,
+  NestedArithmeticSet
 >;
 
 type NestedArithmeticExpected = {
@@ -404,7 +404,7 @@ type MultiplySet = {
   totalPrice: { $multiply: ["$price", "$quantity"] };
 };
 
-type MultiplyResult = ResolveSetOutput<MultiplySet, ArithmeticSchema>;
+type MultiplyResult = ResolveSetOutput<ArithmeticSchema, MultiplySet>;
 
 type MultiplyExpected = {
   totalLikes: number;
@@ -424,7 +424,7 @@ type SubtractSet = {
   finalPrice: { $subtract: ["$basePrice", "$discount"] };
 };
 
-type SubtractResult = ResolveSetOutput<SubtractSet, ArithmeticSchema>;
+type SubtractResult = ResolveSetOutput<ArithmeticSchema, SubtractSet>;
 
 type SubtractExpected = {
   totalLikes: number;
@@ -444,7 +444,7 @@ type ModSet = {
   remainder: { $mod: ["$totalViews", 7] };
 };
 
-type ModResult = ResolveSetOutput<ModSet, ArithmeticSchema>;
+type ModResult = ResolveSetOutput<ArithmeticSchema, ModSet>;
 
 type ModExpected = {
   totalLikes: number;
@@ -474,7 +474,7 @@ type ConcatSet = {
   fullName: { $concat: ["$firstName", " ", "$lastName"] };
 };
 
-type ConcatResult = ResolveSetOutput<ConcatSet, StringSchema>;
+type ConcatResult = ResolveSetOutput<StringSchema, ConcatSet>;
 
 type ConcatExpected = {
   firstName: string;
@@ -502,7 +502,7 @@ type DateTruncSet = {
   eventDate: { $dateTrunc: { date: "$createdAt"; unit: "day" } };
 };
 
-type DateTruncResult = ResolveSetOutput<DateTruncSet, DateSchema>;
+type DateTruncResult = ResolveSetOutput<DateSchema, DateTruncSet>;
 
 type DateTruncExpected = {
   _id: string;
@@ -527,7 +527,7 @@ type DateTruncFullSet = {
   };
 };
 
-type DateTruncFullResult = ResolveSetOutput<DateTruncFullSet, DateSchema>;
+type DateTruncFullResult = ResolveSetOutput<DateSchema, DateTruncFullSet>;
 
 type DateTruncFullExpected = {
   _id: string;
@@ -546,7 +546,7 @@ type DateAddSet = {
   expiresAt: { $dateAdd: { startDate: "$createdAt"; unit: "day"; amount: 30 } };
 };
 
-type DateAddResult = ResolveSetOutput<DateAddSet, DateSchema>;
+type DateAddResult = ResolveSetOutput<DateSchema, DateAddSet>;
 
 type DateAddExpected = {
   _id: string;
@@ -565,7 +565,7 @@ type DateAddDynamicSet = {
   };
 };
 
-type DateAddDynamicResult = ResolveSetOutput<DateAddDynamicSet, DateSchema>;
+type DateAddDynamicResult = ResolveSetOutput<DateSchema, DateAddDynamicSet>;
 
 type DateAddDynamicExpected = {
   _id: string;
@@ -586,7 +586,7 @@ type DateSubtractSet = {
   };
 };
 
-type DateSubtractResult = ResolveSetOutput<DateSubtractSet, DateSchema>;
+type DateSubtractResult = ResolveSetOutput<DateSchema, DateSubtractSet>;
 
 type DateSubtractExpected = {
   _id: string;
@@ -610,7 +610,7 @@ type ToDateSet = {
   dateFromTimestamp: { $toDate: "$timestamp" };
 };
 
-type ToDateResult = ResolveSetOutput<ToDateSet, DateSchemaWithTimestamp>;
+type ToDateResult = ResolveSetOutput<DateSchemaWithTimestamp, ToDateSet>;
 
 type ToDateExpected = {
   _id: string;
@@ -630,8 +630,8 @@ type ToDateNestedSet = {
 };
 
 type ToDateNestedResult = ResolveSetOutput<
-  ToDateNestedSet,
-  DateSchemaWithTimestamp
+  DateSchemaWithTimestamp,
+  ToDateNestedSet
 >;
 
 type ToDateNestedExpected = {
@@ -661,7 +661,7 @@ type IfNullStringSet = {
   displayName: { $ifNull: ["$name", "Anonymous"] };
 };
 
-type IfNullStringResult = ResolveSetOutput<IfNullStringSet, ConditionalSchema>;
+type IfNullStringResult = ResolveSetOutput<ConditionalSchema, IfNullStringSet>;
 
 type IfNullStringExpected = {
   _id: string;
@@ -679,7 +679,7 @@ type IfNullNumberSet = {
   yearsOld: { $ifNull: ["$age", 18] };
 };
 
-type IfNullNumberResult = ResolveSetOutput<IfNullNumberSet, ConditionalSchema>;
+type IfNullNumberResult = ResolveSetOutput<ConditionalSchema, IfNullNumberSet>;
 
 type IfNullNumberExpected = {
   _id: string;
@@ -698,8 +698,8 @@ type IfNullTwoFieldsSet = {
 };
 
 type IfNullTwoFieldsResult = ResolveSetOutput<
-  IfNullTwoFieldsSet,
-  ConditionalSchema
+  ConditionalSchema,
+  IfNullTwoFieldsSet
 >;
 
 type IfNullTwoFieldsExpected = {
@@ -722,7 +722,7 @@ type IfNullNestedSet = {
   };
 };
 
-type IfNullNestedResult = ResolveSetOutput<IfNullNestedSet, ConditionalSchema>;
+type IfNullNestedResult = ResolveSetOutput<ConditionalSchema, IfNullNestedSet>;
 
 type IfNullNestedExpected = {
   _id: string;
@@ -741,8 +741,8 @@ type IfNullMultipleSet = {
 };
 
 type IfNullMultipleResult = ResolveSetOutput<
-  IfNullMultipleSet,
-  ConditionalSchema
+  ConditionalSchema,
+  IfNullMultipleSet
 >;
 
 type IfNullMultipleExpected = {
@@ -764,8 +764,8 @@ type IfNullManyArgsSet = {
 };
 
 type IfNullManyArgsResult = ResolveSetOutput<
-  IfNullManyArgsSet,
-  ConditionalSchema
+  ConditionalSchema,
+  IfNullManyArgsSet
 >;
 
 type IfNullManyArgsExpected = {
@@ -788,7 +788,7 @@ type CondBasicSet = {
   };
 };
 
-type CondBasicResult = ResolveSetOutput<CondBasicSet, ConditionalSchema>;
+type CondBasicResult = ResolveSetOutput<ConditionalSchema, CondBasicSet>;
 
 type CondBasicExpected = {
   _id: string;
@@ -796,7 +796,11 @@ type CondBasicExpected = {
   email: string;
   age?: number;
   status: string;
-  displayName: string; // Both branches are string fields
+  // `$name` is optional: if $cond picks a missing field the result is
+  // missing, so the undefined survives (the old NonNullable stripping of
+  // $cond branch refs was a bug — $cond returns the branch verbatim,
+  // nulls/missing included; $ifNull is the operator that strips).
+  displayName: string | undefined;
 };
 
 type CondBasicTest = Assert<Equal<CondBasicResult, CondBasicExpected>>;
@@ -813,8 +817,8 @@ type CondWithExpressionsSet = {
 };
 
 type CondWithExpressionsResult = ResolveSetOutput<
-  CondWithExpressionsSet,
-  ConditionalSchema
+  ConditionalSchema,
+  CondWithExpressionsSet
 >;
 
 type CondWithExpressionsExpected = {
@@ -838,8 +842,8 @@ type CondMixedTypesSet = {
 };
 
 type CondMixedTypesResult = ResolveSetOutput<
-  CondMixedTypesSet,
-  ConditionalSchema
+  ConditionalSchema,
+  CondMixedTypesSet
 >;
 
 type CondMixedTypesExpected = {
@@ -867,7 +871,7 @@ type DeepNestedSet = {
   };
 };
 
-type DeepNestedResult = ResolveSetOutput<DeepNestedSet, ConditionalSchema>;
+type DeepNestedResult = ResolveSetOutput<ConditionalSchema, DeepNestedSet>;
 
 type DeepNestedExpected = {
   _id: string;
@@ -896,8 +900,8 @@ type RemoveSimpleFieldSet = {
 };
 
 type RemoveSimpleFieldResult = ResolveSetOutput<
-  RemoveSimpleFieldSet,
-  RemoveSimpleFieldSchema
+  RemoveSimpleFieldSchema,
+  RemoveSimpleFieldSet
 >;
 
 type RemoveSimpleFieldExpected = {
@@ -923,8 +927,8 @@ type RemoveNestedFieldSet = {
 };
 
 type RemoveNestedFieldResult = ResolveSetOutput<
-  RemoveNestedFieldSet,
-  RemoveNestedFieldSchema
+  RemoveNestedFieldSchema,
+  RemoveNestedFieldSet
 >;
 
 type RemoveNestedFieldExpected = {
@@ -954,8 +958,8 @@ type RemoveOptionalFieldSet = {
 };
 
 type RemoveOptionalFieldResult = ResolveSetOutput<
-  RemoveOptionalFieldSet,
-  RemoveOptionalFieldSchema
+  RemoveOptionalFieldSchema,
+  RemoveOptionalFieldSet
 >;
 
 // FIXED: When using $$REMOVE on nested fields, parent objects stay optional
@@ -991,8 +995,8 @@ type MixedOperationsSet = {
 };
 
 type MixedOperationsResult = ResolveSetOutput<
-  MixedOperationsSet,
-  MixedOperationsSchema
+  MixedOperationsSchema,
+  MixedOperationsSet
 >;
 
 type MixedOperationsExpected = {
@@ -1026,8 +1030,8 @@ type RemoveEntireObjectSet = {
 };
 
 type RemoveEntireObjectResult = ResolveSetOutput<
-  RemoveEntireObjectSet,
-  RemoveEntireObjectSchema
+  RemoveEntireObjectSchema,
+  RemoveEntireObjectSet
 >;
 
 type RemoveEntireObjectExpected = {
@@ -1065,8 +1069,8 @@ type ComplexRemovalSet = {
 };
 
 type ComplexRemovalResult = ResolveSetOutput<
-  ComplexRemovalSet,
-  ComplexRemovalSchema
+  ComplexRemovalSchema,
+  ComplexRemovalSet
 >;
 
 // FIXED: cache stays optional when only using $$REMOVE on its nested fields
@@ -1131,7 +1135,7 @@ export type {
 };
 
 // ============================================================================
-// Phase 1 — Prettify wrapping on ResolveSetOutput
+// Prettify wrapping on ResolveSetOutput
 // ============================================================================
 // Verifies that a multi-key set against a multi-key schema produces a flat
 // object shape, not nested intersection chains.
@@ -1142,7 +1146,7 @@ type PrettifySetSchema = {
   c: boolean;
 };
 type PrettifySetQuery = { d: "new"; e: 42 };
-type PrettifySetResult = ResolveSetOutput<PrettifySetQuery, PrettifySetSchema>;
+type PrettifySetResult = ResolveSetOutput<PrettifySetSchema, PrettifySetQuery>;
 type PrettifySetExpected = {
   a: string;
   b: number;
@@ -1152,4 +1156,27 @@ type PrettifySetExpected = {
 };
 type PrettifySetTest = Assert<Equal<PrettifySetResult, PrettifySetExpected>>;
 
-export type { PrettifySetTest };
+// ============================================================================
+// $$-system variables infer as `unknown` — never a dropped field
+// ============================================================================
+// Validation ACCEPTS `$$`-vars ($$NOW, $$ROOT, ...), so inference mapping
+// them to `never` silently erased the key from the output schema (and a
+// later read of it falsely branded Field-not-on-schema). Only $$REMOVE
+// keeps the load-bearing `never` (see the $$REMOVE tests above).
+
+type SystemVarSetSchema = {
+  a: string;
+};
+type SystemVarSetQuery = { snapshotAt: "$$NOW"; root: "$$ROOT" };
+type SystemVarSetResult = ResolveSetOutput<
+  SystemVarSetSchema,
+  SystemVarSetQuery
+>;
+type SystemVarSetExpected = {
+  a: string;
+  snapshotAt: unknown;
+  root: unknown;
+};
+type SystemVarSetTest = Assert<Equal<SystemVarSetResult, SystemVarSetExpected>>;
+
+export type { PrettifySetTest, SystemVarSetTest };

@@ -1,15 +1,32 @@
-import { Document, PassThrough, PipeSafeError, Prettify } from "../utils/core";
+import { Document, Prettify } from "../utils/objects";
+import { PassThrough, PipeSafeError } from "../utils/errors";
 import { FieldPathsThatInferToForLookup } from "../elements/fieldReference";
+import { FlattenDotSet, IsDottedKey } from "../utils/paths";
+import { ApplySetUpdates } from "../utils/updates";
 
-// Todo: Convert new key to a nested field and merge
+/**
+ * A dotted `as` path NESTS in MongoDB — `as: "user.orders"` writes
+ * `{ user: { orders: [...] } }`, preserving `user`'s sibling fields and
+ * overwriting only the target path — exactly the semantics of a `$set` on
+ * that path. The resolver therefore reuses the shared dotted-key update
+ * kernel (utils/updates.ts: FlattenDotSet to expand, ApplySetUpdates to
+ * merge — mirroring ResolveSetOutputInner's early-exit split) instead of
+ * re-spelling the expand-and-merge. A FLAT key keeps the cheap `Omit & { [NewKey]: ... }`
+ * form: routing it through ApplySetUpdates gave the same output but was
+ * measured at ~+65k whole-project instantiations (every lookup call site
+ * paid the $set merge machinery for a single top-level key).
+ */
 export type ResolveLookupOutput<
-  StartingDocs extends Document,
+  Schema extends Document,
   NewKey extends string,
-  PipelineOutput extends Document,
+  Foreign extends Document,
 > = PassThrough<
-  StartingDocs,
-  StartingDocs extends any ?
-    Prettify<Omit<StartingDocs, NewKey> & { [K in NewKey]: PipelineOutput[] }>
+  Schema,
+  // distribute over union schemas
+  Schema extends unknown ?
+    IsDottedKey<NewKey> extends true ?
+      ApplySetUpdates<Schema, FlattenDotSet<{ [K in NewKey]: Foreign[] }>>
+    : Prettify<Omit<Schema, NewKey> & { [K in NewKey]: Foreign[] }>
   : never
 >;
 
@@ -22,18 +39,18 @@ export type ResolveLookupOutput<
  * arrays, and dotted paths whose inferred type is array-shaped.
  */
 export type LookupCompatibleFieldPaths<
-  ForeignSchema extends Document,
+  Foreign extends Document,
   LocalFieldType,
 > =
   | FieldPathsThatInferToForLookup<
-      ForeignSchema,
+      Foreign,
       LocalFieldType extends string ? string : LocalFieldType
     >
-  | FieldPathsThatInferToForLookup<ForeignSchema, LocalFieldType>
+  | FieldPathsThatInferToForLookup<Foreign, LocalFieldType>
   | (LocalFieldType extends (infer Element)[] ?
-      FieldPathsThatInferToForLookup<ForeignSchema, Element>
+      FieldPathsThatInferToForLookup<Foreign, Element>
     : never)
-  | FieldPathsThatInferToForLookup<ForeignSchema, LocalFieldType[]>;
+  | FieldPathsThatInferToForLookup<Foreign, LocalFieldType[]>;
 
 /**
  * Resolves to the union of valid foreign-field paths, OR a branded
@@ -48,14 +65,12 @@ export type LookupCompatibleFieldPaths<
  * no-compatible-field brand on top of it.
  */
 export type LookupForeignFieldOrError<
-  ForeignSchema extends Document,
+  Foreign extends Document,
   LocalFieldType,
   LocalField extends string,
 > =
-  ForeignSchema extends PipeSafeError<string> ? ForeignSchema
+  Foreign extends PipeSafeError<string> ? Foreign
   : LocalFieldType extends PipeSafeError<string> ? LocalFieldType
-  : [LookupCompatibleFieldPaths<ForeignSchema, LocalFieldType>] extends (
-    [never]
-  ) ?
+  : [LookupCompatibleFieldPaths<Foreign, LocalFieldType>] extends [never] ?
     PipeSafeError<`Foreign collection has no field with a type compatible with localField '${LocalField}'.`>
-  : LookupCompatibleFieldPaths<ForeignSchema, LocalFieldType>;
+  : LookupCompatibleFieldPaths<Foreign, LocalFieldType>;

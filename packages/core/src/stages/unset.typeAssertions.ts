@@ -40,7 +40,7 @@ type SimpleSchema = {
   email: string;
 };
 
-type RemoveSingleFieldResult = ResolveUnsetOutput<"age", SimpleSchema>;
+type RemoveSingleFieldResult = ResolveUnsetOutput<SimpleSchema, "age">;
 
 type RemoveSingleFieldExpected = {
   name: string;
@@ -52,7 +52,7 @@ type RemoveSingleFieldTest = Assert<
 >;
 
 // Test 2: Remove a different field
-type RemoveEmailResult = ResolveUnsetOutput<"email", SimpleSchema>;
+type RemoveEmailResult = ResolveUnsetOutput<SimpleSchema, "email">;
 
 type RemoveEmailExpected = {
   name: string;
@@ -66,7 +66,7 @@ type RemoveEmailTest = Assert<Equal<RemoveEmailResult, RemoveEmailExpected>>;
 // ============================================================================
 
 // Test 3: Remove multiple fields at once
-type RemoveMultipleResult = ResolveUnsetOutput<["age", "email"], SimpleSchema>;
+type RemoveMultipleResult = ResolveUnsetOutput<SimpleSchema, ["age", "email"]>;
 
 type RemoveMultipleExpected = {
   name: string;
@@ -77,7 +77,7 @@ type RemoveMultipleTest = Assert<
 >;
 
 // Test 4: Remove all but one field
-type RemoveMostFieldsResult = ResolveUnsetOutput<["name", "age"], SimpleSchema>;
+type RemoveMostFieldsResult = ResolveUnsetOutput<SimpleSchema, ["name", "age"]>;
 
 type RemoveMostFieldsExpected = {
   email: string;
@@ -101,7 +101,7 @@ type NestedSchema = {
   status: string;
 };
 
-type RemoveNestedFieldResult = ResolveUnsetOutput<"user.email", NestedSchema>;
+type RemoveNestedFieldResult = ResolveUnsetOutput<NestedSchema, "user.email">;
 
 type RemoveNestedFieldExpected = {
   user: {
@@ -117,8 +117,8 @@ type RemoveNestedFieldTest = Assert<
 
 // Test 6: Remove multiple nested fields
 type RemoveMultipleNestedResult = ResolveUnsetOutput<
-  ["user.email", "user.age"],
-  NestedSchema
+  NestedSchema,
+  ["user.email", "user.age"]
 >;
 
 type RemoveMultipleNestedExpected = {
@@ -137,7 +137,7 @@ type RemoveMultipleNestedTest = Assert<
 // ============================================================================
 
 // Test 7: Remove an entire nested object
-type RemoveEntireObjectResult = ResolveUnsetOutput<"user", NestedSchema>;
+type RemoveEntireObjectResult = ResolveUnsetOutput<NestedSchema, "user">;
 
 type RemoveEntireObjectExpected = {
   status: string;
@@ -160,8 +160,8 @@ type MixedRemovalSchema = {
 };
 
 type MixedRemovalResult = ResolveUnsetOutput<
-  ["metadata.created", "data"],
-  MixedRemovalSchema
+  MixedRemovalSchema,
+  ["metadata.created", "data"]
 >;
 
 type MixedRemovalExpected = {
@@ -188,8 +188,8 @@ type OptionalFieldSchema = {
 };
 
 type RemoveOptionalFieldResult = ResolveUnsetOutput<
-  "optional",
-  OptionalFieldSchema
+  OptionalFieldSchema,
+  "optional"
 >;
 
 type RemoveOptionalFieldExpected = {
@@ -206,8 +206,8 @@ type RemoveOptionalFieldTest = Assert<
 
 // Test 10: Remove nested optional field, parent stays optional
 type RemoveNestedOptionalResult = ResolveUnsetOutput<
-  "nested.optional",
-  OptionalFieldSchema
+  OptionalFieldSchema,
+  "nested.optional"
 >;
 
 type RemoveNestedOptionalExpected = {
@@ -236,8 +236,8 @@ type OptionalParentSchema = {
 };
 
 type RemoveFromOptionalParentResult = ResolveUnsetOutput<
-  "nested.b",
-  OptionalParentSchema
+  OptionalParentSchema,
+  "nested.b"
 >;
 
 // Parent stays optional when only removing fields
@@ -254,8 +254,8 @@ type RemoveFromOptionalParentTest = Assert<
 
 // Test 12: Remove entire optional parent
 type RemoveOptionalParentResult = ResolveUnsetOutput<
-  "nested",
-  OptionalParentSchema
+  OptionalParentSchema,
+  "nested"
 >;
 
 type RemoveOptionalParentExpected = {
@@ -284,8 +284,8 @@ type DeepNestedSchema = {
 };
 
 type RemoveDeepNestedResult = ResolveUnsetOutput<
-  "config.database.connection.timeout",
-  DeepNestedSchema
+  DeepNestedSchema,
+  "config.database.connection.timeout"
 >;
 
 type RemoveDeepNestedExpected = {
@@ -305,8 +305,8 @@ type RemoveDeepNestedTest = Assert<
 
 // Test 14: Remove multiple deeply nested fields
 type RemoveMultipleDeepResult = ResolveUnsetOutput<
-  ["config.database.connection.timeout", "config.database.connection.port"],
-  DeepNestedSchema
+  DeepNestedSchema,
+  ["config.database.connection.timeout", "config.database.connection.port"]
 >;
 
 type RemoveMultipleDeepExpected = {
@@ -348,8 +348,8 @@ type ComplexSchema = {
 };
 
 type ComplexRemovalResult = ResolveUnsetOutput<
-  ["metadata.tags", "user.profile.email", "user.settings"],
-  ComplexSchema
+  ComplexSchema,
+  ["metadata.tags", "user.profile.email", "user.settings"]
 >;
 
 type ComplexRemovalExpected = {
@@ -378,8 +378,8 @@ type RemoveAllButOneSchema = {
 };
 
 type RemoveAllButOneResult = ResolveUnsetOutput<
-  ["remove1", "remove2", "remove3"],
-  RemoveAllButOneSchema
+  RemoveAllButOneSchema,
+  ["remove1", "remove2", "remove3"]
 >;
 
 type RemoveAllButOneExpected = {
@@ -395,7 +395,7 @@ type RemoveAllButOneTest = Assert<
 // ============================================================================
 
 // Test 17: Empty array (edge case - should preserve schema)
-type EmptyArrayResult = ResolveUnsetOutput<[], SimpleSchema>;
+type EmptyArrayResult = ResolveUnsetOutput<SimpleSchema, []>;
 
 // Note: This is an edge case - empty array should preserve schema
 type EmptyArrayExpected = SimpleSchema;
@@ -416,8 +416,8 @@ type MixedOptionalSchema = {
 };
 
 type RemoveMixedOptionalResult = ResolveUnsetOutput<
-  ["optional1", "nested.optional2", "optional3"],
-  MixedOptionalSchema
+  MixedOptionalSchema,
+  ["optional1", "nested.optional2", "optional3"]
 >;
 
 type RemoveMixedOptionalExpected = {

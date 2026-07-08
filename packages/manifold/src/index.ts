@@ -17,7 +17,7 @@ export type {
   TypedTimeSeriesOptions,
   ModelConfig,
 } from "./model/Model";
-export type { MergeOptions } from "@pipesafe/core";
+export type { MergeQuery } from "@pipesafe/core";
 export type {
   ProjectConfig,
   RunOptions,

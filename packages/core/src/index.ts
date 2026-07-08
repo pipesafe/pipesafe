@@ -22,13 +22,12 @@ export type {
 } from "./pipeline/Pipeline";
 export type { InferCollectionType } from "./collection/Collection";
 export type { Source, InferSourceType } from "./source/Source";
+export type { Document, Prettify } from "./utils/objects";
 export type {
-  Document,
-  Prettify,
   PipeSafeError,
   IsPipeSafeError,
   PassThrough,
-} from "./utils/core";
+} from "./utils/errors";
 
 // Re-export commonly used types from elements for advanced usage
 export type {
@@ -45,13 +44,13 @@ export type {
 } from "./elements/fieldReference";
 
 // Stage type re-exports for advanced usage
-export type { ResolveLimitOutput } from "./stages/limit";
-export type { ResolveSkipOutput } from "./stages/skip";
+export type { LimitQuery, ResolveLimitOutput } from "./stages/limit";
+export type { SkipQuery, ResolveSkipOutput } from "./stages/skip";
 export type { ResolveSampleOutput, SampleQuery } from "./stages/sample";
-export type { ResolveCountOutput } from "./stages/count";
+export type { CountQuery, ResolveCountOutput } from "./stages/count";
 
 // Stage option types
-export type { MergeOptions } from "./stages/merge";
+export type { MergeQuery } from "./stages/merge";
 
 // Type assertion utilities (for testing type inference)
 export type {

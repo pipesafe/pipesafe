@@ -1,6 +1,12 @@
-import type { Document, PipeSafeError } from "../utils/core";
+import type { Document } from "../utils/objects";
+import type { PipeSafeError } from "../utils/errors";
 import type { Assert, AssertPipeSafeError, Equal } from "../utils/tests";
 import type {
+  ExpressionSpec,
+  ExpressionCategory,
+  OpsInCategory,
+  LiteralDependentOps,
+  UnimplementedExpressionOps,
   AddExpression,
   SubtractExpression,
   MultiplyExpression,
@@ -260,7 +266,54 @@ type _Assert_SizeAcceptsArrayRef = Assert<
   Equal<"$tags" extends SizeOperand<ArithSchema> ? true : false, true>
 >;
 
+// ---------------------------------------------------------------------------
+// Registry category lockstep: every ExpressionSpec entry declares a category
+// (the key sets are DERIVED from it). An entry with a missing/typo'd
+// category would silently vanish from its category union — this pin turns
+// that into a compile failure.
+// ---------------------------------------------------------------------------
+
+type _EveryOpCategorized = Assert<
+  Equal<
+    Exclude<keyof ExpressionSpec<Document>, OpsInCategory<ExpressionCategory>>,
+    never
+  >
+>;
+
+// The literal-dependent set is DERIVED from `returns`-omission on registry
+// entries. This pin (a) documents the current set and (b) catches both
+// drift directions: an entry that accidentally drops its `returns` joins
+// this union and fails here; a dependent entry that accidentally gains a
+// `returns` leaves it and fails here.
+type _DerivedLiteralDependentOps = Assert<
+  Equal<
+    LiteralDependentOps,
+    | "$concatArrays"
+    | "$arrayElemAt"
+    | "$filter"
+    | "$ifNull"
+    | "$cond"
+    | "$literal"
+  >
+>;
+
+// Registry/allow-list DISJOINTNESS: "add a registry entry + DELETE its
+// allow-list line" is the documented recipe, and validation checks the
+// registry BEFORE the allow-list — so an operator in both is silently dead
+// allow-list weight today, and a validation-ladder reorder would turn it
+// into an operand-check bypass. This pin makes the forgotten DELETE step a
+// compile failure.
+type _RegistryAllowListDisjoint = Assert<
+  Equal<
+    Extract<keyof ExpressionSpec<Document>, UnimplementedExpressionOps>,
+    never
+  >
+>;
+
 export type {
+  _DerivedLiteralDependentOps,
+  _EveryOpCategorized,
+  _RegistryAllowListDisjoint,
   _Assert_AddBrand,
   _Assert_SubtractBrand,
   _Assert_SubtractIs2Tuple,

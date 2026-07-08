@@ -1,8 +1,9 @@
 import { pipesafe } from "../singleton/pipesafe";
 import { tagClient } from "../singleton/tagClient";
-import { Document, WithoutDollar } from "../utils/core";
+import { Document } from "../utils/objects";
+import { WithoutDollar } from "../utils/strings";
 import { MatchQuery, ResolveMatchOutput } from "../stages/match";
-import { ResolveSetOutput, SetQuery } from "../stages/set";
+import { ResolveSetOutput, SetQuery, ValidateSetQuery } from "../stages/set";
 import { ResolveUnsetOutput, UnsetQuery } from "../stages/unset";
 import {
   FieldPath,
@@ -19,21 +20,29 @@ import {
 import { ResolveGraphLookupOutput } from "../stages/graphLookup";
 import { FacetQuery, ResolveFacetOutput } from "../stages/facet";
 import { GetFieldType } from "../elements/fieldSelector";
-import { GroupQuery, ResolveGroupOutput } from "../stages/group";
-import { ResolveProjectOutput, ValidateProjectQuery } from "../stages/project";
+import {
+  GroupQuery,
+  ResolveGroupOutput,
+  ValidateGroupQuery,
+} from "../stages/group";
+import {
+  ProjectQuery,
+  ResolveProjectOutput,
+  ValidateProjectQuery,
+} from "../stages/project";
 import {
   ReplaceRootQuery,
   ResolveReplaceRootOutput,
 } from "../stages/replaceRoot";
 import { ResolveUnionWithOutput } from "../stages/unionWith";
-import { SortQuery } from "../stages/sort";
-import { ResolveUnwindOutput } from "../stages/unwind";
-import { ResolveLimitOutput } from "../stages/limit";
-import { ResolveSkipOutput } from "../stages/skip";
+import { SortQuery, ResolveSortOutput } from "../stages/sort";
+import { ResolveUnwindOutput, UnwindPath, UnwindQuery } from "../stages/unwind";
+import { LimitQuery, ResolveLimitOutput } from "../stages/limit";
+import { SkipQuery, ResolveSkipOutput } from "../stages/skip";
 import { ResolveSampleOutput, SampleQuery } from "../stages/sample";
-import { ResolveCountOutput } from "../stages/count";
+import { CountQuery, ResolveCountOutput } from "../stages/count";
 import { OutQuery } from "../stages/out";
-import { MergeOptions } from "../stages/merge";
+import { MergeQuery } from "../stages/merge";
 import { AggregationCursor, MongoClient } from "mongodb";
 import { type Source, type InferSourceType } from "../source/Source";
 
@@ -197,24 +206,24 @@ export class Pipeline<
     $match: M
   ): Pipeline<
     StartingDocs,
-    ResolveMatchOutput<M, PreviousStageDocs>,
+    ResolveMatchOutput<PreviousStageDocs, M>,
     Mode,
     UsedStages | "$match"
   > {
-    return this._chain<ResolveMatchOutput<M, PreviousStageDocs>, "$match">([
+    return this._chain<ResolveMatchOutput<PreviousStageDocs, M>, "$match">([
       { $match },
     ]);
   }
 
   set<const S extends SetQuery<PreviousStageDocs>>(
-    $set: S
+    $set: S & ValidateSetQuery<PreviousStageDocs, S>
   ): Pipeline<
     StartingDocs,
-    ResolveSetOutput<S, PreviousStageDocs>,
+    ResolveSetOutput<PreviousStageDocs, S>,
     Mode,
     UsedStages | "$set"
   > {
-    return this._chain<ResolveSetOutput<S, PreviousStageDocs>, "$set">([
+    return this._chain<ResolveSetOutput<PreviousStageDocs, S>, "$set">([
       { $set },
     ]);
   }
@@ -223,11 +232,11 @@ export class Pipeline<
     $unset: U
   ): Pipeline<
     StartingDocs,
-    ResolveUnsetOutput<U, PreviousStageDocs>,
+    ResolveUnsetOutput<PreviousStageDocs, U>,
     Mode,
     UsedStages | "$unset"
   > {
-    return this._chain<ResolveUnsetOutput<U, PreviousStageDocs>, "$unset">([
+    return this._chain<ResolveUnsetOutput<PreviousStageDocs, U>, "$unset">([
       { $unset },
     ]);
   }
@@ -247,7 +256,7 @@ export class Pipeline<
       LocalField
     >,
     NewKey extends string,
-    PipelineOutput extends Document = InferSourceType<C>,
+    Foreign extends Document = InferSourceType<C>,
   >(
     $lookup:
       | {
@@ -257,7 +266,7 @@ export class Pipeline<
           as: NewKey;
           pipeline?: PipelineBuilder<
             InferSourceType<C>,
-            PipelineOutput,
+            Foreign,
             Mode,
             LookupAllowedStages
           >;
@@ -267,14 +276,14 @@ export class Pipeline<
           as: NewKey;
           pipeline: PipelineBuilder<
             InferSourceType<C>,
-            PipelineOutput,
+            Foreign,
             Mode,
             LookupAllowedStages
           >;
         }
   ): Pipeline<
     StartingDocs,
-    ResolveLookupOutput<PreviousStageDocs, NewKey, PipelineOutput>,
+    ResolveLookupOutput<PreviousStageDocs, NewKey, Foreign>,
     Mode,
     UsedStages | "$lookup"
   > {
@@ -299,7 +308,7 @@ export class Pipeline<
     }
 
     return this._chain<
-      ResolveLookupOutput<PreviousStageDocs, NewKey, PipelineOutput>,
+      ResolveLookupOutput<PreviousStageDocs, NewKey, Foreign>,
       "$lookup"
     >(
       [
@@ -394,8 +403,12 @@ export class Pipeline<
     );
   }
 
+  // The intersection parameter keeps `G` as the inference/contextual-typing
+  // position (compound `_id` expressions break under a bare mapped wrapper)
+  // while ValidateGroupQuery re-checks accumulator operands — key-filtered,
+  // so a fully-valid query validates against `{}` (see stages/group.ts).
   group<const G extends GroupQuery<PreviousStageDocs>>(
-    $group: G
+    $group: G & ValidateGroupQuery<PreviousStageDocs, G>
   ): Pipeline<
     StartingDocs,
     ResolveGroupOutput<PreviousStageDocs, G>,
@@ -407,15 +420,23 @@ export class Pipeline<
     ]);
   }
 
-  project<const P>(
-    $project: ValidateProjectQuery<PreviousStageDocs, P>
+  // The validate and resolve positions each compute the projection modes
+  // via their defaulted parameters; the second computation is an alias-cache
+  // hit, so hoisting them into method generics would buy nothing.
+  // Intersection parameter: P stays the raw inference /
+  // contextual-typing position — a bare mapped wrapper breaks nested
+  // expression literals once its value arms are conditionals (same failure
+  // class as group's compound-_id) — while ValidateProjectQuery re-checks
+  // keys, projection mode, and values.
+  project<const P extends ProjectQuery<PreviousStageDocs>>(
+    $project: P & ValidateProjectQuery<PreviousStageDocs, P>
   ): Pipeline<
     StartingDocs,
-    ResolveProjectOutput<P, PreviousStageDocs>,
+    ResolveProjectOutput<PreviousStageDocs, P>,
     Mode,
     UsedStages | "$project"
   > {
-    return this._chain<ResolveProjectOutput<P, PreviousStageDocs>, "$project">([
+    return this._chain<ResolveProjectOutput<PreviousStageDocs, P>, "$project">([
       { $project },
     ]);
   }
@@ -424,12 +445,12 @@ export class Pipeline<
     $replaceRoot: R
   ): Pipeline<
     StartingDocs,
-    ResolveReplaceRootOutput<R, PreviousStageDocs>,
+    ResolveReplaceRootOutput<PreviousStageDocs, R>,
     Mode,
     UsedStages | "$replaceRoot"
   > {
     return this._chain<
-      ResolveReplaceRootOutput<R, PreviousStageDocs>,
+      ResolveReplaceRootOutput<PreviousStageDocs, R>,
       "$replaceRoot"
     >([{ $replaceRoot }]);
   }
@@ -440,8 +461,15 @@ export class Pipeline<
    */
   sort(
     $sort: SortQuery<PreviousStageDocs>
-  ): Pipeline<StartingDocs, PreviousStageDocs, Mode, UsedStages | "$sort"> {
-    return this._chain<PreviousStageDocs, "$sort">([{ $sort }]);
+  ): Pipeline<
+    StartingDocs,
+    ResolveSortOutput<PreviousStageDocs>,
+    Mode,
+    UsedStages | "$sort"
+  > {
+    return this._chain<ResolveSortOutput<PreviousStageDocs>, "$sort">([
+      { $sort },
+    ]);
   }
 
   /**
@@ -449,7 +477,7 @@ export class Pipeline<
    * @example .limit(10)
    */
   limit(
-    n: number
+    n: LimitQuery
   ): Pipeline<
     StartingDocs,
     ResolveLimitOutput<PreviousStageDocs>,
@@ -466,7 +494,7 @@ export class Pipeline<
    * @example .skip(20).limit(10)
    */
   skip(
-    n: number
+    n: SkipQuery
   ): Pipeline<
     StartingDocs,
     ResolveSkipOutput<PreviousStageDocs>,
@@ -500,15 +528,15 @@ export class Pipeline<
    * under the given field name.
    * @example .count("total") // → { total: number }
    */
-  count<F extends string>(
+  count<F extends CountQuery>(
     fieldName: F
   ): Pipeline<
     StartingDocs,
-    ResolveCountOutput<F>,
+    ResolveCountOutput<PreviousStageDocs, F>,
     Mode,
     UsedStages | "$count"
   > {
-    return this._chain<ResolveCountOutput<F>, "$count">([
+    return this._chain<ResolveCountOutput<PreviousStageDocs, F>, "$count">([
       { $count: fieldName },
     ]);
   }
@@ -518,38 +546,42 @@ export class Pipeline<
    * @example .unwind("$items") or .unwind({ path: "$items", includeArrayIndex: "idx" })
    */
   unwind<
-    Path extends FieldReferencesThatInferTo<PreviousStageDocs, unknown[]>,
+    // Constrained to UnwindPath (not the raw FieldReferencesThatInferTo) so
+    // the module's branded error arm surfaces in hovers at the call site.
+    Path extends UnwindPath<PreviousStageDocs>,
     IndexField extends string = never,
   >(
-    $unwind:
-      | Path
-      | {
-          path: Path;
-          includeArrayIndex?: IndexField;
-          preserveNullAndEmptyArrays?: boolean;
-        }
+    $unwind: UnwindQuery<PreviousStageDocs, Path, IndexField>
   ): Pipeline<
     StartingDocs,
-    ResolveUnwindOutput<PreviousStageDocs, WithoutDollar<Path>, IndexField>,
+    ResolveUnwindOutput<
+      PreviousStageDocs,
+      WithoutDollar<Path & string>,
+      IndexField
+    >,
     Mode,
     UsedStages | "$unwind"
   > {
     return this._chain<
-      ResolveUnwindOutput<PreviousStageDocs, WithoutDollar<Path>, IndexField>,
+      ResolveUnwindOutput<
+        PreviousStageDocs,
+        WithoutDollar<Path & string>,
+        IndexField
+      >,
       "$unwind"
     >([{ $unwind }]);
   }
 
   unionWith<
     C extends AllowedSource<Mode, any>,
-    PipelineOutput extends Document = InferSourceType<C>,
+    Foreign extends Document = InferSourceType<C>,
   >(
     $unionWith:
       | {
           coll: C;
           pipeline?: PipelineBuilder<
             InferSourceType<C>,
-            PipelineOutput,
+            Foreign,
             Mode,
             UnionWithAllowedStages
           >;
@@ -558,14 +590,14 @@ export class Pipeline<
           coll: C;
           pipeline: PipelineBuilder<
             InferSourceType<C>,
-            PipelineOutput,
+            Foreign,
             Mode,
             UnionWithAllowedStages
           >;
         }
   ): Pipeline<
     StartingDocs,
-    ResolveUnionWithOutput<PreviousStageDocs, PipelineOutput>,
+    ResolveUnionWithOutput<PreviousStageDocs, Foreign>,
     Mode,
     UsedStages | "$unionWith"
   > {
@@ -588,7 +620,7 @@ export class Pipeline<
     }
 
     return this._chain<
-      ResolveUnionWithOutput<PreviousStageDocs, PipelineOutput>,
+      ResolveUnionWithOutput<PreviousStageDocs, Foreign>,
       "$unionWith"
     >(
       [
@@ -659,7 +691,7 @@ export class Pipeline<
    * @see https://www.mongodb.com/docs/manual/reference/operator/aggregation/merge/
    */
   merge(
-    $merge: MergeOptions<PreviousStageDocs>
+    $merge: MergeQuery<PreviousStageDocs>
   ): Pipeline<StartingDocs, never, Mode, UsedStages | "$merge"> {
     return this._chain<never, "$merge">([{ $merge }]);
   }

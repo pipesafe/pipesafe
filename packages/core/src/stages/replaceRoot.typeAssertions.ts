@@ -44,8 +44,8 @@ type ReplaceWithFieldQuery = {
 };
 
 type ReplaceWithFieldResult = ResolveReplaceRootOutput<
-  ReplaceWithFieldQuery,
-  ReplaceWithFieldSchema
+  ReplaceWithFieldSchema,
+  ReplaceWithFieldQuery
 >;
 
 type ReplaceWithFieldExpected = {
@@ -66,8 +66,8 @@ type ReplaceWithNestedFieldQuery = {
 };
 
 type ReplaceWithNestedFieldResult = ResolveReplaceRootOutput<
-  ReplaceWithNestedFieldQuery,
-  ReplaceWithFieldSchema
+  ReplaceWithFieldSchema,
+  ReplaceWithNestedFieldQuery
 >;
 
 type ReplaceWithNestedFieldExpected = {
@@ -94,8 +94,8 @@ type ReplaceWithExpressionQuery = {
 };
 
 type ReplaceWithExpressionResult = ResolveReplaceRootOutput<
-  ReplaceWithExpressionQuery,
-  ReplaceWithExpressionSchema
+  ReplaceWithExpressionSchema,
+  ReplaceWithExpressionQuery
 >;
 
 type ReplaceWithExpressionExpected = {
@@ -128,8 +128,8 @@ type ReplaceWithNestedObjectQuery = {
 };
 
 type ReplaceWithNestedObjectResult = ResolveReplaceRootOutput<
-  ReplaceWithNestedObjectQuery,
-  ReplaceWithNestedObjectSchema
+  ReplaceWithNestedObjectSchema,
+  ReplaceWithNestedObjectQuery
 >;
 
 type ReplaceWithNestedObjectExpected = {
@@ -167,8 +167,8 @@ type ReplaceWithComplexQuery = {
 };
 
 type ReplaceWithComplexResult = ResolveReplaceRootOutput<
-  ReplaceWithComplexQuery,
-  ReplaceWithComplexSchema
+  ReplaceWithComplexSchema,
+  ReplaceWithComplexQuery
 >;
 
 type ReplaceWithComplexExpected = {
@@ -195,8 +195,8 @@ type ReplaceWithArrayQuery = {
 };
 
 type ReplaceWithArrayResult = ResolveReplaceRootOutput<
-  ReplaceWithArrayQuery,
-  ReplaceWithArraySchema
+  ReplaceWithArraySchema,
+  ReplaceWithArrayQuery
 >;
 
 type ReplaceWithArrayExpected = string[];
@@ -219,8 +219,8 @@ type ReplaceWithPrimitiveQuery = {
 };
 
 type ReplaceWithPrimitiveResult = ResolveReplaceRootOutput<
-  ReplaceWithPrimitiveQuery,
-  ReplaceWithPrimitiveSchema
+  ReplaceWithPrimitiveSchema,
+  ReplaceWithPrimitiveQuery
 >;
 
 type ReplaceWithPrimitiveExpected = string;

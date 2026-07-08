@@ -1,10 +1,6 @@
-import {
-  Document,
-  PassThrough,
-  PipeSafeError,
-  Prettify,
-  WithoutDollar,
-} from "../utils/core";
+import { Document, Prettify } from "../utils/objects";
+import { PassThrough, PipeSafeError, RequiresMsg } from "../utils/errors";
+import { WithoutDollar } from "../utils/strings";
 import { FieldReferencesThatInferTo } from "../elements/fieldReference";
 
 /**
@@ -16,21 +12,25 @@ import { FieldReferencesThatInferTo } from "../elements/fieldReference";
  */
 export type UnwindPath<Schema extends Document> =
   | FieldReferencesThatInferTo<Schema, unknown[]>
-  | PipeSafeError<`Stage '$unwind' requires an array field reference.`>;
+  | PipeSafeError<RequiresMsg<"Stage", "$unwind", "an array field reference">>;
 
-export type UnwindOptions<
-  Schema extends Document,
-  IndexField extends string = never,
-> = {
-  path: UnwindPath<Schema>;
-  includeArrayIndex?: IndexField;
-  preserveNullAndEmptyArrays?: boolean;
-};
-
+/**
+ * `$unwind`'s full input shape: a bare path or an options object. `P` is the
+ * literal path inferred at the call site (constrained to `UnwindPath`, so the
+ * brand arm surfaces in hovers when a non-array field is referenced);
+ * `Pipeline.unwind` threads it into `ResolveUnwindOutput`.
+ */
 export type UnwindQuery<
   Schema extends Document,
+  P extends UnwindPath<Schema> = UnwindPath<Schema>,
   IndexField extends string = never,
-> = UnwindPath<Schema> | UnwindOptions<Schema, IndexField>;
+> =
+  | P
+  | {
+      path: P;
+      includeArrayIndex?: IndexField;
+      preserveNullAndEmptyArrays?: boolean;
+    };
 
 /**
  * Transform an array type to its element type

@@ -1,4 +1,12 @@
-import { Document, PassThrough } from "../utils/core";
+import { Document } from "../utils/objects";
+import { PassThrough } from "../utils/errors";
+
+/**
+ * `$limit` takes a positive document count. Schema-free scalar Query
+ * exported so `Pipeline.limit` references the module's type
+ * rather than an inline scalar.
+ */
+export type LimitQuery = number;
 
 /**
  * `$limit` is a passthrough stage: it does not change the document schema,

@@ -1,15 +1,8 @@
-import {
-  Document,
-  Join,
-  DollarPrefixed,
-  NonExpandableTypes,
-  WithoutDollar,
-  NoDollarString,
-  PipeSafeError,
-  Prettify,
-} from "../utils/core";
-import { FieldSelector, InferFieldSelector } from "./fieldSelector";
-import { Expression, InferExpression } from "./expressions";
+import { Document, NonExpandableTypes, Prettify } from "../utils/objects";
+import { Join, DollarPrefixed, WithoutDollar } from "../utils/strings";
+import { PipeSafeError, UnknownFieldError } from "../utils/errors";
+import { HasOperatorKey } from "../utils/dispatch";
+import { InferExpression } from "./expressions";
 
 // Types related to field referencees
 // These are used as part of values within expressions
@@ -31,24 +24,41 @@ export type FieldPath<T> =
 
 export type FieldReference<T extends Document> = DollarPrefixed<FieldPath<T>>;
 
+// Deliberate asymmetry: unknown paths brand with PipeSafeError here, while
+// the field-selector twin (GetFieldType in fieldSelector.ts) resolves them
+// to `never` — its `never` is load-bearing for union narrowing. FullPath is
+// an accumulator so recursion doesn't lose the original path for the
+// error message.
 export type GetFieldTypeWithoutArrays<
   Schema,
   Path extends string,
   FullPath extends string = Path,
 > =
-  Schema extends (infer U)[] ? GetFieldTypeWithoutArrays<U, Path, FullPath>[]
+  Schema extends (infer U)[] ?
+    // Element-wise recursion; a brand from the element must PROPAGATE as
+    // the brand, not get wrapped into `brand[]` (which would read as a
+    // valid array type to IsPipeSafeError-based callers).
+    GetFieldTypeWithoutArrays<U, Path, FullPath> extends infer R ?
+      [R] extends [PipeSafeError<string>] ?
+        R
+      : R[] // non-distributive: union elements stay (A | B)[], not A[] | B[]
+    : never
   : // null/undefined branches of nullable unions silently fall through so
   // distributing over `T | null` doesn't leak the brand into a result
   // that's otherwise valid via the non-null branch.
   Schema extends null | undefined ? never
+  : // JS structural/prototype keys on non-expandable values and primitives
+  // ("$name.length", "$joinedAt.getTime") are not MongoDB paths — brand
+  // before the keyof lookup would admit them.
+  Schema extends NonExpandableTypes | string | number | boolean | bigint ?
+    UnknownFieldError<FullPath>
   : Path extends keyof Schema ?
     Schema[Path] // Direct property access
   : Path extends `${infer Head}.${infer Tail}` ?
     Head extends keyof Schema ?
       GetFieldTypeWithoutArrays<Schema[Head], Tail, FullPath> // Recurse into property
-    : PipeSafeError<`Field '${FullPath}' is not on the schema.`>
-  : Path extends string ?
-    PipeSafeError<`Field '${FullPath}' is not on the schema.`>
+    : UnknownFieldError<FullPath>
+  : Path extends string ? UnknownFieldError<FullPath>
   : never;
 
 // Infer the type of a field at a given selector
@@ -57,6 +67,35 @@ export type InferFieldReference<
   Schema extends Document,
   Ref extends FieldReference<Schema>,
 > = GetFieldTypeWithoutArrays<Schema, WithoutDollar<Ref>>;
+
+/**
+ * One ref→type map per schema: computed once per (distributed) schema member
+ * and alias-cached, so every target type used across operand helpers filters
+ * the same precomputed map instead of re-running InferFieldReference.
+ *
+ * Deliberately applied AFTER `Schema extends unknown` distribution in the
+ * consumers below. A defaulted parameter (`M = SchemaRefTypeMap<Schema>`)
+ * would be unsound: defaults substitute before the body's conditional
+ * distributes a union schema, so the map would be built over the whole union.
+ */
+type SchemaRefTypeMap<Schema extends Document> = {
+  [K in FieldReference<Schema>]: InferFieldReference<Schema, K>;
+};
+
+/** Filter a precomputed ref→type map down to refs assignable to T. */
+type RefsInferringTo<M, DesiredType> = {
+  [K in keyof M]: M[K] extends PipeSafeError<string> ?
+    never // Skip branded errors — they only appear when K is widened past a valid path
+  : NonNullable<M[K]> extends DesiredType ? K
+  : never;
+}[keyof M];
+
+/** Lookup variant: reversed assignability, no NonNullable stripping. */
+type RefsInferringToForLookup<M, DesiredType> = {
+  [K in keyof M]: M[K] extends PipeSafeError<string> ? never
+  : DesiredType extends M[K] ? K
+  : never;
+}[keyof M];
 
 export type FieldPathsThatInferToForLookup<
   Schema extends Document,
@@ -74,60 +113,13 @@ export type FieldReferencesThatInferToForLookup<
   DesiredType,
 > =
   Schema extends unknown ?
-    {
-      [K in FieldReference<Schema>]: InferFieldReference<Schema, K> extends (
-        PipeSafeError<string>
-      ) ?
-        never // Skip branded errors — they only appear when K is widened past a valid path
-      : DesiredType extends InferFieldReference<Schema, K> ? K
-      : never;
-    }[FieldReference<Schema>]
+    RefsInferringToForLookup<SchemaRefTypeMap<Schema>, DesiredType>
   : never;
 
 export type FieldReferencesThatInferTo<Schema extends Document, DesiredType> =
   Schema extends unknown ?
-    {
-      [K in FieldReference<Schema>]: InferFieldReference<Schema, K> extends (
-        PipeSafeError<string>
-      ) ?
-        never // Skip branded errors
-      : NonNullable<InferFieldReference<Schema, K>> extends DesiredType ? K
-      : never;
-    }[FieldReference<Schema>]
+    RefsInferringTo<SchemaRefTypeMap<Schema>, DesiredType>
   : never;
-
-export type ElementResolvingToType<Schema extends Document, Type> =
-  Type extends string ?
-    FieldReferencesThatInferTo<Schema, string> | NoDollarString
-  : Type extends object ?
-    Type extends Function ?
-      never
-    : | FieldReferencesThatInferTo<Schema, Type>
-      | {
-          [K in keyof Type]: Type[K] extends string ?
-            FieldReferencesThatInferTo<Schema, string> | NoDollarString
-          : ArrayResolvingToType<Schema, Type[K]> extends Array<infer U> ? U
-          : Type[K];
-        }
-  : Type | FieldReferencesThatInferTo<Schema, Type>;
-
-// Perhaps should be ArrayResolvingToSameType<Schema>
-export type ArrayResolvingToType<
-  Schema extends Document,
-  Type,
-> = ElementResolvingToType<Schema, Type>[];
-
-export type MatcherThatOnlyDoesEquals<Schema extends Document> =
-  | {
-      [K in FieldSelector<Schema>]: InferFieldSelector<Schema, K>;
-    }
-  | {
-      $expr: {
-        $eq:
-          | ArrayResolvingToType<Schema, string>
-          | ArrayResolvingToType<Schema, number>;
-      };
-    };
 
 /**
  * Recursively infers and resolves all field references and expressions within a nested structure
@@ -144,12 +136,28 @@ export type MatcherThatOnlyDoesEquals<Schema extends Document> =
  */
 export type InferNestedFieldReference<Schema extends Document, Obj> =
   Obj extends FieldReference<Schema> ? InferFieldReference<Schema, Obj>
-  : Obj extends Expression<Schema> ? InferExpression<Schema, Obj>
-  : Obj extends `$${string}` ? never
+  : // Nested `$$REMOVE` deletes the field: `never` here is load-bearing —
+  // RemoveNeverFields (utils/updates.ts) strips the key from the output.
+  Obj extends "$$REMOVE" ? never
+  : // Other `$$`-system variables ($$NOW, $$ROOT, ...) are valid MongoDB
+  // whose inference is not modeled: degrade to `unknown`, never to a
+  // dropped field (validation accepts them, so `never` would silently
+  // erase the key from the output schema).
+  Obj extends `$$${string}` ? unknown
+  : // Unknown single-`$` refs: validation brands them at the call site, so
+  // inference must not invent a type for them.
+  Obj extends `$${string}` ? never
   : Obj extends unknown[] ? InferNestedFieldReferenceArray<Schema, Obj>
   : Obj extends object ?
-    Obj extends NonExpandableTypes ?
-      Obj
+    Obj extends NonExpandableTypes ? Obj
+    : // Only objects carrying a `$`-prefixed key are candidates for
+    // expression inference — `$`-less objects are nested literals and never
+    // pay for expression dispatch. This is the hottest path in the library
+    // (every value of every $set/$project/$group literal flows through
+    // here). InferExpression is forgiving: malformed operands keep the
+    // operator's declared result type while the operand brand reports the
+    // error at the input position.
+    HasOperatorKey<Obj> extends true ? InferExpression<Schema, Obj>
     : InferNestedFieldReferenceObject<Schema, Obj>
   : Obj; // Handles literals (string, number, boolean, null, undefined, etc.)
 

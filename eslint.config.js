@@ -45,4 +45,22 @@ export default defineConfig([
       ],
     },
   },
+  {
+    files: ["packages/*/src/**/*.{ts,mts,cts}"],
+    ignores: ["packages/*/src/index.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/packages/**"],
+              message:
+                'Use package imports (e.g., "@pipesafe/core") instead of relative cross-package imports',
+            },
+          ],
+        },
+      ],
+    },
+  },
 ]);

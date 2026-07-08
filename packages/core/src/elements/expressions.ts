@@ -1,4 +1,16 @@
-import { Document, PipeSafeError } from "../utils/core";
+import { Document } from "../utils/objects";
+import {
+  MultiOperatorError,
+  PipeSafeError,
+  RequiresMsg,
+} from "../utils/errors";
+import {
+  HasOperatorKey,
+  HasSingleOperatorKey,
+  NotAnExpression,
+  OperatorKeyOf,
+} from "../utils/dispatch";
+import { ExpressionOperand } from "./operands";
 import {
   FieldReference,
   InferFieldReference,
@@ -7,43 +19,36 @@ import {
 import { AnyLiteral } from "./literals";
 
 // ============================================================================
-// MongoDB Expression Operators
+// MongoDB Expression Operators — registry edition
 // ============================================================================
+// `ExpressionSpec` is THE registration point: one entry per operator holds
+// its operand (input) shape and, for fixed-return operators, its result
+// type. Everything else — the per-operator expression types, the category
+// unions, the `Expression` union, and the fixed-return arm of
+// `InferExpression` — is derived mechanically. Adding an operator = one
+// registry entry (plus one `InferDependentExpression` arm if its result
+// depends on the literal arguments).
+
+// ----------------------------------------------------------------------------
+// Operand helpers (kernel one-liners; see elements/operands.ts)
+// ----------------------------------------------------------------------------
 
 /**
- * Array operand — accepts a field reference to an array field, or an array
- * literal of any element type. The branded `PipeSafeError` arm surfaces in
- * IDE hovers when a user passes a non-array value (e.g. a string field
- * reference) where an array is required.
+ * Array operand — accepts a field reference to an array field, an array
+ * literal of any element type, or an array-producing expression
+ * ($concatArrays/$arrayElemAt/$filter/$map — e.g. `$size: { $filter: … }`).
+ * The branded `PipeSafeError` arm surfaces in IDE hovers when a user passes
+ * a non-array value (e.g. a string field reference) where an array is
+ * required. Specialized rather than an `ExpressionOperand` one-liner
+ * because the literal arm is `AnyLiteral[]` while the reference arm targets
+ * `unknown[]`.
  */
-type ArrayOperandFor<Schema extends Document, Op extends string> =
+type ArrayOperand<Schema extends Document, Op extends string> =
   | FieldReferencesThatInferTo<Schema, unknown[]>
-  | AnyLiteral<Schema>[]
-  | PipeSafeError<`Operator '${Op}' requires an array operand.`>;
-
-/**
- * $concatArrays expression - concatenates arrays
- * Syntax: { $concatArrays: [array1, array2, ...] }
- * Each array can be:
- * - Array literal: [1, 2, 3]
- * - Field reference to an array: "$items"
- * - Nested expressions (future)
- */
-export type ConcatArraysExpression<Schema extends Document> = {
-  $concatArrays: ArrayOperandFor<Schema, "$concatArrays">[];
-};
-
-/**
- * $size expression - returns the size of an array
- * Syntax: { $size: "$arrayField" } or { $size: [1, 2, 3] }
- * Accepts:
- * - Field reference to an array: "$items"
- * - Array literal: [1, 2, 3]
- * Returns: number (the length of the array)
- */
-export type SizeExpression<Schema extends Document> = {
-  $size: ArrayOperandFor<Schema, "$size">;
-};
+  | readonly AnyLiteral<Schema>[]
+  | ArrayProducingExpression<Schema>
+  | MapExpression<Schema>
+  | PipeSafeError<RequiresMsg<"Operator", Op, "an array operand">>;
 
 /**
  * Date operand for $dateToString.date, $dateTrunc.date, $dateAdd.startDate,
@@ -51,29 +56,86 @@ export type SizeExpression<Schema extends Document> = {
  * when a non-Date operand is supplied (e.g. a string field reference passed
  * to a `date` parameter) instead of letting the value silently degrade.
  */
-type DateOperand<Schema extends Document, Op extends string> =
-  | Date
-  | FieldReferencesThatInferTo<Schema, Date>
-  | PipeSafeError<`Operator '${Op}' requires a Date operand.`>;
+type DateOperand<
+  Schema extends Document,
+  Op extends string,
+> = ExpressionOperand<
+  Schema,
+  Date,
+  RequiresMsg<"Operator", Op, "a Date operand">
+>;
 
 /**
- * $dateToString expression - converts a date to a string
- * Syntax: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } }
- * Accepts:
- * - format: string (date format string)
- * - date: Field reference to a Date field or Date literal
- * - timezone: optional string
- * - onNull: optional value
- * Returns: string
+ * Arithmetic expression operands — numbers, field references to numbers, or
+ * nested expressions. The branded `PipeSafeError` arm surfaces in IDE hovers
+ * when a user passes a non-numeric field reference (e.g. `'$stringField'`)
+ * instead of letting it silently degrade to `never` downstream.
  */
-export type DateToStringExpression<Schema extends Document> = {
-  $dateToString: {
-    format: string;
-    date: DateOperand<Schema, "$dateToString">;
-    timezone?: string;
-    onNull?: unknown;
-  };
-};
+type ArithmeticOperand<Schema extends Document, Op extends string> =
+  | ExpressionOperand<
+      Schema,
+      number,
+      RequiresMsg<"Operator", Op, "a numeric operand">
+    >
+  | Expression<Schema>;
+
+/**
+ * String expression operands — strings and field references to strings only.
+ * Does not support nested expressions to keep things simple.
+ *
+ * The literal arm is deliberately the FULL `string` (which subsumes
+ * `$`-strings): this type sits in ACCEPTANCE positions, where narrowing to
+ * NoDollarString would reject legit separators (" ", "(", ""). The actual
+ * rejection of typo'd/non-string `$`-refs happens element-wise in
+ * ValidateConcatValue (elements/validation.ts), which dispatches BEFORE the
+ * registry relation — so the wide literal arm here cannot swallow them at
+ * chained call sites. The brand's message is what ValidateConcatElement
+ * surfaces (same RequiresMsg).
+ */
+type StringOperand<
+  Schema extends Document,
+  Op extends string,
+> = ExpressionOperand<
+  Schema,
+  string,
+  RequiresMsg<"Operator", Op, "a string operand">
+>;
+
+/** The `[left, right]` pair shape shared by the binary arithmetic operators. */
+type ArithmeticPair<Schema extends Document, Op extends string> = readonly [
+  ArithmeticOperand<Schema, Op>,
+  ArithmeticOperand<Schema, Op>,
+];
+
+/**
+ * Generic expression operands - can be any literal, null, field reference, or expression
+ * Used for conditional operators like $ifNull and $cond that accept flexible types
+ */
+type ConditionalOperand<Schema extends Document> =
+  | null
+  | AnyLiteral<Schema>
+  | FieldReference<Schema>
+  | Expression<Schema>;
+
+/**
+ * Comparison operand - values that can be compared
+ * Note: Excludes ComparisonExpression to avoid circular reference
+ */
+type ComparisonOperand<Schema extends Document> =
+  | null
+  | AnyLiteral<Schema>
+  | FieldReference<Schema>
+  | ArrayExpression<Schema>
+  | DateExpression<Schema>
+  | ArithmeticExpression<Schema>
+  | StringExpression<Schema>
+  | ConditionalExpression<Schema>;
+
+/** The `[left, right]` pair shape shared by all binary comparison operators. */
+type ComparisonPair<Schema extends Document> = readonly [
+  ComparisonOperand<Schema>,
+  ComparisonOperand<Schema>,
+];
 
 /**
  * Time unit for date truncation/manipulation
@@ -90,121 +152,13 @@ export type DateUnit =
   | "millisecond";
 
 /**
- * $dateTrunc expression - truncates a date to a specified unit
- * Syntax: { $dateTrunc: { date: "$timestamp", unit: "day" } }
- * Accepts:
- * - date: Field reference to a Date field or Date literal
- * - unit: time unit to truncate to
- * - binSize: optional number of units
- * - timezone: optional timezone string
- * - startOfWeek: optional day to start week (for "week" unit)
- * Returns: Date
- */
-export type DateTruncExpression<Schema extends Document> = {
-  $dateTrunc: {
-    date: DateOperand<Schema, "$dateTrunc">;
-    unit: DateUnit;
-    binSize?: number;
-    timezone?: string;
-    startOfWeek?:
-      | "monday"
-      | "tuesday"
-      | "wednesday"
-      | "thursday"
-      | "friday"
-      | "saturday"
-      | "sunday";
-  };
-};
-
-/**
- * $dateAdd expression - adds a specified amount to a date
- * Syntax: { $dateAdd: { startDate: "$timestamp", unit: "day", amount: 1 } }
- * Accepts:
- * - startDate: Field reference to a Date field or Date literal
- * - unit: time unit to add
- * - amount: number of units to add (can be field reference)
- * - timezone: optional timezone string
- * Returns: Date
- */
-export type DateAddExpression<Schema extends Document> = {
-  $dateAdd: {
-    startDate: DateOperand<Schema, "$dateAdd">;
-    unit: DateUnit;
-    amount: number | FieldReferencesThatInferTo<Schema, number>;
-    timezone?: string;
-  };
-};
-
-/**
- * $dateSubtract expression - subtracts a specified amount from a date
- * Syntax: { $dateSubtract: { startDate: "$timestamp", unit: "day", amount: 1 } }
- * Accepts:
- * - startDate: Field reference to a Date field or Date literal
- * - unit: time unit to subtract
- * - amount: number of units to subtract (can be field reference)
- * - timezone: optional timezone string
- * Returns: Date
- */
-export type DateSubtractExpression<Schema extends Document> = {
-  $dateSubtract: {
-    startDate: DateOperand<Schema, "$dateSubtract">;
-    unit: DateUnit;
-    amount: number | FieldReferencesThatInferTo<Schema, number>;
-    timezone?: string;
-  };
-};
-
-/**
- * $toDate expression - converts a numeric value (Unix timestamp in milliseconds) to a Date
- * Syntax: { $toDate: "$timestamp" } or { $toDate: { $multiply: ['$created', 1000] } }
- * Accepts:
- * - A number representing milliseconds since epoch
- * - A field reference to a numeric field
- * - A nested expression that returns a number
- * Returns: Date
- */
-export type ToDateExpression<Schema extends Document> = {
-  $toDate: ArithmeticOperandFor<Schema, "$toDate">;
-};
-
-/**
- * $arrayElemAt expression - returns the element at a specified array index
- * Syntax: { $arrayElemAt: [<array>, <index>] }
- * Accepts:
- * - First element: array field reference or array literal
- * - Second element: numeric index (0-based, negative counts from end)
- * Returns: The element type of the array (or unknown for dynamic arrays)
- */
-export type ArrayElemAtExpression<Schema extends Document> = {
-  $arrayElemAt: [
-    ArrayOperandFor<Schema, "$arrayElemAt">,
-    number | FieldReferencesThatInferTo<Schema, number>,
-  ];
-};
-
-/**
- * $filter expression - filters an array based on a condition
- * Syntax: { $filter: { input: <array>, as: <string>, cond: <expression> } }
- * Returns: Filtered array
- */
-export type FilterExpression<Schema extends Document> = {
-  $filter: {
-    input: ArrayOperandFor<Schema, "$filter">;
-    as: string;
-    cond: unknown; // Condition expression (uses $$var references)
-    limit?: number;
-  };
-};
-
-/**
  * Array-producing expressions that can be used as input to $map, $filter, etc.
  * Excludes $map and $sum to avoid circular references.
  */
-export type ArrayProducingExpression<Schema extends Document> =
-  | ConcatArraysExpression<Schema>
-  | ArrayElemAtExpression<Schema>
-  | FilterExpression<Schema>;
+export type ArrayProducingExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  "$concatArrays" | "$arrayElemAt" | "$filter"
+>;
 
 /**
  * Valid inputs for array operations: field references, literals, or expressions
@@ -214,374 +168,618 @@ export type ArrayInput<Schema extends Document> =
   | ArrayProducingExpression<Schema>
   | unknown[];
 
+// ----------------------------------------------------------------------------
+// THE registry
+// ----------------------------------------------------------------------------
+
 /**
- * $map expression - transforms each element of an array
- * Syntax: { $map: { input: <array>, as: <string>, in: <expression> } }
- * Returns: Array of transformed elements
- * Note: The `in` expression type inference requires $$variable tracking,
- * so we return unknown[] for now. $sum wrapping will still infer number.
+ * Per-operator registration — one entry declares everything about an
+ * operator that CAN be declared as data:
+ *
+ * - `operand`: the input shape (carrying the operand brands).
+ * - `returns`: the result type — PRESENT only on fixed-return operators.
+ *   A LITERAL-DEPENDENT operator (its result derives from its arguments —
+ *   $cond's branches, $concatArrays' element types, ...) OMITS `returns`:
+ *   the omission is the entry's own declaration of dependence
+ *   (`LiteralDependentOps` is derived from it), and the real inference
+ *   lives as an arm of `InferDependentExpression` below — TypeScript has
+ *   no type-level lambdas, so a parameterized "how to compute the result"
+ *   cannot be stored in a registry entry; the hand-written arm is the
+ *   irreducible per-operator inference code. A missing arm degrades to
+ *   `unknown`, never to a wrong type or a dropped field.
+ * - `category`: the operator's category — the category key sets and
+ *   unions (`ArrayExpression`, ...) are DERIVED from this field, so the
+ *   category is declared exactly once (pinned by `_EveryOpCategorized`).
+ *
+ * Being an interface, members resolve lazily and mutual recursion with the
+ * derived `Expression` union is safe.
+ *
+ * Operand ARRAY positions are `readonly`: a readonly target accepts both
+ * mutable and `as const` (readonly) user operands — both valid MongoDB —
+ * so the Validate re-checks need no per-literal readonly stripping (a
+ * DeepMutable approach measured +280k instantiations / 2x check time by
+ * defeating the relation cache).
  */
-export type MapExpression<Schema extends Document> = {
+export interface ExpressionSpec<Schema extends Document> {
+  // --- Array operators -----------------------------------------------------
+  /** Concatenates arrays. Result element type depends on the literal args. */
+  $concatArrays: {
+    operand: readonly ArrayOperand<Schema, "$concatArrays">[];
+    category: "array";
+  };
+  /** Returns the size of an array. */
+  $size: {
+    operand: ArrayOperand<Schema, "$size">;
+    returns: number;
+    category: "array";
+  };
+  /** Element at index (0-based; negative counts from the end). */
+  $arrayElemAt: {
+    operand: readonly [
+      ArrayOperand<Schema, "$arrayElemAt">,
+      number | FieldReferencesThatInferTo<Schema, number>,
+    ];
+    category: "array";
+  };
+  /** Filters an array by a condition (cond uses $$var references; `as`
+   *  defaults to `$$this` in MongoDB, so it is optional). */
+  $filter: {
+    operand: {
+      input: ArrayOperand<Schema, "$filter">;
+      as?: string;
+      cond: unknown;
+      limit?: number;
+    };
+    category: "array";
+  };
+  /**
+   * Transforms each element. `in` needs $$variable tracking we don't have,
+   * so the result stays unknown[] ($sum wrapping still infers number).
+   */
   $map: {
-    input: ArrayInput<Schema>;
-    as: string;
-    in: unknown; // Expression using $$var references
+    operand: { input: ArrayInput<Schema>; as: string; in: unknown };
+    returns: unknown[];
+    category: "array";
   };
-};
+  /** Sums numeric values in an array ($group accumulation lives in group.ts). */
+  $sum: {
+    operand:
+      | FieldReferencesThatInferTo<Schema, number[]>
+      | ArrayProducingExpression<Schema>
+      | MapExpression<Schema>
+      | readonly number[];
+    returns: number;
+    category: "array";
+  };
 
-/**
- * $sum expression - sums numeric values in an array
- * Syntax: { $sum: <array-expression> } or { $sum: <field-reference> }
- * In $set context: operates on array expressions
- * In $group context: accumulates values (handled separately)
- * Returns: number
- */
-export type SumExpression<Schema extends Document> = {
-  $sum:
-    | FieldReferencesThatInferTo<Schema, number[]>
-    | ArrayProducingExpression<Schema>
-    | MapExpression<Schema>
-    | number[];
-};
+  // --- Date operators -------------------------------------------------------
+  /** Converts a date to a string with the given format. */
+  $dateToString: {
+    operand: {
+      format: string;
+      date: DateOperand<Schema, "$dateToString">;
+      timezone?: string;
+      onNull?: unknown;
+    };
+    returns: string;
+    category: "date";
+  };
+  /** Truncates a date to a unit. */
+  $dateTrunc: {
+    operand: {
+      date: DateOperand<Schema, "$dateTrunc">;
+      unit: DateUnit;
+      binSize?: number;
+      timezone?: string;
+      startOfWeek?:
+        | "monday"
+        | "tuesday"
+        | "wednesday"
+        | "thursday"
+        | "friday"
+        | "saturday"
+        | "sunday";
+    };
+    returns: Date;
+    category: "date";
+  };
+  /** Adds an amount of units to a date. */
+  $dateAdd: {
+    operand: {
+      startDate: DateOperand<Schema, "$dateAdd">;
+      unit: DateUnit;
+      amount: number | FieldReferencesThatInferTo<Schema, number>;
+      timezone?: string;
+    };
+    returns: Date;
+    category: "date";
+  };
+  /** Subtracts an amount of units from a date. */
+  $dateSubtract: {
+    operand: {
+      startDate: DateOperand<Schema, "$dateSubtract">;
+      unit: DateUnit;
+      amount: number | FieldReferencesThatInferTo<Schema, number>;
+      timezone?: string;
+    };
+    returns: Date;
+    category: "date";
+  };
+  /** Converts a Unix-ms number (or numeric expression) to a Date. */
+  $toDate: {
+    operand: ArithmeticOperand<Schema, "$toDate">;
+    returns: Date;
+    category: "date";
+  };
 
-/**
- * Union of all array expressions
- * Extend this as we add more array operators
- */
-export type ArrayExpression<Schema extends Document> =
-  | ConcatArraysExpression<Schema>
-  | SizeExpression<Schema>
-  | ArrayElemAtExpression<Schema>
-  | FilterExpression<Schema>
-  | MapExpression<Schema>
-  | SumExpression<Schema>;
+  // --- Arithmetic operators (all return number) -----------------------------
+  $add: {
+    operand: readonly ArithmeticOperand<Schema, "$add">[];
+    returns: number;
+    category: "arithmetic";
+  };
+  $subtract: {
+    operand: ArithmeticPair<Schema, "$subtract">;
+    returns: number;
+    category: "arithmetic";
+  };
+  $multiply: {
+    operand: readonly ArithmeticOperand<Schema, "$multiply">[];
+    returns: number;
+    category: "arithmetic";
+  };
+  $divide: {
+    operand: ArithmeticPair<Schema, "$divide">;
+    returns: number;
+    category: "arithmetic";
+  };
+  $mod: {
+    operand: ArithmeticPair<Schema, "$mod">;
+    returns: number;
+    category: "arithmetic";
+  };
 
-/**
- * Arithmetic expression operands — numbers, field references to numbers, or
- * nested expressions. The branded `PipeSafeError` arm surfaces in IDE hovers
- * when a user passes a non-numeric field reference (e.g. `'$stringField'`)
- * instead of letting it silently degrade to `never` downstream.
- */
-type ArithmeticOperandFor<Schema extends Document, Op extends string> =
-  | number
-  | FieldReferencesThatInferTo<Schema, number>
-  | Expression<Schema>
-  | PipeSafeError<`Operator '${Op}' requires a numeric operand.`>;
+  // --- String operators ------------------------------------------------------
+  /** Concatenates strings. */
+  $concat: {
+    operand: readonly StringOperand<Schema, "$concat">[];
+    returns: string;
+    category: "string";
+  };
 
-/**
- * $add expression - adds numbers together
- * Syntax: { $add: [expr1, expr2, ...] }
- * Accepts: array of numbers, field references to numbers, or nested expressions
- * Returns: number
- */
-export type AddExpression<Schema extends Document> = {
-  $add: ArithmeticOperandFor<Schema, "$add">[];
-};
+  // --- Conditional operators (results depend on the literal args) -----------
+  /** First non-null operand. */
+  $ifNull: {
+    operand: readonly [
+      ConditionalOperand<Schema>,
+      ConditionalOperand<Schema>,
+      ...ConditionalOperand<Schema>[],
+    ];
+    category: "conditional";
+  };
+  /** Ternary: [condition, thenValue, elseValue]. */
+  $cond: {
+    operand: readonly [
+      ConditionalOperand<Schema>,
+      ConditionalOperand<Schema>,
+      ConditionalOperand<Schema>,
+    ];
+    category: "conditional";
+  };
 
-/**
- * $subtract expression - subtracts numbers
- * Syntax: { $subtract: [expr1, expr2] }
- * Accepts: array with 2 elements (minuend, subtrahend)
- * Returns: number
- */
-export type SubtractExpression<Schema extends Document> = {
-  $subtract: [
-    ArithmeticOperandFor<Schema, "$subtract">,
-    ArithmeticOperandFor<Schema, "$subtract">,
-  ];
-};
-
-/**
- * $multiply expression - multiplies numbers
- * Syntax: { $multiply: [expr1, expr2, ...] }
- * Accepts: array of numbers, field references to numbers, or nested expressions
- * Returns: number
- */
-export type MultiplyExpression<Schema extends Document> = {
-  $multiply: ArithmeticOperandFor<Schema, "$multiply">[];
-};
-
-/**
- * $divide expression - divides numbers
- * Syntax: { $divide: [expr1, expr2] }
- * Accepts: array with 2 elements (dividend, divisor)
- * Returns: number
- */
-export type DivideExpression<Schema extends Document> = {
-  $divide: [
-    ArithmeticOperandFor<Schema, "$divide">,
-    ArithmeticOperandFor<Schema, "$divide">,
-  ];
-};
-
-/**
- * $mod expression - modulo operation
- * Syntax: { $mod: [expr1, expr2] }
- * Accepts: array with 2 elements (dividend, divisor)
- * Returns: number
- */
-export type ModExpression<Schema extends Document> = {
-  $mod: [
-    ArithmeticOperandFor<Schema, "$mod">,
-    ArithmeticOperandFor<Schema, "$mod">,
-  ];
-};
-
-/**
- * Union of all date expressions
- * Extend this as we add more date operators
- */
-export type DateExpression<Schema extends Document> =
-  | DateToStringExpression<Schema>
-  | DateTruncExpression<Schema>
-  | DateAddExpression<Schema>
-  | DateSubtractExpression<Schema>
-  | ToDateExpression<Schema>;
-
-/**
- * String expression operands — strings and field references to strings only.
- * Does not support nested expressions to keep things simple. The branded
- * `PipeSafeError` arm surfaces in IDE hovers when a non-string operand is
- * passed (e.g. a numeric field reference) instead of degrading silently.
- */
-type StringOperandFor<Schema extends Document, Op extends string> =
-  | string
-  | FieldReferencesThatInferTo<Schema, string>
-  | PipeSafeError<`Operator '${Op}' requires a string operand.`>;
-
-/**
- * $concat expression - concatenates strings together
- * Syntax: { $concat: [expr1, expr2, ...] }
- * Accepts: array of strings and field references to strings only
- * Returns: string
- */
-export type ConcatExpression<Schema extends Document> = {
-  $concat: StringOperandFor<Schema, "$concat">[];
-};
-
-/**
- * Union of all string expressions
- * Extend this as we add more string operators
- */
-export type StringExpression<Schema extends Document> =
-  ConcatExpression<Schema>;
-
-/**
- * Generic expression operands - can be any literal, null, field reference, or expression
- * Used for conditional operators like $ifNull and $cond that accept flexible types
- */
-type ConditionalOperand<Schema extends Document> =
-  | null
-  | AnyLiteral<Schema>
-  | FieldReference<Schema>
-  | Expression<Schema>;
-
-/**
- * $ifNull expression - returns the first non-null value from a list of expressions
- * Syntax: { $ifNull: [expr1, expr2, expr3, ...] }
- * Accepts: array of 2 or more operands
- * - Returns the first non-null/non-missing value
- * - If all are null/missing, returns null
- * Returns: union of all operand types (excluding null/undefined)
- */
-export type IfNullExpression<Schema extends Document> = {
-  $ifNull: [
-    ConditionalOperand<Schema>,
-    ConditionalOperand<Schema>,
-    ...ConditionalOperand<Schema>[],
-  ];
-};
-
-/**
- * $cond expression - returns a value based on a boolean condition
- * Syntax: { $cond: [booleanExpr, trueValue, falseValue] }
- * Accepts:
- * - First element: a boolean expression or value (the condition)
- * - Second element: value to return if condition is true
- * - Third element: value to return if condition is false
- * Returns: union of the types of the true and false values
- */
-export type CondExpression<Schema extends Document> = {
-  $cond: [
-    ConditionalOperand<Schema>,
-    ConditionalOperand<Schema>,
-    ConditionalOperand<Schema>,
-  ];
-};
-
-/**
- * Union of all arithmetic expressions
- * Extend this as we add more arithmetic operators
- */
-export type ArithmeticExpression<Schema extends Document> =
-  | AddExpression<Schema>
-  | SubtractExpression<Schema>
-  | MultiplyExpression<Schema>
-  | DivideExpression<Schema>
-  | ModExpression<Schema>;
-
-/**
- * Union of all conditional expressions
- * Extend this as we add more conditional operators
- */
-export type ConditionalExpression<Schema extends Document> =
-  | IfNullExpression<Schema>
-  | CondExpression<Schema>;
-
-// ============================================================================
-// Variable Binding Expression Operators
-// ============================================================================
-
-/**
- * $let expression - binds variables for use in a sub-expression
- * Syntax: { $let: { vars: { <var1>: <expr1>, ... }, in: <expression> } }
- * Accepts:
- * - vars: Object mapping variable names to expressions
- * - in: Expression that can use $$var1, $$var2, etc.
- * Returns: The result of the `in` expression (unknown since vars are dynamic)
- */
-export type LetExpression<_Schema extends Document> = {
+  // --- Variable binding ------------------------------------------------------
+  /** Binds $$vars for a sub-expression; result not tracked. */
   $let: {
-    vars: Record<string, unknown>;
-    in: unknown; // The expression result - uses $$var references
+    operand: { vars: Record<string, unknown>; in: unknown };
+    returns: unknown;
+    category: "variable";
   };
-};
+
+  // --- Literal ----------------------------------------------------------------
+  /** Returns the value without parsing; result is the literal's own type. */
+  $literal: { operand: unknown; category: "literal" };
+
+  // --- Comparison operators (all return boolean) ------------------------------
+  $in: {
+    operand: ComparisonPair<Schema>;
+    returns: boolean;
+    category: "comparison";
+  };
+  $eq: {
+    operand: ComparisonPair<Schema>;
+    returns: boolean;
+    category: "comparison";
+  };
+  $ne: {
+    operand: ComparisonPair<Schema>;
+    returns: boolean;
+    category: "comparison";
+  };
+  $gt: {
+    operand: ComparisonPair<Schema>;
+    returns: boolean;
+    category: "comparison";
+  };
+  $gte: {
+    operand: ComparisonPair<Schema>;
+    returns: boolean;
+    category: "comparison";
+  };
+  $lt: {
+    operand: ComparisonPair<Schema>;
+    returns: boolean;
+    category: "comparison";
+  };
+  $lte: {
+    operand: ComparisonPair<Schema>;
+    returns: boolean;
+    category: "comparison";
+  };
+}
 
 /**
- * Union of all variable binding expressions
+ * Aggregation expression operators that are VALID MongoDB but not yet
+ * modeled by the registry. They are allow-listed BY NAME: accepted with no
+ * operand validation and no result inference (results degrade to
+ * `unknown`), so real pipelines compile while a typo'd operator brands
+ * with `UnknownOperatorError` (utils/errors.ts).
+ *
+ * DO NOT widen this to `` `$${string}` `` — the explicit list is exactly
+ * what makes unknown-operator rejection possible.
+ *
+ * Implementing one of these = add its `ExpressionSpec` entry (plus a
+ * dependent-inference arm if literal-dependent) and DELETE it from this
+ * list. If a valid operator is missing here, the fix is to add it here —
+ * never to loosen the checks that consume the list.
  */
-export type VariableExpression<_Schema extends Document> =
-  LetExpression<_Schema>;
+export type UnimplementedExpressionOps =
+  // Accumulators usable in expression position ($project/$set over arrays)
+  | "$avg"
+  | "$max"
+  | "$min"
+  | "$median"
+  | "$percentile"
+  | "$stdDevPop"
+  | "$stdDevSamp"
+  // Arithmetic
+  | "$abs"
+  | "$ceil"
+  | "$exp"
+  | "$floor"
+  | "$ln"
+  | "$log"
+  | "$log10"
+  | "$pow"
+  | "$round"
+  | "$sqrt"
+  | "$trunc"
+  // Array
+  | "$arrayToObject"
+  | "$first"
+  | "$firstN"
+  | "$indexOfArray"
+  | "$isArray"
+  | "$last"
+  | "$lastN"
+  | "$maxN"
+  | "$minN"
+  | "$objectToArray"
+  | "$range"
+  | "$reduce"
+  | "$reverseArray"
+  | "$slice"
+  | "$sortArray"
+  | "$zip"
+  // Bitwise
+  | "$bitAnd"
+  | "$bitNot"
+  | "$bitOr"
+  | "$bitXor"
+  // Boolean
+  | "$and"
+  | "$not"
+  | "$or"
+  // Comparison
+  | "$cmp"
+  // Conditional
+  | "$switch"
+  // Custom
+  | "$accumulator"
+  | "$function"
+  // Data size
+  | "$binarySize"
+  | "$bsonSize"
+  // Date
+  | "$dateDiff"
+  | "$dateFromParts"
+  | "$dateFromString"
+  | "$dateToParts"
+  | "$dayOfMonth"
+  | "$dayOfWeek"
+  | "$dayOfYear"
+  | "$hour"
+  | "$isoDayOfWeek"
+  | "$isoWeek"
+  | "$isoWeekYear"
+  | "$millisecond"
+  | "$minute"
+  | "$month"
+  | "$second"
+  | "$week"
+  | "$year"
+  // Miscellaneous
+  | "$getField"
+  | "$rand"
+  | "$sampleRate"
+  | "$toHashedIndexKey"
+  // Object
+  | "$mergeObjects"
+  | "$setField"
+  | "$unsetField"
+  // Set
+  | "$allElementsTrue"
+  | "$anyElementTrue"
+  | "$setDifference"
+  | "$setEquals"
+  | "$setIntersection"
+  | "$setIsSubset"
+  | "$setUnion"
+  // String
+  | "$indexOfBytes"
+  | "$indexOfCP"
+  | "$ltrim"
+  | "$regexFind"
+  | "$regexFindAll"
+  | "$regexMatch"
+  | "$replaceAll"
+  | "$replaceOne"
+  | "$rtrim"
+  | "$split"
+  | "$strLenBytes"
+  | "$strLenCP"
+  | "$strcasecmp"
+  | "$substr"
+  | "$substrBytes"
+  | "$substrCP"
+  | "$toLower"
+  | "$toUpper"
+  | "$trim"
+  // Text
+  | "$meta"
+  // Timestamp
+  | "$tsIncrement"
+  | "$tsSecond"
+  // Trigonometry
+  | "$acos"
+  | "$acosh"
+  | "$asin"
+  | "$asinh"
+  | "$atan"
+  | "$atan2"
+  | "$atanh"
+  | "$cos"
+  | "$cosh"
+  | "$degreesToRadians"
+  | "$radiansToDegrees"
+  | "$sin"
+  | "$sinh"
+  | "$tan"
+  | "$tanh"
+  // Type conversion / inspection
+  | "$convert"
+  | "$isNumber"
+  | "$toBool"
+  | "$toDecimal"
+  | "$toDouble"
+  | "$toInt"
+  | "$toLong"
+  | "$toObjectId"
+  | "$toString"
+  | "$toUUID"
+  | "$type";
 
-// ============================================================================
-// Literal Expression Operators
-// ============================================================================
+// ----------------------------------------------------------------------------
+// Derived expression types — never hand-maintained
+// ----------------------------------------------------------------------------
 
 /**
- * $literal expression - returns a value without parsing
- * Syntax: { $literal: <value> }
- * Used to pass literal values that might otherwise be interpreted as operators
- * Returns: The exact type of the value
+ * The expression object shape for one operator (or a union of single-key
+ * shapes when `Op` is a union — the conditional distributes deliberately).
  */
-export type LiteralExpression<_Schema extends Document> = {
-  $literal: unknown;
-};
-
-// ============================================================================
-// Comparison Expression Operators (return boolean)
-// ============================================================================
+export type ExpressionFor<Schema extends Document, Op> =
+  Op extends keyof ExpressionSpec<Schema> ?
+    { [K in Op]: ExpressionSpec<Schema>[K]["operand"] }
+  : never;
 
 /**
- * Comparison operand - values that can be compared
- * Note: Excludes ComparisonExpression to avoid circular reference
+ * Registry keys whose declared `returns` is assignable to `T` — derived, so
+ * a new registry entry joins automatically. Used to build "any expression
+ * producing a T" operand arms (e.g. numeric accumulators accepting
+ * `{ $size: ... }`).
  */
-type ComparisonOperand<Schema extends Document> =
-  | null
-  | AnyLiteral<Schema>
-  | FieldReference<Schema>
-  | ArrayExpression<Schema>
-  | DateExpression<Schema>
-  | ArithmeticExpression<Schema>
-  | StringExpression<Schema>
-  | ConditionalExpression<Schema>;
+type OpsReturning<Schema extends Document, T> = {
+  [K in keyof ExpressionSpec<Schema>]: ExpressionSpec<Schema>[K] extends (
+    { returns: infer R }
+  ) ?
+    R extends T ?
+      K
+    : never
+  : never; // literal-dependent (no declared `returns`) — never in a fixed set
+}[keyof ExpressionSpec<Schema>];
+
+/** Union of expression shapes whose declared result is assignable to `T`. */
+export type ExpressionsReturning<Schema extends Document, T> = ExpressionFor<
+  Schema,
+  OpsReturning<Schema, T>
+>;
+
+// Category key sets — DERIVED from the registry's per-entry `category`
+// field, so an operator's category is declared exactly once, on its entry.
+// Schema-free by construction: entry keys and categories don't depend on
+// Schema, so the filter runs once against `ExpressionSpec<Document>` and is
+// alias-cached globally. `_EveryOpCategorized`
+// (expressions.typeAssertions.ts) pins that no entry omits its category.
+
+/** Closed set of registry categories — every entry declares exactly one. */
+export type ExpressionCategory =
+  | "array"
+  | "date"
+  | "arithmetic"
+  | "string"
+  | "conditional"
+  | "variable"
+  | "literal"
+  | "comparison";
+
+/** Registry keys whose entry declares `category: C`. */
+export type OpsInCategory<C extends ExpressionCategory> = {
+  [K in keyof ExpressionSpec<Document>]: ExpressionSpec<Document>[K] extends (
+    { category: C }
+  ) ?
+    K
+  : never;
+}[keyof ExpressionSpec<Document>];
+
+type ArrayOps = OpsInCategory<"array">;
+type DateOps = OpsInCategory<"date">;
+type ArithmeticOps = OpsInCategory<"arithmetic">;
+type StringOps = OpsInCategory<"string">;
+type ConditionalOps = OpsInCategory<"conditional">;
+type VariableOps = OpsInCategory<"variable">;
+type ComparisonOps = OpsInCategory<"comparison">;
+
+// Per-operator expression types (public API, derived).
+export type ConcatArraysExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  "$concatArrays"
+>;
+export type SizeExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  "$size"
+>;
+export type ArrayElemAtExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  "$arrayElemAt"
+>;
+export type FilterExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  "$filter"
+>;
+export type MapExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  "$map"
+>;
+export type DateToStringExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  "$dateToString"
+>;
+export type DateTruncExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  "$dateTrunc"
+>;
+export type DateAddExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  "$dateAdd"
+>;
+export type DateSubtractExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  "$dateSubtract"
+>;
+export type AddExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  "$add"
+>;
+export type SubtractExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  "$subtract"
+>;
+export type MultiplyExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  "$multiply"
+>;
+export type DivideExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  "$divide"
+>;
+export type ModExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  "$mod"
+>;
+export type ConcatExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  "$concat"
+>;
+
+// Category unions (derived views over the registry).
+export type ArrayExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  ArrayOps
+>;
+export type DateExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  DateOps
+>;
+export type ArithmeticExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  ArithmeticOps
+>;
+export type StringExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  StringOps
+>;
+export type ConditionalExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  ConditionalOps
+>;
+export type VariableExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  VariableOps
+>;
+export type ComparisonExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  ComparisonOps
+>;
 
 /**
- * $in expression (aggregation) - checks if a value is in an array
- * Syntax: { $in: [<expression>, <array expression>] }
- * Note: This is different from $in in $match queries
- * Returns: boolean
+ * Union of all expression operators — derived from the registry keys, so a
+ * new registry entry joins automatically.
  */
-export type InAggExpression<Schema extends Document> = {
-  $in: [ComparisonOperand<Schema>, ComparisonOperand<Schema>];
-};
+export type Expression<Schema extends Document> = ExpressionFor<
+  Schema,
+  keyof ExpressionSpec<Schema>
+>;
+
+// ----------------------------------------------------------------------------
+// Inference — operator-key dispatch
+// ----------------------------------------------------------------------------
 
 /**
- * $eq expression - checks if two values are equal
- * Syntax: { $eq: [expr1, expr2] }
- * Returns: boolean
+ * Operators whose result type depends on the literal arguments rather than
+ * being fixed in the registry — DERIVED: an entry declares this by
+ * OMITTING `returns` (fixed-return operators declare one), which co-locates
+ * the "my result is argument-dependent" fact on the entry itself. Each such
+ * operator needs a matching `InferDependentExpression` arm; a missing arm
+ * degrades gracefully to `unknown` (the dispatch tail), it does not produce
+ * a wrong type or drop the field. Pinned by `_DerivedLiteralDependentOps`
+ * (expressions.typeAssertions.ts).
  */
-export type EqExpression<Schema extends Document> = {
-  $eq: [ComparisonOperand<Schema>, ComparisonOperand<Schema>];
-};
-
-/**
- * $ne expression - checks if two values are not equal
- * Syntax: { $ne: [expr1, expr2] }
- * Returns: boolean
- */
-export type NeExpression<Schema extends Document> = {
-  $ne: [ComparisonOperand<Schema>, ComparisonOperand<Schema>];
-};
-
-/**
- * $gt expression - checks if first value is greater than second
- * Syntax: { $gt: [expr1, expr2] }
- * Returns: boolean
- */
-export type GtExpression<Schema extends Document> = {
-  $gt: [ComparisonOperand<Schema>, ComparisonOperand<Schema>];
-};
-
-/**
- * $gte expression - checks if first value is greater than or equal to second
- * Syntax: { $gte: [expr1, expr2] }
- * Returns: boolean
- */
-export type GteExpression<Schema extends Document> = {
-  $gte: [ComparisonOperand<Schema>, ComparisonOperand<Schema>];
-};
-
-/**
- * $lt expression - checks if first value is less than second
- * Syntax: { $lt: [expr1, expr2] }
- * Returns: boolean
- */
-export type LtExpression<Schema extends Document> = {
-  $lt: [ComparisonOperand<Schema>, ComparisonOperand<Schema>];
-};
-
-/**
- * $lte expression - checks if first value is less than or equal to second
- * Syntax: { $lte: [expr1, expr2] }
- * Returns: boolean
- */
-export type LteExpression<Schema extends Document> = {
-  $lte: [ComparisonOperand<Schema>, ComparisonOperand<Schema>];
-};
-
-/**
- * Union of all comparison expressions
- * All return boolean
- */
-export type ComparisonExpression<Schema extends Document> =
-  | InAggExpression<Schema>
-  | EqExpression<Schema>
-  | NeExpression<Schema>
-  | GtExpression<Schema>
-  | GteExpression<Schema>
-  | LtExpression<Schema>
-  | LteExpression<Schema>;
-
-/**
- * Union of all expression operators
- * Extend this as we add more expression categories
- */
-export type Expression<Schema extends Document> =
-  | ArrayExpression<Schema>
-  | DateExpression<Schema>
-  | ArithmeticExpression<Schema>
-  | StringExpression<Schema>
-  | ConditionalExpression<Schema>
-  | VariableExpression<Schema>
-  | LiteralExpression<Schema>
-  | ComparisonExpression<Schema>;
+export type LiteralDependentOps = {
+  [K in keyof ExpressionSpec<Document>]: ExpressionSpec<Document>[K] extends (
+    { returns: unknown }
+  ) ?
+    never
+  : K;
+}[keyof ExpressionSpec<Document>];
 
 /**
  * Helper to get union of all array element types
  * Recursively processes each array in the concat list
  */
-type UnionArrayElements<Schema extends Document, Arrays extends unknown[]> =
-  Arrays extends [infer First, ...infer Rest] ?
+type UnionArrayElements<
+  Schema extends Document,
+  Arrays extends readonly unknown[],
+> =
+  Arrays extends readonly [infer First, ...infer Rest] ?
     GetArrayElement<Schema, First> | UnionArrayElements<Schema, Rest>
   : never;
 
@@ -590,11 +788,21 @@ type UnionArrayElements<Schema extends Document, Arrays extends unknown[]> =
  * Handles both field references and array literals
  */
 type GetArrayElement<Schema extends Document, Item> =
-  Item extends (infer E)[] ?
+  Item extends readonly (infer E)[] ?
     E // Array literal - extract element type
   : Item extends FieldReference<Schema> ?
     InferFieldReference<Schema, Item> extends (infer T)[] ?
       T // Field reference to array - extract element type
+    : never
+  : HasOperatorKey<Item> extends true ?
+    // Array-producing expression item ($filter/$concatArrays/$map/...):
+    // route through the single dispatch and unwrap. Without this arm the
+    // item's elements silently vanished from the result — a WRONG type,
+    // violating the degrade-to-widest contract.
+    InferExpression<Schema, Item> extends infer R ?
+      R extends (infer T)[] ?
+        T
+      : unknown
     : never
   : never;
 
@@ -603,7 +811,7 @@ type GetArrayElement<Schema extends Document, Item> =
  */
 type InferArrayElementType<Schema extends Document, ArraySource> =
   // Array literal - extract element type
-  ArraySource extends (infer E)[] ? E
+  ArraySource extends readonly (infer E)[] ? E
   : // Field reference to array - get element type
   ArraySource extends FieldReference<Schema> ?
     InferFieldReference<Schema, ArraySource> extends (infer T)[] ?
@@ -612,116 +820,44 @@ type InferArrayElementType<Schema extends Document, ArraySource> =
   : unknown;
 
 /**
- * Infer the result type of an array expression
- * For $concatArrays: Union of all array element types
- * For $size: always returns number
- * For $arrayElemAt: returns the array element type
- * For $filter: returns array of the input element type
- * For $map: returns unknown[] (in expression uses $$vars we can't track)
- * For $sum: returns number (sum of array elements)
+ * Shared operand inference for the conditional operators. The only semantic
+ * difference between $ifNull and $cond is null handling, captured by
+ * `SwallowsNull`: $ifNull returns the first NON-null operand, so null
+ * literals contribute `never` and nullable field references are stripped;
+ * $cond returns whichever branch is chosen, nulls included. Non-expression
+ * operands are detected via the NotAnExpression sentinel and treated as
+ * literals.
  */
-export type InferArrayExpression<Schema extends Document, Expr> =
-  Expr extends { $concatArrays: infer Arrays } ?
-    Arrays extends unknown[] ?
-      UnionArrayElements<Schema, Arrays>[]
-    : never
-  : Expr extends SizeExpression<Schema> ? number
-  : Expr extends { $arrayElemAt: [infer ArraySource, unknown] } ?
-    InferArrayElementType<Schema, ArraySource>
-  : Expr extends { $filter: { input: infer ArraySource } } ?
-    InferArrayElementType<Schema, ArraySource>[]
-  : Expr extends MapExpression<Schema> ? unknown[]
-  : Expr extends SumExpression<Schema> ? number
-  : never;
-
-/**
- * Infer the result type of a date expression
- * - $dateToString: returns string
- * - $dateTrunc, $dateAdd, $dateSubtract, $toDate: return Date
- */
-export type InferDateExpression<Schema extends Document, Expr> =
-  Expr extends DateToStringExpression<Schema> ? string
-  : Expr extends DateTruncExpression<Schema> ? Date
-  : Expr extends DateAddExpression<Schema> ? Date
-  : Expr extends DateSubtractExpression<Schema> ? Date
-  : Expr extends ToDateExpression<Schema> ? Date
-  : never;
-
-/**
- * Infer the result type of a string expression
- * All string operators return string
- */
-export type InferStringExpression<Schema extends Document, Expr> =
-  Expr extends StringExpression<Schema> ? string : never;
-
-/**
- * Infer the result type of an arithmetic expression
- * All arithmetic operators return number
- */
-export type InferArithmeticExpression<Schema extends Document, Expr> =
-  Expr extends ArithmeticExpression<Schema> ? number : never;
-
-/**
- * Helper to exclude null and undefined from a type
- */
-type NonNullable<T> = T extends null | undefined ? never : T;
-
-/**
- * Helper to infer expression result type
- * Centralizes all expression type mappings for reusability
- */
-type InferExpressionType<Schema extends Document, Expr> =
-  Expr extends DateExpression<Schema> ? InferDateExpression<Schema, Expr>
-  : Expr extends ArithmeticExpression<Schema> ? number
-  : Expr extends StringExpression<Schema> ? string
-  : Expr extends SizeExpression<Schema> ? number
-  : Expr extends { $concatArrays: infer Arrays } ?
-    Arrays extends unknown[] ?
-      (Arrays[number] extends (infer E)[] ? E : never)[]
-    : never
-  : Expr extends { $arrayElemAt: [infer Arr, unknown] } ?
-    Arr extends (infer E)[] ?
-      E
-    : unknown
-  : Expr extends { $filter: { input: infer Arr } } ?
-    Arr extends (infer E)[] ?
-      E[]
-    : unknown[]
-  : Expr extends VariableExpression<Schema> ? unknown
-  : Expr extends ComparisonExpression<Schema> ? boolean
-  : never;
-
-/**
- * Helper to infer operand type for $ifNull (filters out null - $ifNull never returns null literals)
- */
-type InferIfNullOperand<Schema extends Document, Operand> =
+type InferConditionalOperandValue<
+  Schema extends Document,
+  Operand,
+  SwallowsNull extends boolean,
+> =
   Operand extends null ?
-    never // $ifNull skips null literals, they're never returned
+    SwallowsNull extends true ?
+      never // $ifNull skips null literals, they're never returned
+    : null // $cond CAN return null if it's in a branch
   : Operand extends FieldReference<Schema> ?
-    NonNullable<InferFieldReference<Schema, Operand>>
-  : Operand extends (infer T)[] ?
+    SwallowsNull extends true ?
+      NonNullable<InferFieldReference<Schema, Operand>>
+    : InferFieldReference<Schema, Operand> // $cond keeps the field's null
+  : Operand extends readonly (infer T)[] ?
     T // Array literal
-  : Operand extends ConditionalExpression<Schema> ?
-    InferConditionalExpression<Schema, Operand> // Conditional expressions
-  : InferExpressionType<Schema, Operand> extends never ?
-    NonNullable<Operand> // Not an expression, treat as literal
-  : InferExpressionType<Schema, Operand>; // Is an expression
+  : InferExpression<Schema, Operand> extends infer R ?
+    [R] extends [NotAnExpression] ?
+      Operand // Not an expression, treat as literal
+    : R // Is an expression — single dispatch, no second inference path
+  : never;
 
-/**
- * Helper to infer operand type for $cond (includes null - either branch can be returned)
- */
-type InferCondOperand<Schema extends Document, Operand> =
-  Operand extends null ?
-    null // $cond CAN return null if it's in a branch
-  : Operand extends FieldReference<Schema> ?
-    NonNullable<InferFieldReference<Schema, Operand>>
-  : Operand extends (infer T)[] ?
-    T // Array literal
-  : Operand extends ConditionalExpression<Schema> ?
-    InferConditionalExpression<Schema, Operand> // Conditional expressions
-  : InferExpressionType<Schema, Operand> extends never ?
-    NonNullable<Operand> // Not an expression, treat as literal
-  : InferExpressionType<Schema, Operand>; // Is an expression
+type InferIfNullOperand<
+  Schema extends Document,
+  Operand,
+> = InferConditionalOperandValue<Schema, Operand, true>;
+
+type InferCondOperand<
+  Schema extends Document,
+  Operand,
+> = InferConditionalOperandValue<Schema, Operand, false>;
 
 /**
  * Helper to infer the union of all operand types in $ifNull
@@ -729,47 +865,74 @@ type InferCondOperand<Schema extends Document, Operand> =
  */
 type UnionIfNullOperandTypes<
   Schema extends Document,
-  Operands extends unknown[],
+  Operands extends readonly unknown[],
 > =
-  Operands extends [infer First, ...infer Rest] ?
+  Operands extends readonly [infer First, ...infer Rest] ?
     InferIfNullOperand<Schema, First> | UnionIfNullOperandTypes<Schema, Rest>
   : never;
 
 /**
- * Infer the result type of a conditional expression
- * - $ifNull: returns the union of all operand types (filtering null literals)
- * - $cond: returns the union of the true and false value types (including null)
+ * Hand-written inference arms for the literal-dependent operators — the only
+ * per-operator inference code left after the registry rebuild.
+ *
+ * All array/tuple PATTERNS here are `readonly`: since the registry's operand
+ * positions became readonly, `<const>` call sites infer readonly tuples, and
+ * a readonly pattern matches both mutabilities while a mutable pattern
+ * matches neither (a mutable-pattern arm silently falls through and the
+ * resolver DROPS the field).
  */
-export type InferConditionalExpression<Schema extends Document, Expr> =
-  Expr extends { $ifNull: infer Operands } ?
-    Operands extends unknown[] ?
+type InferDependentExpression<Schema extends Document, Expr> =
+  Expr extends { $concatArrays: infer Arrays } ?
+    Arrays extends readonly unknown[] ?
+      UnionArrayElements<Schema, Arrays>[]
+    : never
+  : Expr extends { $arrayElemAt: readonly [infer ArraySource, unknown] } ?
+    InferArrayElementType<Schema, ArraySource>
+  : Expr extends { $filter: { input: infer ArraySource } } ?
+    InferArrayElementType<Schema, ArraySource>[]
+  : Expr extends { $ifNull: infer Operands } ?
+    Operands extends readonly unknown[] ?
       UnionIfNullOperandTypes<Schema, Operands>
     : never
-  : Expr extends { $cond: [unknown, infer TrueVal, infer FalseVal] } ?
+  : Expr extends { $cond: readonly [unknown, infer TrueVal, infer FalseVal] } ?
     InferCondOperand<Schema, TrueVal> | InferCondOperand<Schema, FalseVal>
-  : never;
+  : Expr extends { $literal: infer Value } ? Value
+  : // No matching arm (out-of-lockstep operator, or a malformed operand
+    // shape the patterns don't match): degrade to `unknown`, mirroring the
+    // dispatch tail — `never` here would DROP the field from resolvers.
+    unknown;
 
 /**
- * Infer the result type of any expression
- * Delegates to specific expression type inferrers
+ * Infer the result type of any expression — THE single dispatch:
+ *
+ *  - no `$`-prefixed key → `NotAnExpression` sentinel (the value is a
+ *    literal; callers like InferNestedFieldReference treat it as such);
+ *  - more than one `$` key → exactly-one-operator brand (invalid in MongoDB);
+ *  - literal-dependent operator → hand-written arm refines from the args;
+ *  - known fixed-return operator → the registry's `returns` (FORGIVING:
+ *    a malformed operand does not change the inferred kind — the operand
+ *    brand reports the error at the input position);
+ *  - unregistered `$` operator (allow-listed or typo) → `unknown`;
+ *    validation, not inference, rejects the typos.
  */
 export type InferExpression<Schema extends Document, Expr> =
-  // Date expressions
-  Expr extends DateExpression<Schema> ? InferDateExpression<Schema, Expr>
-  : // Arithmetic expressions
-  Expr extends ArithmeticExpression<Schema> ?
-    InferArithmeticExpression<Schema, Expr>
-  : // Array expressions (including $arrayElemAt, $filter, $map, $sum)
-  Expr extends ArrayExpression<Schema> ? InferArrayExpression<Schema, Expr>
-  : // String expressions
-  Expr extends StringExpression<Schema> ? InferStringExpression<Schema, Expr>
-  : // Conditional expressions
-  Expr extends ConditionalExpression<Schema> ?
-    InferConditionalExpression<Schema, Expr>
-  : // Variable binding expressions (return unknown)
-  Expr extends VariableExpression<Schema> ? unknown
-  : // Literal expressions (return the literal type)
-  Expr extends { $literal: infer Value } ? Value
-  : // Comparison expressions (all return boolean)
-  Expr extends ComparisonExpression<Schema> ? boolean
-  : never;
+  [OperatorKeyOf<Expr>] extends [never] ? NotAnExpression
+  : HasSingleOperatorKey<Expr> extends false ? MultiOperatorError
+  : [OperatorKeyOf<Expr>] extends [LiteralDependentOps] ?
+    InferDependentExpression<Schema, Expr>
+  : [OperatorKeyOf<Expr>] extends [keyof ExpressionSpec<Schema>] ?
+    // Declared `returns` of a registered operator; a dependent entry the
+    // arm dispatch missed degrades to `unknown` (never a dropped field).
+    ExpressionSpec<Schema>[OperatorKeyOf<Expr> &
+      keyof ExpressionSpec<Schema>] extends { returns: infer R } ?
+      R
+    : unknown
+  : // Unregistered operator: degrade to `unknown`, never to a dropped
+    // field — `never` here made the resolvers DROP it, and a later stage
+    // reading it errored with a misleading Field-not-on-schema. Inference
+    // stays lenient for ALL unregistered keys (allow-listed
+    // UnimplementedExpressionOps AND typos alike): rejection is
+    // validation's job (elements/validation.ts brands operators outside
+    // registry + allow-list), and a branded call site never ships, so its
+    // inferred output type is moot.
+    unknown;
