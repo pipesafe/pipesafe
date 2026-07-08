@@ -1,6 +1,11 @@
 import { Document } from "../utils/objects";
-import { PipeSafeError, RequiresMsg } from "../utils/errors";
 import {
+  MultiOperatorError,
+  PipeSafeError,
+  RequiresMsg,
+} from "../utils/errors";
+import {
+  HasOperatorKey,
   HasSingleOperatorKey,
   NotAnExpression,
   OperatorKeyOf,
@@ -40,7 +45,7 @@ import { AnyLiteral } from "./literals";
  */
 type ArrayOperand<Schema extends Document, Op extends string> =
   | FieldReferencesThatInferTo<Schema, unknown[]>
-  | AnyLiteral<Schema>[]
+  | readonly AnyLiteral<Schema>[]
   | ArrayProducingExpression<Schema>
   | MapExpression<Schema>
   | PipeSafeError<RequiresMsg<"Operator", Op, "an array operand">>;
@@ -90,7 +95,7 @@ type StringOperand<
 >;
 
 /** The `[left, right]` pair shape shared by the binary arithmetic operators. */
-type ArithmeticPair<Schema extends Document, Op extends string> = [
+type ArithmeticPair<Schema extends Document, Op extends string> = readonly [
   ArithmeticOperand<Schema, Op>,
   ArithmeticOperand<Schema, Op>,
 ];
@@ -120,7 +125,7 @@ type ComparisonOperand<Schema extends Document> =
   | ConditionalExpression<Schema>;
 
 /** The `[left, right]` pair shape shared by all binary comparison operators. */
-type ComparisonPair<Schema extends Document> = [
+type ComparisonPair<Schema extends Document> = readonly [
   ComparisonOperand<Schema>,
   ComparisonOperand<Schema>,
 ];
@@ -170,19 +175,25 @@ export type ArrayInput<Schema extends Document> =
  *
  * Being an interface, members resolve lazily and mutual recursion with the
  * derived `Expression` union is safe.
+ *
+ * Operand ARRAY positions are `readonly`: a readonly target accepts both
+ * mutable and `as const` (readonly) user operands — both valid MongoDB —
+ * so the Validate re-checks need no per-literal readonly stripping (a
+ * DeepMutable approach measured +280k instantiations / 2x check time by
+ * defeating the relation cache).
  */
 export interface ExpressionSpec<Schema extends Document> {
   // --- Array operators -----------------------------------------------------
   /** Concatenates arrays. Result element type depends on the literal args. */
   $concatArrays: {
-    operand: ArrayOperand<Schema, "$concatArrays">[];
+    operand: readonly ArrayOperand<Schema, "$concatArrays">[];
     returns: unknown[];
   };
   /** Returns the size of an array. */
   $size: { operand: ArrayOperand<Schema, "$size">; returns: number };
   /** Element at index (0-based; negative counts from the end). */
   $arrayElemAt: {
-    operand: [
+    operand: readonly [
       ArrayOperand<Schema, "$arrayElemAt">,
       number | FieldReferencesThatInferTo<Schema, number>,
     ];
@@ -213,7 +224,7 @@ export interface ExpressionSpec<Schema extends Document> {
       | FieldReferencesThatInferTo<Schema, number[]>
       | ArrayProducingExpression<Schema>
       | MapExpression<Schema>
-      | number[];
+      | readonly number[];
     returns: number;
   };
 
@@ -270,13 +281,16 @@ export interface ExpressionSpec<Schema extends Document> {
   $toDate: { operand: ArithmeticOperand<Schema, "$toDate">; returns: Date };
 
   // --- Arithmetic operators (all return number) -----------------------------
-  $add: { operand: ArithmeticOperand<Schema, "$add">[]; returns: number };
+  $add: {
+    operand: readonly ArithmeticOperand<Schema, "$add">[];
+    returns: number;
+  };
   $subtract: {
     operand: ArithmeticPair<Schema, "$subtract">;
     returns: number;
   };
   $multiply: {
-    operand: ArithmeticOperand<Schema, "$multiply">[];
+    operand: readonly ArithmeticOperand<Schema, "$multiply">[];
     returns: number;
   };
   $divide: {
@@ -290,12 +304,15 @@ export interface ExpressionSpec<Schema extends Document> {
 
   // --- String operators ------------------------------------------------------
   /** Concatenates strings. */
-  $concat: { operand: StringOperand<Schema, "$concat">[]; returns: string };
+  $concat: {
+    operand: readonly StringOperand<Schema, "$concat">[];
+    returns: string;
+  };
 
   // --- Conditional operators (results depend on the literal args) -----------
   /** First non-null operand. */
   $ifNull: {
-    operand: [
+    operand: readonly [
       ConditionalOperand<Schema>,
       ConditionalOperand<Schema>,
       ...ConditionalOperand<Schema>[],
@@ -304,7 +321,7 @@ export interface ExpressionSpec<Schema extends Document> {
   };
   /** Ternary: [condition, thenValue, elseValue]. */
   $cond: {
-    operand: [
+    operand: readonly [
       ConditionalOperand<Schema>,
       ConditionalOperand<Schema>,
       ConditionalOperand<Schema>,
@@ -366,6 +383,26 @@ export type ExpressionFor<Schema extends Document, Op> =
   Op extends keyof ExpressionSpec<Schema> ?
     { [K in Op]: ExpressionSpec<Schema>[K]["operand"] }
   : never;
+
+/**
+ * Registry keys whose declared `returns` is assignable to `T` — derived, so
+ * a new registry entry joins automatically. Used to build "any expression
+ * producing a T" operand arms (e.g. numeric accumulators accepting
+ * `{ $size: ... }`).
+ */
+type OpsReturning<Schema extends Document, T> = {
+  [K in keyof ExpressionSpec<Schema>]: ExpressionSpec<Schema>[K]["returns"] extends (
+    T
+  ) ?
+    K
+  : never;
+}[keyof ExpressionSpec<Schema>];
+
+/** Union of expression shapes whose declared result is assignable to `T`. */
+export type ExpressionsReturning<Schema extends Document, T> = ExpressionFor<
+  Schema,
+  OpsReturning<Schema, T>
+>;
 
 // Category key sets — the registry's table of contents.
 type ArrayOps =
@@ -563,8 +600,11 @@ type LiteralDependentOps =
  * Helper to get union of all array element types
  * Recursively processes each array in the concat list
  */
-type UnionArrayElements<Schema extends Document, Arrays extends unknown[]> =
-  Arrays extends [infer First, ...infer Rest] ?
+type UnionArrayElements<
+  Schema extends Document,
+  Arrays extends readonly unknown[],
+> =
+  Arrays extends readonly [infer First, ...infer Rest] ?
     GetArrayElement<Schema, First> | UnionArrayElements<Schema, Rest>
   : never;
 
@@ -573,11 +613,21 @@ type UnionArrayElements<Schema extends Document, Arrays extends unknown[]> =
  * Handles both field references and array literals
  */
 type GetArrayElement<Schema extends Document, Item> =
-  Item extends (infer E)[] ?
+  Item extends readonly (infer E)[] ?
     E // Array literal - extract element type
   : Item extends FieldReference<Schema> ?
     InferFieldReference<Schema, Item> extends (infer T)[] ?
       T // Field reference to array - extract element type
+    : never
+  : HasOperatorKey<Item> extends true ?
+    // Array-producing expression item ($filter/$concatArrays/$map/...):
+    // route through the single dispatch and unwrap. Without this arm the
+    // item's elements silently vanished from the result — a WRONG type,
+    // violating the degrade-to-widest contract.
+    InferExpression<Schema, Item> extends infer R ?
+      R extends (infer T)[] ?
+        T
+      : unknown
     : never
   : never;
 
@@ -586,7 +636,7 @@ type GetArrayElement<Schema extends Document, Item> =
  */
 type InferArrayElementType<Schema extends Document, ArraySource> =
   // Array literal - extract element type
-  ArraySource extends (infer E)[] ? E
+  ArraySource extends readonly (infer E)[] ? E
   : // Field reference to array - get element type
   ArraySource extends FieldReference<Schema> ?
     InferFieldReference<Schema, ArraySource> extends (infer T)[] ?
@@ -616,7 +666,7 @@ type InferConditionalOperandValue<
     SwallowsNull extends true ?
       NonNullable<InferFieldReference<Schema, Operand>>
     : InferFieldReference<Schema, Operand> // $cond keeps the field's null
-  : Operand extends (infer T)[] ?
+  : Operand extends readonly (infer T)[] ?
     T // Array literal
   : InferExpression<Schema, Operand> extends infer R ?
     [R] extends [NotAnExpression] ?
@@ -640,30 +690,36 @@ type InferCondOperand<
  */
 type UnionIfNullOperandTypes<
   Schema extends Document,
-  Operands extends unknown[],
+  Operands extends readonly unknown[],
 > =
-  Operands extends [infer First, ...infer Rest] ?
+  Operands extends readonly [infer First, ...infer Rest] ?
     InferIfNullOperand<Schema, First> | UnionIfNullOperandTypes<Schema, Rest>
   : never;
 
 /**
  * Hand-written inference arms for the literal-dependent operators — the only
  * per-operator inference code left after the registry rebuild.
+ *
+ * All array/tuple PATTERNS here are `readonly`: since the registry's operand
+ * positions became readonly, `<const>` call sites infer readonly tuples, and
+ * a readonly pattern matches both mutabilities while a mutable pattern
+ * matches neither (a mutable-pattern arm silently falls through and the
+ * resolver DROPS the field — a real bug caught in review round 3).
  */
 type InferDependentExpression<Schema extends Document, Expr> =
   Expr extends { $concatArrays: infer Arrays } ?
-    Arrays extends unknown[] ?
+    Arrays extends readonly unknown[] ?
       UnionArrayElements<Schema, Arrays>[]
     : never
-  : Expr extends { $arrayElemAt: [infer ArraySource, unknown] } ?
+  : Expr extends { $arrayElemAt: readonly [infer ArraySource, unknown] } ?
     InferArrayElementType<Schema, ArraySource>
   : Expr extends { $filter: { input: infer ArraySource } } ?
     InferArrayElementType<Schema, ArraySource>[]
   : Expr extends { $ifNull: infer Operands } ?
-    Operands extends unknown[] ?
+    Operands extends readonly unknown[] ?
       UnionIfNullOperandTypes<Schema, Operands>
     : never
-  : Expr extends { $cond: [unknown, infer TrueVal, infer FalseVal] } ?
+  : Expr extends { $cond: readonly [unknown, infer TrueVal, infer FalseVal] } ?
     InferCondOperand<Schema, TrueVal> | InferCondOperand<Schema, FalseVal>
   : Expr extends { $literal: infer Value } ? Value
   : never;
@@ -682,14 +738,18 @@ type InferDependentExpression<Schema extends Document, Expr> =
  */
 export type InferExpression<Schema extends Document, Expr> =
   [OperatorKeyOf<Expr>] extends [never] ? NotAnExpression
-  : HasSingleOperatorKey<Expr> extends false ?
-    PipeSafeError<`Expression objects must have exactly one operator.`>
+  : HasSingleOperatorKey<Expr> extends false ? MultiOperatorError
   : [OperatorKeyOf<Expr>] extends [LiteralDependentOps] ?
     InferDependentExpression<Schema, Expr>
   : [OperatorKeyOf<Expr>] extends [keyof ExpressionSpec<Schema>] ?
     ExpressionSpec<Schema>[OperatorKeyOf<Expr> &
       keyof ExpressionSpec<Schema>]["returns"]
-  : never;
+  : // Unknown operator: degrade to `unknown`, never to a dropped field. The
+    // registry covers a subset of MongoDB's operators; acceptance is
+    // forgiving (elements/validation.ts), so inference must keep the field
+    // usable downstream — `never` here made the resolvers DROP it, and a
+    // later stage reading it errored with a misleading Field-not-on-schema.
+    unknown;
 
 // ----------------------------------------------------------------------------
 // Category inference views — kept for assertion-level use; all key-dispatched

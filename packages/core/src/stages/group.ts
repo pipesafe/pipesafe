@@ -1,17 +1,31 @@
-import { InferNestedFieldReference } from "../elements/fieldReference";
+import {
+  FieldReferencesThatInferTo,
+  InferNestedFieldReference,
+} from "../elements/fieldReference";
 import { ValidateNestedValue } from "../elements/validation";
 import {
   AnyLiteral,
+  ExpressionShaped,
   LiteralOrFieldReferenceInferringTo,
 } from "../elements/literals";
 import {
   Expression,
   ConditionalExpression,
-  ArithmeticExpression,
+  ExpressionsReturning,
 } from "../elements/expressions";
-import { Document, Prettify } from "../utils/objects";
-import { HasSingleOperatorKey, OperatorKeyOf } from "../utils/dispatch";
-import { PassThrough, PipeSafeError, RequiresMsg } from "../utils/errors";
+import { Document, OmitNeverValues, Prettify } from "../utils/objects";
+import { NoDollarString } from "../utils/strings";
+import {
+  HasOperatorKey,
+  HasSingleOperatorKey,
+  OperatorKeyOf,
+} from "../utils/dispatch";
+import {
+  MultiOperatorError,
+  PassThrough,
+  PipeSafeError,
+  RequiresMsg,
+} from "../utils/errors";
 import { ExpressionOperand } from "../elements/operands";
 
 /**
@@ -27,21 +41,34 @@ type NumericAccumulatorOperand<Schema extends Document, Op extends string> =
       number,
       RequiresMsg<"Accumulator", Op, "a numeric operand">
     >
-  | ArithmeticExpression<Schema>
+  // Any registry expression whose declared result is numeric ($size,
+  // arithmetic, $toDate arithmetic chains, ...) — derived, so new numeric
+  // operators join automatically. ConditionalExpression stays explicit:
+  // $ifNull/$cond results are literal-dependent (declared `unknown`).
+  | ExpressionsReturning<Schema, number>
   | ConditionalExpression<Schema>;
 
 /**
- * Operand for $min/$max that can be numbers or dates.
- * Same brand pattern as NumericAccumulatorOperand but allows Date too.
+ * Operand for $min/$max. MongoDB defines them over BSON-comparable values —
+ * numbers, dates, AND strings (lexicographic) are the ones this library
+ * models; `$min: "$name"` is valid MongoDB and must compile.
  */
 type MinMaxAccumulatorOperand<Schema extends Document, Op extends string> =
   | ExpressionOperand<
       Schema,
-      number,
-      RequiresMsg<"Accumulator", Op, "a numeric or date operand">
+      // The ref side accepts every modeled comparable; the LITERAL string
+      // arm is narrowed to NoDollarString below — a bare `string` here
+      // would swallow `$`-typo refs and make the brand unreachable.
+      number | Date | boolean,
+      RequiresMsg<
+        "Accumulator",
+        Op,
+        "a comparable (number, date, string, or boolean) operand"
+      >
     >
-  | LiteralOrFieldReferenceInferringTo<Schema, Date>
-  | ArithmeticExpression<Schema>
+  | NoDollarString
+  | FieldReferencesThatInferTo<Schema, string>
+  | ExpressionsReturning<Schema, number | Date | string | boolean>
   | ConditionalExpression<Schema>;
 
 /**
@@ -110,65 +137,116 @@ export type ResolveAccumulatorFunction<Schema extends Document, Accumulator> =
     InferNestedFieldReference<Schema, A>
   : Accumulator extends { $last: infer A } ?
     InferNestedFieldReference<Schema, A>
+  : // Unregistered accumulators are ACCEPTED structurally (GroupQuery's
+  // ExpressionShaped arm; valid MongoDB the registry doesn't model) — so
+  // their result degrades to `unknown`, never to a `never`-poisoned field.
+  HasOperatorKey<Accumulator> extends true ? unknown
   : never;
 
 export type GroupQuery<Schema extends Document> = {
   _id: AnyLiteral<Schema> | Expression<Schema> | null;
 } & {
-  [key: string]: AnyLiteral<Schema> | AccumulatorFunction<Schema> | null;
+  // ExpressionShaped accepts $-keyed values structurally (§3.8 rule 6):
+  // MongoDB has accumulators the registry doesn't cover ($stdDevPop, $top,
+  // $mergeObjects, ...) — rejecting them at the constraint would break
+  // valid pipelines AND misreport the error on sibling keys. Registered
+  // accumulators are operand-checked by ValidateGroupQuery.
+  [key: string]:
+    | AnyLiteral<Schema>
+    | AccumulatorFunction<Schema>
+    | ExpressionShaped
+    | null;
 };
 
 /**
- * The branded replacement `ValidateGroupQuery` maps an invalid accumulator
- * to. Message via `RequiresMsg` so the skeleton stays enforced.
+ * The accumulators whose operands ValidateGroupQuery re-checks. Derived
+ * checking: the operand type AND its brand come from AccumulatorSpec, so
+ * adding an accumulator to this key set (after registering it) is the whole
+ * cost of extending call-site validation — the flexible accumulators
+ * ($push/$addToSet/$first/$last/$count) accept any operand by design and
+ * stay out.
  */
-type BrandedAccumulator<Op extends string, What extends string> = {
-  [K in Op]: PipeSafeError<RequiresMsg<"Accumulator", Op, What>>;
-};
+type CheckedAccumulatorOps = "$sum" | "$avg" | "$min" | "$max";
 
 /**
- * Per-value accumulator re-check: `never` means "valid — nothing to
- * report"; anything else is the branded replacement. Re-uses the registry's
- * operand types for the checks (§3.8 rule 3 — each constraint is spelled
- * once, in `NumericAccumulatorOperand` / `MinMaxAccumulatorOperand`). The
- * flexible accumulators ($push/$addToSet/$first/$last) accept any
- * literal/ref/expression by design and are not re-checked.
+ * Registry-derived accumulator re-check: dispatch on the operator key,
+ * compare the value against the registry's own shape (`AccumulatorFor`),
+ * and on failure map the key to the brand EXTRACTED from the registry
+ * operand's union — the message is spelled once, inside
+ * NumericAccumulatorOperand/MinMaxAccumulatorOperand's RequiresMsg (§3.8
+ * rule 3).
  */
+/** The registry operand's own brand, extracted — spelled once (§3.8 rule 3). */
+type BrandedAccumulatorFor<
+  Schema extends Document,
+  Op extends CheckedAccumulatorOps,
+> = {
+  [K in Op]: Extract<
+    AccumulatorSpec<Schema>[K]["operand"],
+    PipeSafeError<string>
+  >;
+};
+
 type ValidateAccumulatorValue<Schema extends Document, A> =
-  A extends { $sum: infer O } ?
-    [O] extends [NumericAccumulatorOperand<Schema, "$sum">] ?
-      never
-    : BrandedAccumulator<"$sum", "a numeric operand">
-  : A extends { $avg: infer O } ?
-    [O] extends [NumericAccumulatorOperand<Schema, "$avg">] ?
-      never
-    : BrandedAccumulator<"$avg", "a numeric operand">
-  : A extends { $min: infer O } ?
-    [O] extends [MinMaxAccumulatorOperand<Schema, "$min">] ?
-      never
-    : BrandedAccumulator<"$min", "a numeric or date operand">
-  : A extends { $max: infer O } ?
-    [O] extends [MinMaxAccumulatorOperand<Schema, "$max">] ?
-      never
-    : BrandedAccumulator<"$max", "a numeric or date operand">
+  // Schema-FREE fast-accept: literal operands that are valid regardless of
+  // the schema. Besides skipping the registry work for the common
+  // `$sum: 1` case, this arm RESOLVES for unresolved generic schemas —
+  // without it, generic-schema pipeline helpers
+  // (`<D extends Document>(p: Pipeline<D, D>) => p.group(...)`) fail on
+  // deferred conditionals even for schema-independent operands.
+  [A] extends (
+    [
+      | { $sum: number }
+      | { $avg: number }
+      | { $min: number | Date | boolean | NoDollarString }
+      | { $max: number | Date | boolean | NoDollarString },
+    ]
+  ) ?
+    never
+  : string extends keyof Schema ?
+    never // operand checks are meaningless on a wide/index-signature schema
+  : OperatorKeyOf<A> extends infer Op extends CheckedAccumulatorOps ?
+    // $min/$max: ANY non-`$` string literal is a comparable. The union
+    // relation below can't express "string minus `$`-prefix" (NoDollarString
+    // only covers alphanumeric-leading strings, falsely rejecting "", "_x",
+    // "(none)"), so accept it here; `$`-strings fall through to the union,
+    // where the refs arm checks them against the schema.
+    Op extends "$min" | "$max" ?
+      A[Op & keyof A] extends `$${string}` ?
+        [A] extends [AccumulatorFor<Schema, Op>] ?
+          never
+        : BrandedAccumulatorFor<Schema, Op>
+      : A[Op & keyof A] extends string ? never
+      : [A] extends [AccumulatorFor<Schema, Op>] ? never
+      : BrandedAccumulatorFor<Schema, Op>
+    : // Readonly-tolerant via the registry's readonly operand positions
+    // (see ExpressionSpec).
+    [A] extends [AccumulatorFor<Schema, Op>] ? never
+    : BrandedAccumulatorFor<Schema, Op>
   : never;
 
 /**
  * Per-key group re-check. `_id` is an expression/literal position — it gets
  * the shared nested-validation walk (`elements/validation.ts`), including
  * compound-`_id` objects. Non-`_id` keys are accumulator positions:
- * `$`-keyed values must be a single known accumulator (with a valid operand
- * for the numeric family); `$`-less values are plain literals and get the
- * nested walk.
+ * registered numeric-family accumulators get the registry-derived operand
+ * check; a `$`-keyed value with more than one operator key is malformed;
+ * everything else (unregistered accumulators, plain literals) is accepted —
+ * unregistered accumulators are valid MongoDB the registry doesn't model
+ * yet. Distributes over union-typed values so a union of valid
+ * accumulators stays valid.
  */
 type ValidateGroupValue<Schema extends Document, K, V> =
-  K extends "_id" ? ValidateNestedValue<Schema, V>
-  : [OperatorKeyOf<V>] extends [never] ? ValidateNestedValue<Schema, V>
-  : HasSingleOperatorKey<V> extends false ?
-    PipeSafeError<`Expression objects must have exactly one operator.`>
-  : [OperatorKeyOf<V>] extends [keyof AccumulatorSpec<Schema>] ?
-    ValidateAccumulatorValue<Schema, V>
-  : PipeSafeError<`Accumulator '${OperatorKeyOf<V> & string}' is not a known accumulator.`>;
+  V extends unknown ?
+    K extends "_id" ? ValidateNestedValue<Schema, V>
+    : [OperatorKeyOf<V>] extends [never] ? ValidateNestedValue<Schema, V>
+    : HasSingleOperatorKey<V> extends false ? MultiOperatorError
+    : [Exclude<keyof V & string, `$${string}`>] extends [never] ?
+      ValidateAccumulatorValue<Schema, V>
+    : // Accumulator key mixed with plain keys — MongoDB: "The field must
+      // specify one accumulator" (mirrors ValidateExpressionValue's guard).
+      MultiOperatorError
+  : never;
 
 /**
  * Key-filtered validation wrapper for `Pipeline.group` (§7.4). GroupQuery's
@@ -180,17 +258,28 @@ type ValidateGroupValue<Schema extends Document, K, V> =
  * breaks contextual typing of compound `_id` expressions, in both the bare
  * and concrete-`_id` variants; see plan §7.4).
  *
- * Cost control (§3.8 rule 5): keys whose value is valid are filtered OUT by
- * the `as` clause — including a valid (compound) `_id`, so its contextual
- * typing is untouched on the happy path. A fully-valid query — the common
- * case — validates against `{}` and the intersection relation
- * short-circuits. Only offending keys survive, mapped to their branded
- * replacement so TS reports TS2322 at the bad value.
+ * Cost control (§3.8 rule 5): OmitNeverValues filters valid keys out, so a
+ * fully-valid query — the common case — validates against `{}` and the
+ * intersection relation short-circuits.
+ *
+ * The `string extends keyof Q` guard skips validation when Q is not a
+ * literal query: when the CONSTRAINT check fails, TS falls back to
+ * instantiating this wrapper with Q = GroupQuery<Schema> itself (whose
+ * index signature makes `keyof Q` include `string`), and without the guard
+ * the walk misfires on the wide value unions — branding the user's VALID
+ * keys and overflowing the instantiation depth on top of the real
+ * constraint error.
  */
-export type ValidateGroupQuery<Schema extends Document, G> = {
-  [K in keyof G as [ValidateGroupValue<Schema, K, G[K]>] extends [never] ? never
-  : K]: ValidateGroupValue<Schema, K, G[K]>;
-};
+export type ValidateGroupQuery<Schema extends Document, Q> =
+  // Wide-QUERY guard: on constraint failure TS re-instantiates this wrapper
+  // with Q = GroupQuery<Schema> itself — skip entirely. Schema-DEPENDENT
+  // checks guard themselves (ValidateAccumulatorValue / the kernel's
+  // ref/operand arms), so shape checks still run on index-signature
+  // schemas.
+  string extends keyof Q ? {}
+  : OmitNeverValues<{
+      [K in keyof Q]: ValidateGroupValue<Schema, K, Q[K]>;
+    }>;
 
 export type ResolveGroupOutput<
   Schema extends Document,

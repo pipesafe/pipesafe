@@ -227,7 +227,7 @@ Uses `mongodb-memory-server` for isolated testing with pre-seeded test data.
 
 - **`never` type in pipeline stages**: Usually indicates impossible type conditions in match operations
 - **Union type filtering**: Check `FilterUnion` in `packages/core/src/stages/match.ts`
-- **Dotted field inference**: Use `FlattenDotSet` from `packages/core/src/utils/core.ts`
+- **Dotted field inference**: Use `FlattenDotSet` from `packages/core/src/utils/paths.ts`
 
 ### TypeScript Config
 
@@ -243,7 +243,7 @@ interface PipeSafeError<Msg extends string> {
 }
 ```
 
-Defined in `packages/core/src/utils/core.ts`. Single type parameter — the literal `Msg` is the entire surface area. Embed dynamic context (operator names, key names, path segments) into the message via template literals; do not add a separate `Ctx` parameter.
+Defined in `packages/core/src/utils/errors.ts`. Single type parameter — the literal `Msg` is the entire surface area. Embed dynamic context (operator names, key names, path segments) into the message via template literals; do not add a separate `Ctx` parameter.
 
 ### Message format
 
@@ -251,7 +251,6 @@ All brand messages follow one skeleton, keyed off MongoDB nomenclature:
 
 ```
 Operator           '$op' requires <constraint>.
-Operator           '$op' is not a known expression operator.
 Accumulator        '$op' requires <constraint>.
 Stage              '$stage' <constraint>.
 Field              'name' is not on the schema.
@@ -287,8 +286,8 @@ from `RequiresMsg` (utils/errors.ts):
 Different stages need different patterns to make brands fire at the chained call site:
 
 - **Direct typing** (`(\$q: Q<Schema>)` — no generic): `sort`. Use when the query type is a finite-key mapped type and the return type doesn't need the literal query.
-- **Validation-mapped wrapper** (`<const P>(\$q: ValidateXQuery<Schema, P>)`): `project`. Use for stages with `[key: string]:` index signatures where direct typing alone wouldn't trigger excess-property checking. Output type still uses the literal `P` for narrowing. The validate and resolve types each default their mode parameters from the same alias — the second computation is an alias-cache hit, so the modes are NOT hoisted into method generics.
-- **Generic constraint** (`<const M extends Q<Schema>>(\$q: M)`): `match`, `set`, `group`, `replaceRoot`, `facet`. Default pattern. Inner-value brands (e.g. `$gte` on a string) fire from the constraint check; call-site excess-property checking is suppressed but the resulting "is not assignable to PipeSafeError" message is still readable.
+- **Constraint + validation intersection** (`<const Q extends XxxQuery<Schema>>(\$q: Q & ValidateXxxQuery<Schema, Q>)`): `set`, `project`, `group`. THE pattern for stages with `[key: string]:` index signatures (which suppress per-value checks) — Q stays the raw inference/contextual-typing position while the key-filtered wrapper re-checks the literal and brands offending keys (plan §3.8 rule 4; a bare mapped wrapper breaks contextual typing of nested expression literals — group's compound-`_id` is the counterexample). Project's validate/resolve mode parameters default from the same alias — the second computation is an alias-cache hit, so the modes are NOT hoisted into method generics.
+- **Generic constraint** (`<const M extends Q<Schema>>(\$q: M)`): `match`, `replaceRoot`, `facet`. Default pattern when the query type has finite, schema-derived keys. Inner-value brands (e.g. `$gte` on a string) fire from the constraint check; call-site excess-property checking is suppressed but the resulting "is not assignable to PipeSafeError" message is still readable.
 
 ### Error code: prefer TS2322 over TS2353
 
@@ -304,8 +303,8 @@ When a `<const P>`-inferred literal is used as the brand's `Ctx` (or as part of 
 
 ### Known limitations
 
-- **`Pipeline.group`'s call-site brand surfacing** for `$sum: '$stringField'` etc. now fires via the key-filtered `ValidateGroupQuery` intersection (`$group: G & ValidateGroupQuery<Schema, G>`). Two hard-won constraints, both pinned in `Pipeline.callSite.typeAssertions.ts`: the intersection form is REQUIRED (a bare mapped wrapper at the parameter position breaks contextual typing of compound-`_id` patterns like `_id: { date: { $dateToString: ... } }` — both the bare and concrete-`_id` variants were tried and failed, plan §7.4), and the wrapper must be key-FILTERED so a fully-valid query validates against `{}` (a full-map intersection cost 3× whole-project check time). Validation currently covers the numeric accumulators (`$sum`/`$avg`); extending it follows §3.8.
-- **Nested value validation** (`$set`/`$project` values and group `_id` at any literal depth) is handled by the shared kernel in `elements/validation.ts` (`ValidateNestedValue`): unknown refs, unknown/multi-key operators, and invalid operands all brand at the chained call site. Remaining structural-only interiors: expression OPERAND interiors reached through permissive operand arms (`$cond`/`$ifNull` conditional operands, `$filter.cond`, `$let.in` — all `unknown`-typed in the registry) and `replaceRoot`'s bare `Document` arm.
+- **`Pipeline.group`'s call-site brand surfacing** for `$sum: '$stringField'` etc. now fires via the key-filtered `ValidateGroupQuery` intersection (`$group: G & ValidateGroupQuery<Schema, G>`). Two hard-won constraints, both pinned in `Pipeline.callSite.typeAssertions.ts`: the intersection form is REQUIRED (a bare mapped wrapper at the parameter position breaks contextual typing of compound-`_id` patterns like `_id: { date: { $dateToString: ... } }` — both the bare and concrete-`_id` variants were tried and failed, plan §7.4), and the wrapper must be key-FILTERED so a fully-valid query validates against `{}` (a full-map intersection cost 3× whole-project check time). Validation covers `$sum`/`$avg` (numeric) and `$min`/`$max` (BSON-comparable: number, date, string, boolean); extending it = adding the key to `CheckedAccumulatorOps` after registering the operand in `AccumulatorSpec`.
+- **Nested value validation** (`$set`/`$project` values and group `_id` at any literal depth) is handled by the shared kernel in `elements/validation.ts` (`ValidateNestedValue`): unknown refs, malformed expression objects (multi-operator, or operator keys mixed with plain keys), and invalid operands of REGISTERED operators brand at the chained call site. UNREGISTERED operators/accumulators are deliberately FORGIVEN (valid MongoDB the registry doesn't model — $toUpper, $stdDevPop, ...; inference degrades them to `unknown`), as are `$$`-system variables and widened (non-literal) value types. Remaining structural-only interiors: expression OPERAND interiors reached through permissive operand arms (`$cond`/`$ifNull` conditional operands, `$filter.cond`, `$let.in`— all`unknown`-typed in the registry) and `replaceRoot`'s bare `Document` arm.
 
 ### Regression guard
 
@@ -325,9 +324,14 @@ replacing the coverage:
 
 Every file in `stages/` exports, with **Schema always the first type parameter**:
 
-- `XxxQuery<Schema>` — what the user may write (skipped for scalar stages like `limit`)
-- `ValidateXxxQuery<Schema, Q, ...>` — only when the validation-mapped signature
-  pattern is needed (currently `project`)
+- `XxxQuery<Schema>` — what the user may write. Scalar stages export a
+  schema-free alias (`LimitQuery = number`, `SkipQuery = number`,
+  `CountQuery = string`); the Pipeline method always references the
+  module's type.
+- `ValidateXxxQuery<Schema, Q, ...>` — the rejection surface (`set`,
+  `project`, `group`), wired via the `Q & ValidateXxxQuery<Schema, Q>`
+  intersection. Re-uses the operand kernel and the shared nested walk in
+  `elements/validation.ts`; never re-spells a constraint (plan §3.8).
 - `ResolveXxxOutput<Schema, Q>` — the output schema; MUST wrap its body in
   `PassThrough<Schema, ...>` (terminal stages `out`/`merge` are exempt — they have no
   resolver). Do NOT re-prove `Q extends XxxQuery<Schema>` inside the resolver: the
@@ -349,7 +353,7 @@ methods are where those belong).
 | ---- | ---------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | 1    | Schema already a `PipeSafeError` → forward                                         | `PassThrough` in every resolver                      |
 | 2    | No `$`-prefixed key → literal (`NotAnExpression` sentinel)                         | `OperatorKeyOf`/`HasOperatorKey` (utils/dispatch.ts) |
-| 3    | Multi-`$`-key → exactly-one-operator brand; unknown op → `never`                   | `InferExpression`                                    |
+| 3    | Multi-`$`-key → exactly-one-operator brand; unknown op → `unknown` (forgiving)     | `InferExpression`                                    |
 | 4    | Known operator → registry `returns` / dependent arm; operand brands validate input | `ExpressionSpec` / operand kernel                    |
 
 Inference is **forgiving**: a malformed operand does not change the inferred kind —

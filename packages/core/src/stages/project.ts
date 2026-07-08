@@ -1,5 +1,6 @@
 import {
   Document,
+  OmitNeverValues,
   Prettify,
   UnionToIntersection,
   MergeNested,
@@ -8,9 +9,8 @@ import {
 import { PassThrough, PipeSafeError } from "../utils/errors";
 import { HasOperatorKey } from "../utils/dispatch";
 import { ExpandDottedKey, IsDottedKey } from "../utils/paths";
-import { WithoutDollar } from "../utils/strings";
+import { NoDollarString, WithoutDollar } from "../utils/strings";
 import {
-  FieldReference,
   GetFieldTypeWithoutArrays,
   InferNestedFieldReference,
 } from "../elements/fieldReference";
@@ -33,13 +33,27 @@ export type ProjectQuery<Schema extends Document> = {
     | 0
     | true
     | false
-    | FieldReference<Schema>
-    | Expression<Schema>
+    // Widened flags: MongoDB treats any nonzero number as inclusion, so a
+    // `number`/`boolean`-typed variable is a valid projection value even
+    // though its literal can't be known at compile time. Rejecting it went
+    // through the deep value union with a spurious TS2589.
+    | number
+    | boolean
     // Structural acceptance of `$`-strings (§3.8 rule 6): unknown refs are
     // branded by ValidateProjectQuery's value walk instead of rejecting
-    // through the FieldReference union on the constraint path.
+    // through the deep refs union on the constraint path. NOTE: a
+    // FieldReference<Schema> member here would be ABSORBED by this template
+    // under union normalization (verified) — it would cost the full path
+    // union per schema and buy nothing, so it is deliberately absent.
     | `$${string}`
-    | Document; // For nested object replacement
+    // Plain string values are valid MongoDB literal assignments in $project
+    // (only numeric/boolean literals require $literal).
+    | NoDollarString
+    // Nested object replacement AND expression shapes. Expression<Schema>
+    // below is AUTOCOMPLETE-ONLY: Document subsumes every object for
+    // checking — do not "fix" acceptance bugs by editing it.
+    | Document
+    | Expression<Schema>;
 };
 
 // ---------------------------------------------------------------------------
@@ -78,22 +92,22 @@ export type HasExclusionsNonId<P> =
   : false;
 
 /**
- * Value re-check via the shared nested-validation kernel
- * (`elements/validation.ts`): identity for valid values (1/0/booleans and
- * plain literals fall out of the walk as valid), the branded/expected-shape
- * replacement for invalid refs, expressions, or nested objects.
+ * Per-key project re-check: `never` = valid (key is filtered out by the
+ * wrapper). Inclusion/exclusion flags exit in one arm (the dominant
+ * projection value); unknown keys carrying a flag brand; every other value
+ * goes through the shared nested-validation kernel.
  */
-type ValidateProjectValue<Schema extends Document, V> =
-  [ValidateNestedValue<Schema, V>] extends [never] ? V
-  : ValidateNestedValue<Schema, V>;
+type ValidateProjectKey<Schema extends Document, P, K extends keyof P> =
+  [P[K]] extends [number | boolean] ?
+    string extends keyof Schema ?
+      never // unknown-key detection is meaningless on a wide schema
+    : K extends FieldSelector<Schema> ? never
+    : PipeSafeError<`Field '${K & string}' is not on the schema.`>
+  : ValidateNestedValue<Schema, P[K]>;
 
-type ValidateProjectQueryKeys<Schema extends Document, P> = {
-  [K in keyof P]: K extends FieldSelector<Schema> ?
-    ValidateProjectValue<Schema, P[K]>
-  : P[K] extends 1 | 0 | true | false ?
-    PipeSafeError<`Field '${K & string}' is not on the schema.`>
-  : ValidateProjectValue<Schema, P[K]>;
-};
+type ValidateProjectQueryKeys<Schema extends Document, P> = OmitNeverValues<{
+  [K in keyof P]: ValidateProjectKey<Schema, P, K>;
+}>;
 
 /**
  * Validation wrapper for $project queries used at Pipeline.project's
@@ -126,17 +140,26 @@ export type ValidateProjectQuery<
   Inc extends boolean = HasInclusionsNonId<P>,
   Exc extends boolean = HasExclusionsNonId<P>,
 > =
-  Inc extends true ?
+  // Wide-QUERY guard: on constraint failure TS re-instantiates this wrapper
+  // with P = ProjectQuery<Schema> (index signature ⇒ `keyof P` includes
+  // string); validating the wide value unions would brand valid keys and
+  // overflow depth on top of the real error. The mixed-mode check below is
+  // deliberately NOT schema-guarded — it is schema-independent, so it fires
+  // on index-signature schemas too (the per-key/value checks guard
+  // themselves).
+  string extends keyof P ? {}
+  : Inc extends true ?
     Exc extends true ?
       // Mixed mode: brand each non-_id exclusion VALUE so TS reports
       // TS2322 ("Type 0 is not assignable to PipeSafeError<...>") at
-      // the offending 0/false rather than TS2353 on a valid key.
-      {
-        [K in keyof P]: K extends "_id" ? P[K]
+      // the offending 0/false rather than TS2353 on a valid key. Key-
+      // filtered (§3.8 rule 5): only the offending exclusion keys survive.
+      OmitNeverValues<{
+        [K in keyof P]: K extends "_id" ? never
         : P[K] extends 0 | false ?
           PipeSafeError<`Stage '$project' cannot mix inclusion 1/true and exclusion 0/false.`>
-        : P[K];
-      }
+        : never;
+      }>
     : ValidateProjectQueryKeys<Schema, P>
   : ValidateProjectQueryKeys<Schema, P>;
 
@@ -149,19 +172,20 @@ type ResolveNestedProjection<Schema extends Document, Obj extends Document> = {
 
 // Helper: Resolve a single field value (handles both regular and dotted keys)
 type ResolveFieldValue<Schema extends Document, Value, Key extends string> =
-  Value extends 1 | true ?
-    // Inclusion - get field type from schema. If the key isn't on the schema,
-    // surface a branded error rather than silently producing `never` (which
-    // would just drop the key from the output without any signal).
+  Value extends 0 | false ?
+    // Exclusion - return never (field is excluded). Intentional: `never`
+    // here means "the field is dropped from the output", which is correct.
+    never
+  : [Value] extends [number | boolean] ?
+    // Inclusion — literal 1/true, or a WIDENED number/boolean (MongoDB:
+    // any nonzero number includes; compile time can't know the runtime
+    // value, so degrade to inclusion). If the key isn't on the schema,
+    // surface a branded error rather than silently producing `never`.
     IsDottedKey<Key> extends true ?
       // Dotted key - get nested field type
       GetFieldType<Schema, Key>
     : Key extends keyof Schema ? Schema[Key]
     : PipeSafeError<`Field '${Key}' is not on the schema.`>
-  : Value extends 0 | false ?
-    // Exclusion - return never (field is excluded). Intentional: `never`
-    // here means "the field is dropped from the output", which is correct.
-    never
   : Value extends `$${string}` ?
     // Field reference — a `$`-string check is far cheaper than FieldReference
     // union membership; unknown paths brand via GetFieldTypeWithoutArrays.
@@ -172,6 +196,8 @@ type ResolveFieldValue<Schema extends Document, Value, Key extends string> =
   : Value extends Document ?
     // Nested object - recursively resolve field references and expressions within it
     ResolveNestedProjection<Schema, Value>
+  : [Value] extends [string] ?
+    Value // plain-string literal assignment (valid MongoDB; $-refs handled above)
   : PipeSafeError<`Invalid projection value for field '${Key}'.`>;
 
 // Helper: Create flat map of dotted keys to their types (only include keys with 1/true values)

@@ -56,3 +56,12 @@ export type RequiresMsg<
   Op extends string,
   What extends string,
 > = `${Subject} '${Op}' requires ${What}.`;
+
+/**
+ * THE exactly-one-operator brand — MongoDB rejects expression objects with
+ * more than one operator key ("an expression specification must contain
+ * exactly one field"). Referenced by InferExpression and every Validate
+ * layer so the message is spelled once.
+ */
+export type MultiOperatorError =
+  PipeSafeError<"Expression objects must have exactly one operator.">;

@@ -2,11 +2,7 @@ pre-commit:
   parallel: true
   commands:
     build:
-      # typecheck:packages runs after the build on purpose: manifold
-      # type-checks against core's built dist, and this is the only hook
-      # that validates the *.typeAssertions.ts regression net (neither the
-      # root typecheck nor tsdown re-checks package sources).
-      run: bun run build && bun run typecheck:packages
+      run: bun run build
       stage_fixed: true
     lint:
       run: bun run lint:fix
@@ -17,3 +13,13 @@ pre-commit:
     test:
       run: bun run test:ci
       stage_fixed: true
+
+# The assertion regression net (two full tsc passes) runs before anything
+# leaves the machine rather than on every commit — CI enforces it too.
+# The build is part of the hook: manifold type-checks against core's dist,
+# and pushes from fresh clones / after rebase / after --no-verify commits
+# cannot rely on a pre-commit build having run (stale dist = false result).
+pre-push:
+  commands:
+    typecheck-packages:
+      run: bun run build && bun run typecheck:packages

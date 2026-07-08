@@ -103,12 +103,13 @@ const _group_valid = orders.group({
   totalRevenue: { $sum: "$total" },
 });
 
-// Note: `$sum: '$customerId'` (a string field reference) is rejected by
-// the type system but doesn't fire a brand at the chained call site —
-// GroupQuery's `[key: string]:` index signature suppresses operand
-// validation here. The brand still surfaces when assigning the literal
-// to a `GroupQuery<Order>`-typed variable directly. Tracked as a
-// follow-up.
+// ❌ Error: $sum on a string field reference brands AT the chained call
+// site (the key-filtered ValidateGroupQuery intersection re-checks the
+// literal; GroupQuery's index signature used to suppress this):
+//   "Accumulator '$sum' requires a numeric operand."
+// @ts-expect-error  '$customerId' is a string field
+// prettier-ignore
+const _group_bad_sum = orders.group({ _id: "$status", n: { $sum: "$customerId" } });
 
 // =============================================================================
 // Note: where these errors come from
@@ -123,10 +124,15 @@ const _group_valid = orders.group({
 //
 //   match.ts   → ComparatorMatchers (per-operator brands)
 //   sort.ts    → strict mapped type SortQuery (no wrapper needed)
-//   project.ts → ValidateProjectQuery (handles unknown keys + mixed mode)
-//   group.ts   → per-aggregator operand brands (call-site is a follow-up)
+//   project.ts → ValidateProjectQuery (unknown keys, mixed mode, values)
+//   set.ts     → ValidateSetQuery (refs/expressions at any depth)
+//   group.ts   → ValidateGroupQuery (accumulator operands, compound _id)
+//
+// set/project/group re-check nested values through the shared kernel in
+// `packages/core/src/elements/validation.ts`.
 
 export {
+  _group_bad_sum,
   _sort_valid,
   _sort_bad,
   _match_valid,

@@ -16,11 +16,11 @@
  */
 
 import { execSync } from "child_process";
-import { readFileSync, existsSync, unlinkSync } from "fs";
+import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import process from "node:process";
-import { parseExtendedDiagnostics } from "./benchmark";
+import { clearTSCache, parseExtendedDiagnostics } from "./benchmark";
 
 const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -34,11 +34,9 @@ const budget = JSON.parse(readFileSync(budgetFile, "utf-8")) as {
   lastMeasured: number;
 };
 
-// Clear incremental state so the count is a full, deterministic check.
-for (const f of ["tsconfig.tsbuildinfo", ".tsbuildinfo"]) {
-  const p = join(PACKAGE_ROOT, f);
-  if (existsSync(p)) unlinkSync(p);
-}
+// Same cache hygiene as the benchmark suite — one shared implementation so
+// the CI gate and the suite always measure the same configuration.
+clearTSCache();
 
 let output: string;
 try {

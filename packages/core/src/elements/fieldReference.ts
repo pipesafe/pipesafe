@@ -34,11 +34,24 @@ export type GetFieldTypeWithoutArrays<
   Path extends string,
   FullPath extends string = Path,
 > =
-  Schema extends (infer U)[] ? GetFieldTypeWithoutArrays<U, Path, FullPath>[]
+  Schema extends (infer U)[] ?
+    // Element-wise recursion; a brand from the element must PROPAGATE as
+    // the brand, not get wrapped into `brand[]` (which would read as a
+    // valid array type to IsPipeSafeError-based callers).
+    GetFieldTypeWithoutArrays<U, Path, FullPath> extends infer R ?
+      [R] extends [PipeSafeError<string>] ?
+        R
+      : R[] // non-distributive: union elements stay (A | B)[], not A[] | B[]
+    : never
   : // null/undefined branches of nullable unions silently fall through so
   // distributing over `T | null` doesn't leak the brand into a result
   // that's otherwise valid via the non-null branch.
   Schema extends null | undefined ? never
+  : // JS structural/prototype keys on non-expandable values and primitives
+  // ("$name.length", "$joinedAt.getTime") are not MongoDB paths — brand
+  // before the keyof lookup would admit them.
+  Schema extends NonExpandableTypes | string | number | boolean | bigint ?
+    PipeSafeError<`Field '${FullPath}' is not on the schema.`>
   : Path extends keyof Schema ?
     Schema[Path] // Direct property access
   : Path extends `${infer Head}.${infer Tail}` ?

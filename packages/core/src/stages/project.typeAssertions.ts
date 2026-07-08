@@ -862,8 +862,11 @@ export type {
 // ============================================================================
 // `ResolveFieldValue` and `ResolveProjectOutput` now return branded
 // `PipeSafeError` types at three otherwise-silent failure sites:
-//   1. Inclusion of a field that doesn't exist on the schema (`{ unknownKey: 1 }`).
-//   2. Invalid projection value (anything other than 0/1/ref/expr/object).
+//   1. Inclusion of a field that doesn't exist on the schema (`{ unknownKey: 1 }`)
+//      — including via a widened number/boolean flag (any number is a valid
+//      FLAG per MongoDB's nonzero-includes rule, so a bad KEY is the error).
+//   2. A value that is none of flag/ref/expression/object/string —
+//      `Invalid projection value for field '...'.` (e.g. null/undefined).
 //   3. Mixed inclusion and exclusion in the same projection.
 
 type ProjectErrorSchema = {
@@ -883,15 +886,37 @@ type _Assert_UnknownInclusion = Assert<
   >
 >;
 
-// 2. Invalid projection value (anything other than 0/1/ref/expr/object)
-//    produces a branded error on the offending key.
-type _InvalidValueResult = ResolveProjectOutput<
+// 2. Any number is a valid projection FLAG (MongoDB: nonzero includes), so
+//    `bogus: 99` on an UNKNOWN key brands as an unknown field — not as an
+//    invalid value — and on a known key it includes the field.
+type _NonZeroFlagUnknownKey = ResolveProjectOutput<
   ProjectErrorSchema,
   { name: 1; bogus: 99 }
 >;
-type _Assert_InvalidValue = Assert<
+type _Assert_NonZeroFlagUnknownKey = Assert<
   AssertPipeSafeError<
-    _InvalidValueResult["bogus"],
+    _NonZeroFlagUnknownKey["bogus"],
+    "Field 'bogus' is not on the schema."
+  >
+>;
+type _NonZeroFlagKnownKey = ResolveProjectOutput<
+  ProjectErrorSchema,
+  { name: 99 }
+>;
+type _Assert_NonZeroFlagIncludes = Assert<
+  Equal<_NonZeroFlagKnownKey["name"], ProjectErrorSchema["name"]>
+>;
+
+// The Invalid-value brand itself stays pinned (resolver-level: null is not
+// a valid projection value; the Query constraint rejects it before the
+// resolver in the chained API, but the message must not drift silently).
+type _InvalidValueStillBranded = ResolveProjectOutput<
+  ProjectErrorSchema,
+  { name: 1; bogus: null }
+>;
+type _Assert_InvalidValueBrand = Assert<
+  AssertPipeSafeError<
+    _InvalidValueStillBranded["bogus"],
     "Invalid projection value for field 'bogus'."
   >
 >;
@@ -921,7 +946,9 @@ type _Assert_ValidInclusion = Assert<
 
 export type {
   _Assert_UnknownInclusion,
-  _Assert_InvalidValue,
+  _Assert_NonZeroFlagUnknownKey,
+  _Assert_NonZeroFlagIncludes,
+  _Assert_InvalidValueBrand,
   _Assert_MixedMode,
   _Assert_ValidInclusion,
 };
