@@ -834,26 +834,15 @@ type _AccumulatorAllowListDisjoint = Assert<
   >
 >;
 
-// CheckedAccumulatorOps must be exactly the registry entries whose operand
-// union carries a PipeSafeError arm (the brand is what the re-check
-// surfaces). The IsAny guard is load-bearing: FlexibleAccumulatorOperand
-// collapses to `any` under LiteralOrFieldReferenceInferringTo<Schema, any>,
-// and `Extract<any, PipeSafeError<string>>` is `any` — without the guard
-// $push/$addToSet/$first/$last would wrongly join the derived set.
-type IsAny<T> = 0 extends 1 & T ? true : false;
-type _DerivedCheckedAccumulatorOps = {
-  [K in keyof AccumulatorSpec<Document>]: IsAny<
-    AccumulatorSpec<Document>[K]["operand"]
-  > extends true ?
-    never
-  : [
-    Extract<AccumulatorSpec<Document>[K]["operand"], PipeSafeError<string>>,
-  ] extends [never] ?
-    never
-  : K;
-}[keyof AccumulatorSpec<Document>];
-type _CheckedOpsMatchRegistryBrands = Assert<
-  Equal<_DerivedCheckedAccumulatorOps, CheckedAccumulatorOps>
+// CheckedAccumulatorOps is DERIVED in group.ts (registry entries whose
+// operand union carries a PipeSafeError brand arm). This pin documents the
+// current set and catches both drift directions — an operand losing its
+// brand arm drops out of validation coverage and fails here; a flexible
+// accumulator gaining a brand (or the IsAny guard breaking) joins and
+// fails here. (Mirrors the _DerivedLiteralDependentOps pin in
+// expressions.typeAssertions.ts.)
+type _DerivedCheckedAccumulatorOps = Assert<
+  Equal<CheckedAccumulatorOps, "$sum" | "$avg" | "$min" | "$max">
 >;
 
 export type {
@@ -865,5 +854,5 @@ export type {
   _Assert_MinValid,
   _Assert_SystemVarGroup,
   _AccumulatorAllowListDisjoint,
-  _CheckedOpsMatchRegistryBrands,
+  _DerivedCheckedAccumulatorOps,
 };

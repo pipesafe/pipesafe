@@ -199,16 +199,35 @@ export type GroupQuery<Schema extends Document> = {
 };
 
 /**
- * The accumulators whose operands ValidateGroupQuery re-checks. Derived
- * checking: the operand type AND its brand come from AccumulatorSpec, so
- * adding an accumulator to this key set (after registering it) is the whole
- * cost of extending call-site validation — the flexible accumulators
- * ($push/$addToSet/$first/$last/$count) accept any operand by design and
- * stay out.
+ * The IsAny guard is load-bearing for CheckedAccumulatorOps below:
+ * FlexibleAccumulatorOperand collapses to `any` (its
+ * LiteralOrFieldReferenceInferringTo<Schema, any> arm), and
+ * `Extract<any, PipeSafeError<string>>` is `any` — without the guard
+ * $push/$addToSet/$first/$last would wrongly join the derived set.
  */
-// Exported for the group.typeAssertions.ts pin that keeps this set in
-// lockstep with the registry (the brand-carrying operand entries).
-export type CheckedAccumulatorOps = "$sum" | "$avg" | "$min" | "$max";
+type IsAny<T> = 0 extends 1 & T ? true : false;
+
+/**
+ * The accumulators whose operands ValidateGroupQuery re-checks — DERIVED
+ * from the registry: exactly the entries whose operand union carries a
+ * PipeSafeError brand arm (the brand is what the re-check surfaces).
+ * Registering an accumulator with a branded operand extends call-site
+ * validation automatically; the flexible accumulators
+ * ($push/$addToSet/$first/$last/$count) carry no brand and stay out.
+ * Schema-independent, so it is computed once over `Document` (exported for
+ * the documenting pin in group.typeAssertions.ts).
+ */
+export type CheckedAccumulatorOps = {
+  [K in keyof AccumulatorSpec<Document>]: IsAny<
+    AccumulatorSpec<Document>[K]["operand"]
+  > extends true ?
+    never
+  : [
+    Extract<AccumulatorSpec<Document>[K]["operand"], PipeSafeError<string>>,
+  ] extends [never] ?
+    never
+  : K;
+}[keyof AccumulatorSpec<Document>];
 
 /**
  * Registry-derived accumulator re-check: dispatch on the operator key,
