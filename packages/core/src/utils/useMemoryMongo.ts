@@ -1,6 +1,6 @@
 import { MongoMemoryReplSet } from "mongodb-memory-server";
 import { MongoClient } from "mongodb";
-import { afterAll, afterEach, beforeAll } from "vitest";
+import { afterAll, afterEach } from "vitest";
 
 export const useMemoryMongo = async () => {
   // Create a new in-memory MongoDB instance
@@ -13,9 +13,14 @@ export const useMemoryMongo = async () => {
   const memoryReplSetUri = memoryReplSet.getUri();
 
   const client = new MongoClient(memoryReplSetUri);
-  await client.connect();
-
-  beforeAll(async () => {});
+  try {
+    await client.connect();
+  } catch (error) {
+    // A failed connect aborts suite collection before the afterAll below
+    // is registered, so nothing else would ever stop this replset.
+    await memoryReplSet.stop({ doCleanup: true });
+    throw error;
+  }
 
   afterEach(async () => {
     const collections = await client.db().listCollections().toArray();
@@ -26,10 +31,11 @@ export const useMemoryMongo = async () => {
 
   afterAll(async () => {
     await client.close();
-    // doCleanup removes exactly this instance's own dbPath directory —
-    // without it every test run leaks a ~300MB tmp dir. The vitest
-    // globalSetup teardown is the backstop for runs that die before this
-    // hook fires.
+    // doCleanup frees this instance's ~300MB dbPath eagerly — it is what
+    // bounds disk across watch-mode reruns, where the globalSetup teardown
+    // only fires on watch exit. That teardown covers suites that fail
+    // before this hook runs; neither layer survives a hard kill of the
+    // vitest main process.
     await memoryReplSet.stop({ doCleanup: true });
   }, 30_000);
 
