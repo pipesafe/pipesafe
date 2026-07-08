@@ -1,0 +1,5 @@
+---
+"@pipesafe/core": minor
+---
+
+Add `let` variable bindings to `Pipeline.lookup` for correlated sub-pipelines (no more `custom()` escape hatch for `$lookup` + `let` + `$expr` patterns), new expression operators `$setUnion`, `$setIntersection`, `$setDifference`, and `$reduce`, and scoped variable inference for `$map`/`$reduce` `in` expressions: `$$this`/`$$value` (and a custom `$map` `as` variable) resolve against the input's element type, e.g. `$map: { input: "$reactions", in: "$$this.article" }` now infers the element field type instead of `unknown[]`. `as` on `$map` is now optional, matching MongoDB's default of `$$this`. Also fixes `$ifNull`/`$cond` inference for array-literal operands: the branch/replacement is returned verbatim by MongoDB, so it now contributes the array type instead of its element type (`$ifNull: ["$tags", ["none"]]` infers `string[] | ["none"]`, not `string | "none"`). `$$`-system/`let`-variable references are accepted in array operand positions (`$setUnion: ["$labels", "$$localTags"]`), and `let` without `pipeline` is rejected at compile time (MongoDB FailedToParse).
