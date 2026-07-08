@@ -1,6 +1,6 @@
 # utils/ — shared type primitives
 
-Five small modules with strict boundaries — do not grow a grab-bag here:
+Six small modules with strict boundaries — do not grow a grab-bag here:
 
 - **errors.ts** — `PipeSafeError` (the brand), `PassThrough` (the first
   early exit every resolver wraps in), `RequiresMsg` (brand-message
@@ -18,6 +18,11 @@ Five small modules with strict boundaries — do not grow a grab-bag here:
 - **paths.ts** — dotted-path machinery. `SplitPath` is deliberately
   tail-recursive (accumulator parameter → ~1000-depth budget instead of
   ~50); parse paths with it, then fold the segments.
+- **updates.ts** — `ApplySetUpdates` + helpers: the dotted-key update/merge
+  kernel (write a value at a possibly-dotted path, preserving optionality
+  semantics). Shared by `$set` and `$lookup`'s dotted `as` — stages must
+  not import each other, so it lives here. Callers dot-EXPAND first
+  (`FlattenDotSet`) with an early-exit for non-dotted keys.
 
 ## Gotchas
 

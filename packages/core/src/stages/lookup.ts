@@ -2,16 +2,16 @@ import { Document, Prettify } from "../utils/objects";
 import { PassThrough, PipeSafeError } from "../utils/errors";
 import { FieldPathsThatInferToForLookup } from "../elements/fieldReference";
 import { FlattenDotSet, IsDottedKey } from "../utils/paths";
-import { ApplySetUpdates } from "./set";
+import { ApplySetUpdates } from "../utils/updates";
 
 /**
  * A dotted `as` path NESTS in MongoDB — `as: "user.orders"` writes
  * `{ user: { orders: [...] } }`, preserving `user`'s sibling fields and
  * overwriting only the target path — exactly the semantics of a `$set` on
- * that path. The resolver therefore reuses $set's machinery (FlattenDotSet
- * to expand the dotted key, ApplySetUpdates to merge — mirroring
- * ResolveSetOutputInner's early-exit split) instead of re-spelling the
- * expand-and-merge. A FLAT key keeps the cheap `Omit & { [NewKey]: ... }`
+ * that path. The resolver therefore reuses the shared dotted-key update
+ * kernel (utils/updates.ts: FlattenDotSet to expand, ApplySetUpdates to
+ * merge — mirroring ResolveSetOutputInner's early-exit split) instead of
+ * re-spelling the expand-and-merge. A FLAT key keeps the cheap `Omit & { [NewKey]: ... }`
  * form: routing it through ApplySetUpdates gave the same output but was
  * measured at ~+65k whole-project instantiations (every lookup call site
  * paid the $set merge machinery for a single top-level key).

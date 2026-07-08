@@ -169,9 +169,9 @@ The former `utils/core.ts` grab-bag no longer exists — it was split along its 
   `ExclusifyUnion`, `ExcludeUndefined`, `IsPlainObject`, `MergeNested`
 - **paths.ts**: `SplitPath` (tail-recursive segment splitter), `ExpandDottedKey`
   (split + fold), `HasDottedKeys`, `RemoveDottedKeys`, `FlattenDotSet`
-
-The `$set` update machinery (`ApplySetUpdates` + helpers) lives in `stages/set.ts`,
-its only consumer.
+- **updates.ts**: `ApplySetUpdates` + helpers — THE dotted-key update/merge
+  kernel, shared by `$set` and `$lookup`'s dotted `as` paths (stages must
+  not import each other, so the shared machinery lives here)
 
 ### Pipeline Stages
 
