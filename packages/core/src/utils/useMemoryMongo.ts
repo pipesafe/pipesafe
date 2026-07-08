@@ -25,7 +25,12 @@ export const useMemoryMongo = async () => {
   });
 
   afterAll(async () => {
-    await memoryReplSet.stop({ doCleanup: false });
+    await client.close();
+    // doCleanup removes exactly this instance's own dbPath directory —
+    // without it every test run leaks a ~300MB tmp dir. The vitest
+    // globalSetup teardown is the backstop for runs that die before this
+    // hook fires.
+    await memoryReplSet.stop({ doCleanup: true });
   }, 30_000);
 
   return { memoryReplSet, memoryReplSetUri, client };
