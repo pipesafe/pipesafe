@@ -89,7 +89,7 @@ export type MergeNested<A, B> =
  * Load-bearing companion to pattern index signatures — a pattern index
  * constrains only MATCHING keys, so a shape meant to be "keys of pattern X
  * only" must also forbid the complement or every object with non-matching
- * keys is VACUOUSLY assignable (the §7.3 ObjectLiteral bug class).
+ * keys is VACUOUSLY assignable (the ObjectLiteral vacuity bug class).
  */
 export type ForbidKeys<Pattern extends string> = {
   [K in Pattern]?: never;
@@ -97,7 +97,7 @@ export type ForbidKeys<Pattern extends string> = {
 
 /**
  * Drop keys whose value is exactly `never`. THE key-filter for Validate
- * wrappers (§3.8 rule 5): apply to a full per-key validation map so a
+ * wrappers: apply to a full per-key validation map so a
  * fully-valid query filters to `{}` and the `Q & ValidateXxxQuery<...>`
  * intersection short-circuits on the happy path. The tuple wrapping is
  * load-bearing — a naked `M[K] extends never` distributes and keeps keys

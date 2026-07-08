@@ -82,8 +82,7 @@ export type ConcatOutputType = InferOutputType<typeof concatPipeline>;
 
 // Type validation test: This should cause a type error. ValidateSetQuery
 // maps the offending key to the registry's expected shape, so the rejection
-// is a single TS2322 against ArrayOperand at the operand — no spurious
-// statement-level TS2589 (plan §7.3 addendum).
+// is a single TS2322 against ArrayOperand at the operand.
 export const _invalidPipeline = new Pipeline<TestDoc>().set({
   items: {
     // @ts-expect-error - ERROR: $name is string, not array

@@ -131,12 +131,10 @@ type DotKeyAssignTest = Assert<Equal<DotKeyAssignResult, DotKeyAssignExpected>>;
 // ============================================================================
 // Test 4: Mixed inclusion and exclusion — rejected (MongoDB forbids this)
 // ============================================================================
-// Previously this test asserted that `{ id: 1, fullName: "$name", email: false }`
-// produced `{ id: string; fullName: string }` (exclusion of `email` plus
-// inclusion of `id` and computed `fullName`). MongoDB actually rejects this
-// at runtime: you can only mix when excluding `_id` from an otherwise-
-// inclusion projection. With the typed-error rollout the dispatch now
-// produces a branded `PipeSafeError` instead of silently picking a mode.
+// MongoDB rejects mixed inclusion/exclusion at runtime (you can only mix
+// when excluding `_id` from an otherwise-inclusion projection), so the
+// dispatch produces a branded `PipeSafeError` instead of silently picking
+// a mode.
 type MixedSchema = {
   id: string;
   name: string;

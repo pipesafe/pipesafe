@@ -3,7 +3,7 @@ import { Document } from "../utils/objects";
 
 /**
  * `$count` takes the output field's name. Schema-free scalar Query
- * (§3.1/§7.2): exported so `Pipeline.count` references the module's type
+ * exported so `Pipeline.count` references the module's type
  * rather than an inline `string`.
  */
 export type CountQuery = string;

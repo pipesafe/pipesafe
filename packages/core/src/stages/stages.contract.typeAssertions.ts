@@ -15,7 +15,7 @@
  *      constructed against an error schema without contortions (unwind,
  *      lookup, graphLookup, unionWith) are covered at the resolver level
  *      only.
- *   3. Query-alias wiring (§7.2) — the method's parameter references the
+ *   3. Query-alias wiring — the method's parameter references the
  *      module's Query type (scalar stages export schema-free aliases).
  *      These pins break if a parameter drifts from its module's alias
  *      (e.g. widening to `number | string`); identical-alias drift is
@@ -198,13 +198,13 @@ type _DispatchMultiOperator = Assert<
 >;
 
 // (d) Forgiving dispatch holds through the NESTED-VALUE hot path
-// (InferNestedFieldReference), not just direct InferExpression calls. The
-// PR #102 review showed that reverting InferNestedFieldReference to a
-// full-union `Obj extends Expression<Schema>` membership test left every
-// assertion green while costing +8% whole-project instantiations AND
-// changing this semantics: a malformed-but-keyed expression would fall
-// through to literal treatment instead of keeping its operator's declared
-// result kind. This pin makes that revert a compile failure.
+// (InferNestedFieldReference), not just direct InferExpression calls.
+// Reverting InferNestedFieldReference to a full-union
+// `Obj extends Expression<Schema>` membership test leaves every assertion
+// green while costing ~+8% whole-project instantiations AND changing this
+// semantics: a malformed-but-keyed expression falls through to literal
+// treatment instead of keeping its operator's declared result kind. This
+// pin makes that revert a compile failure.
 type _NestedDispatchSchema = { ts: Date; n: number };
 type _NestedForgiving = Assert<
   Equal<
@@ -220,9 +220,9 @@ type _NestedForgiving = Assert<
 // inference at chained call sites: the registry's operand positions are
 // readonly, so const call sites infer readonly operand tuples — the
 // dependent arms' patterns must be readonly too, or the arm silently
-// falls through and the RESOLVER DROPS THE FIELD (caught in review round
-// 3: .set({ flag: { $cond: [...] } }) compiled with `flag` missing from
-// the output schema).
+// falls through and the RESOLVER DROPS THE FIELD
+// (.set({ flag: { $cond: [...] } }) compiles with `flag` missing from the
+// output schema).
 const _condPipeline = new Pipeline<{ age: number }>().set({
   flag: { $cond: [{ $gt: ["$age", 18] }, "adult", "minor"] },
 });

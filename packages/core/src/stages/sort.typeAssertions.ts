@@ -86,10 +86,10 @@ type UnionSortTest = Assert<Equal<UnionSortOutput, UnionSchema>>;
 // ============================================================================
 // Phase F — Strict field selector
 // ============================================================================
-// `SortQuery<Schema>` is now strictly typed: arbitrary string keys (typos)
-// are rejected at compile time. Previously a permissive
-// `[key: string]: SortValue` index signature accepted anything, masking
-// typos like `pipeline.sort({ naem: 1 })` against a schema with `name`.
+// `SortQuery<Schema>` is strictly typed: arbitrary string keys (typos
+// like `pipeline.sort({ naem: 1 })` against a schema with `name`) are
+// rejected at compile time — no permissive `[key: string]` index
+// signature.
 
 type StrictSortSchema = { name: string; age: number };
 

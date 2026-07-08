@@ -36,11 +36,12 @@ export type ProjectQuery<Schema extends Document> = {
     // literals adds nothing. The wide types are also required on their own
     // terms — MongoDB treats any nonzero number as inclusion, so a
     // `number`/`boolean`-typed VARIABLE is a valid projection value even
-    // though its literal can't be known at compile time (rejecting it went
-    // through the deep value union with a spurious TS2589).
+    // though its literal can't be known at compile time (rejecting it
+    // would go through the deep value union and surface a spurious
+    // TS2589).
     | number
     | boolean
-    // Structural acceptance of `$`-strings (§3.8 rule 6): unknown refs are
+    // Structural acceptance of `$`-strings: unknown refs are
     // branded by ValidateProjectQuery's value walk instead of rejecting
     // through the deep refs union on the constraint path. NOTE: a
     // FieldReference<Schema> member here would be ABSORBED by this template
@@ -128,12 +129,6 @@ type ValidateProjectQueryKeys<Schema extends Document, P> = OmitNeverValues<{
  *
  * `Inc`/`Exc` default from the NonId mode pair above; direct 2-arg
  * annotation works thanks to the defaults.
- *
- * Cost: ~3,600 instantiations once at baseline; zero per-stage marginal
- * cost for valid inputs (TS folds the mapped type when shape matches).
- * An `Exclude<keyof P, FieldSelector<Schema>> extends never ? P : ...`
- * early-exit was tried and adds ~600 instantiations without helping
- * the per-stage cost — left out.
  */
 export type ValidateProjectQuery<
   Schema extends Document,
@@ -154,7 +149,7 @@ export type ValidateProjectQuery<
       // Mixed mode: brand each non-_id exclusion VALUE so TS reports
       // TS2322 ("Type 0 is not assignable to PipeSafeError<...>") at
       // the offending 0/false rather than TS2353 on a valid key. Key-
-      // filtered (§3.8 rule 5): only the offending exclusion keys survive.
+      // filtered: only the offending exclusion keys survive.
       OmitNeverValues<{
         [K in keyof P]: K extends "_id" ? never
         : P[K] extends 0 | false ?

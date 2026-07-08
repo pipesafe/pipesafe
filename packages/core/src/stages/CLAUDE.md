@@ -13,7 +13,7 @@ Every stage module exports, with **Schema always the first type parameter**:
   `project`, `group` — all via the `Q & ValidateXxxQuery<Schema, Q>`
   intersection at the parameter position). Validate members re-use the
   Query/operand-kernel building blocks and the shared nested walk in
-  `elements/validation.ts`, never re-spelling a constraint (plan §3.8).
+  `elements/validation.ts`, never re-spelling a constraint.
 - `ResolveXxxOutput<Schema, Q>` — the output schema. MUST wrap its body in
   `PassThrough<Schema, ...>` so upstream `PipeSafeError`s forward verbatim
   (terminal stages `out`/`merge` have no resolver and are exempt).

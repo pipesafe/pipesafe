@@ -423,7 +423,7 @@ export class Pipeline<
   // The validate and resolve positions each compute the projection modes
   // via their defaulted parameters; the second computation is an alias-cache
   // hit, so hoisting them into method generics would buy nothing.
-  // Intersection parameter (§3.8 rule 4): P stays the raw inference /
+  // Intersection parameter: P stays the raw inference /
   // contextual-typing position — a bare mapped wrapper breaks nested
   // expression literals once its value arms are conditionals (same failure
   // class as group's compound-_id) — while ValidateProjectQuery re-checks

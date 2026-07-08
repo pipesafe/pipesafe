@@ -9,11 +9,10 @@ import { ApplySetUpdates } from "../utils/updates";
 
 /**
  * `$`-shaped values (`$`-strings, `$`-keyed objects) are accepted
- * STRUCTURALLY here and re-checked by `ValidateSetQuery` (§3.8 rule 2/6).
- * Rejecting them through the deep `AnyLiteral | Expression` union instead
- * accumulates relation depth on the shared call-checking stack and surfaced
- * spurious statement-level TS2589s next to the real error (plan §7.3
- * addendum).
+ * STRUCTURALLY here and re-checked by `ValidateSetQuery`. Rejecting them
+ * through the deep `AnyLiteral | Expression` union instead accumulates
+ * relation depth on the shared call-checking stack and surfaces spurious
+ * statement-level TS2589s next to the real error.
  *
  * `Expression<Schema>` and `"$$REMOVE"` are AUTOCOMPLETE-ONLY members:
  * for checking they are subsumed by `ExpressionShaped` and `` `$${string}` ``
@@ -31,7 +30,7 @@ export type SetQuery<Schema extends Document> = {
 };
 
 /**
- * Key-filtered validation wrapper for `Pipeline.set` (§3.8 rule 5):
+ * Key-filtered validation wrapper for `Pipeline.set`:
  * OmitNeverValues drops valid keys, so a fully-valid query validates
  * against `{}` and the `$set: Q & ValidateSetQuery<Schema, Q>` intersection
  * costs nothing on the happy path; only offending keys survive, mapped to

@@ -1,13 +1,10 @@
 #!/usr/bin/env bun
 /**
- * CI instantiation-budget gate (plan §7.1 item 2).
- *
- * Whole-project type-instantiation count is the only automatic enforcement
- * the operator-key dispatch standard (§3.4) can have: the assertion files
- * pin SEMANTICS, but a reintroduced full-union membership test on a hot
- * path keeps every assertion green while costing +8% instantiations
- * (measured during the PR #102 review). This script fails CI when the
- * count exceeds the budget in instantiation-budget.json.
+ * CI instantiation-budget gate: fails when the whole-project type
+ * instantiation count exceeds the budget in instantiation-budget.json.
+ * The assertion files pin type SEMANTICS; this gate is what catches
+ * type-level performance regressions (which can leave every assertion
+ * green).
  *
  * Requires a fresh `bun run build` first: tsconfig.benchmark.json includes
  * the examples, which resolve @pipesafe/core to dist.
@@ -75,8 +72,8 @@ if (typeInstantiations > budget.maxInstantiations) {
     `\n❌ Instantiation budget exceeded by ${(
       typeInstantiations - budget.maxInstantiations
     ).toLocaleString()}.\n` +
-      "Investigate the regression before raising the budget — see " +
-      "benchmarking/instantiation-budget.json for the update policy."
+      "Investigate the regression first; raise the budget (and update " +
+      "lastMeasured) only as a deliberate, reviewed decision."
   );
   process.exit(1);
 }

@@ -45,7 +45,7 @@ type NumericAccumulatorOperand<Schema extends Document, Op extends string> =
   // Any registry expression whose declared result is numeric ($size,
   // arithmetic, $toDate arithmetic chains, ...) — derived, so new numeric
   // operators join automatically. ConditionalExpression stays explicit:
-  // $ifNull/$cond results are literal-dependent (declared `unknown`).
+  // $ifNull/$cond results are literal-dependent (no declared `returns`).
   | ExpressionsReturning<Schema, number>
   | ConditionalExpression<Schema>;
 
@@ -180,8 +180,8 @@ export type ResolveAccumulatorFunction<Schema extends Document, Accumulator> =
 export type GroupQuery<Schema extends Document> = {
   _id: AnyLiteral<Schema> | Expression<Schema> | null;
 } & {
-  // ExpressionShaped accepts $-keyed values structurally (§3.8 rule 6):
-  // rejecting at the constraint would misreport the error on sibling
+  // ExpressionShaped accepts $-keyed values structurally: rejecting at
+  // the constraint would misreport the error on sibling
   // keys. The NAME check happens in ValidateGroupQuery instead — the key
   // must be registered (AccumulatorSpec) or allow-listed
   // (UnimplementedAccumulators, e.g. $stdDevPop/$top/$mergeObjects);
@@ -208,10 +208,9 @@ type CheckedAccumulatorOps = "$sum" | "$avg" | "$min" | "$max";
  * compare the value against the registry's own shape (`AccumulatorFor`),
  * and on failure map the key to the brand EXTRACTED from the registry
  * operand's union — the message is spelled once, inside
- * NumericAccumulatorOperand/MinMaxAccumulatorOperand's RequiresMsg (§3.8
- * rule 3).
+ * NumericAccumulatorOperand/MinMaxAccumulatorOperand's RequiresMsg.
  */
-/** The registry operand's own brand, extracted — spelled once (§3.8 rule 3). */
+/** The registry operand's own brand, extracted — spelled once. */
 type BrandedAccumulatorFor<
   Schema extends Document,
   Op extends CheckedAccumulatorOps,
@@ -293,16 +292,15 @@ type ValidateGroupValue<Schema extends Document, K, V> =
   : never;
 
 /**
- * Key-filtered validation wrapper for `Pipeline.group` (§7.4). GroupQuery's
+ * Key-filtered validation wrapper for `Pipeline.group`. GroupQuery's
  * `[key: string]` index signature suppresses per-value operand checks at
- * the call site (§3.8 rule 2), so the accumulator brands never fired from
+ * the call site, so the accumulator brands cannot fire from
  * chained calls. This wrapper re-checks the inferred literal at the
  * parameter position via intersection (`$group: G & ValidateGroupQuery<…>`
  * — the intersection form is REQUIRED: replacing the raw `G` parameter
- * breaks contextual typing of compound `_id` expressions, in both the bare
- * and concrete-`_id` variants; see plan §7.4).
+ * breaks contextual typing of compound `_id` expressions).
  *
- * Cost control (§3.8 rule 5): OmitNeverValues filters valid keys out, so a
+ * Cost control: OmitNeverValues filters valid keys out, so a
  * fully-valid query — the common case — validates against `{}` and the
  * intersection relation short-circuits.
  *

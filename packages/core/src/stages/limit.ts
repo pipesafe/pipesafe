@@ -3,7 +3,7 @@ import { PassThrough } from "../utils/errors";
 
 /**
  * `$limit` takes a positive document count. Schema-free scalar Query
- * (§3.1/§7.2): exported so `Pipeline.limit` references the module's type
+ * exported so `Pipeline.limit` references the module's type
  * rather than an inline scalar.
  */
 export type LimitQuery = number;

@@ -907,7 +907,7 @@ type UnionIfNullOperandTypes<
  * positions became readonly, `<const>` call sites infer readonly tuples, and
  * a readonly pattern matches both mutabilities while a mutable pattern
  * matches neither (a mutable-pattern arm silently falls through and the
- * resolver DROPS the field — a real bug caught in review round 3).
+ * resolver DROPS the field).
  */
 type InferDependentExpression<Schema extends Document, Expr> =
   Expr extends { $concatArrays: infer Arrays } ?
@@ -951,8 +951,6 @@ export type InferExpression<Schema extends Document, Expr> =
   : [OperatorKeyOf<Expr>] extends [keyof ExpressionSpec<Schema>] ?
     // Declared `returns` of a registered operator; a dependent entry the
     // arm dispatch missed degrades to `unknown` (never a dropped field).
-    // (Hoisting this into a cached alias measured neutral — the alias
-    // cache already shares it; see the hoisting rules in CLAUDE.md.)
     ExpressionSpec<Schema>[OperatorKeyOf<Expr> &
       keyof ExpressionSpec<Schema>] extends { returns: infer R } ?
       R

@@ -1,28 +1,25 @@
 /**
- * THE nested-value validation kernel (§3.8, §7.2).
+ * THE nested-value validation kernel.
  *
- * Query-vs-Validate delineation (§3.8): the Query types ACCEPT `$`-shaped
- * values structurally (`` `$${string}` `` strings, `ExpressionShaped`
- * objects) so that failing relations stay shallow — rejecting through the
- * deep `AnyLiteral | Expression` union accumulates relation depth on the
- * shared call-checking stack and surfaces spurious TS2589s (plan §7.3
- * addendum). The helpers here are the matching REJECTION surface: stage
- * `ValidateXxxQuery` wrappers re-check the inferred literal with them and
- * map offending keys to brands (or the registry's expected operand shape).
+ * The Query types ACCEPT `$`-shaped values structurally (`` `$${string}` ``
+ * strings, `ExpressionShaped` objects) — rejecting through the deep
+ * `AnyLiteral | Expression` union accumulates relation depth on the shared
+ * call-checking stack and surfaces spurious TS2589s. The helpers here are
+ * the matching REJECTION surface: stage `ValidateXxxQuery` wrappers
+ * re-check the inferred literal with them and map offending keys to brands
+ * (or the registry's expected operand shape).
  *
  * Contract shared by every helper: `never` means "valid — nothing to
  * report"; anything else is the replacement type the wrapper maps the key
- * to. Constraints are never re-spelled here (§3.8 rule 3): field
- * references resolve through `GetFieldTypeWithoutArrays` (the same
- * authority inference uses, so acceptance and inference cannot disagree
- * and the Field brand is spelled once), expression operands check against
- * the registry's `ExpressionFor<Schema, Op>`.
+ * to. Constraints are never re-spelled here: field references resolve
+ * through `GetFieldTypeWithoutArrays` (the same authority inference uses,
+ * so acceptance and inference cannot disagree and the Field brand is
+ * spelled once); expression operands check against the registry's
+ * `ExpressionFor<Schema, Op>`.
  *
- * Operator names are checked against an EXPLICIT allow-list: MongoDB has
- * 100+ expression operators and the registry models a subset, so the
- * remainder is enumerated by name in `UnimplementedExpressionOps`
- * (expressions.ts) — accepted with no operand validation or inference.
- * A `$`-key outside registry + allow-list is a typo and brands with
+ * Operator names must be registered (`ExpressionSpec`) or allow-listed
+ * (`UnimplementedExpressionOps` — accepted with no operand validation or
+ * inference); anything else is a typo and brands with
  * `UnknownOperatorError`. Structurally malformed shapes brand too:
  * multi-operator objects, operator keys mixed with plain keys, and
  * registered operators with invalid operands.

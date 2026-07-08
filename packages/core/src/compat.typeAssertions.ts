@@ -1,5 +1,5 @@
 /**
- * Compat-alias conformance assertions (§3.7 / §7.5).
+ * Compat-alias conformance assertions.
  *
  * Every deprecated alias in compat.ts must stay IDENTICAL to its
  * replacement until removal at the next major. Imports go through

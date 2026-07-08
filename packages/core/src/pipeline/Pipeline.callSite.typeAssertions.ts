@@ -33,9 +33,7 @@ const _match_bad = new Pipeline<User>().match({ name: { $gte: "Alice" } });
 const _sort_bad = new Pipeline<User>().sort({ naem: 1 });
 
 // set — typo'd field reference should fail. ValidateSetQuery brands it
-// (`Field 'naem' is not on the schema.`) — previously this rejected through
-// the deep AnyLiteral | Expression union and surfaced a spurious TS2589
-// next to the error (plan §7.3 addendum).
+// (`Field 'naem' is not on the schema.`).
 // @ts-expect-error  '$naem' is not a valid field reference on User
 const _set_bad = new Pipeline<User>().set({ display: "$naem" });
 
@@ -44,16 +42,15 @@ const _set_bad = new Pipeline<User>().set({ display: "$naem" });
 const _unset_bad = new Pipeline<User>().unset("naem");
 
 // set — a TOP-LEVEL invalid expression must fail: the ObjectLiteral $-key
-// guard (elements/literals.ts, §7.3) stops it from slipping through the
-// literal arm, so it must pass Expression<User> or be rejected.
+// guard (elements/literals.ts) stops it from slipping through the literal
+// arm, so it must pass Expression<User> or be rejected.
 const _set_bad_expr = new Pipeline<User>().set({
   // @ts-expect-error  '$name' is a string field; $add requires numeric operands
   total: { $add: ["$name", 1] },
 });
 
 // set — a VALID expression nested inside an object literal must keep
-// compiling (accepted via ObjectLiteral's expression-shaped arm; before the
-// $-key guard this only worked through the vacuous-assignability bug).
+// compiling (accepted via ObjectLiteral's expression-shaped arm).
 const _set_good_nested = new Pipeline<User>().set({
   meta: { computed: { $add: ["$age", 1] } },
 });
@@ -122,10 +119,9 @@ const _set_system_var_ok = new Pipeline<User>().set({
   now: "$$NOW",
 });
 
-// group — accumulator operand brands now fire at the chained call site via
-// the key-filtered ValidateGroupQuery intersection (§7.4; GroupQuery's
-// `[key: string]:` index signature suppresses the in-Query brands, §3.8
-// rule 2).
+// group — accumulator operand brands fire at the chained call site via
+// the key-filtered ValidateGroupQuery intersection (GroupQuery's
+// `[key: string]:` index signature suppresses the in-Query brands).
 const _group_bad_sum = new Pipeline<User>().group({
   _id: null,
   // @ts-expect-error  '$name' is a string field; $sum requires a numeric operand
@@ -166,8 +162,8 @@ const _group_sum_size_ok = new Pipeline<User>().group({
   n: { $sum: { $size: "$tags" } },
 });
 
-// group — non-alphanumeric-leading strings are valid comparables (round-3
-// fix: NoDollarString can't express "string minus $-prefix").
+// group — non-alphanumeric-leading strings are valid comparables
+// (NoDollarString can't express "string minus $-prefix").
 const _group_min_underscore_ok = new Pipeline<User>().group({
   _id: null,
   m: { $min: "_pending" },
@@ -182,7 +178,7 @@ const _group_bad_mixed_accum = new Pipeline<User>().group({
 });
 
 // group — the compound-_id pattern must KEEP compiling under the wrapper
-// (the reason the intersection form is required; plan §7.4), and the valid
+// (the reason the intersection form is required), and the valid
 // accumulators — including Date-typed $min/$max — must not brand.
 const _group_compound_id = new Pipeline<User>().group({
   _id: { day: { $dateToString: { format: "%Y-%m-%d", date: "$joinedAt" } } },
@@ -232,8 +228,8 @@ const _project_bad_expr = new Pipeline<User>().project({
   total: { $add: ["$name", 1] },
 });
 
-// project — an unknown field reference value fails with the Field brand at
-// the call site (previously it only surfaced in the OUTPUT schema).
+// project — an unknown field reference value fails with the Field brand
+// at the call site.
 // @ts-expect-error  '$naem' is not a valid field reference on User
 const _project_bad_ref = new Pipeline<User>().project({ display: "$naem" });
 
