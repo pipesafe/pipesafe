@@ -6,6 +6,7 @@ import type {
   ExpressionCategory,
   OpsInCategory,
   LiteralDependentOps,
+  UnimplementedExpressionOps,
   AddExpression,
   SubtractExpression,
   MultiplyExpression,
@@ -296,9 +297,23 @@ type _DerivedLiteralDependentOps = Assert<
   >
 >;
 
+// Registry/allow-list DISJOINTNESS: "add a registry entry + DELETE its
+// allow-list line" is the documented recipe, and validation checks the
+// registry BEFORE the allow-list — so an operator in both is silently dead
+// allow-list weight today, and a validation-ladder reorder would turn it
+// into an operand-check bypass. This pin makes the forgotten DELETE step a
+// compile failure.
+type _RegistryAllowListDisjoint = Assert<
+  Equal<
+    Extract<keyof ExpressionSpec<Document>, UnimplementedExpressionOps>,
+    never
+  >
+>;
+
 export type {
   _DerivedLiteralDependentOps,
   _EveryOpCategorized,
+  _RegistryAllowListDisjoint,
   _Assert_AddBrand,
   _Assert_SubtractBrand,
   _Assert_SubtractIs2Tuple,

@@ -19,17 +19,14 @@ import { ApplySetUpdates } from "../utils/updates";
 export type ResolveLookupOutput<
   Schema extends Document,
   NewKey extends string,
-  PipelineOutput extends Document,
+  Foreign extends Document,
 > = PassThrough<
   Schema,
   // distribute over union schemas
   Schema extends unknown ?
     IsDottedKey<NewKey> extends true ?
-      ApplySetUpdates<
-        Schema,
-        FlattenDotSet<{ [K in NewKey]: PipelineOutput[] }>
-      >
-    : Prettify<Omit<Schema, NewKey> & { [K in NewKey]: PipelineOutput[] }>
+      ApplySetUpdates<Schema, FlattenDotSet<{ [K in NewKey]: Foreign[] }>>
+    : Prettify<Omit<Schema, NewKey> & { [K in NewKey]: Foreign[] }>
   : never
 >;
 
@@ -42,18 +39,18 @@ export type ResolveLookupOutput<
  * arrays, and dotted paths whose inferred type is array-shaped.
  */
 export type LookupCompatibleFieldPaths<
-  ForeignSchema extends Document,
+  Foreign extends Document,
   LocalFieldType,
 > =
   | FieldPathsThatInferToForLookup<
-      ForeignSchema,
+      Foreign,
       LocalFieldType extends string ? string : LocalFieldType
     >
-  | FieldPathsThatInferToForLookup<ForeignSchema, LocalFieldType>
+  | FieldPathsThatInferToForLookup<Foreign, LocalFieldType>
   | (LocalFieldType extends (infer Element)[] ?
-      FieldPathsThatInferToForLookup<ForeignSchema, Element>
+      FieldPathsThatInferToForLookup<Foreign, Element>
     : never)
-  | FieldPathsThatInferToForLookup<ForeignSchema, LocalFieldType[]>;
+  | FieldPathsThatInferToForLookup<Foreign, LocalFieldType[]>;
 
 /**
  * Resolves to the union of valid foreign-field paths, OR a branded
@@ -68,14 +65,12 @@ export type LookupCompatibleFieldPaths<
  * no-compatible-field brand on top of it.
  */
 export type LookupForeignFieldOrError<
-  ForeignSchema extends Document,
+  Foreign extends Document,
   LocalFieldType,
   LocalField extends string,
 > =
-  ForeignSchema extends PipeSafeError<string> ? ForeignSchema
+  Foreign extends PipeSafeError<string> ? Foreign
   : LocalFieldType extends PipeSafeError<string> ? LocalFieldType
-  : [LookupCompatibleFieldPaths<ForeignSchema, LocalFieldType>] extends (
-    [never]
-  ) ?
+  : [LookupCompatibleFieldPaths<Foreign, LocalFieldType>] extends [never] ?
     PipeSafeError<`Foreign collection has no field with a type compatible with localField '${LocalField}'.`>
-  : LookupCompatibleFieldPaths<ForeignSchema, LocalFieldType>;
+  : LookupCompatibleFieldPaths<Foreign, LocalFieldType>;

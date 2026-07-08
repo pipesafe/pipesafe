@@ -1,6 +1,6 @@
 import { Document, NonExpandableTypes } from "../utils/objects";
 import { IndexStr, Join } from "../utils/strings";
-import { PipeSafeError } from "../utils/errors";
+import { UnknownFieldError } from "../utils/errors";
 
 // Types related to field selectors
 // These are used in $match stages as KEYS of documents
@@ -72,8 +72,7 @@ export type GetFieldType<Schema, Path extends string> =
  * stages/match.ts).
  */
 export type GetFieldTypeOrError<Schema, Path extends string> =
-  [GetFieldType<Schema, Path>] extends [never] ?
-    PipeSafeError<`Field '${Path}' is not on the schema.`>
+  [GetFieldType<Schema, Path>] extends [never] ? UnknownFieldError<Path>
   : GetFieldType<Schema, Path>;
 
 // Infer the type of a field at a given selector

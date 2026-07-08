@@ -1,7 +1,13 @@
 import { Assert, AssertPipeSafeError, Equal } from "../utils/tests";
 import type { Document } from "../utils/objects";
 import type { PipeSafeError } from "../utils/errors";
-import { AccumulatorFunction, ResolveGroupOutput } from "./group";
+import {
+  AccumulatorFunction,
+  AccumulatorSpec,
+  CheckedAccumulatorOps,
+  ResolveGroupOutput,
+  UnimplementedAccumulators,
+} from "./group";
 
 /**
  * Type Resolution Behaviors for $group Stage:
@@ -796,6 +802,60 @@ type _Assert_MinValid = Assert<
   Equal<_MinValidResult, { _id: string; earliest: Date }>
 >;
 
+// ---------------------------------------------------------------------------
+// `$$`-system variables in _id/accumulator positions: accepted, and their
+// inference degrades to `unknown` ($push wraps it in an array) — never to a
+// dropped field or a brand.
+// ---------------------------------------------------------------------------
+
+type _SystemVarGroupResult = ResolveGroupOutput<
+  { a: string },
+  { _id: "$$NOW"; latest: { $max: "$$NOW" }; docs: { $push: "$$ROOT" } }
+>;
+type _Assert_SystemVarGroup = Assert<
+  Equal<
+    _SystemVarGroupResult,
+    { _id: unknown; latest: unknown; docs: unknown[] }
+  >
+>;
+
+// ---------------------------------------------------------------------------
+// Registry lockstep pins (mirroring expressions.typeAssertions.ts)
+// ---------------------------------------------------------------------------
+
+// Registry/allow-list DISJOINTNESS: validation checks AccumulatorSpec before
+// UnimplementedAccumulators, so an accumulator in both is dead allow-list
+// weight — and a forgotten DELETE step after registering one would sit
+// silently. Compile failure instead.
+type _AccumulatorAllowListDisjoint = Assert<
+  Equal<
+    Extract<keyof AccumulatorSpec<Document>, UnimplementedAccumulators>,
+    never
+  >
+>;
+
+// CheckedAccumulatorOps must be exactly the registry entries whose operand
+// union carries a PipeSafeError arm (the brand is what the re-check
+// surfaces). The IsAny guard is load-bearing: FlexibleAccumulatorOperand
+// collapses to `any` under LiteralOrFieldReferenceInferringTo<Schema, any>,
+// and `Extract<any, PipeSafeError<string>>` is `any` — without the guard
+// $push/$addToSet/$first/$last would wrongly join the derived set.
+type IsAny<T> = 0 extends 1 & T ? true : false;
+type _DerivedCheckedAccumulatorOps = {
+  [K in keyof AccumulatorSpec<Document>]: IsAny<
+    AccumulatorSpec<Document>[K]["operand"]
+  > extends true ?
+    never
+  : [
+    Extract<AccumulatorSpec<Document>[K]["operand"], PipeSafeError<string>>,
+  ] extends [never] ?
+    never
+  : K;
+}[keyof AccumulatorSpec<Document>];
+type _CheckedOpsMatchRegistryBrands = Assert<
+  Equal<_DerivedCheckedAccumulatorOps, CheckedAccumulatorOps>
+>;
+
 export type {
   _Assert_SumBrand,
   _Assert_AvgBrand,
@@ -803,4 +863,7 @@ export type {
   _Assert_MaxBrand,
   _Assert_SumValid,
   _Assert_MinValid,
+  _Assert_SystemVarGroup,
+  _AccumulatorAllowListDisjoint,
+  _CheckedOpsMatchRegistryBrands,
 };

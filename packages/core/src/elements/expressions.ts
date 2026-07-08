@@ -81,9 +81,16 @@ type ArithmeticOperand<Schema extends Document, Op extends string> =
 
 /**
  * String expression operands — strings and field references to strings only.
- * Does not support nested expressions to keep things simple. The branded
- * `PipeSafeError` arm surfaces in IDE hovers when a non-string operand is
- * passed (e.g. a numeric field reference) instead of degrading silently.
+ * Does not support nested expressions to keep things simple.
+ *
+ * The literal arm is deliberately the FULL `string` (which subsumes
+ * `$`-strings): this type sits in ACCEPTANCE positions, where narrowing to
+ * NoDollarString would reject legit separators (" ", "(", ""). The actual
+ * rejection of typo'd/non-string `$`-refs happens element-wise in
+ * ValidateConcatValue (elements/validation.ts), which dispatches BEFORE the
+ * registry relation — so the wide literal arm here cannot swallow them at
+ * chained call sites. The brand's message is what ValidateConcatElement
+ * surfaces (same RequiresMsg).
  */
 type StringOperand<
   Schema extends Document,
@@ -542,6 +549,22 @@ export type UnimplementedExpressionOps =
   // Timestamp
   | "$tsIncrement"
   | "$tsSecond"
+  // Trigonometry
+  | "$acos"
+  | "$acosh"
+  | "$asin"
+  | "$asinh"
+  | "$atan"
+  | "$atan2"
+  | "$atanh"
+  | "$cos"
+  | "$cosh"
+  | "$degreesToRadians"
+  | "$radiansToDegrees"
+  | "$sin"
+  | "$sinh"
+  | "$tan"
+  | "$tanh"
   // Type conversion / inspection
   | "$convert"
   | "$isNumber"
@@ -552,6 +575,7 @@ export type UnimplementedExpressionOps =
   | "$toLong"
   | "$toObjectId"
   | "$toString"
+  | "$toUUID"
   | "$type";
 
 // ----------------------------------------------------------------------------
@@ -645,10 +669,6 @@ export type MapExpression<Schema extends Document> = ExpressionFor<
   Schema,
   "$map"
 >;
-export type SumExpression<Schema extends Document> = ExpressionFor<
-  Schema,
-  "$sum"
->;
 export type DateToStringExpression<Schema extends Document> = ExpressionFor<
   Schema,
   "$dateToString"
@@ -664,10 +684,6 @@ export type DateAddExpression<Schema extends Document> = ExpressionFor<
 export type DateSubtractExpression<Schema extends Document> = ExpressionFor<
   Schema,
   "$dateSubtract"
->;
-export type ToDateExpression<Schema extends Document> = ExpressionFor<
-  Schema,
-  "$toDate"
 >;
 export type AddExpression<Schema extends Document> = ExpressionFor<
   Schema,
@@ -692,50 +708,6 @@ export type ModExpression<Schema extends Document> = ExpressionFor<
 export type ConcatExpression<Schema extends Document> = ExpressionFor<
   Schema,
   "$concat"
->;
-export type IfNullExpression<Schema extends Document> = ExpressionFor<
-  Schema,
-  "$ifNull"
->;
-export type CondExpression<Schema extends Document> = ExpressionFor<
-  Schema,
-  "$cond"
->;
-export type LetExpression<Schema extends Document> = ExpressionFor<
-  Schema,
-  "$let"
->;
-export type LiteralExpression<Schema extends Document> = ExpressionFor<
-  Schema,
-  "$literal"
->;
-export type InAggExpression<Schema extends Document> = ExpressionFor<
-  Schema,
-  "$in"
->;
-export type EqExpression<Schema extends Document> = ExpressionFor<
-  Schema,
-  "$eq"
->;
-export type NeExpression<Schema extends Document> = ExpressionFor<
-  Schema,
-  "$ne"
->;
-export type GtExpression<Schema extends Document> = ExpressionFor<
-  Schema,
-  "$gt"
->;
-export type GteExpression<Schema extends Document> = ExpressionFor<
-  Schema,
-  "$gte"
->;
-export type LtExpression<Schema extends Document> = ExpressionFor<
-  Schema,
-  "$lt"
->;
-export type LteExpression<Schema extends Document> = ExpressionFor<
-  Schema,
-  "$lte"
 >;
 
 // Category unions (derived views over the registry).
@@ -964,43 +936,3 @@ export type InferExpression<Schema extends Document, Expr> =
     // registry + allow-list), and a branded call site never ships, so its
     // inferred output type is moot.
     unknown;
-
-// ----------------------------------------------------------------------------
-// Category inference views — kept for assertion-level use; all key-dispatched
-// ----------------------------------------------------------------------------
-
-/**
- * Infer the result type of an array expression (key-dispatched view).
- */
-export type InferArrayExpression<Schema extends Document, Expr> =
-  [OperatorKeyOf<Expr>] extends [ArrayOps] ? InferExpression<Schema, Expr>
-  : never;
-
-/**
- * Infer the result type of a date expression (key-dispatched view).
- */
-export type InferDateExpression<Schema extends Document, Expr> =
-  [OperatorKeyOf<Expr>] extends [DateOps] ? InferExpression<Schema, Expr>
-  : never;
-
-/**
- * Infer the result type of a string expression (key-dispatched view).
- */
-export type InferStringExpression<Schema extends Document, Expr> =
-  [OperatorKeyOf<Expr>] extends [StringOps] ? InferExpression<Schema, Expr>
-  : never;
-
-/**
- * Infer the result type of an arithmetic expression (key-dispatched view).
- */
-export type InferArithmeticExpression<Schema extends Document, Expr> =
-  [OperatorKeyOf<Expr>] extends [ArithmeticOps] ? InferExpression<Schema, Expr>
-  : never;
-
-/**
- * Infer the result type of a conditional expression (key-dispatched view).
- */
-export type InferConditionalExpression<Schema extends Document, Expr> =
-  [OperatorKeyOf<Expr>] extends [ConditionalOps] ?
-    InferDependentExpression<Schema, Expr>
-  : never;

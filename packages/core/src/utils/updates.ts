@@ -16,59 +16,10 @@
 import {
   Document,
   ExcludeUndefined,
+  HaveSameKeys,
   IsPlainObject,
   Prettify,
-  UnionToIntersection,
 } from "./objects";
-import { HasDottedKeys, IsDottedKey } from "./paths";
-
-// Extract ancestor paths from dotted keys
-// Example: "a.b.c" -> ["a", "a.b"]
-// This helps us only process relevant schema paths
-type ExtractAncestorPaths<T extends string> =
-  T extends `${infer First}.${infer Rest}` ?
-    IsDottedKey<Rest> extends true ?
-      First | `${First}.${ExtractAncestorPaths<Rest>}`
-    : First
-  : never;
-
-// Get all ancestor paths from all dotted keys in a type
-type GetAllAncestorPaths<T> = {
-  [K in keyof T]: K extends string ?
-    IsDottedKey<K> extends true ?
-      ExtractAncestorPaths<K>
-    : never
-  : never;
-}[keyof T];
-
-// Extract a single path from schema (recursive helper)
-type ExtractSinglePath<Schema extends Document, Path extends string> =
-  Path extends `${infer First}.${infer Rest}` ?
-    First extends keyof Schema ?
-      Rest extends string ?
-        Schema[First] extends infer V ?
-          V extends Document ?
-            { [K in First]: ExtractSinglePath<V, Rest> }
-          : { [K in First]: V }
-        : never
-      : First extends keyof Schema ? { [K in First]: Schema[K] }
-      : {}
-    : {}
-  : Path extends keyof Schema ? { [K in Path]: Schema[K] }
-  : {};
-
-// Extract all relevant schema paths for dotted keys (handles union of paths)
-// Merges all extracted paths into a single object
-type ExtractRelevantSchemaPaths<
-  Schema extends Document,
-  Updates extends Document,
-> =
-  GetAllAncestorPaths<Updates> extends infer Paths ?
-    Paths extends string ?
-      // Union of paths - extract each and merge
-      UnionToIntersection<ExtractSinglePath<Schema, Paths>>
-    : {}
-  : {};
 
 // Check if a type contains any non-never values (recursively)
 // Used to determine if $$REMOVE operations are setting any actual values
@@ -241,23 +192,20 @@ type ReorderKeysToMatchSchema<
   Schema extends Document,
   Output extends Document,
 > =
-  keyof Output extends keyof Schema ?
-    keyof Schema extends keyof Output ?
-      Output // Keys match exactly - no reordering needed
-    : ReorderedKeys<Schema, Output>
+  HaveSameKeys<Output, Schema> extends true ?
+    Output // Keys match exactly - no reordering needed
   : ReorderedKeys<Schema, Output>;
 
-// Selective path processing — only process schema paths that are ancestors of
-// dotted keys. Reduces type instantiation depth when the schema has many
-// nested objects but the query has only a few dotted keys.
-export type ApplySetUpdates<Schema extends Document, Updates extends Document> =
-  HasDottedKeys<Updates> extends true ?
-    // Has dotted keys - use selective schema extraction
-    ReorderKeysToMatchSchema<Schema, ApplySetUpdatesSelective<Schema, Updates>>
-  : // No dotted keys - use standard processing (no optimization needed)
-    ReorderKeysToMatchSchema<Schema, ApplySetUpdatesStandard<Schema, Updates>>;
+// The module contract (header) guarantees `Updates` is already dot-EXPANDED
+// — callers run FlattenDotSet first — so there is exactly one merge path.
+// (A "Selective" dotted-key branch used to live here; it was unreachable
+// under the contract AND computed a union instead of the merged
+// intersection — deleted rather than fixed.)
+export type ApplySetUpdates<
+  Schema extends Document,
+  Updates extends Document,
+> = ReorderKeysToMatchSchema<Schema, ApplySetUpdatesStandard<Schema, Updates>>;
 
-// Standard processing for non-dotted keys (no optimization needed)
 type ApplySetUpdatesStandard<
   Schema extends Document,
   Updates extends Document,
@@ -278,35 +226,3 @@ type ApplySetUpdatesStandard<
     }
   >
 >;
-
-// Selective processing - only merge with relevant schema paths
-type ApplySetUpdatesSelective<
-  Schema extends Document,
-  Updates extends Document,
-> =
-  ExtractRelevantSchemaPaths<Schema, Updates> extends infer RelevantSchema ?
-    RelevantSchema extends Document ?
-      Prettify<
-        RemoveNeverFields<
-          // Preserve non-updated keys from schema (including non-relevant paths)
-          Pick<Schema, Exclude<keyof Schema, keyof Updates>> & {
-            // Required update keys - only merge with relevant schema paths
-            [K in RequiredUpdateKeys<Schema, Updates>]-?: MergeSetValue<
-              K extends keyof RelevantSchema ? RelevantSchema[K]
-              : K extends keyof Schema ? Schema[K]
-              : never,
-              Updates[K]
-            >;
-          } & {
-            // Optional update keys
-            [K in OptionalUpdateKeys<Schema, Updates>]?: MergeSetValue<
-              K extends keyof RelevantSchema ? RelevantSchema[K]
-              : K extends keyof Schema ? Schema[K]
-              : never,
-              Updates[K]
-            >;
-          }
-        >
-      >
-    : ApplySetUpdatesStandard<Schema, Updates>
-  : ApplySetUpdatesStandard<Schema, Updates>;

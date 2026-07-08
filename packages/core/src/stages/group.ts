@@ -178,8 +178,12 @@ export type ResolveAccumulatorFunction<Schema extends Document, Accumulator> =
   : never;
 
 export type GroupQuery<Schema extends Document> = {
-  _id: AnyLiteral<Schema> | Expression<Schema> | null;
+  // `$$`-system variables ($$NOW, $$ROOT, ...) are valid _id expressions;
+  // AnyLiteral's string arm is NoDollarString, so they need their own arm.
+  _id: AnyLiteral<Schema> | Expression<Schema> | `$$${string}` | null;
 } & {
+  // The index signature covers _id too, so it must also carry the `$$` arm
+  // (an intersection member rejecting _id would reject the whole query).
   // ExpressionShaped accepts $-keyed values structurally: rejecting at
   // the constraint would misreport the error on sibling
   // keys. The NAME check happens in ValidateGroupQuery instead — the key
@@ -190,6 +194,7 @@ export type GroupQuery<Schema extends Document> = {
     | AnyLiteral<Schema>
     | AccumulatorFunction<Schema>
     | ExpressionShaped
+    | `$$${string}`
     | null;
 };
 
@@ -201,7 +206,9 @@ export type GroupQuery<Schema extends Document> = {
  * ($push/$addToSet/$first/$last/$count) accept any operand by design and
  * stay out.
  */
-type CheckedAccumulatorOps = "$sum" | "$avg" | "$min" | "$max";
+// Exported for the group.typeAssertions.ts pin that keeps this set in
+// lockstep with the registry (the brand-carrying operand entries).
+export type CheckedAccumulatorOps = "$sum" | "$avg" | "$min" | "$max";
 
 /**
  * Registry-derived accumulator re-check: dispatch on the operator key,
@@ -222,21 +229,17 @@ type BrandedAccumulatorFor<
 };
 
 type ValidateAccumulatorValue<Schema extends Document, A> =
-  // Schema-FREE fast-accept: literal operands that are valid regardless of
-  // the schema. Besides skipping the registry work for the common
-  // `$sum: 1` case, this arm RESOLVES for unresolved generic schemas —
-  // without it, generic-schema pipeline helpers
-  // (`<D extends Document>(p: Pipeline<D, D>) => p.group(...)`) fail on
-  // deferred conditionals even for schema-independent operands.
-  [A] extends (
-    [
-      | { $sum: number }
-      | { $avg: number }
-      | { $min: number | Date | boolean | NoDollarString }
-      | { $max: number | Date | boolean | NoDollarString },
-    ]
-  ) ?
-    never
+  // Schema-FREE fast-accept: an operand valid against the EMPTY schema is
+  // valid against any schema (the ref arms collapse to `never` under `{}`).
+  // DERIVED from the registry (`AccumulatorFor<{}, Op>`) so an operand
+  // narrowing or a new checked accumulator cannot silently diverge from
+  // this arm — it is checked FIRST, so a hand-spelled copy that drifted
+  // wider would make the registry brands unreachable. Besides skipping the
+  // registry work for the common `$sum: 1` case, this arm RESOLVES for
+  // unresolved generic schemas — without it, generic-schema pipeline
+  // helpers (`<D extends Document>(p: Pipeline<D, D>) => p.group(...)`)
+  // fail on deferred conditionals even for schema-independent operands.
+  [A] extends [AccumulatorFor<{}, OperatorKeyOf<A>>] ? never
   : // Schema-INDEPENDENT name check first, so it still runs on wide
   // schemas AND resolves for generic-schema helpers: the accumulator must
   // be registered or allow-listed — anything else is a typo, not a
@@ -245,7 +248,12 @@ type ValidateAccumulatorValue<Schema extends Document, A> =
     [keyof AccumulatorSpec<Schema> | UnimplementedAccumulators]
   ) ?
     OperatorKeyOf<A> extends infer Op extends CheckedAccumulatorOps ?
-      string extends keyof Schema ?
+      // `$$`-system variables ($$NOW, $$ROOT, ...) are valid MongoDB in any
+      // accumulator position (mirrors the kernel's tier-1 `$$` arm in
+      // ValidateNestedValue) — schema-free, and checked before the operand
+      // relation so they never reach the brand.
+      A[Op & keyof A] extends `$$${string}` ? never
+      : string extends keyof Schema ?
         never // operand checks are meaningless on a wide/index-signature schema
       : // $min/$max: ANY non-`$` string literal is a comparable. The union
       // relation below can't express "string minus `$`-prefix" (NoDollarString

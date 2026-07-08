@@ -1,6 +1,6 @@
 import { Document, NonExpandableTypes, Prettify } from "../utils/objects";
 import { Join, DollarPrefixed, WithoutDollar } from "../utils/strings";
-import { PipeSafeError } from "../utils/errors";
+import { PipeSafeError, UnknownFieldError } from "../utils/errors";
 import { HasOperatorKey } from "../utils/dispatch";
 import { InferExpression } from "./expressions";
 
@@ -51,15 +51,14 @@ export type GetFieldTypeWithoutArrays<
   // ("$name.length", "$joinedAt.getTime") are not MongoDB paths — brand
   // before the keyof lookup would admit them.
   Schema extends NonExpandableTypes | string | number | boolean | bigint ?
-    PipeSafeError<`Field '${FullPath}' is not on the schema.`>
+    UnknownFieldError<FullPath>
   : Path extends keyof Schema ?
     Schema[Path] // Direct property access
   : Path extends `${infer Head}.${infer Tail}` ?
     Head extends keyof Schema ?
       GetFieldTypeWithoutArrays<Schema[Head], Tail, FullPath> // Recurse into property
-    : PipeSafeError<`Field '${FullPath}' is not on the schema.`>
-  : Path extends string ?
-    PipeSafeError<`Field '${FullPath}' is not on the schema.`>
+    : UnknownFieldError<FullPath>
+  : Path extends string ? UnknownFieldError<FullPath>
   : never;
 
 // Infer the type of a field at a given selector
@@ -137,7 +136,17 @@ export type FieldReferencesThatInferTo<Schema extends Document, DesiredType> =
  */
 export type InferNestedFieldReference<Schema extends Document, Obj> =
   Obj extends FieldReference<Schema> ? InferFieldReference<Schema, Obj>
-  : Obj extends `$${string}` ? never
+  : // Nested `$$REMOVE` deletes the field: `never` here is load-bearing —
+  // RemoveNeverFields (utils/updates.ts) strips the key from the output.
+  Obj extends "$$REMOVE" ? never
+  : // Other `$$`-system variables ($$NOW, $$ROOT, ...) are valid MongoDB
+  // whose inference is not modeled: degrade to `unknown`, never to a
+  // dropped field (validation accepts them, so `never` would silently
+  // erase the key from the output schema).
+  Obj extends `$$${string}` ? unknown
+  : // Unknown single-`$` refs: validation brands them at the call site, so
+  // inference must not invent a type for them.
+  Obj extends `$${string}` ? never
   : Obj extends unknown[] ? InferNestedFieldReferenceArray<Schema, Obj>
   : Obj extends object ?
     Obj extends NonExpandableTypes ? Obj

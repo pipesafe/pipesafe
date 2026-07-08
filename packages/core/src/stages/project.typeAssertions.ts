@@ -915,7 +915,23 @@ type _InvalidValueStillBranded = ResolveProjectOutput<
 type _Assert_InvalidValueBrand = Assert<
   AssertPipeSafeError<
     _InvalidValueStillBranded["bogus"],
-    "Invalid projection value for field 'bogus'."
+    "Stage '$project' requires a valid projection value for field 'bogus'."
+  >
+>;
+
+// Unknown DOTTED inclusion keys brand at the resolver too (via
+// GetFieldTypeOrError) — previously they silently resolved to a `never`
+// leaf while plain unknown keys branded, and the resolver's own comment
+// promised otherwise. The chained API already rejects them at the
+// parameter position; this pins the resolver-level authority.
+type _UnknownDottedInclusion = ResolveProjectOutput<
+  ProjectErrorSchema,
+  { name: 1; "user.nam": 1 }
+>;
+type _Assert_UnknownDottedInclusionBrand = Assert<
+  AssertPipeSafeError<
+    _UnknownDottedInclusion["user"]["nam"],
+    "Field 'user.nam' is not on the schema."
   >
 >;
 
@@ -947,6 +963,7 @@ export type {
   _Assert_NonZeroFlagUnknownKey,
   _Assert_NonZeroFlagIncludes,
   _Assert_InvalidValueBrand,
+  _Assert_UnknownDottedInclusionBrand,
   _Assert_MixedMode,
   _Assert_ValidInclusion,
 };

@@ -6,7 +6,7 @@ import {
   MergeNested,
   IsPlainObject,
 } from "../utils/objects";
-import { PassThrough, PipeSafeError } from "../utils/errors";
+import { PassThrough, PipeSafeError, UnknownFieldError } from "../utils/errors";
 import { HasOperatorKey } from "../utils/dispatch";
 import { ExpandDottedKey, IsDottedKey } from "../utils/paths";
 import { NoDollarString, WithoutDollar } from "../utils/strings";
@@ -15,7 +15,7 @@ import {
   InferNestedFieldReference,
 } from "../elements/fieldReference";
 import { Expression, InferExpression } from "../elements/expressions";
-import { FieldSelector, GetFieldType } from "../elements/fieldSelector";
+import { FieldSelector, GetFieldTypeOrError } from "../elements/fieldSelector";
 import { ValidateNestedValue } from "../elements/validation";
 
 /**
@@ -94,6 +94,14 @@ export type HasExclusionsNonId<P> =
   : false;
 
 /**
+ * The mixed-mode brand, spelled once: fired at the call site by
+ * ValidateProjectQuery and at the resolver by ResolveProjectOutput for the
+ * same user error.
+ */
+type MixedProjectionError =
+  PipeSafeError<`Stage '$project' cannot mix inclusion 1/true and exclusion 0/false.`>;
+
+/**
  * Per-key project re-check: `never` = valid (key is filtered out by the
  * wrapper). Inclusion/exclusion flags exit in one arm (the dominant
  * projection value); unknown keys carrying a flag brand; every other value
@@ -104,7 +112,7 @@ type ValidateProjectKey<Schema extends Document, P, K extends keyof P> =
     string extends keyof Schema ?
       never // unknown-key detection is meaningless on a wide schema
     : K extends FieldSelector<Schema> ? never
-    : PipeSafeError<`Field '${K & string}' is not on the schema.`>
+    : UnknownFieldError<K & string>
   : ValidateNestedValue<Schema, P[K]>;
 
 type ValidateProjectQueryKeys<Schema extends Document, P> = OmitNeverValues<{
@@ -152,8 +160,7 @@ export type ValidateProjectQuery<
       // filtered: only the offending exclusion keys survive.
       OmitNeverValues<{
         [K in keyof P]: K extends "_id" ? never
-        : P[K] extends 0 | false ?
-          PipeSafeError<`Stage '$project' cannot mix inclusion 1/true and exclusion 0/false.`>
+        : P[K] extends 0 | false ? MixedProjectionError
         : never;
       }>
     : ValidateProjectQueryKeys<Schema, P>
@@ -177,11 +184,10 @@ type ResolveFieldValue<Schema extends Document, Value, Key extends string> =
     // any nonzero number includes; compile time can't know the runtime
     // value, so degrade to inclusion). If the key isn't on the schema,
     // surface a branded error rather than silently producing `never`.
-    IsDottedKey<Key> extends true ?
-      // Dotted key - get nested field type
-      GetFieldType<Schema, Key>
-    : Key extends keyof Schema ? Schema[Key]
-    : PipeSafeError<`Field '${Key}' is not on the schema.`>
+    // GetFieldTypeOrError handles dotted and plain keys alike and brands
+    // unknown paths - a bare GetFieldType here silently produced a `never`
+    // leaf for unknown DOTTED keys, contradicting this comment.
+    GetFieldTypeOrError<Schema, Key>
   : Value extends `$${string}` ?
     // Field reference — a `$`-string check is far cheaper than FieldReference
     // union membership; unknown paths brand via GetFieldTypeWithoutArrays.
@@ -194,7 +200,7 @@ type ResolveFieldValue<Schema extends Document, Value, Key extends string> =
     ResolveNestedProjection<Schema, Value>
   : [Value] extends [string] ?
     Value // plain-string literal assignment (valid MongoDB; $-refs handled above)
-  : PipeSafeError<`Invalid projection value for field '${Key}'.`>;
+  : PipeSafeError<`Stage '$project' requires a valid projection value for field '${Key}'.`>;
 
 // Helper: Create flat map of dotted keys to their types (only include keys with 1/true values)
 type DottedKeyFlatMap<Schema extends Document, Query> = Prettify<{
@@ -206,7 +212,7 @@ type DottedKeyFlatMap<Schema extends Document, Query> = Prettify<{
     : never
   : never]: K extends keyof Query ?
     Query[K] extends 1 | true ?
-      GetFieldType<Schema, K & string>
+      GetFieldTypeOrError<Schema, K & string>
     : never
   : never;
 }>;
@@ -271,8 +277,9 @@ type ResolveInclusionMode<Schema extends Document, Query> = Prettify<
       } & {
         // Include non-dotted fields specified in query. Keys with invalid
         // values (not 1/true, ref, expression, or object) are deliberately
-        // KEPT so ResolveFieldValue brands them ("Invalid projection value
-        // for field ...") instead of silently dropping the key — exclusion
+        // KEPT so ResolveFieldValue brands them ("Stage '$project' requires
+        // a valid projection value for field...") instead of silently
+        // dropping the key — exclusion
         // values can't reach the fallthrough because genuine mixing already
         // branded at dispatch.
         [K in keyof NonDottedKeys<Query> as K extends "_id" ? never
@@ -339,7 +346,7 @@ export type ResolveProjectOutput<
   Schema,
   Inc extends true ?
     Exc extends true ?
-      PipeSafeError<`Stage '$project' cannot mix inclusion 1/true and exclusion 0/false.`>
+      MixedProjectionError
     : // Inclusion mode
       ResolveInclusionMode<Schema, Query>
   : Exc extends true ?

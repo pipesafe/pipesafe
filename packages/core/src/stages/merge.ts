@@ -4,12 +4,12 @@ import { FieldSelector, TopLevelField } from "../elements/fieldSelector";
 /**
  * Type-safe options for the `$merge` stage.
  *
- * @template TOutput The document shape entering the `$merge` stage.
+ * @template Schema The document shape entering the `$merge` stage.
  *                   `on` is constrained to top-level field names of this type.
  *
  * @see https://www.mongodb.com/docs/manual/reference/operator/aggregation/merge/
  */
-export type MergeQuery<TOutput extends Document> = {
+export type MergeQuery<Schema extends Document> = {
   /**
    * The output collection.
    * Either a collection name in the current database, or a `{ db, coll }` pair
@@ -22,8 +22,8 @@ export type MergeQuery<TOutput extends Document> = {
    * Defaults to `_id` when omitted (per MongoDB).
    */
   on?:
-    | TopLevelField<FieldSelector<TOutput>>
-    | TopLevelField<FieldSelector<TOutput>>[];
+    | TopLevelField<FieldSelector<Schema>>
+    | TopLevelField<FieldSelector<Schema>>[];
   /** Action to take when a document in the pipeline matches an existing document. */
   whenMatched?: "replace" | "merge" | "keepExisting" | "fail";
   /** Action to take when a document in the pipeline does not match an existing document. */

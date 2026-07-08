@@ -118,7 +118,7 @@ const _group_bad_sum = orders.group({
 // =============================================================================
 //
 // `PipeSafeError<Msg>` is a single-message branded interface defined
-// in `packages/core/src/utils/core.ts`. The literal `Msg` is the entire
+// in `packages/core/src/utils/errors.ts`. The literal `Msg` is the entire
 // surface area — dynamic context (operator names, key names, path
 // segments) is templated into the message so the hover stays focused.
 //

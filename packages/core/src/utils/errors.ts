@@ -82,3 +82,12 @@ export type UnknownOperatorError<Op extends string> =
  */
 export type UnknownAccumulatorError<Op extends string> =
   PipeSafeError<`Accumulator '${Op}' is not a recognized accumulator.`>;
+
+/**
+ * THE unknown-field brand — a field selector/reference/projection key that
+ * doesn't resolve on the schema. Referenced by GetFieldTypeOrError,
+ * GetFieldTypeWithoutArrays, and project's key check so the message is
+ * spelled once.
+ */
+export type UnknownFieldError<Path extends string> =
+  PipeSafeError<`Field '${Path}' is not on the schema.`>;

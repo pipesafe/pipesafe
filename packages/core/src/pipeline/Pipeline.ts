@@ -256,7 +256,7 @@ export class Pipeline<
       LocalField
     >,
     NewKey extends string,
-    PipelineOutput extends Document = InferSourceType<C>,
+    Foreign extends Document = InferSourceType<C>,
   >(
     $lookup:
       | {
@@ -266,7 +266,7 @@ export class Pipeline<
           as: NewKey;
           pipeline?: PipelineBuilder<
             InferSourceType<C>,
-            PipelineOutput,
+            Foreign,
             Mode,
             LookupAllowedStages
           >;
@@ -276,14 +276,14 @@ export class Pipeline<
           as: NewKey;
           pipeline: PipelineBuilder<
             InferSourceType<C>,
-            PipelineOutput,
+            Foreign,
             Mode,
             LookupAllowedStages
           >;
         }
   ): Pipeline<
     StartingDocs,
-    ResolveLookupOutput<PreviousStageDocs, NewKey, PipelineOutput>,
+    ResolveLookupOutput<PreviousStageDocs, NewKey, Foreign>,
     Mode,
     UsedStages | "$lookup"
   > {
@@ -308,7 +308,7 @@ export class Pipeline<
     }
 
     return this._chain<
-      ResolveLookupOutput<PreviousStageDocs, NewKey, PipelineOutput>,
+      ResolveLookupOutput<PreviousStageDocs, NewKey, Foreign>,
       "$lookup"
     >(
       [
@@ -574,14 +574,14 @@ export class Pipeline<
 
   unionWith<
     C extends AllowedSource<Mode, any>,
-    PipelineOutput extends Document = InferSourceType<C>,
+    Foreign extends Document = InferSourceType<C>,
   >(
     $unionWith:
       | {
           coll: C;
           pipeline?: PipelineBuilder<
             InferSourceType<C>,
-            PipelineOutput,
+            Foreign,
             Mode,
             UnionWithAllowedStages
           >;
@@ -590,14 +590,14 @@ export class Pipeline<
           coll: C;
           pipeline: PipelineBuilder<
             InferSourceType<C>,
-            PipelineOutput,
+            Foreign,
             Mode,
             UnionWithAllowedStages
           >;
         }
   ): Pipeline<
     StartingDocs,
-    ResolveUnionWithOutput<PreviousStageDocs, PipelineOutput>,
+    ResolveUnionWithOutput<PreviousStageDocs, Foreign>,
     Mode,
     UsedStages | "$unionWith"
   > {
@@ -620,7 +620,7 @@ export class Pipeline<
     }
 
     return this._chain<
-      ResolveUnionWithOutput<PreviousStageDocs, PipelineOutput>,
+      ResolveUnionWithOutput<PreviousStageDocs, Foreign>,
       "$unionWith"
     >(
       [

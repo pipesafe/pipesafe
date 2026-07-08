@@ -8,12 +8,12 @@ import { PassThrough } from "../utils/errors";
  */
 export type ResolveUnionWithOutput<
   Schema extends Document,
-  PipelineOutput extends Document,
+  Foreign extends Document,
 > = PassThrough<
   Schema,
-  [Schema] extends [PipelineOutput] ?
-    [PipelineOutput] extends [Schema] ?
+  [Schema] extends [Foreign] ?
+    [Foreign] extends [Schema] ?
       Prettify<Schema> // Schemas are identical - collapse to single type
-    : Prettify<Schema | PipelineOutput> // Different schemas - union
-  : Prettify<Schema | PipelineOutput> // Different schemas - union
+    : Prettify<Schema | Foreign> // Different schemas - union
+  : Prettify<Schema | Foreign> // Different schemas - union
 >;

@@ -29,6 +29,8 @@ import { Document, NonExpandableTypes } from "../utils/objects";
 import {
   IsPipeSafeError,
   MultiOperatorError,
+  PipeSafeError,
+  RequiresMsg,
   UnknownOperatorError,
 } from "../utils/errors";
 import {
@@ -61,7 +63,12 @@ export type ValidateExpressionValue<Schema extends Document, V> =
   [Exclude<keyof V & string, `$${string}`>] extends [never] ?
     HasSingleOperatorKey<V> extends false ? MultiOperatorError
     : [OperatorKeyOf<V>] extends [keyof ExpressionSpec<Schema>] ?
-      // Schema-FREE fast-accept (mirrors group's ValidateAccumulatorValue):
+      // $concat gets an element-wise walk (mirrors group's $min/$max): the
+      // union relation can't express "any non-`$` string" — NoDollarString
+      // is alphanumeric-leading only, so " - " or "(" would falsely brand —
+      // and the whole-operand relation can't resolve refs element-wise.
+      [OperatorKeyOf<V>] extends ["$concat"] ? ValidateConcatValue<Schema, V>
+      : // Schema-FREE fast-accept (mirrors group's ValidateAccumulatorValue):
       // an operand valid against the EMPTY schema is valid against any
       // schema — the ref arms collapse to `never` under `{}`, so only
       // schema-independent operands (literals, nested literal expressions)
@@ -82,6 +89,53 @@ export type ValidateExpressionValue<Schema extends Document, V> =
       // even on wide/index-signature schemas.
       UnknownOperatorError<OperatorKeyOf<V> & string>
   : MultiOperatorError; // operator key alongside plain keys
+
+/**
+ * `$concat` operand re-check, element-wise. Every element must be a string:
+ * `$$`-system variables pass, single-`$` refs must resolve to a string-typed
+ * field (unknown paths get the Field brand from the resolving authority;
+ * known non-string refs get the operator's RequiresMsg brand), any non-`$`
+ * string literal passes (including the "", " - ", "(" separators
+ * NoDollarString can't cover), and everything else brands. Same
+ * never-or-replacement contract as the rest of the kernel.
+ */
+type ValidateConcatValue<Schema extends Document, V> =
+  V extends { readonly $concat: infer Arr } ?
+    Arr extends readonly unknown[] ?
+      true extends (
+        {
+          [I in keyof Arr]: [ValidateConcatElement<Schema, Arr[I]>] extends (
+            [never]
+          ) ?
+            never
+          : true;
+        }[number]
+      ) ?
+        {
+          $concat: {
+            [I in keyof Arr]: [ValidateConcatElement<Schema, Arr[I]>] extends (
+              [never]
+            ) ?
+              Arr[I]
+            : ValidateConcatElement<Schema, Arr[I]>;
+          };
+        }
+      : never
+    : ExpressionFor<Schema, "$concat"> // non-array operand → expected shape
+  : never;
+
+type ValidateConcatElement<Schema extends Document, E> =
+  E extends `$$${string}` ? never
+  : E extends `$${string}` ?
+    string extends keyof Schema ?
+      never // ref resolution is meaningless on a wide/index-signature schema
+    : GetFieldTypeWithoutArrays<Schema, WithoutDollar<E>> extends infer R ?
+      IsPipeSafeError<R> extends true ? R
+      : [NonNullable<R>] extends [string] ? never
+      : PipeSafeError<RequiresMsg<"Operator", "$concat", "a string operand">>
+    : never
+  : E extends string ? never
+  : PipeSafeError<RequiresMsg<"Operator", "$concat", "a string operand">>;
 
 /**
  * Recursive walk over a literal value tree. `$$`-prefixed strings are

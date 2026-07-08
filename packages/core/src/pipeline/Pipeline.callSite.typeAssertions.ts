@@ -119,6 +119,53 @@ const _set_system_var_ok = new Pipeline<User>().set({
   now: "$$NOW",
 });
 
+// set — $concat operands are validated ELEMENT-WISE (ValidateConcatValue):
+// plain strings of any shape (separators NoDollarString can't cover),
+// valid string refs, and `$$`-system variables pass; typo'd `$`-refs brand
+// with the Field message; refs to non-string fields and non-string
+// literals brand with the operator's RequiresMsg.
+const _set_concat_ok = new Pipeline<User>().set({
+  greeting: { $concat: ["Hello ", "$name", " - ", "(", "", "$$NOW"] },
+});
+
+const _set_concat_bad_ref = new Pipeline<User>().set({
+  greeting: {
+    $concat: [
+      "Hello ",
+      // @ts-expect-error  '$naem' is not on the schema
+      "$naem",
+    ],
+  },
+});
+
+const _set_concat_nonstring_ref = new Pipeline<User>().set({
+  greeting: {
+    $concat: [
+      "Age: ",
+      // @ts-expect-error  '$age' is a number field; $concat requires a string operand
+      "$age",
+    ],
+  },
+});
+
+const _set_concat_bad_literal = new Pipeline<User>().set({
+  greeting: {
+    $concat: [
+      "n = ",
+      // @ts-expect-error  number literals are not valid $concat operands
+      42,
+    ],
+  },
+});
+
+// set — allow-listed valid-but-unmodeled operators (here: trigonometry,
+// MongoDB 4.2+) are accepted by NAME; only names outside registry +
+// allow-list brand as typos.
+const _set_trig_allowlisted_ok = new Pipeline<User>().set({
+  angleRad: { $degreesToRadians: "$age" },
+  angleDeg: { $radiansToDegrees: "$age" },
+});
+
 // group — accumulator operand brands fire at the chained call site via
 // the key-filtered ValidateGroupQuery intersection (GroupQuery's
 // `[key: string]:` index signature suppresses the in-Query brands).
@@ -167,6 +214,16 @@ const _group_sum_size_ok = new Pipeline<User>().group({
 const _group_min_underscore_ok = new Pipeline<User>().group({
   _id: null,
   m: { $min: "_pending" },
+});
+
+// group — `$$`-system variables are valid MongoDB in _id and in ANY
+// accumulator position (`$max: "$$NOW"`, `$push: "$$ROOT"`): they must not
+// hit the comparable/numeric operand brands.
+const _group_system_vars_ok = new Pipeline<User>().group({
+  _id: "$$NOW",
+  latest: { $max: "$$NOW" },
+  total: { $sum: "$$NOW" },
+  docs: { $push: "$$ROOT" },
 });
 
 // group — an accumulator key mixed with plain keys is malformed (MongoDB:
@@ -301,6 +358,12 @@ export {
   _set_bad_typo_op_nested,
   _set_generic_helper_ok,
   _set_system_var_ok,
+  _set_concat_ok,
+  _set_concat_bad_ref,
+  _set_concat_nonstring_ref,
+  _set_concat_bad_literal,
+  _set_trig_allowlisted_ok,
+  _group_system_vars_ok,
   _unset_bad,
   _group_bad_sum,
   _group_min_string_ok,

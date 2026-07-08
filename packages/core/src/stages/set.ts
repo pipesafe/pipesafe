@@ -69,7 +69,9 @@ export type ResolveSetQueryValueType<
 // { a?: { b?: string | undefined } | undefined } // { $set: { 'a.b': 'hello' }} ==> { a: { b: 'hello' } }
 // { a?: { b: string, c: string } | undefined } // { $set: { 'a.b': 'hello' }} ==> { a: { b: 'hello', c?: string | undefined }}
 
-// Don't use RemoveNever here - let ApplySetUpdates handle never values
+// Never-valued entries ($$REMOVE) are stripped INSIDE ApplySetUpdates
+// (RemoveNeverFields) — don't pre-strip them here or nested removals lose
+// their optionality reclassification.
 export type ResolveSetInlineSchema<Schema extends Document, Query> = {
   [Key in keyof Query]: ResolveSetQueryValueType<Schema, Query, Key>;
 };

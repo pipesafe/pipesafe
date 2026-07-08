@@ -1156,4 +1156,27 @@ type PrettifySetExpected = {
 };
 type PrettifySetTest = Assert<Equal<PrettifySetResult, PrettifySetExpected>>;
 
-export type { PrettifySetTest };
+// ============================================================================
+// $$-system variables infer as `unknown` — never a dropped field
+// ============================================================================
+// Validation ACCEPTS `$$`-vars ($$NOW, $$ROOT, ...), so inference mapping
+// them to `never` silently erased the key from the output schema (and a
+// later read of it falsely branded Field-not-on-schema). Only $$REMOVE
+// keeps the load-bearing `never` (see the $$REMOVE tests above).
+
+type SystemVarSetSchema = {
+  a: string;
+};
+type SystemVarSetQuery = { snapshotAt: "$$NOW"; root: "$$ROOT" };
+type SystemVarSetResult = ResolveSetOutput<
+  SystemVarSetSchema,
+  SystemVarSetQuery
+>;
+type SystemVarSetExpected = {
+  a: string;
+  snapshotAt: unknown;
+  root: unknown;
+};
+type SystemVarSetTest = Assert<Equal<SystemVarSetResult, SystemVarSetExpected>>;
+
+export type { PrettifySetTest, SystemVarSetTest };

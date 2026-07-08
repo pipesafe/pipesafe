@@ -53,7 +53,9 @@ type MergeKeyValue<AVal, BVal> =
 
 // Helper to check if two types have the same keys (cheaper than full extends check)
 // This is a fast heuristic: if keyof A === keyof B, types might be identical
-type HaveSameKeys<A, B> =
+// (exported: updates.ts's reorder fast path is the other consumer — one
+// spelling of the bidirectional-keyof predicate)
+export type HaveSameKeys<A, B> =
   keyof A extends keyof B ?
     keyof B extends keyof A ?
       true

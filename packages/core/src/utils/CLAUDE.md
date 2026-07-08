@@ -1,6 +1,11 @@
 # utils/ — shared type primitives
 
-Six small modules with strict boundaries — do not grow a grab-bag here:
+Six small TYPE modules with strict boundaries — do not grow a grab-bag here.
+(The directory also holds the test plumbing: `tests.ts` +
+`tests.typeAssertions.ts` — the Assert/Equal helpers — and
+`useMemoryMongo.ts`, the runtime mongodb-memory-server vitest fixture.
+They are deliberately NOT part of the six-module rule; don't add further
+runtime code here.)
 
 - **errors.ts** — `PipeSafeError` (the brand), `PassThrough` (the first
   early exit every resolver wraps in), `RequiresMsg` (brand-message
@@ -18,11 +23,12 @@ Six small modules with strict boundaries — do not grow a grab-bag here:
 - **paths.ts** — dotted-path machinery. `SplitPath` is deliberately
   tail-recursive (accumulator parameter → ~1000-depth budget instead of
   ~50); parse paths with it, then fold the segments.
-- **updates.ts** — `ApplySetUpdates` + helpers: the dotted-key update/merge
-  kernel (write a value at a possibly-dotted path, preserving optionality
-  semantics). Shared by `$set` and `$lookup`'s dotted `as` — stages must
-  not import each other, so it lives here. Callers dot-EXPAND first
-  (`FlattenDotSet`) with an early-exit for non-dotted keys.
+- **updates.ts** — `ApplySetUpdates` + helpers: the update/merge kernel
+  (write values, preserving optionality semantics). Shared by `$set` and
+  `$lookup`'s dotted `as` — stages must not import each other, so it lives
+  here. Callers MUST dot-EXPAND first (`FlattenDotSet`, with an early-exit
+  for non-dotted keys): the kernel has exactly one merge path and no
+  dotted-key handling of its own.
 
 ## Gotchas
 

@@ -28,13 +28,19 @@ strips `null`/`undefined` from branches; the `$unwind` brand fires at
 chained call sites; `$`-keyed objects no longer pass as object literals;
 `$set` rejections no longer emit a spurious TS2589; `as const` operands
 type-check (readonly operand positions); dotted `$lookup` `as` paths nest
-in the output schema.
+in the output schema. `$$`-system variables now infer as `unknown` instead
+of silently dropping the field from the output schema (`$$REMOVE` still
+removes), and are accepted in `$group` `_id`/accumulator positions
+(`$max: "$$NOW"` compiles); `$concat` validates its operands (typo'd
+`$`-refs and non-string refs brand instead of shipping); the
+trigonometry operators and `$toUUID` are allow-listed (no longer falsely
+brand as typos); unknown dotted `$project` inclusion keys brand instead of
+silently resolving to a `never` leaf.
 
 Breaking: `@pipesafe/manifold` now requires `@pipesafe/core` 2.x
 (peer dependency `>=2.0.0 <3.0.0`); `ResolveCountOutput` gained a `Schema`
-first type parameter;
-`MergeOptions` is deprecated in favor of `MergeQuery` (alias retained in
-`compat.ts`); several internal type names changed (deprecated aliases
-retained where signatures allow). Whole-project type instantiations drop
-~40% for equivalent pipelines; a CI budget gate
+first type parameter; `MergeOptions` is REMOVED — use `MergeQuery`
+(deprecated aliases are no longer shipped; renames land in majors);
+several internal type names changed. Whole-project type instantiations
+drop ~40% for equivalent pipelines; a CI budget gate
 (`bun run budget:check`) now guards type-level performance.

@@ -16,10 +16,9 @@ pipesafe/
 │   │   │   ├── elements/        # Type system building blocks (+ operand kernel)
 │   │   │   ├── collection/      # Collection wrapper
 │   │   │   ├── source/          # Source interface
-│   │   │   ├── utils/           # errors/strings/objects/paths/dispatch type utilities
+│   │   │   ├── utils/           # errors/strings/objects/paths/dispatch/updates type utilities (+ test fixtures)
 │   │   │   ├── singleton/       # Global pipesafe instance
-│   │   │   ├── database/        # Database utilities
-│   │   │   └── compat.ts        # THE deprecated-alias file (see Compat rule)
+│   │   │   └── database/        # Database utilities
 │   │   ├── examples/            # Pipeline usage examples
 │   │   ├── benchmarking/        # TypeScript performance benchmarks
 │   │   └── LICENSE              # Apache License 2.0
@@ -188,7 +187,7 @@ Located in `packages/core/src/stages/`:
     - Regex: Direct RegExp or `$regex` operator for strings
     - Logical: `$and`, `$or`, `$nor`, `$not`
     - Expressions: `$expr`
-  - **Type Narrowing**: `ResolveMatchOutput<Query, Schema>` filters union types based on query
+  - **Type Narrowing**: `ResolveMatchOutput<Schema, Query>` filters union types based on query
   - **Union Support**: `FilterUnion<Union, Query>` validates each union member against query fields
   - Advanced query validation with `MatchersForType<T>` and `ComparatorMatchers<T>`
 
@@ -396,7 +395,8 @@ Inference is **forgiving**: a malformed operand does not change the inferred kin
 
 ### Compat rule
 
-`packages/core/src/compat.ts` is THE only home for deprecated aliases (currently:
-`MergeOptions` → `MergeQuery`). `index.ts` is the only file allowed to import it
-(enforced by `no-restricted-imports`). Removal at the next major = delete the file +
-its `index.ts` re-export line.
+There are NO deprecated aliases: renames ship in a major with the old name
+deleted outright (the former `compat.ts` mechanism was removed along with
+its `MergeOptions` alias). If a future rename ever needs a bridge, put the
+alias next to the new name with `@deprecated` JSDoc naming the removal
+major — do not resurrect a separate compat file.
