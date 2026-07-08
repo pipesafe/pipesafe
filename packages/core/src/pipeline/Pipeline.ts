@@ -20,7 +20,11 @@ import {
 import { ResolveGraphLookupOutput } from "../stages/graphLookup";
 import { FacetQuery, ResolveFacetOutput } from "../stages/facet";
 import { GetFieldType } from "../elements/fieldSelector";
-import { GroupQuery, ResolveGroupOutput } from "../stages/group";
+import {
+  GroupQuery,
+  ResolveGroupOutput,
+  ValidateGroupQuery,
+} from "../stages/group";
 import { ResolveProjectOutput, ValidateProjectQuery } from "../stages/project";
 import {
   ReplaceRootQuery,
@@ -395,8 +399,12 @@ export class Pipeline<
     );
   }
 
+  // The intersection parameter keeps `G` as the inference/contextual-typing
+  // position (compound `_id` expressions break under a bare mapped wrapper)
+  // while ValidateGroupQuery re-checks accumulator operands — key-filtered,
+  // so a fully-valid query validates against `{}` (see stages/group.ts).
   group<const G extends GroupQuery<PreviousStageDocs>>(
-    $group: G
+    $group: G & ValidateGroupQuery<PreviousStageDocs, G>
   ): Pipeline<
     StartingDocs,
     ResolveGroupOutput<PreviousStageDocs, G>,

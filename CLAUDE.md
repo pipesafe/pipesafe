@@ -302,7 +302,8 @@ When a `<const P>`-inferred literal is used as the brand's `Ctx` (or as part of 
 
 ### Known limitations
 
-- **`Pipeline.group`'s call-site brand surfacing** for `$sum: '$stringField'` etc. is silent. The brands exist in the type system (covered by `group.typeAssertions.ts`) but don't fire at chained call sites because `GroupQuery`'s `[key: string]:` index signature suppresses operand validation, and wrapping `Pipeline.group`'s parameter in a validation type interferes with TS's resolution of legitimate compound-`_id` patterns like `_id: { date: { $dateToString: ... } }`. Tracked as a follow-up. Annotating the literal as `GroupQuery<Schema>` directly still fires the brand.
+- **`Pipeline.group`'s call-site brand surfacing** for `$sum: '$stringField'` etc. now fires via the key-filtered `ValidateGroupQuery` intersection (`$group: G & ValidateGroupQuery<Schema, G>`). Two hard-won constraints, both pinned in `Pipeline.callSite.typeAssertions.ts`: the intersection form is REQUIRED (a bare mapped wrapper at the parameter position breaks contextual typing of compound-`_id` patterns like `_id: { date: { $dateToString: ... } }` — both the bare and concrete-`_id` variants were tried and failed, plan §7.4), and the wrapper must be key-FILTERED so a fully-valid query validates against `{}` (a full-map intersection cost 3× whole-project check time). Validation currently covers the numeric accumulators (`$sum`/`$avg`); extending it follows §3.8.
+- **Nested expression operands inside object literals** (`$set`/`$project` values like `{ meta: { computed: { $add: [...] } } }`) are accepted structurally (`$`-key shape only) — operand validity is not yet checked at those depths. Deferred to the per-stage Validate layer (plan §7.2/§7.3, §3.8 rule 2); the gap is pinned as a TODO in `Pipeline.callSite.typeAssertions.ts`.
 
 ### Regression guard
 

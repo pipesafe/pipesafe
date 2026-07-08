@@ -9,7 +9,7 @@ import {
   ArithmeticExpression,
 } from "../elements/expressions";
 import { Document, Prettify } from "../utils/objects";
-import { PassThrough, RequiresMsg } from "../utils/errors";
+import { PassThrough, PipeSafeError, RequiresMsg } from "../utils/errors";
 import { ExpressionOperand } from "../elements/operands";
 
 /**
@@ -114,6 +114,63 @@ export type GroupQuery<Schema extends Document> = {
   _id: AnyLiteral<Schema> | Expression<Schema> | null;
 } & {
   [key: string]: AnyLiteral<Schema> | AccumulatorFunction<Schema> | null;
+};
+
+/**
+ * The branded replacement `ValidateGroupQuery` maps an invalid accumulator
+ * to. Message via `RequiresMsg` so the skeleton stays enforced.
+ */
+type BrandedAccumulator<Op extends string, What extends string> = {
+  [K in Op]: PipeSafeError<RequiresMsg<"Accumulator", Op, What>>;
+};
+
+/**
+ * Per-value accumulator re-check: `never` means "valid — nothing to
+ * report"; anything else is the branded replacement. Re-uses the registry's
+ * operand types for the checks (§3.8 rule 3 — each constraint is spelled
+ * once, in `NumericAccumulatorOperand` / `MinMaxAccumulatorOperand`). The
+ * flexible accumulators ($push/$addToSet/$first/$last) accept any
+ * literal/ref/expression by design and are not re-checked.
+ */
+type ValidateAccumulatorValue<Schema extends Document, A> =
+  A extends { $sum: infer O } ?
+    [O] extends [NumericAccumulatorOperand<Schema, "$sum">] ?
+      never
+    : BrandedAccumulator<"$sum", "a numeric operand">
+  : A extends { $avg: infer O } ?
+    [O] extends [NumericAccumulatorOperand<Schema, "$avg">] ?
+      never
+    : BrandedAccumulator<"$avg", "a numeric operand">
+  : A extends { $min: infer O } ?
+    [O] extends [MinMaxAccumulatorOperand<Schema, "$min">] ?
+      never
+    : BrandedAccumulator<"$min", "a numeric or date operand">
+  : A extends { $max: infer O } ?
+    [O] extends [MinMaxAccumulatorOperand<Schema, "$max">] ?
+      never
+    : BrandedAccumulator<"$max", "a numeric or date operand">
+  : never;
+
+/**
+ * Key-filtered validation wrapper for `Pipeline.group` (§7.4). GroupQuery's
+ * `[key: string]` index signature suppresses per-value operand checks at
+ * the call site (§3.8 rule 2), so the accumulator brands never fired from
+ * chained calls. This wrapper re-checks the inferred literal at the
+ * parameter position via intersection (`$group: G & ValidateGroupQuery<…>`
+ * — the intersection form is REQUIRED: replacing the raw `G` parameter
+ * breaks contextual typing of compound `_id` expressions, in both the bare
+ * and concrete-`_id` variants; see plan §7.4).
+ *
+ * Cost control (§3.8 rule 5): keys whose accumulator is valid are filtered
+ * OUT by the `as` clause, so a fully-valid query — the common case —
+ * validates against `{}` and the intersection relation short-circuits.
+ * Only offending keys survive, mapped to the branded accumulator so TS
+ * reports TS2322 at the bad operand value.
+ */
+export type ValidateGroupQuery<Schema extends Document, G> = {
+  [K in keyof G as K extends "_id" ? never
+  : [ValidateAccumulatorValue<Schema, G[K]>] extends [never] ? never
+  : K]: ValidateAccumulatorValue<Schema, G[K]>;
 };
 
 export type ResolveGroupOutput<
