@@ -2,7 +2,10 @@ import { Document, Prettify } from "../utils/objects";
 import { PassThrough, PipeSafeError } from "../utils/errors";
 import { FieldPathsThatInferToForLookup } from "../elements/fieldReference";
 
-// Todo: Convert new key to a nested field and merge
+// TODO (pre-existing, #55): a dotted `as` path ("user.orders") nests in
+// MongoDB, but this resolver types it as a flat literal key
+// ("user.orders": Output[]). Fix = ExpandDottedKey + MergeNested on the
+// NewKey segments, mirroring $set's dotted-key handling.
 export type ResolveLookupOutput<
   Schema extends Document,
   NewKey extends string,

@@ -1028,6 +1028,21 @@ probes and PR #99's depth-viewer, then fixed:
   array elements, and guarded prototype-key paths (`"$name.length"`) in
   `GetFieldTypeWithoutArrays`.
 
+  **Maintainer correction (PR review, supersedes the paragraph above on
+  unknown-operator handling):** blanket forgiveness was replaced with
+  EXPLICIT by-name allow-lists — `UnimplementedExpressionOps`
+  (elements/expressions.ts) and `UnimplementedAccumulators`
+  (stages/group.ts) enumerate every valid MongoDB operator/accumulator the
+  registry doesn't model (allow-listed = accepted with no operand
+  validation or inference). A `$`-key outside registry + allow-list now
+  brands (`UnknownOperatorError` / `UnknownAccumulatorError`), so typos
+  are rejected again — without rejecting valid MongoDB, which was the
+  problem with the original unknown-operator brand. The lists must never
+  be widened to `` `$${string}` ``; a missing valid operator is fixed by
+  adding its name. Implementing an operator = registry entry + DELETE its
+  allow-list line. INFERENCE is unchanged (unregistered → `unknown`):
+  rejection is validation's job, and a branded call site never ships.
+
 - **Result**: zero TS2589 across all rejection probes; every `set`
   rejection is now a single correctly-positioned TS2322 (previously: a
   union-wall TS2322 plus a spurious statement-level TS2589). Cost:

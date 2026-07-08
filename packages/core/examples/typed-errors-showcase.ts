@@ -107,9 +107,11 @@ const _group_valid = orders.group({
 // site (the key-filtered ValidateGroupQuery intersection re-checks the
 // literal; GroupQuery's index signature used to suppress this):
 //   "Accumulator '$sum' requires a numeric operand."
-// @ts-expect-error  '$customerId' is a string field
-// prettier-ignore
-const _group_bad_sum = orders.group({ _id: "$status", n: { $sum: "$customerId" } });
+const _group_bad_sum = orders.group({
+  _id: "$status",
+  // @ts-expect-error  '$customerId' is a string field
+  n: { $sum: "$customerId" },
+});
 
 // =============================================================================
 // Note: where these errors come from

@@ -141,9 +141,12 @@ The type system is organized into modular building blocks located in `packages/c
   `RequiresMsg` (utils/errors.ts).
 
 - **expressions.ts**: THE expression registry — `ExpressionSpec<Schema>` maps each
-  operator to `{ operand; returns }`. Per-operator types, category unions, `Expression`,
-  and the fixed-return arm of `InferExpression` are all derived. Adding an operator =
-  one registry entry (+ one `InferDependentExpression` arm if the result depends on the
+  operator to `{ operand; returns; category }`. Per-operator types, category key sets
+  and unions (derived from the per-entry `category`), `Expression`, and the
+  fixed-return arm of `InferExpression` are all derived. Valid-but-unmodeled operators
+  are allow-listed by name in `UnimplementedExpressionOps` (never widen it to
+  `` `$${string}` ``). Adding an operator = one registry entry + deleting its
+  allow-list line (+ one `InferDependentExpression` arm if the result depends on the
   literal arguments: `$concatArrays`, `$arrayElemAt`, `$filter`, `$ifNull`, `$cond`,
   `$literal`).
 
@@ -151,7 +154,7 @@ The type system is organized into modular building blocks located in `packages/c
 
 #### Utility Types (`packages/core/src/utils/`)
 
-`utils/core.ts` was split along its seams:
+The former `utils/core.ts` grab-bag no longer exists — it was split along its seams:
 
 - **errors.ts**: `PipeSafeError`, `IsPipeSafeError`, `PassThrough` (the tier-1 early
   exit), `RequiresMsg` (the brand-message skeleton template)
@@ -191,6 +194,12 @@ TODO: Document the rest of the stages
 
 - Use `bun` as the package manager (specified in package.json)
 - TypeScript strict mode is enabled
+- Suppressing prettier/lint findings is unacceptable — no `// prettier-ignore`
+  or `// eslint-disable*` anywhere; restructure the code until the tools pass.
+  In assertion files, put `@ts-expect-error` on the exact line the error
+  reports (a directive binds to the next line only; a multi-line statement may
+  need one per reporting line) — never collapse a statement onto one line to
+  dodge the formatter
 - Modular architecture: type utilities separated into `packages/core/src/elements/` for reusability
 - Examples in `examples/*.ts` demonstrate example pipeline use cases
 - Assertions in `packages/core/src/*/*.typeAssertions.ts` are used as tests for type functionality
@@ -201,7 +210,7 @@ TODO: Document the rest of the stages
 ### Workflow for Type Assertions
 
 1. **Use IDE/LSP for fast iteration** - The TypeScript LSP provides instant feedback without running builds
-2. **The real type gate is per-package**: `cd packages/core && bunx tsc --noEmit` (same for manifold, after a fresh core `bun run build`). The root `bun run typecheck` resolves project references to built `dist/` declarations and does NOT re-check `packages/*/src` — including the `*.typeAssertions.ts` files
+2. **The real type gate is per-package**: `bun run typecheck:packages` (from the root; runs `tsc --noEmit` in core then manifold — manifold needs a fresh core `bun run build` first). The root `bun run typecheck` resolves project references to built `dist/` declarations and does NOT re-check `packages/*/src` — including the `*.typeAssertions.ts` files
 3. **When types don't match**, use `inspect-types.ts` to see the actual inferred type:
    ```bash
    bun run tsx .claude/inspect-types.ts <variableName> [fileName]
@@ -251,7 +260,9 @@ All brand messages follow one skeleton, keyed off MongoDB nomenclature:
 
 ```
 Operator           '$op' requires <constraint>.
+Operator           '$op' is not a recognized aggregation operator.
 Accumulator        '$op' requires <constraint>.
+Accumulator        '$op' is not a recognized accumulator.
 Stage              '$stage' <constraint>.
 Field              'name' is not on the schema.
 Foreign collection has no <constraint>.
@@ -304,7 +315,7 @@ When a `<const P>`-inferred literal is used as the brand's `Ctx` (or as part of 
 ### Known limitations
 
 - **`Pipeline.group`'s call-site brand surfacing** for `$sum: '$stringField'` etc. now fires via the key-filtered `ValidateGroupQuery` intersection (`$group: G & ValidateGroupQuery<Schema, G>`). Two hard-won constraints, both pinned in `Pipeline.callSite.typeAssertions.ts`: the intersection form is REQUIRED (a bare mapped wrapper at the parameter position breaks contextual typing of compound-`_id` patterns like `_id: { date: { $dateToString: ... } }` — both the bare and concrete-`_id` variants were tried and failed, plan §7.4), and the wrapper must be key-FILTERED so a fully-valid query validates against `{}` (a full-map intersection cost 3× whole-project check time). Validation covers `$sum`/`$avg` (numeric) and `$min`/`$max` (BSON-comparable: number, date, string, boolean); extending it = adding the key to `CheckedAccumulatorOps` after registering the operand in `AccumulatorSpec`.
-- **Nested value validation** (`$set`/`$project` values and group `_id` at any literal depth) is handled by the shared kernel in `elements/validation.ts` (`ValidateNestedValue`): unknown refs, malformed expression objects (multi-operator, or operator keys mixed with plain keys), and invalid operands of REGISTERED operators brand at the chained call site. UNREGISTERED operators/accumulators are deliberately FORGIVEN (valid MongoDB the registry doesn't model — $toUpper, $stdDevPop, ...; inference degrades them to `unknown`), as are `$$`-system variables and widened (non-literal) value types. Remaining structural-only interiors: expression OPERAND interiors reached through permissive operand arms (`$cond`/`$ifNull` conditional operands, `$filter.cond`, `$let.in`— all`unknown`-typed in the registry) and `replaceRoot`'s bare `Document` arm.
+- **Nested value validation** (`$set`/`$project` values and group `_id` at any literal depth) is handled by the shared kernel in `elements/validation.ts` (`ValidateNestedValue`): unknown refs, malformed expression objects (multi-operator, or operator keys mixed with plain keys), invalid operands of REGISTERED operators, AND operator/accumulator names outside registry + allow-list all brand at the chained call site. Valid-but-unmodeled MongoDB is enumerated BY NAME (`UnimplementedExpressionOps` in elements/expressions.ts, `UnimplementedAccumulators` in stages/group.ts — accepted with no operand validation; inference degrades them to `unknown`); never widen those lists to `` `$${string}` ``. `$$`-system variables and widened (non-literal) value types stay accepted. Remaining structural-only interiors: expression OPERAND interiors reached through permissive operand arms (`$cond`/`$ifNull` conditional operands, `$filter.cond`, `$let.in`— all`unknown`-typed in the registry) and `replaceRoot`'s bare `Document` arm.
 
 ### Regression guard
 
@@ -349,12 +360,12 @@ Schema-parameterized union to pick a branch (no `extends Expression<Schema>` /
 `extends XxxQuery<Schema>` in inference positions — constraint positions on Pipeline
 methods are where those belong).
 
-| Tier | Check                                                                              | Lives in                                             |
-| ---- | ---------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| 1    | Schema already a `PipeSafeError` → forward                                         | `PassThrough` in every resolver                      |
-| 2    | No `$`-prefixed key → literal (`NotAnExpression` sentinel)                         | `OperatorKeyOf`/`HasOperatorKey` (utils/dispatch.ts) |
-| 3    | Multi-`$`-key → exactly-one-operator brand; unknown op → `unknown` (forgiving)     | `InferExpression`                                    |
-| 4    | Known operator → registry `returns` / dependent arm; operand brands validate input | `ExpressionSpec` / operand kernel                    |
+| Tier | Check                                                                                                                                     | Lives in                                             |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| 1    | Schema already a `PipeSafeError` → forward                                                                                                | `PassThrough` in every resolver                      |
+| 2    | No `$`-prefixed key → literal (`NotAnExpression` sentinel)                                                                                | `OperatorKeyOf`/`HasOperatorKey` (utils/dispatch.ts) |
+| 3    | Multi-`$`-key → exactly-one-operator brand; unregistered op → `unknown` inference (validation brands names outside registry + allow-list) | `InferExpression`                                    |
+| 4    | Known operator → registry `returns` / dependent arm; operand brands validate input                                                        | `ExpressionSpec` / operand kernel                    |
 
 Inference is **forgiving**: a malformed operand does not change the inferred kind —
 `{ $size: 12 }` still infers `number`; the operand brand reports at the input position.

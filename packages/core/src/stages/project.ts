@@ -28,15 +28,16 @@ import { ValidateNestedValue } from "../elements/validation";
  * - Nested reshaping: { nested: { a: "$field1", b: "$field2" } }
  */
 export type ProjectQuery<Schema extends Document> = {
-  [key: string]:
-    | 1
-    | 0
-    | true
-    | false
-    // Widened flags: MongoDB treats any nonzero number as inclusion, so a
-    // `number`/`boolean`-typed variable is a valid projection value even
-    // though its literal can't be known at compile time. Rejecting it went
-    // through the deep value union with a spurious TS2589.
+  [
+    key: string
+  ]: // Inclusion/exclusion flags (1/0/true/false). `number | boolean` IS the
+    // literal set: TS normalizes `1 | 0 | number` to `number` and
+    // `true | false` to `boolean` at union creation, so spelling the
+    // literals adds nothing. The wide types are also required on their own
+    // terms — MongoDB treats any nonzero number as inclusion, so a
+    // `number`/`boolean`-typed VARIABLE is a valid projection value even
+    // though its literal can't be known at compile time (rejecting it went
+    // through the deep value union with a spurious TS2589).
     | number
     | boolean
     // Structural acceptance of `$`-strings (§3.8 rule 6): unknown refs are

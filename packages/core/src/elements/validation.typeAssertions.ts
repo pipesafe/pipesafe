@@ -62,11 +62,29 @@ type _MultiKey = Assert<
     PipeSafeError<"Expression objects must have exactly one operator.">
   >
 >;
-// Unknown operators are VALID — the registry covers a subset of MongoDB's
-// 100+ operators, and branding unregistered ones would reject working
-// pipelines ($toUpper, $switch, ...). Typos share this leniency by design.
-type _UnknownOpForgiven = Assert<
+// Allow-listed unimplemented operators are VALID — the registry models a
+// subset of MongoDB's 100+ operators; the remainder is enumerated by name
+// in UnimplementedExpressionOps ($toUpper, $switch, ...) with no operand
+// validation.
+type _AllowListedOpValid = Assert<
   Equal<ValidateExpressionValue<User, { $toUpper: "$name" }>, never>
+>;
+type _AllowListedSwitchValid = Assert<
+  Equal<ValidateExpressionValue<User, { $switch: { branches: [] } }>, never>
+>;
+// A `$`-key OUTSIDE registry + allow-list is a typo and brands byte-for-byte
+// (schema-independently — it fires even on wide/index-signature schemas).
+type _UnknownOpBrands = Assert<
+  Equal<
+    ValidateExpressionValue<User, { $toUper: "$name" }>,
+    PipeSafeError<"Operator '$toUper' is not a recognized aggregation operator.">
+  >
+>;
+type _UnknownOpBrandsOnWideSchema = Assert<
+  Equal<
+    ValidateExpressionValue<Record<string, unknown>, { $toUper: "$name" }>,
+    PipeSafeError<"Operator '$toUper' is not a recognized aggregation operator.">
+  >
 >;
 
 // An operator key alongside plain keys is malformed (MongoDB: "an
@@ -127,7 +145,10 @@ export type {
   _ValidNestedTree,
   _BadRef,
   _MultiKey,
-  _UnknownOpForgiven,
+  _AllowListedOpValid,
+  _AllowListedSwitchValid,
+  _UnknownOpBrands,
+  _UnknownOpBrandsOnWideSchema,
   _MixedKeys,
   _SystemVariable,
   _SystemVariableNested,

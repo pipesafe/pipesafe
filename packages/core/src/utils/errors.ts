@@ -65,3 +65,20 @@ export type RequiresMsg<
  */
 export type MultiOperatorError =
   PipeSafeError<"Expression objects must have exactly one operator.">;
+
+/**
+ * Brand for a `$`-key that is neither registered (ExpressionSpec) nor on
+ * the UnimplementedExpressionOps allow-list — i.e. a typo'd or nonexistent
+ * operator. Valid-but-unmodeled MongoDB never reaches this: it is
+ * allow-listed by name (elements/expressions.ts).
+ */
+export type UnknownOperatorError<Op extends string> =
+  PipeSafeError<`Operator '${Op}' is not a recognized aggregation operator.`>;
+
+/**
+ * Accumulator sibling of UnknownOperatorError — a $group field's operator
+ * key that is neither in AccumulatorSpec nor on the
+ * UnimplementedAccumulators allow-list (stages/group.ts).
+ */
+export type UnknownAccumulatorError<Op extends string> =
+  PipeSafeError<`Accumulator '${Op}' is not a recognized accumulator.`>;

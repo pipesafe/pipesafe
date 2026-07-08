@@ -18,23 +18,32 @@
  * and the Field brand is spelled once), expression operands check against
  * the registry's `ExpressionFor<Schema, Op>`.
  *
- * Deliberately FORGIVING where the registry is incomplete: MongoDB has
- * 100+ expression operators and the registry covers a subset, so an
- * unknown single-operator key is treated as VALID (it was accepted before
- * the §7.3 guard closed the literal hole, and rejecting it would break
- * real pipelines). Only structurally malformed shapes brand: multi-
- * operator objects, operator keys mixed with plain keys, and known
- * operators with invalid operands.
+ * Operator names are checked against an EXPLICIT allow-list: MongoDB has
+ * 100+ expression operators and the registry models a subset, so the
+ * remainder is enumerated by name in `UnimplementedExpressionOps`
+ * (expressions.ts) — accepted with no operand validation or inference.
+ * A `$`-key outside registry + allow-list is a typo and brands with
+ * `UnknownOperatorError`. Structurally malformed shapes brand too:
+ * multi-operator objects, operator keys mixed with plain keys, and
+ * registered operators with invalid operands.
  */
 
 import { Document, NonExpandableTypes } from "../utils/objects";
-import { IsPipeSafeError, MultiOperatorError } from "../utils/errors";
+import {
+  IsPipeSafeError,
+  MultiOperatorError,
+  UnknownOperatorError,
+} from "../utils/errors";
 import {
   HasOperatorKey,
   HasSingleOperatorKey,
   OperatorKeyOf,
 } from "../utils/dispatch";
-import { ExpressionFor, ExpressionSpec } from "./expressions";
+import {
+  ExpressionFor,
+  ExpressionSpec,
+  UnimplementedExpressionOps,
+} from "./expressions";
 import { GetFieldTypeWithoutArrays } from "./fieldReference";
 import { WithoutDollar } from "../utils/strings";
 
@@ -44,25 +53,37 @@ import { WithoutDollar } from "../utils/strings";
  * - operator key(s) mixed with plain keys, or more than one operator key →
  *   the exactly-one-operator brand (MongoDB: "an expression specification
  *   must contain exactly one field")
- * - known operator, invalid operand → the registry's expected shape, so
- *   TS reports TS2322 at the offending operand against the operand
+ * - registered operator, invalid operand → the registry's expected shape,
+ *   so TS reports TS2322 at the offending operand against the operand
  *   kernel's branded union
- * - unknown operator → valid (see the forgiving-registry note above)
+ * - allow-listed unimplemented operator → valid (no operand check)
+ * - anything else → UnknownOperatorError (a typo, not a MongoDB operator)
  * - valid → `never`
  */
 export type ValidateExpressionValue<Schema extends Document, V> =
   [Exclude<keyof V & string, `$${string}`>] extends [never] ?
     HasSingleOperatorKey<V> extends false ? MultiOperatorError
-    : string extends keyof Schema ?
-      never // schema-dependent operand check is meaningless on a wide schema
     : [OperatorKeyOf<V>] extends [keyof ExpressionSpec<Schema>] ?
-      // Readonly-tolerant WITHOUT per-literal transformation: the
+      // Schema-FREE fast-accept (mirrors group's ValidateAccumulatorValue):
+      // an operand valid against the EMPTY schema is valid against any
+      // schema — the ref arms collapse to `never` under `{}`, so only
+      // schema-independent operands (literals, nested literal expressions)
+      // pass here. Besides skipping the Schema-parameterized operand types
+      // for the common literal case, this arm RESOLVES for generic-schema
+      // helpers, where the guarded check below stays deferred.
+      [V] extends [ExpressionFor<{}, OperatorKeyOf<V>>] ? never
+      : string extends keyof Schema ?
+        never // schema-dependent operand check is meaningless on a wide schema
+      : // Readonly-tolerant WITHOUT per-literal transformation: the
       // registry's operand array positions are `readonly`, so mutable and
       // `as const` operands both relate directly.
-      [V] extends [ExpressionFor<Schema, OperatorKeyOf<V>>] ?
-        never
+      [V] extends [ExpressionFor<Schema, OperatorKeyOf<V>>] ? never
       : ExpressionFor<Schema, OperatorKeyOf<V>>
-    : never // unknown operator — forgiving (partial registry)
+    : [OperatorKeyOf<V>] extends [UnimplementedExpressionOps] ?
+      never // allow-listed: valid MongoDB the registry doesn't model yet
+    : // Schema-INDEPENDENT (like the multi-operator check), so it runs
+      // even on wide/index-signature schemas.
+      UnknownOperatorError<OperatorKeyOf<V> & string>
   : MultiOperatorError; // operator key alongside plain keys
 
 /**

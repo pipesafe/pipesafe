@@ -9,10 +9,12 @@ malformed expression objects (multiple operator keys, or operator keys
 mixed with plain keys), and invalid operands of REGISTERED operators now
 brand at the call site (previously nested `$`-shapes were accepted
 structurally, and `$project` value errors only surfaced in the output
-schema). Validation is deliberately forgiving where the registry is
-incomplete: unregistered operators and accumulators ($toUpper, $switch,
-$stdDevPop, ...) are valid MongoDB and keep compiling, as do `$$`-system
-variables ($$NOW, $$ROOT). Operand semantics were corrected along the way:
+schema). Valid-but-unmodeled MongoDB operators and accumulators ($toUpper,
+$switch, $stdDevPop, ...) are allow-listed by name
+(`UnimplementedExpressionOps` / `UnimplementedAccumulators`, see the
+companion changeset) and keep compiling with no operand validation, as do
+`$$`-system variables ($$NOW, $$ROOT). Operand semantics were corrected
+along the way:
 $min/$max accept BSON-comparable operands (number, date, string, or
 boolean —
 `$min: "$name"` is valid), numeric accumulators accept any

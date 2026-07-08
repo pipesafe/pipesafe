@@ -2,6 +2,9 @@ import type { Document } from "../utils/objects";
 import type { PipeSafeError } from "../utils/errors";
 import type { Assert, AssertPipeSafeError, Equal } from "../utils/tests";
 import type {
+  ExpressionSpec,
+  ExpressionCategory,
+  OpsInCategory,
   AddExpression,
   SubtractExpression,
   MultiplyExpression,
@@ -261,7 +264,22 @@ type _Assert_SizeAcceptsArrayRef = Assert<
   Equal<"$tags" extends SizeOperand<ArithSchema> ? true : false, true>
 >;
 
+// ---------------------------------------------------------------------------
+// Registry category lockstep: every ExpressionSpec entry declares a category
+// (the key sets are DERIVED from it). An entry with a missing/typo'd
+// category would silently vanish from its category union — this pin turns
+// that into a compile failure.
+// ---------------------------------------------------------------------------
+
+type _EveryOpCategorized = Assert<
+  Equal<
+    Exclude<keyof ExpressionSpec<Document>, OpsInCategory<ExpressionCategory>>,
+    never
+  >
+>;
+
 export type {
+  _EveryOpCategorized,
   _Assert_AddBrand,
   _Assert_SubtractBrand,
   _Assert_SubtractIs2Tuple,

@@ -25,6 +25,7 @@ import {
   PassThrough,
   PipeSafeError,
   RequiresMsg,
+  UnknownAccumulatorError,
 } from "../utils/errors";
 import { ExpressionOperand } from "../elements/operands";
 
@@ -105,6 +106,37 @@ export interface AccumulatorSpec<Schema extends Document> {
   $last: { operand: FlexibleAccumulatorOperand<Schema>; returns: unknown };
 }
 
+/**
+ * $group accumulators that are VALID MongoDB but not yet in
+ * `AccumulatorSpec`. Allow-listed BY NAME: accepted with no operand
+ * validation and `unknown` result inference, so real pipelines compile
+ * while a typo'd accumulator brands with `UnknownAccumulatorError`
+ * (utils/errors.ts).
+ *
+ * DO NOT widen this to `` `$${string}` `` — the explicit list is exactly
+ * what makes unknown-accumulator rejection possible.
+ *
+ * Implementing one = register it in `AccumulatorSpec` (plus a
+ * `ResolveAccumulatorFunction` arm if operand-dependent) and DELETE it
+ * from this list. If a valid accumulator is missing here, add it here —
+ * never loosen the checks that consume the list.
+ */
+export type UnimplementedAccumulators =
+  | "$accumulator"
+  | "$bottom"
+  | "$bottomN"
+  | "$firstN"
+  | "$lastN"
+  | "$maxN"
+  | "$median"
+  | "$mergeObjects"
+  | "$minN"
+  | "$percentile"
+  | "$stdDevPop"
+  | "$stdDevSamp"
+  | "$top"
+  | "$topN";
+
 /** Single-operator accumulator shape(s) for `Op` (distributes over unions). */
 type AccumulatorFor<Schema extends Document, Op> =
   Op extends keyof AccumulatorSpec<Schema> ?
@@ -137,9 +169,10 @@ export type ResolveAccumulatorFunction<Schema extends Document, Accumulator> =
     InferNestedFieldReference<Schema, A>
   : Accumulator extends { $last: infer A } ?
     InferNestedFieldReference<Schema, A>
-  : // Unregistered accumulators are ACCEPTED structurally (GroupQuery's
-  // ExpressionShaped arm; valid MongoDB the registry doesn't model) — so
-  // their result degrades to `unknown`, never to a `never`-poisoned field.
+  : // Allow-listed unimplemented accumulators (UnimplementedAccumulators)
+  // have no inference — their result degrades to `unknown`, never to a
+  // `never`-poisoned field. (Typo'd keys also land here, but validation
+  // brands those at the call site, so their output type is moot.)
   HasOperatorKey<Accumulator> extends true ? unknown
   : never;
 
@@ -147,10 +180,11 @@ export type GroupQuery<Schema extends Document> = {
   _id: AnyLiteral<Schema> | Expression<Schema> | null;
 } & {
   // ExpressionShaped accepts $-keyed values structurally (§3.8 rule 6):
-  // MongoDB has accumulators the registry doesn't cover ($stdDevPop, $top,
-  // $mergeObjects, ...) — rejecting them at the constraint would break
-  // valid pipelines AND misreport the error on sibling keys. Registered
-  // accumulators are operand-checked by ValidateGroupQuery.
+  // rejecting at the constraint would misreport the error on sibling
+  // keys. The NAME check happens in ValidateGroupQuery instead — the key
+  // must be registered (AccumulatorSpec) or allow-listed
+  // (UnimplementedAccumulators, e.g. $stdDevPop/$top/$mergeObjects);
+  // registered numeric/comparable accumulators are also operand-checked.
   [key: string]:
     | AnyLiteral<Schema>
     | AccumulatorFunction<Schema>
@@ -203,27 +237,36 @@ type ValidateAccumulatorValue<Schema extends Document, A> =
     ]
   ) ?
     never
-  : string extends keyof Schema ?
-    never // operand checks are meaningless on a wide/index-signature schema
-  : OperatorKeyOf<A> extends infer Op extends CheckedAccumulatorOps ?
-    // $min/$max: ANY non-`$` string literal is a comparable. The union
-    // relation below can't express "string minus `$`-prefix" (NoDollarString
-    // only covers alphanumeric-leading strings, falsely rejecting "", "_x",
-    // "(none)"), so accept it here; `$`-strings fall through to the union,
-    // where the refs arm checks them against the schema.
-    Op extends "$min" | "$max" ?
-      A[Op & keyof A] extends `$${string}` ?
-        [A] extends [AccumulatorFor<Schema, Op>] ?
-          never
+  : // Schema-INDEPENDENT name check first, so it still runs on wide
+  // schemas AND resolves for generic-schema helpers: the accumulator must
+  // be registered or allow-listed — anything else is a typo, not a
+  // MongoDB accumulator.
+  [OperatorKeyOf<A>] extends (
+    [keyof AccumulatorSpec<Schema> | UnimplementedAccumulators]
+  ) ?
+    OperatorKeyOf<A> extends infer Op extends CheckedAccumulatorOps ?
+      string extends keyof Schema ?
+        never // operand checks are meaningless on a wide/index-signature schema
+      : // $min/$max: ANY non-`$` string literal is a comparable. The union
+      // relation below can't express "string minus `$`-prefix" (NoDollarString
+      // only covers alphanumeric-leading strings, falsely rejecting "", "_x",
+      // "(none)"), so accept it here; `$`-strings fall through to the union,
+      // where the refs arm checks them against the schema.
+      Op extends "$min" | "$max" ?
+        A[Op & keyof A] extends `$${string}` ?
+          [A] extends [AccumulatorFor<Schema, Op>] ?
+            never
+          : BrandedAccumulatorFor<Schema, Op>
+        : A[Op & keyof A] extends string ? never
+        : [A] extends [AccumulatorFor<Schema, Op>] ? never
         : BrandedAccumulatorFor<Schema, Op>
-      : A[Op & keyof A] extends string ? never
-      : [A] extends [AccumulatorFor<Schema, Op>] ? never
+      : // Readonly-tolerant via the registry's readonly operand positions
+      // (see ExpressionSpec).
+      [A] extends [AccumulatorFor<Schema, Op>] ? never
       : BrandedAccumulatorFor<Schema, Op>
-    : // Readonly-tolerant via the registry's readonly operand positions
-    // (see ExpressionSpec).
-    [A] extends [AccumulatorFor<Schema, Op>] ? never
-    : BrandedAccumulatorFor<Schema, Op>
-  : never;
+    : never // registered-but-unchecked ($push, ...) or allow-listed:
+  : // schema-free, so it RESOLVES for generic-schema helpers
+    UnknownAccumulatorError<OperatorKeyOf<A> & string>;
 
 /**
  * Per-key group re-check. `_id` is an expression/literal position — it gets

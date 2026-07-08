@@ -4,13 +4,18 @@ Schema-parameterized primitives consumed by every stage: field selectors/
 references, literals, the operand kernel, the expression registry, and the
 nested-validation kernel (`validation.ts` — THE rejection surface for
 structurally-accepted `$`-shapes; `never` = valid, anything else is the
-branded replacement; unregistered operators are FORGIVEN by design).
+branded replacement; unimplemented-but-valid operators are allow-listed BY
+NAME in `UnimplementedExpressionOps` — names outside registry + allow-list
+brand as typos).
 
 ## The expression registry (expressions.ts)
 
 `ExpressionSpec<Schema>` is the single registration point. To add an operator:
 
-1. Add one registry entry: `$op: { operand: <shape>; returns: <type> }`.
+1. Add one registry entry: `$op: { operand: <shape>; returns: <type> }` —
+   and DELETE `$op` from `UnimplementedExpressionOps` (the by-name
+   allow-list of valid-but-unmodeled operators; never widen it to
+   `` `$${string}` ``).
    Build operand shapes from the kernel (`ExpressionOperand`/`ArrayOperand`/
    `ArithmeticPair`/...) so the brand message comes via `RequiresMsg`.
    Operand ARRAY/TUPLE positions must be `readonly` (mutable AND `as const`
@@ -19,12 +24,15 @@ branded replacement; unregistered operators are FORGIVEN by design).
    an `InferDependentExpression` arm, its tuple PATTERNS must be readonly
    too, or `<const>`-inferred readonly literals fall through the arm and
    the resolver silently drops the field.
-2. If the operator belongs in a category union (`StringExpression` etc.),
-   add its key to the matching key-set alias (`StringOps` etc.).
+2. Declare the entry's `category` — the category key sets and unions
+   (`StringExpression` etc.) are DERIVED from it (`OpsInCategory`), and
+   `_EveryOpCategorized` fails the build if it's missing.
 3. Only if the RESULT depends on the literal arguments: add the key to
    `LiteralDependentOps` AND an arm to `InferDependentExpression` (keep them
    in lockstep; a missed entry degrades to the registry's declared
-   `returns`, never to a wrong type).
+   `returns`, never to a wrong type). Declare the widest correct `returns`
+   on the entry — TS has no type-level lambdas, so the arm is the
+   irreducible per-operator inference code.
 
 Everything else (per-operator types, `Expression`, fixed-return inference)
 derives automatically. Do NOT hand-write expression object types.
@@ -59,7 +67,7 @@ derives automatically. Do NOT hand-write expression object types.
 
 ## Verifying changes
 
-`cd packages/core && bunx tsc --noEmit` is the gate that checks the
+`bun run typecheck:packages` (from the root) is the gate that checks the
 `*.typeAssertions.ts` files (the root `bun run typecheck` does NOT re-check
 package sources). Inspect resolved types with
 `bun run tsx .claude/inspect-types.ts <TypeName> src/path/file.ts` from the

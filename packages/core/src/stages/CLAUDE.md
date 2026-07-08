@@ -35,18 +35,23 @@ aliases behind `PassThrough` (defaults evaluate eagerly).
 - Brand messages are built with `RequiresMsg` (utils/errors.ts); keep the
   "Operator/Accumulator/Stage '<x>' requires <constraint>." skeleton.
 - Accumulators register in `AccumulatorSpec` (group.ts), mirroring the
-  expression registry: one entry + one resolver arm if operand-dependent.
+  expression registry: one entry + one resolver arm if operand-dependent —
+  and DELETE the key from `UnimplementedAccumulators` (the by-name
+  allow-list; never widen it to `` `$${string}` ``).
 
 ## When adding a stage
 
 Touch: the new trio module here, the `Pipeline` method, a
-`<stage>.typeAssertions.ts`, and entries in
-`stages.contract.typeAssertions.ts` (PassThrough + method-wiring pins).
-Nothing compile-enforces the contract entries — don't skip them.
+`<stage>.typeAssertions.ts`, and ONE per-stage block in
+`stages.contract.typeAssertions.ts` (the file is grouped by stage; a
+block holds the stage's PassThrough, method-wiring, and Query-alias
+pins together). Nothing compile-enforces the contract entries — don't
+skip them.
 
 ## Verifying
 
-`cd packages/core && bunx tsc --noEmit` (the root typecheck does NOT check
-package sources). The regression guards that must never be weakened:
+`bun run typecheck:packages` (from the root; the root `bun run typecheck`
+does NOT check package sources). The regression guards that must never be
+weakened:
 `stages.contract.typeAssertions.ts` and
 `../pipeline/Pipeline.callSite.typeAssertions.ts`.

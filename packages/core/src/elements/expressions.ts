@@ -166,12 +166,22 @@ export type ArrayInput<Schema extends Document> =
 // ----------------------------------------------------------------------------
 
 /**
- * Per-operator registration: `operand` is the input shape (carrying the
- * operand brands), `returns` is the result type for fixed-return operators.
- * For the literal-dependent operators (`LiteralDependentOps`) `returns`
- * holds the widest correct type — top-level inference for those routes
- * through `InferDependentExpression`, which refines from the literal
- * arguments.
+ * Per-operator registration — one entry declares everything about an
+ * operator that CAN be declared as data:
+ *
+ * - `operand`: the input shape (carrying the operand brands).
+ * - `returns`: the result type for fixed-return operators. A LITERAL-
+ *   DEPENDENT operator (its result derives from its arguments — $cond's
+ *   branches, $concatArrays' element types, ...) declares its WIDEST
+ *   correct type here (`unknown`/`unknown[]`), and its real inference
+ *   lives as an arm of `InferDependentExpression` below — TypeScript has
+ *   no type-level lambdas, so a parameterized "how to compute the result"
+ *   cannot be stored in a registry entry; the hand-written arm is the
+ *   irreducible per-operator inference code, kept in lockstep via
+ *   `LiteralDependentOps`.
+ * - `category`: the operator's category — the category key sets and
+ *   unions (`ArrayExpression`, ...) are DERIVED from this field, so the
+ *   category is declared exactly once (pinned by `_EveryOpCategorized`).
  *
  * Being an interface, members resolve lazily and mutual recursion with the
  * derived `Expression` union is safe.
@@ -188,9 +198,14 @@ export interface ExpressionSpec<Schema extends Document> {
   $concatArrays: {
     operand: readonly ArrayOperand<Schema, "$concatArrays">[];
     returns: unknown[];
+    category: "array";
   };
   /** Returns the size of an array. */
-  $size: { operand: ArrayOperand<Schema, "$size">; returns: number };
+  $size: {
+    operand: ArrayOperand<Schema, "$size">;
+    returns: number;
+    category: "array";
+  };
   /** Element at index (0-based; negative counts from the end). */
   $arrayElemAt: {
     operand: readonly [
@@ -198,6 +213,7 @@ export interface ExpressionSpec<Schema extends Document> {
       number | FieldReferencesThatInferTo<Schema, number>,
     ];
     returns: unknown;
+    category: "array";
   };
   /** Filters an array by a condition (cond uses $$var references; `as`
    *  defaults to `$$this` in MongoDB, so it is optional). */
@@ -209,6 +225,7 @@ export interface ExpressionSpec<Schema extends Document> {
       limit?: number;
     };
     returns: unknown[];
+    category: "array";
   };
   /**
    * Transforms each element. `in` needs $$variable tracking we don't have,
@@ -217,6 +234,7 @@ export interface ExpressionSpec<Schema extends Document> {
   $map: {
     operand: { input: ArrayInput<Schema>; as: string; in: unknown };
     returns: unknown[];
+    category: "array";
   };
   /** Sums numeric values in an array ($group accumulation lives in group.ts). */
   $sum: {
@@ -226,6 +244,7 @@ export interface ExpressionSpec<Schema extends Document> {
       | MapExpression<Schema>
       | readonly number[];
     returns: number;
+    category: "array";
   };
 
   // --- Date operators -------------------------------------------------------
@@ -238,6 +257,7 @@ export interface ExpressionSpec<Schema extends Document> {
       onNull?: unknown;
     };
     returns: string;
+    category: "date";
   };
   /** Truncates a date to a unit. */
   $dateTrunc: {
@@ -256,6 +276,7 @@ export interface ExpressionSpec<Schema extends Document> {
         | "sunday";
     };
     returns: Date;
+    category: "date";
   };
   /** Adds an amount of units to a date. */
   $dateAdd: {
@@ -266,6 +287,7 @@ export interface ExpressionSpec<Schema extends Document> {
       timezone?: string;
     };
     returns: Date;
+    category: "date";
   };
   /** Subtracts an amount of units from a date. */
   $dateSubtract: {
@@ -276,30 +298,40 @@ export interface ExpressionSpec<Schema extends Document> {
       timezone?: string;
     };
     returns: Date;
+    category: "date";
   };
   /** Converts a Unix-ms number (or numeric expression) to a Date. */
-  $toDate: { operand: ArithmeticOperand<Schema, "$toDate">; returns: Date };
+  $toDate: {
+    operand: ArithmeticOperand<Schema, "$toDate">;
+    returns: Date;
+    category: "date";
+  };
 
   // --- Arithmetic operators (all return number) -----------------------------
   $add: {
     operand: readonly ArithmeticOperand<Schema, "$add">[];
     returns: number;
+    category: "arithmetic";
   };
   $subtract: {
     operand: ArithmeticPair<Schema, "$subtract">;
     returns: number;
+    category: "arithmetic";
   };
   $multiply: {
     operand: readonly ArithmeticOperand<Schema, "$multiply">[];
     returns: number;
+    category: "arithmetic";
   };
   $divide: {
     operand: ArithmeticPair<Schema, "$divide">;
     returns: number;
+    category: "arithmetic";
   };
   $mod: {
     operand: ArithmeticPair<Schema, "$mod">;
     returns: number;
+    category: "arithmetic";
   };
 
   // --- String operators ------------------------------------------------------
@@ -307,6 +339,7 @@ export interface ExpressionSpec<Schema extends Document> {
   $concat: {
     operand: readonly StringOperand<Schema, "$concat">[];
     returns: string;
+    category: "string";
   };
 
   // --- Conditional operators (results depend on the literal args) -----------
@@ -318,6 +351,7 @@ export interface ExpressionSpec<Schema extends Document> {
       ...ConditionalOperand<Schema>[],
     ];
     returns: unknown;
+    category: "conditional";
   };
   /** Ternary: [condition, thenValue, elseValue]. */
   $cond: {
@@ -327,6 +361,7 @@ export interface ExpressionSpec<Schema extends Document> {
       ConditionalOperand<Schema>,
     ];
     returns: unknown;
+    category: "conditional";
   };
 
   // --- Variable binding ------------------------------------------------------
@@ -334,42 +369,194 @@ export interface ExpressionSpec<Schema extends Document> {
   $let: {
     operand: { vars: Record<string, unknown>; in: unknown };
     returns: unknown;
+    category: "variable";
   };
 
   // --- Literal ----------------------------------------------------------------
   /** Returns the value without parsing; result is the literal's own type. */
-  $literal: { operand: unknown; returns: unknown };
+  $literal: { operand: unknown; returns: unknown; category: "literal" };
 
   // --- Comparison operators (all return boolean) ------------------------------
   $in: {
     operand: ComparisonPair<Schema>;
     returns: boolean;
+    category: "comparison";
   };
   $eq: {
     operand: ComparisonPair<Schema>;
     returns: boolean;
+    category: "comparison";
   };
   $ne: {
     operand: ComparisonPair<Schema>;
     returns: boolean;
+    category: "comparison";
   };
   $gt: {
     operand: ComparisonPair<Schema>;
     returns: boolean;
+    category: "comparison";
   };
   $gte: {
     operand: ComparisonPair<Schema>;
     returns: boolean;
+    category: "comparison";
   };
   $lt: {
     operand: ComparisonPair<Schema>;
     returns: boolean;
+    category: "comparison";
   };
   $lte: {
     operand: ComparisonPair<Schema>;
     returns: boolean;
+    category: "comparison";
   };
 }
+
+/**
+ * Aggregation expression operators that are VALID MongoDB but not yet
+ * modeled by the registry. They are allow-listed BY NAME: accepted with no
+ * operand validation and no result inference (results degrade to
+ * `unknown`), so real pipelines compile while a typo'd operator brands
+ * with `UnknownOperatorError` (utils/errors.ts).
+ *
+ * DO NOT widen this to `` `$${string}` `` — the explicit list is exactly
+ * what makes unknown-operator rejection possible.
+ *
+ * Implementing one of these = add its `ExpressionSpec` entry (plus a
+ * dependent-inference arm if literal-dependent) and DELETE it from this
+ * list. If a valid operator is missing here, the fix is to add it here —
+ * never to loosen the checks that consume the list.
+ */
+export type UnimplementedExpressionOps =
+  // Accumulators usable in expression position ($project/$set over arrays)
+  | "$avg"
+  | "$max"
+  | "$min"
+  | "$median"
+  | "$percentile"
+  | "$stdDevPop"
+  | "$stdDevSamp"
+  // Arithmetic
+  | "$abs"
+  | "$ceil"
+  | "$exp"
+  | "$floor"
+  | "$ln"
+  | "$log"
+  | "$log10"
+  | "$pow"
+  | "$round"
+  | "$sqrt"
+  | "$trunc"
+  // Array
+  | "$arrayToObject"
+  | "$first"
+  | "$firstN"
+  | "$indexOfArray"
+  | "$isArray"
+  | "$last"
+  | "$lastN"
+  | "$maxN"
+  | "$minN"
+  | "$objectToArray"
+  | "$range"
+  | "$reduce"
+  | "$reverseArray"
+  | "$slice"
+  | "$sortArray"
+  | "$zip"
+  // Bitwise
+  | "$bitAnd"
+  | "$bitNot"
+  | "$bitOr"
+  | "$bitXor"
+  // Boolean
+  | "$and"
+  | "$not"
+  | "$or"
+  // Comparison
+  | "$cmp"
+  // Conditional
+  | "$switch"
+  // Custom
+  | "$accumulator"
+  | "$function"
+  // Data size
+  | "$binarySize"
+  | "$bsonSize"
+  // Date
+  | "$dateDiff"
+  | "$dateFromParts"
+  | "$dateFromString"
+  | "$dateToParts"
+  | "$dayOfMonth"
+  | "$dayOfWeek"
+  | "$dayOfYear"
+  | "$hour"
+  | "$isoDayOfWeek"
+  | "$isoWeek"
+  | "$isoWeekYear"
+  | "$millisecond"
+  | "$minute"
+  | "$month"
+  | "$second"
+  | "$week"
+  | "$year"
+  // Miscellaneous
+  | "$getField"
+  | "$rand"
+  | "$sampleRate"
+  | "$toHashedIndexKey"
+  // Object
+  | "$mergeObjects"
+  | "$setField"
+  | "$unsetField"
+  // Set
+  | "$allElementsTrue"
+  | "$anyElementTrue"
+  | "$setDifference"
+  | "$setEquals"
+  | "$setIntersection"
+  | "$setIsSubset"
+  | "$setUnion"
+  // String
+  | "$indexOfBytes"
+  | "$indexOfCP"
+  | "$ltrim"
+  | "$regexFind"
+  | "$regexFindAll"
+  | "$regexMatch"
+  | "$replaceAll"
+  | "$replaceOne"
+  | "$rtrim"
+  | "$split"
+  | "$strLenBytes"
+  | "$strLenCP"
+  | "$strcasecmp"
+  | "$substr"
+  | "$substrBytes"
+  | "$substrCP"
+  | "$toLower"
+  | "$toUpper"
+  | "$trim"
+  // Text
+  | "$meta"
+  // Timestamp
+  | "$tsIncrement"
+  | "$tsSecond"
+  // Type conversion / inspection
+  | "$convert"
+  | "$isNumber"
+  | "$toBool"
+  | "$toDecimal"
+  | "$toDouble"
+  | "$toInt"
+  | "$toLong"
+  | "$toObjectId"
+  | "$toString"
+  | "$type";
 
 // ----------------------------------------------------------------------------
 // Derived expression types — never hand-maintained
@@ -404,25 +591,40 @@ export type ExpressionsReturning<Schema extends Document, T> = ExpressionFor<
   OpsReturning<Schema, T>
 >;
 
-// Category key sets — the registry's table of contents.
-type ArrayOps =
-  | "$concatArrays"
-  | "$size"
-  | "$arrayElemAt"
-  | "$filter"
-  | "$map"
-  | "$sum";
-type DateOps =
-  | "$dateToString"
-  | "$dateTrunc"
-  | "$dateAdd"
-  | "$dateSubtract"
-  | "$toDate";
-type ArithmeticOps = "$add" | "$subtract" | "$multiply" | "$divide" | "$mod";
-type StringOps = "$concat";
-type ConditionalOps = "$ifNull" | "$cond";
-type VariableOps = "$let";
-type ComparisonOps = "$in" | "$eq" | "$ne" | "$gt" | "$gte" | "$lt" | "$lte";
+// Category key sets — DERIVED from the registry's per-entry `category`
+// field, so an operator's category is declared exactly once, on its entry.
+// Schema-free by construction: entry keys and categories don't depend on
+// Schema, so the filter runs once against `ExpressionSpec<Document>` and is
+// alias-cached globally. `_EveryOpCategorized`
+// (expressions.typeAssertions.ts) pins that no entry omits its category.
+
+/** Closed set of registry categories — every entry declares exactly one. */
+export type ExpressionCategory =
+  | "array"
+  | "date"
+  | "arithmetic"
+  | "string"
+  | "conditional"
+  | "variable"
+  | "literal"
+  | "comparison";
+
+/** Registry keys whose entry declares `category: C`. */
+export type OpsInCategory<C extends ExpressionCategory> = {
+  [K in keyof ExpressionSpec<Document>]: ExpressionSpec<Document>[K] extends (
+    { category: C }
+  ) ?
+    K
+  : never;
+}[keyof ExpressionSpec<Document>];
+
+type ArrayOps = OpsInCategory<"array">;
+type DateOps = OpsInCategory<"date">;
+type ArithmeticOps = OpsInCategory<"arithmetic">;
+type StringOps = OpsInCategory<"string">;
+type ConditionalOps = OpsInCategory<"conditional">;
+type VariableOps = OpsInCategory<"variable">;
+type ComparisonOps = OpsInCategory<"comparison">;
 
 // Per-operator expression types (public API, derived).
 export type ConcatArraysExpression<Schema extends Document> = ExpressionFor<
@@ -744,11 +946,14 @@ export type InferExpression<Schema extends Document, Expr> =
   : [OperatorKeyOf<Expr>] extends [keyof ExpressionSpec<Schema>] ?
     ExpressionSpec<Schema>[OperatorKeyOf<Expr> &
       keyof ExpressionSpec<Schema>]["returns"]
-  : // Unknown operator: degrade to `unknown`, never to a dropped field. The
-    // registry covers a subset of MongoDB's operators; acceptance is
-    // forgiving (elements/validation.ts), so inference must keep the field
-    // usable downstream — `never` here made the resolvers DROP it, and a
-    // later stage reading it errored with a misleading Field-not-on-schema.
+  : // Unregistered operator: degrade to `unknown`, never to a dropped
+    // field — `never` here made the resolvers DROP it, and a later stage
+    // reading it errored with a misleading Field-not-on-schema. Inference
+    // stays lenient for ALL unregistered keys (allow-listed
+    // UnimplementedExpressionOps AND typos alike): rejection is
+    // validation's job (elements/validation.ts brands operators outside
+    // registry + allow-list), and a branded call site never ships, so its
+    // inferred output type is moot.
     unknown;
 
 // ----------------------------------------------------------------------------
