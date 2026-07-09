@@ -188,10 +188,10 @@ export type ArrayInput<Schema extends Document> =
  *   irreducible per-operator inference code. A missing arm degrades to
  *   `unknown`, never to a wrong type or a dropped field.
  * The operator's CATEGORY is declared by membership in the matching
- * `*_EXPRESSION_OPERATORS` const array (below the registry); the category
- * unions and the combined `EXPRESSION_OPERATORS` list derive from those
- * arrays, and the composed list's `satisfies` rejects non-registry names
- * at the declaration.
+ * `*_EXPRESSION_OPERATORS` const array (below the registry). Those arrays
+ * are AUTHORITATIVE — this registry must carry an entry for every listed
+ * operator (the composed list's `satisfies` surfaces a missing entry at
+ * the array declaration); the category unions derive from the arrays.
  *
  * Being an interface, members resolve lazily and mutual recursion with the
  * derived `Expression` union is safe.
@@ -589,13 +589,15 @@ export type ExpressionsReturning<Schema extends Document, T> = ExpressionFor<
 >;
 
 // ---------------------------------------------------------------------------
-// Runtime operator-name lists. The pattern, used throughout the package:
-// declare a const array, infer its string union right next to it
-// (`(typeof X)[number]`), compose bigger lists by spreading, and use
-// `Record<Union, V>` where an object-shaped view is needed. The `satisfies`
-// on the composed list rejects any name that is not a registry key AT THE
-// declaration; a registry entry missing from these lists is caught by the
-// completions suite's exact-match ideals. Never keep the two sides in sync
+// Runtime operator-name lists — AUTHORITATIVE. The pattern, used throughout
+// the package: declare a const array, infer its string union right next to
+// it (`(typeof X)[number]`), compose bigger lists by spreading, and use
+// `Record<Union, V>` where an object-shaped view is needed. The registry
+// conforms to these lists, not the other way around: the `satisfies` on the
+// composed list is the cheapest compile-time tie, and an error there reads
+// "the registry is missing an entry for this operator" — not doubt about
+// the list. (A registry key absent from the lists is caught by the
+// completions suite's exact-match ideals.) Never keep the two sides in sync
 // with assertion pins.
 // ---------------------------------------------------------------------------
 

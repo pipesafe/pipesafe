@@ -150,10 +150,11 @@ The type system is organized into modular building blocks located in `packages/c
   `InferExpression` are all derived.
   Categories are declared by membership in the per-category const arrays
   (`*_EXPRESSION_OPERATORS`), each paired with its inferred union
-  (`(typeof X)[number]`); `EXPRESSION_OPERATORS` is their spread, whose
-  `satisfies readonly (keyof ExpressionSpec)[]` rejects non-registry names at
-  the declaration (a registry entry missing from the arrays is caught by the
-  completions suite's exact-match ideals). Valid-but-unmodeled operators are
+  (`(typeof X)[number]`). The arrays are AUTHORITATIVE — the registry conforms
+  to them; `EXPRESSION_OPERATORS` is their spread, whose
+  `satisfies readonly (keyof ExpressionSpec)[]` surfaces a missing registry
+  entry at the array declaration (a registry key absent from the arrays is
+  caught by the completions suite's exact-match ideals). Valid-but-unmodeled operators are
   allow-listed by name in `UnimplementedExpressionOps` (never widen it to
   `` `$${string}` ``). Adding an operator = one registry entry + its category
   array line + deleting its allow-list line (+ one dependent arm if applicable).
@@ -206,10 +207,13 @@ TODO: Document the rest of the stages
   infer its string union immediately below it (`type X = (typeof ARR)[number]`
   — keep each array/union PAIR adjacent, don't group arrays and then types),
   compose bigger lists/unions by spreading arrays and unioning types, and use
-  `Record<Union, V>` when an object-shaped companion is needed. NEVER use
-  assertion pins to keep a type and a runtime constant in sync — derive one
-  from the other, or `satisfies`-check at the declaration, so a forgotten
-  update fails at the declaration site, not in a remote assertion file
+  `Record<Union, V>` when an object-shaped companion is needed. The const
+  arrays are AUTHORITATIVE — hand-written types that respell their strings
+  (e.g. registry interfaces) conform to the arrays, and a `satisfies` at the
+  array declaration is the tie (its error means the type side is missing an
+  entry). NEVER use assertion pins to keep a type and a runtime constant in
+  sync — a forgotten update must fail at the declaration site, not in a
+  remote assertion file
 - Suppressing prettier/lint findings is unacceptable — no `// prettier-ignore`
   or `// eslint-disable*` anywhere; restructure the code until the tools pass.
   In assertion files, put `@ts-expect-error` on the exact line the error

@@ -140,12 +140,13 @@ export type UnimplementedAccumulators =
   | "$topN";
 
 /**
- * Every registered accumulator operator, exported so tooling (docs, the
+ * Every accumulator operator — AUTHORITATIVE; `AccumulatorSpec` conforms
+ * to this list, not the other way around. Exported so tooling (docs, the
  * IDE autocomplete tests) consumes the same names the types are built
- * from. The `satisfies` rejects any name that is not an `AccumulatorSpec`
- * key AT THE declaration; a registry entry missing from this list is
- * caught by the completions suite's exact-match ideal. Never keep the two
- * in sync with assertion pins.
+ * from. The `satisfies` is the cheapest compile-time tie: an error here
+ * reads "the registry is missing an entry for this accumulator". (A
+ * registry key absent from this list is caught by the completions suite's
+ * exact-match ideal.) Never keep the two in sync with assertion pins.
  */
 export const ACCUMULATOR_OPERATORS = [
   "$sum",
