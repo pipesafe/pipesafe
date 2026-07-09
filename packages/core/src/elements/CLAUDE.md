@@ -24,12 +24,13 @@ brand as typos).
    an `InferDependentExpression` arm, its tuple PATTERNS must be readonly
    too, or `<const>`-inferred readonly literals fall through the arm and
    the resolver silently drops the field.
-2. Declare the entry's `category` AND add the operator to the matching
-   `*_EXPRESSION_OPERATORS` runtime array (one exported array per category,
-   plus the spread `EXPRESSION_OPERATORS`). The category unions
-   (`StringExpression` etc.) derive from the arrays; the per-category pins
-   and `_EveryOpCategorized` fail the build if either side is missing or
-   the category is wrong.
+2. Add the operator to `EXPRESSION_OPERATOR_CATEGORIES` — the single
+   category declaration, checked at its own declaration by
+   `satisfies Record<keyof ExpressionSpec, ExpressionCategory>` (forgetting
+   the line, or typo'ing the name, is a compile error ON THE MAP). The
+   runtime name arrays (`*_EXPRESSION_OPERATORS`, `EXPRESSION_OPERATORS`)
+   and the category unions (`StringExpression` etc.) all derive from it —
+   never sync them with assertion pins.
 3. Only if the RESULT depends on the literal arguments: OMIT `returns`
    from the entry (the omission IS the declaration — `LiteralDependentOps`
    is derived from it) and add an arm to `InferDependentExpression`. TS

@@ -2,7 +2,6 @@ import { Assert, AssertPipeSafeError, Equal } from "../utils/tests";
 import type { Document } from "../utils/objects";
 import type { PipeSafeError } from "../utils/errors";
 import {
-  ACCUMULATOR_OPERATORS,
   AccumulatorFunction,
   AccumulatorSpec,
   CheckedAccumulatorOps,
@@ -846,15 +845,7 @@ type _DerivedCheckedAccumulatorOps = Assert<
   Equal<CheckedAccumulatorOps, "$sum" | "$avg" | "$min" | "$max">
 >;
 
-// Runtime array ↔ registry lockstep: ACCUMULATOR_OPERATORS is the runtime
-// twin of `keyof AccumulatorSpec` — registering an accumulator without
-// adding it to the array (or vice versa) fails here.
-type _AccumulatorOperatorsListed = Assert<
-  Equal<(typeof ACCUMULATOR_OPERATORS)[number], keyof AccumulatorSpec<Document>>
->;
-
 export type {
-  _AccumulatorOperatorsListed,
   _Assert_SumBrand,
   _Assert_AvgBrand,
   _Assert_MinBrand,

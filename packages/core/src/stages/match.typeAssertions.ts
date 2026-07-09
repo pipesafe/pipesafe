@@ -4,14 +4,7 @@ import {
   Equal,
   IsAssignable,
 } from "../utils/tests";
-import {
-  ComparatorMatchers,
-  FIELD_MATCH_OPERATORS,
-  LogicalMatchOperators,
-  Notted,
-  ResolveMatchOutput,
-  TOP_LEVEL_MATCH_OPERATORS,
-} from "./match";
+import { ComparatorMatchers, Notted, ResolveMatchOutput } from "./match";
 
 /**
  * Type Resolution Behaviors for $match Stage:
@@ -587,30 +580,7 @@ type _ElemMatchOnArrayRejectsBadValue = Assert<
   Equal<IsAssignable<{ $gte: "nope" }, ElemMatchOnArrayOperand>, false>
 >;
 
-// ---------------------------------------------------------------------------
-// Runtime array ↔ matcher-key lockstep: the exported operator lists are the
-// source the matcher-key unions derive from, but $exists/$type keep literal
-// keys in ComparatorMatchers (their value types differ) and $not lives in
-// the Notted wrapper — these pins make any drift between the spread
-// combinations and the actual query surface a compile failure.
-// ---------------------------------------------------------------------------
-
-type _FieldMatchOperatorsListed = Assert<
-  Equal<
-    (typeof FIELD_MATCH_OPERATORS)[number],
-    keyof ComparatorMatchers<unknown> | "$not"
-  >
->;
-type _TopLevelMatchOperatorsListed = Assert<
-  Equal<
-    (typeof TOP_LEVEL_MATCH_OPERATORS)[number],
-    LogicalMatchOperators | "$expr"
-  >
->;
-
 export type {
-  _FieldMatchOperatorsListed,
-  _TopLevelMatchOperatorsListed,
   _GteOnStringArrayMsg,
   _GteOnDateValid,
   _GteOnNumberValid,

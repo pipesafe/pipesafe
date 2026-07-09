@@ -141,20 +141,21 @@ The type system is organized into modular building blocks located in `packages/c
   `RequiresMsg` (utils/errors.ts).
 
 - **expressions.ts**: THE expression registry — `ExpressionSpec<Schema>` maps each
-  operator to `{ operand; returns; category }`, where `returns` is present only on
+  operator to `{ operand; returns }`, where `returns` is present only on
   fixed-return operators: OMITTING it declares the result literal-dependent
   (`LiteralDependentOps` is derived from the omission) and the inference lives in a
   matching `InferDependentExpression` arm (`$concatArrays`, `$arrayElemAt`, `$filter`,
   `$ifNull`, `$cond`, `$literal`; a missing arm degrades to `unknown`). Per-operator
-  types, category key sets and unions (derived from the per-entry `category`),
-  `Expression`, and the fixed-return arm of `InferExpression` are all derived.
-  Each category also has an exported RUNTIME name array (`*_EXPRESSION_OPERATORS`,
-  plus the spread `EXPRESSION_OPERATORS`); the category unions derive from those
-  arrays and per-category pins verify them against the entries' `category` fields.
-  Valid-but-unmodeled operators are allow-listed by name in
-  `UnimplementedExpressionOps` (never widen it to `` `$${string}` ``). Adding an
-  operator = one registry entry + its category-array line + deleting its allow-list
-  line (+ one dependent arm if applicable).
+  types, category key sets and unions, `Expression`, and the fixed-return arm of
+  `InferExpression` are all derived.
+  Categories are declared ONCE in `EXPRESSION_OPERATOR_CATEGORIES` (a
+  `satisfies Record<keyof ExpressionSpec, ExpressionCategory>` map — a missing or
+  extra operator is a compile error at the map itself); the exported runtime name
+  arrays (`*_EXPRESSION_OPERATORS`, `EXPRESSION_OPERATORS`) and the category
+  unions both DERIVE from it. Valid-but-unmodeled operators are allow-listed by
+  name in `UnimplementedExpressionOps` (never widen it to `` `$${string}` ``).
+  Adding an operator = one registry entry + its `EXPRESSION_OPERATOR_CATEGORIES`
+  line + deleting its allow-list line (+ one dependent arm if applicable).
 
 - **literals.ts**: Literal value type constraints
 
@@ -200,6 +201,12 @@ TODO: Document the rest of the stages
 
 - Use `bun` as the package manager (specified in package.json)
 - TypeScript strict mode is enabled
+- NEVER use assertion pins to keep a type and a runtime constant (or two
+  parallel declarations) in sync. Make sync structural: derive the type from
+  the constant (`(typeof ARR)[number]`), derive the constant from a single
+  `satisfies Record<keyof Registry, …>`-checked declaration, or otherwise
+  funnel both through one source — a forgotten update must fail at the
+  declaration site, not in a remote assertion file
 - Suppressing prettier/lint findings is unacceptable — no `// prettier-ignore`
   or `// eslint-disable*` anywhere; restructure the code until the tools pass.
   In assertion files, put `@ts-expect-error` on the exact line the error

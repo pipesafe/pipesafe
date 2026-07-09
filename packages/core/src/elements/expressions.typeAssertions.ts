@@ -3,17 +3,6 @@ import type { PipeSafeError } from "../utils/errors";
 import type { Assert, AssertPipeSafeError, Equal } from "../utils/tests";
 import type {
   ExpressionSpec,
-  ExpressionCategory,
-  OpsInCategory,
-  ARRAY_EXPRESSION_OPERATORS,
-  DATE_EXPRESSION_OPERATORS,
-  ARITHMETIC_EXPRESSION_OPERATORS,
-  STRING_EXPRESSION_OPERATORS,
-  CONDITIONAL_EXPRESSION_OPERATORS,
-  VARIABLE_EXPRESSION_OPERATORS,
-  LITERAL_EXPRESSION_OPERATORS,
-  COMPARISON_EXPRESSION_OPERATORS,
-  EXPRESSION_OPERATORS,
   LiteralDependentOps,
   UnimplementedExpressionOps,
   AddExpression,
@@ -275,68 +264,6 @@ type _Assert_SizeAcceptsArrayRef = Assert<
   Equal<"$tags" extends SizeOperand<ArithSchema> ? true : false, true>
 >;
 
-// ---------------------------------------------------------------------------
-// Registry category lockstep: every ExpressionSpec entry declares a category
-// (the key sets are DERIVED from it). An entry with a missing/typo'd
-// category would silently vanish from its category union — this pin turns
-// that into a compile failure.
-// ---------------------------------------------------------------------------
-
-type _EveryOpCategorized = Assert<
-  Equal<
-    Exclude<keyof ExpressionSpec<Document>, OpsInCategory<ExpressionCategory>>,
-    never
-  >
->;
-
-// ---------------------------------------------------------------------------
-// Runtime array ↔ registry lockstep: the category unions derive from the
-// exported *_EXPRESSION_OPERATORS arrays, and these pins verify each array
-// against the registry's per-entry `category` declarations — an operator
-// added to only one side (entry or array), or filed under the wrong
-// category, fails here in both drift directions.
-// ---------------------------------------------------------------------------
-
-type _ArrayOpsListed = Assert<
-  Equal<(typeof ARRAY_EXPRESSION_OPERATORS)[number], OpsInCategory<"array">>
->;
-type _DateOpsListed = Assert<
-  Equal<(typeof DATE_EXPRESSION_OPERATORS)[number], OpsInCategory<"date">>
->;
-type _ArithmeticOpsListed = Assert<
-  Equal<
-    (typeof ARITHMETIC_EXPRESSION_OPERATORS)[number],
-    OpsInCategory<"arithmetic">
-  >
->;
-type _StringOpsListed = Assert<
-  Equal<(typeof STRING_EXPRESSION_OPERATORS)[number], OpsInCategory<"string">>
->;
-type _ConditionalOpsListed = Assert<
-  Equal<
-    (typeof CONDITIONAL_EXPRESSION_OPERATORS)[number],
-    OpsInCategory<"conditional">
-  >
->;
-type _VariableOpsListed = Assert<
-  Equal<
-    (typeof VARIABLE_EXPRESSION_OPERATORS)[number],
-    OpsInCategory<"variable">
-  >
->;
-type _LiteralOpsListed = Assert<
-  Equal<(typeof LITERAL_EXPRESSION_OPERATORS)[number], OpsInCategory<"literal">>
->;
-type _ComparisonOpsListed = Assert<
-  Equal<
-    (typeof COMPARISON_EXPRESSION_OPERATORS)[number],
-    OpsInCategory<"comparison">
-  >
->;
-type _EveryOpListed = Assert<
-  Equal<(typeof EXPRESSION_OPERATORS)[number], keyof ExpressionSpec<Document>>
->;
-
 // The literal-dependent set is DERIVED from `returns`-omission on registry
 // entries. This pin (a) documents the current set and (b) catches both
 // drift directions: an entry that accidentally drops its `returns` joins
@@ -369,16 +296,6 @@ type _RegistryAllowListDisjoint = Assert<
 
 export type {
   _DerivedLiteralDependentOps,
-  _EveryOpCategorized,
-  _ArrayOpsListed,
-  _DateOpsListed,
-  _ArithmeticOpsListed,
-  _StringOpsListed,
-  _ConditionalOpsListed,
-  _VariableOpsListed,
-  _LiteralOpsListed,
-  _ComparisonOpsListed,
-  _EveryOpListed,
   _RegistryAllowListDisjoint,
   _Assert_AddBrand,
   _Assert_SubtractBrand,

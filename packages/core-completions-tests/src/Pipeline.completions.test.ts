@@ -116,9 +116,9 @@ const NUMERIC_FIELD_REFS = ["$price", "$quantity"];
 /**
  * The operator vocabularies (FIELD_MATCH_OPERATORS,
  * TOP_LEVEL_MATCH_OPERATORS, EXPRESSION_OPERATORS, ACCUMULATOR_OPERATORS)
- * are imported from @pipesafe/core — the same exported arrays core derives
- * its operator-key unions from, and pinned against the registries by
- * core's typeAssertions. Type-inapplicable matchers ($size on a number,
+ * are imported from @pipesafe/core — the same exported arrays core's
+ * operator-key unions and registries derive from (single source by
+ * construction). Type-inapplicable matchers ($size on a number,
  * $regex on a Date, …) are deliberately part of the ideal: the library
  * keeps every matcher key and brands the OPERAND with a PipeSafeError, so
  * the user gets "requires an array field" instead of "unknown property".
