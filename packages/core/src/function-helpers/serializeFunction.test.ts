@@ -168,6 +168,26 @@ describe("serializeFunctionBody", () => {
       x === "[native code]" ? 0 : 1
     );
     expect(src).toContain("[native code]");
+    // Even the full braced form inside a string literal is fine — the guard
+    // is anchored to the WHOLE source, not a substring.
+    expect(() =>
+      serializeFunctionBody((s: string) => s.includes("{ [native code] }"))
+    ).not.toThrow();
+  });
+
+  it("rejects a function declaration escaping its block (strict scoping, no Annex-B hoisting)", () => {
+    const blockFn = new Function(
+      "return ((a) => { { function g() { return a; } } return g(); })"
+    ) as () => (a: number) => unknown;
+    expect(() => serializeFunctionBody(blockFn())).toThrow(/'g'/);
+  });
+
+  it("accepts a default parameter referencing a later parameter", () => {
+    const paramDefault = new Function("return ((a = b, b) => a + b)") as () => (
+      a: number,
+      b: number
+    ) => number;
+    expect(() => serializeFunctionBody(paramDefault())).not.toThrow();
   });
 
   it("rejects nested async functions and dynamic import", () => {
@@ -407,6 +427,39 @@ describe("Pipeline $function integration", () => {
     // round-trip: the bundled body is directly executable
     const fn = new Function(`return (${body})`)() as (p: number) => number;
     expect(fn(10)).toBeCloseTo(12);
+  });
+
+  it("rebundles a serverFn body when the source file's content changes", async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+
+    const dir = mkdtempSync(join(tmpdir(), "pipesafe-serverfn-"));
+    const modulePath = join(dir, "body.server.ts");
+    try {
+      writeFileSync(modulePath, "export default (p: number) => p + 1;\n");
+      const ref = serverFn((p: number) => p, modulePath);
+
+      const build = (): string =>
+        new Pipeline<{ price: number }>()
+          .set({
+            v: { $function: { body: ref, args: ["$price"], lang: "js" } },
+          })
+          .getPipeline()[0]?.["$set"].v.$function.body as string;
+
+      const first = build();
+      const run = (body: string): ((p: number) => number) =>
+        new Function(`return (${body})`)() as (p: number) => number;
+      expect(run(first)(10)).toBe(11);
+
+      // Edit the module — same url, same export, new content. The cache is
+      // content-hash validated, so the next build must pick this up.
+      writeFileSync(modulePath, "export default (p: number) => p + 2;\n");
+      const second = build();
+      expect(run(second)(10)).toBe(12);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("supports named exports in serverFn", () => {

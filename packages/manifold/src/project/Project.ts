@@ -115,12 +115,6 @@ export class Project {
 
     // Build models map, auto-discovering all ancestors (including lookup and unionWith)
     this.models = new Map();
-    // Building a model's pipeline runs its stage methods, which serialize any
-    // `$function` bodies and can throw (impure body, or a serverFn ref with no
-    // bundler installed). Collect those as validation errors so construction
-    // reports them through the same aggregated channel as graph errors,
-    // rather than crashing mid-discovery with a raw exception.
-    const buildErrors: ValidationError[] = [];
     const addModelWithAncestors = (model: Model<any, any, any, any>) => {
       if (this.models.has(model.name)) return;
       // First add upstream ancestor (from property)
@@ -129,18 +123,15 @@ export class Project {
         addModelWithAncestors(upstream);
       }
       // Then add ancestors from lookup/unionWith stages (filter to models
-      // only). This builds the pipeline, so guard it.
+      // only). This builds the pipeline (memoized on the Model), which can
+      // throw — impure `$function` body, serverFn ref with no bundler
+      // installed. Swallow it here so discovery completes; validate() runs
+      // the build check per model and reports it as a `build_error`.
       let stageAncestors: Model<any, any, any, any>[] = [];
       try {
         stageAncestors = model.getAncestorsFromStages().filter(isModel);
-      } catch (error) {
-        buildErrors.push({
-          type: "build_error",
-          message: `Model "${model.name}" failed to build: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-          models: [model.name],
-        });
+      } catch {
+        // reported by validate()'s build pass below
       }
       for (const ancestor of stageAncestors) {
         addModelWithAncestors(ancestor);
@@ -155,9 +146,10 @@ export class Project {
 
     // Validate immediately - fail fast
     const validation = this.validate();
-    const allErrors = [...buildErrors, ...validation.errors];
-    if (allErrors.length > 0) {
-      const errorMessages = allErrors.map((e) => `  - ${e.message}`).join("\n");
+    if (!validation.valid) {
+      const errorMessages = validation.errors
+        .map((e) => `  - ${e.message}`)
+        .join("\n");
       throw new Error(
         `Project "${this.name}" has validation errors:\n${errorMessages}`
       );
@@ -212,6 +204,24 @@ export class Project {
   validate(): ValidationResult {
     const errors: ValidationError[] = [];
     const warnings: ValidationWarning[] = [];
+
+    // Check that every model's pipeline builds. The build is memoized on the
+    // Model (built at most once per instance), so on the success path this is
+    // the same artifact discovery already produced and executeModel later
+    // consumes — a model that validates cleanly cannot newly fail to build.
+    for (const model of this.models.values()) {
+      try {
+        model.getPipelineStages();
+      } catch (error) {
+        errors.push({
+          type: "build_error",
+          message: `Model "${model.name}" failed to build: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          models: [model.name],
+        });
+      }
+    }
 
     // Check for duplicate names
     const names = new Set<string>();

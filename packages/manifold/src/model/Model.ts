@@ -246,15 +246,27 @@ export class Model<
 
   /**
    * Internal: build the pipeline and return the Pipeline instance.
+   *
+   * Built AT MOST ONCE per Model instance and cached: the model is immutable
+   * after construction, so discovery, validation, and execution all consume
+   * the same artifact — the DAG that was validated is provably the pipeline
+   * that runs, even if the user's pipeline function is not deterministic.
+   * (Also means each `$function` body is parsed/bundled once, not once per
+   * consumer.) A build FAILURE is not cached; the error path re-throws on
+   * each call, which Project aggregates during validation.
    */
+  private _builtPipeline?: Pipeline<TInput, TOutput, "model", string>;
+
   private _buildPipeline(): Pipeline<TInput, TOutput, "model", string> {
+    if (this._builtPipeline) return this._builtPipeline;
     // Start with an empty "model" mode pipeline (allows lookup from other models)
     const startPipeline = new Pipeline<TInput, TInput, "model", never>({
       pipeline: [],
     });
 
     // Execute pipeline function
-    return this._pipelineFn(startPipeline);
+    this._builtPipeline = this._pipelineFn(startPipeline);
+    return this._builtPipeline;
   }
 
   /**

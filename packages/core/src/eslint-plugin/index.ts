@@ -1,4 +1,8 @@
 import { MONGO_SERVER_GLOBALS } from "../function-helpers/mongoServerGlobals";
+import {
+  analyzeFunctionBody,
+  AnyNode,
+} from "../function-helpers/analyzeFunctionBody";
 
 /**
  * ESLint plugin for PipeSafe — edit/CI-time enforcement of `$function`
@@ -14,6 +18,15 @@ import { MONGO_SERVER_GLOBALS } from "../function-helpers/mongoServerGlobals";
  *   param types from `args` via FunctionSlots, and nested unannotated
  *   params already fail as TS7006 under noImplicitAny.)
  *
+ * The rule executes the SAME analysis as the runtime check — the shared
+ * walker in `function-helpers/analyzeFunctionBody.ts` (ESLint ASTs are
+ * ESTree-compatible) — so the editor error and the runtime error cannot
+ * drift apart. On top of that shared analysis the rule adds ONE check the
+ * runtime is structurally blind to: a closure over a user binding whose
+ * name shadows a server global (`const Date = myDate` outside the body).
+ * `Function.prototype.toString` carries no lexical context, so only the
+ * scope-aware lint layer can catch it.
+ *
  * Usage (flat config):
  *
  *   import pipesafe from "@pipesafe/core/eslint-plugin";
@@ -25,23 +38,10 @@ import { MONGO_SERVER_GLOBALS } from "../function-helpers/mongoServerGlobals";
  * packages) so the plugin adds zero runtime dependencies.
  */
 
-// Minimal structural views over ESLint's AST/scope/context — enough for
-// this rule without depending on @types/eslint. Frequently accessed slots
-// are declared explicitly so dot access works under
-// `noPropertyAccessFromIndexSignature`.
-interface AstNode {
-  type: string;
-  parent?: AstNode;
-  key?: any;
-  value?: any;
-  name?: any;
-  computed?: any;
-  async?: any;
-  generator?: any;
-  params?: any;
-  left?: any;
-  [key: string]: any;
-}
+// Minimal structural views over ESLint's scope/context — enough for this
+// rule without depending on @types/eslint. AST nodes reuse the shared
+// walker's `AnyNode` view (ESLint nodes additionally carry `parent`
+// back-references, which the walker skips).
 
 interface ScopeReference {
   identifier: { name: string; loc: unknown };
@@ -53,7 +53,7 @@ interface ScopeReference {
 
 interface EslintVariable {
   name: string;
-  defs: { node: AstNode }[];
+  defs: { node: AnyNode }[];
 }
 
 interface EslintScope {
@@ -65,9 +65,9 @@ interface EslintScope {
 interface RuleContext {
   sourceCode: {
     scopeManager: {
-      acquire(node: AstNode, inner?: boolean): EslintScope | null;
+      acquire(node: AnyNode, inner?: boolean): EslintScope | null;
     };
-    getScope(node: AstNode): EslintScope;
+    getScope(node: AnyNode): EslintScope;
   };
   report(descriptor: {
     node: unknown;
@@ -76,7 +76,7 @@ interface RuleContext {
   }): void;
 }
 
-function isFunctionNode(node: AstNode | undefined): node is AstNode {
+function isFunctionNode(node: AnyNode | undefined): node is AnyNode {
   return (
     !!node &&
     (node.type === "FunctionExpression" ||
@@ -91,9 +91,9 @@ function isFunctionNode(node: AstNode | undefined): node is AstNode {
  * (reassigned, imported, non-function) returns undefined and is left alone.
  */
 function resolveFunctionLiteral(
-  idNode: AstNode,
+  idNode: AnyNode,
   context: RuleContext
-): AstNode | undefined {
+): AnyNode | undefined {
   const name = idNode.name as string;
   let scope: EslintScope | null = context.sourceCode.getScope(idNode);
   while (scope) {
@@ -103,7 +103,7 @@ function resolveFunctionLiteral(
       const defNode = variable.defs[0]?.node;
       if (!defNode) return undefined;
       if (defNode.type === "FunctionDeclaration") return defNode;
-      const init = defNode["init"] as AstNode | undefined;
+      const init = defNode["init"] as AnyNode | undefined;
       if (defNode.type === "VariableDeclarator" && isFunctionNode(init))
         return init;
       return undefined;
@@ -113,72 +113,19 @@ function resolveFunctionLiteral(
   return undefined;
 }
 
-/**
- * Report async/generator functions (at any depth) and dynamic `import()`
- * anywhere inside `fnNode` — none can run in MongoDB's synchronous,
- * module-less server engine. Skips `parent` back-references to avoid cycles.
- */
-function reportDisallowedConstructs(
-  fnNode: AstNode,
-  context: RuleContext
-): void {
-  const visit = (n: AstNode): void => {
-    if (
-      n.type === "FunctionExpression" ||
-      n.type === "ArrowFunctionExpression" ||
-      n.type === "FunctionDeclaration"
-    ) {
-      if (n.async === true) context.report({ node: n, messageId: "asyncBody" });
-      if (n.generator === true)
-        context.report({ node: n, messageId: "generatorBody" });
-    }
-    if (n.type === "ImportExpression")
-      context.report({ node: n, messageId: "dynamicImport" });
-    for (const key of Object.keys(n)) {
-      if (
-        key === "parent" ||
-        key === "type" ||
-        key === "loc" ||
-        key === "range" ||
-        key === "start" ||
-        key === "end"
-      )
-        continue;
-      const child = n[key] as unknown;
-      if (Array.isArray(child)) {
-        for (const c of child) {
-          if (
-            c &&
-            typeof c === "object" &&
-            typeof (c as AstNode).type === "string"
-          )
-            visit(c as AstNode);
-        }
-      } else if (
-        child &&
-        typeof child === "object" &&
-        typeof (child as AstNode).type === "string"
-      ) {
-        visit(child as AstNode);
-      }
-    }
-  };
-  visit(fnNode);
-}
-
 /** Is this Property the `body` of an object that is the value of a `$function` property? */
-function isFunctionBodyProperty(node: AstNode): boolean {
+function isFunctionBodyProperty(node: AnyNode): boolean {
   if (node.type !== "Property" || node.computed) return false;
-  const key = node.key as AstNode;
+  const key = node.key as AnyNode;
   const name: unknown = key.type === "Identifier" ? key.name : key.value;
   if (name !== "body") return false;
 
-  const objectExpr = node.parent;
+  const objectExpr = node["parent"] as AnyNode | undefined;
   if (!objectExpr || objectExpr.type !== "ObjectExpression") return false;
-  const parentProp = objectExpr.parent;
+  const parentProp = objectExpr["parent"] as AnyNode | undefined;
   if (!parentProp || parentProp.type !== "Property" || parentProp.computed)
     return false;
-  const parentKey = parentProp.key as AstNode;
+  const parentKey = parentProp.key as AnyNode;
   const parentName: unknown =
     parentKey.type === "Identifier" ? parentKey.name : parentKey.value;
   return parentName === "$function";
@@ -204,9 +151,9 @@ const noImpureFunctionBody = {
   },
   create(context: RuleContext) {
     return {
-      Property(node: AstNode): void {
+      Property(node: AnyNode): void {
         if (!isFunctionBodyProperty(node)) return;
-        let fn = node.value as AstNode;
+        let fn = node.value as AnyNode;
         // A body given as a bare identifier (`body: helper`) is resolved to
         // its function-literal definition and analyzed like an inline body,
         // so factoring the body into a `const` doesn't bypass the rule.
@@ -223,33 +170,60 @@ const noImpureFunctionBody = {
         )
           return;
 
-        // async/generator (top-level or nested) and dynamic import().
-        reportDisallowedConstructs(fn, context);
+        // The shared analysis — identical semantics to the runtime check.
+        const reported = new Set<string>();
+        analyzeFunctionBody(fn, (violation) => {
+          switch (violation.kind) {
+            case "async":
+              context.report({ node: violation.node, messageId: "asyncBody" });
+              return;
+            case "generator":
+              context.report({
+                node: violation.node,
+                messageId: "generatorBody",
+              });
+              return;
+            case "dynamicImport":
+              context.report({
+                node: violation.node,
+                messageId: "dynamicImport",
+              });
+              return;
+            case "freeVariable":
+              if (MONGO_SERVER_GLOBALS.has(violation.name)) return;
+              if (reported.has(violation.name)) return;
+              reported.add(violation.name);
+              context.report({
+                node: violation.node,
+                messageId: "outerScope",
+                data: { name: violation.name },
+              });
+              return;
+          }
+        });
 
-        // Free variables: references that pass through the function's scope
-        // resolve outside it (or nowhere). `through` includes references
-        // escaping from nested scopes too.
+        // ADDITIVE, lint-only check: a free reference whose name matches a
+        // server global passes the shared analysis (the runtime allowlists
+        // it — a toString source carries no lexical context), but if the
+        // reference actually resolves to a USER binding outside the body
+        // (the user shadowed the global), it is a real closure: the server
+        // would run the built-in, not the user's value. Only eslint-scope
+        // can see this.
         const scope = context.sourceCode.scopeManager.acquire(fn, true);
         if (!scope) return;
-        const reported = new Set<string>();
         for (const ref of scope.through) {
           const name = ref.identifier.name;
+          if (!MONGO_SERVER_GLOBALS.has(name)) continue; // shared walk handled it
           if (reported.has(name)) continue;
           const resolved = ref.resolved;
           // A named function expression's self-reference resolves in the
           // wrapper function-expression-name scope, whose block is the
           // function node itself — that binding serializes with the body
-          // and is NOT an outer-scope reference (`function fib(n) {
-          // return fib(n - 1); }` is self-contained).
+          // and is NOT an outer-scope reference.
           if (resolved?.scope?.block === fn) continue;
-          // A reference that resolves to a USER binding in an inner scope is a
-          // real closure — flag it even when its name matches a server global
-          // (the user shadowed the global). A reference that is unresolved,
-          // or resolves to the global scope, is a predefined global: allowed
-          // only when it is an actual MongoDB server-side global.
           const isUserBinding =
             resolved !== null && resolved.scope?.type !== "global";
-          if (!isUserBinding && MONGO_SERVER_GLOBALS.has(name)) continue;
+          if (!isUserBinding) continue;
           reported.add(name);
           context.report({
             node: ref.identifier,

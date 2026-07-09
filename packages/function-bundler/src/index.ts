@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { buildSync } from "esbuild";
 
 /**
@@ -20,6 +21,18 @@ export interface ServerFunctionModuleRef {
   exportName: string;
 }
 
+export interface BundledServerFunction {
+  /** The self-contained `function(){...}` body string sent to MongoDB */
+  code: string;
+  /**
+   * Absolute paths of every file esbuild pulled into the bundle (the entry
+   * module and everything it transitively imports). Core content-hashes
+   * these to revalidate its bundle cache, so editing any of them in a
+   * long-lived process invalidates the cached bundle.
+   */
+  inputs: string[];
+}
+
 /**
  * Bundle the referenced module (esbuild: TS parsed natively, tree-shaken,
  * imports inlined) and wrap it so the named export is invoked with the
@@ -28,7 +41,9 @@ export interface ServerFunctionModuleRef {
  *
  * Synchronous by design: Pipeline stage chaining is synchronous.
  */
-export function bundleServerFunction(ref: ServerFunctionModuleRef): string {
+export function bundleServerFunction(
+  ref: ServerFunctionModuleRef
+): BundledServerFunction {
   const entryPoint =
     ref.url.startsWith("file:") ? fileURLToPath(ref.url) : ref.url;
 
@@ -36,6 +51,7 @@ export function bundleServerFunction(ref: ServerFunctionModuleRef): string {
     entryPoints: [entryPoint],
     bundle: true,
     write: false,
+    metafile: true,
     format: "iife",
     globalName: "__pipesafe_fn",
     platform: "neutral",
@@ -53,12 +69,17 @@ export function bundleServerFunction(ref: ServerFunctionModuleRef): string {
     );
   }
 
+  // Metafile input keys are paths relative to the working directory.
+  const inputs = Object.keys(result.metafile.inputs).map((path) =>
+    resolve(path)
+  );
+
   // Forward via `arguments` rather than a rest parameter: esbuild emits a
   // "use strict" directive at the top of the bundle, and directives are
   // illegal in functions with non-simple parameter lists.
   const exportAccess = JSON.stringify(ref.exportName);
   const isDefault = ref.exportName === "default";
-  return [
+  const code = [
     "function() {",
     output.text,
     `  var __pipesafe_export = __pipesafe_fn[${exportAccess}];`,
@@ -79,4 +100,6 @@ export function bundleServerFunction(ref: ServerFunctionModuleRef): string {
     "  return __pipesafe_export.apply(null, arguments);",
     "}",
   ].join("\n");
+
+  return { code, inputs };
 }

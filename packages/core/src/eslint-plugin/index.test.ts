@@ -76,6 +76,25 @@ describe("no-impure-function-body", () => {
             { messageId: "outerScope", data: { name: "beta" } },
           ],
         },
+        {
+          // A user binding that SHADOWS a server global is a real closure:
+          // the server would run the built-in, not the user's value. This is
+          // the one check only the scope-aware lint layer can make — a
+          // toString of the body carries no lexical context, so the runtime
+          // check structurally cannot catch it.
+          code: `const Date = myDateShim; p.set({ x: { $function: { body: () => new Date().getTime(), args: [], lang: "js" } } });`,
+          errors: [{ messageId: "outerScope", data: { name: "Date" } }],
+        },
+        {
+          // A body passed by identifier is resolved to its function literal
+          code: `const helper = (a: number) => a * TAX; p.set({ x: { $function: { body: helper, args: ["$age"], lang: "js" } } });`,
+          errors: [{ messageId: "outerScope", data: { name: "TAX" } }],
+        },
+        {
+          // dynamic import() cannot load modules server-side
+          code: `p.set({ x: { $function: { body: (x: number) => import("mod").then(() => x), args: ["$age"], lang: "js" } } });`,
+          errors: [{ messageId: "dynamicImport" }],
+        },
       ],
     });
   });
