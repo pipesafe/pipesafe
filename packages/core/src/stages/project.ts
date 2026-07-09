@@ -15,7 +15,11 @@ import {
   InferNestedFieldReference,
 } from "../elements/fieldReference";
 import { Expression, InferExpression } from "../elements/expressions";
-import { FieldSelector, GetFieldTypeOrError } from "../elements/fieldSelector";
+import {
+  FieldSelector,
+  FieldSelectorKeys,
+  GetFieldTypeOrError,
+} from "../elements/fieldSelector";
 import { ValidateNestedValue } from "../elements/validation";
 
 /**
@@ -27,36 +31,51 @@ import { ValidateNestedValue } from "../elements/validation";
  * - Expression operators: { newField: { $size: "$arrayField" } }
  * - Nested reshaping: { nested: { a: "$field1", b: "$field2" } }
  */
+// The value union for a $project assignment.
+type ProjectValue<Schema extends Document> =
+  // Inclusion/exclusion flags (1/0/true/false). `number | boolean` IS the
+  // literal set: TS normalizes `1 | 0 | number` to `number` and
+  // `true | false` to `boolean` at union creation, so spelling the
+  // literals adds nothing. The wide types are also required on their own
+  // terms — MongoDB treats any nonzero number as inclusion, so a
+  // `number`/`boolean`-typed VARIABLE is a valid projection value even
+  // though its literal can't be known at compile time (rejecting it
+  // would go through the deep value union and surface a spurious
+  // TS2589).
+  | number
+  | boolean
+  // Structural acceptance of `$`-strings: unknown refs are
+  // branded by ValidateProjectQuery's value walk instead of rejecting
+  // through the deep refs union on the constraint path. NOTE: a
+  // `FieldReference<Schema>` member here would be ABSORBED by this bare
+  // template under union normalization; the `` `$${string}` & {} ``
+  // non-absorption spelling defeats that but is NOT usable either — the
+  // string-flavored intersection leaks String.prototype into the
+  // object-literal key completions of every sibling value position
+  // (verified; see the KNOWN LIMITATION note in stages/set.ts).
+  | `$${string}`
+  // Plain string values are valid MongoDB literal assignments in $project
+  // (only numeric/boolean literals require $literal).
+  | NoDollarString
+  // Nested object replacement AND expression shapes. Expression<Schema>
+  // below is AUTOCOMPLETE-ONLY: Document subsumes every object for
+  // checking — do not "fix" acceptance bugs by editing it.
+  | Document
+  | Expression<Schema>;
+
+/**
+ * `$project` query. The `[key: string]` index signature keeps arbitrary new
+ * keys (including brand-new dotted paths) legal AND governs value acceptance
+ * (`ProjectValue<Schema>`); the intersected `FieldSelectorKeys` is an
+ * AUTOCOMPLETE-ONLY hint that surfaces the schema's existing field selectors
+ * as key suggestions. Its value type is `unknown` on purpose — key
+ * completion does not depend on it, and instantiating the deep
+ * `ProjectValue<Schema>` union once per field-selector key blows the
+ * whole-project typecheck from seconds to a multi-minute hang.
+ */
 export type ProjectQuery<Schema extends Document> = {
-  [
-    key: string
-  ]: // Inclusion/exclusion flags (1/0/true/false). `number | boolean` IS the
-    // literal set: TS normalizes `1 | 0 | number` to `number` and
-    // `true | false` to `boolean` at union creation, so spelling the
-    // literals adds nothing. The wide types are also required on their own
-    // terms — MongoDB treats any nonzero number as inclusion, so a
-    // `number`/`boolean`-typed VARIABLE is a valid projection value even
-    // though its literal can't be known at compile time (rejecting it
-    // would go through the deep value union and surface a spurious
-    // TS2589).
-    | number
-    | boolean
-    // Structural acceptance of `$`-strings: unknown refs are
-    // branded by ValidateProjectQuery's value walk instead of rejecting
-    // through the deep refs union on the constraint path. NOTE: a
-    // FieldReference<Schema> member here would be ABSORBED by this template
-    // under union normalization (verified) — it would cost the full path
-    // union per schema and buy nothing, so it is deliberately absent.
-    | `$${string}`
-    // Plain string values are valid MongoDB literal assignments in $project
-    // (only numeric/boolean literals require $literal).
-    | NoDollarString
-    // Nested object replacement AND expression shapes. Expression<Schema>
-    // below is AUTOCOMPLETE-ONLY: Document subsumes every object for
-    // checking — do not "fix" acceptance bugs by editing it.
-    | Document
-    | Expression<Schema>;
-};
+  [key: string]: ProjectValue<Schema>;
+} & FieldSelectorKeys<Schema, unknown>;
 
 // ---------------------------------------------------------------------------
 // Projection mode — THE single pair. `_id` is skipped in both directions

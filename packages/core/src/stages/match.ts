@@ -1,4 +1,4 @@
-import { Document, Prettify } from "../utils/objects";
+import { Document, IsPlainObject, Prettify } from "../utils/objects";
 import { DollarPrefixed } from "../utils/strings";
 import { PassThrough, PipeSafeError, RequiresMsg } from "../utils/errors";
 import { FieldOperand } from "../elements/operands";
@@ -87,8 +87,25 @@ type ArrayValueOperand<T, Op extends string> =
   [T] extends [(infer U)[]] ? U[]
   : PipeSafeError<RequiresMsg<"Operator", Op, "an array field">>;
 
-type ArrayElementOperand<T, Op extends string> =
-  [T] extends [(infer U)[]] ? U
+// `$elemMatch`'s operand is a match query against the array's ELEMENT type,
+// NOT the bare element. `ElemMatchFields` contributes the per-field map only
+// when the element is a document (so `{ qty: { $gt: 5 } }` typechecks and its
+// keys complete); scalar elements route through the comparator arms below.
+// `U extends Document` (not just `IsPlainObject`) is what satisfies
+// MatchFieldMap's constraint in the true branch.
+type ElemMatchFields<U> =
+  IsPlainObject<U> extends true ?
+    U extends Document ?
+      MatchFieldMap<U>
+    : never
+  : never;
+
+// The `$elemMatch` operand: field-map (document elements) plus the
+// element-level comparators (`{ $gte: 80 }`, `{ $not: … }`). A non-array
+// field brands.
+type ElemMatchQuery<T, Op extends string> =
+  [T] extends [(infer U)[]] ?
+    ElemMatchFields<U> | ComparatorMatchers<U> | Notted<ComparatorMatchers<U>>
   : PipeSafeError<RequiresMsg<"Operator", Op, "an array field">>;
 
 type RegexOperand<T> = FieldOperand<
@@ -113,10 +130,25 @@ export type ComparatorMatchers<T extends unknown> = Prettify<
   } & {
     [m in ArrayOnlyMatcher]?: ArrayValueOperand<T, m>;
   } & {
-    [m in ElementMatcher]?: ArrayElementOperand<T, m>;
+    [m in ElementMatcher]?: ElemMatchQuery<T, m>;
   } & {
     [m in RegexMatcher]?: RegexOperand<T>;
   }
+>;
+
+// `ComparatorMatchers` restricted to the keys that make sense on a NON-array
+// element — the operand set applied in the recursive element-passthrough arm
+// of `RawMatchersForType`. Dropping the array-only keys ($size/$all/$elemMatch)
+// stops their `PipeSafeError` operands (the element is not itself an array)
+// from leaking a `~pipesafe.error` key into completion, while the shared
+// comparators keep implicit element-operator matching intact. Built by
+// composition over `ComparatorMatchers` — never re-spelling the operand
+// constraints.
+type ArrayOnlyMatcherKeys = SizeMatcher | ArrayOnlyMatcher | ElementMatcher;
+
+export type ScalarMatchers<T> = Omit<
+  ComparatorMatchers<T>,
+  ArrayOnlyMatcherKeys
 >;
 
 // `[T] extends [(infer U)[]]` rather than naked `T extends ...` — the
@@ -125,23 +157,51 @@ export type ComparatorMatchers<T extends unknown> = Prettify<
 // 'delivered'` hovers with the full union rather than just one branch.
 export type RawMatchersForType<T extends unknown> =
   [T] extends [(infer U)[]] ?
-    ComparatorMatchers<T> | RawMatchersForType<U> // Element matcher (passthrough)
+    ComparatorMatchers<T> | ScalarMatchers<U> // Element matcher (passthrough)
   : ComparatorMatchers<T>;
 
 export type Notted<T> = { $not: T } | { $not: Notted<T> };
 
+// A bare `RegExp` in the exact-value position leaks all its prototype members
+// (exec, test, flags, source, …) into the key-completion list of every string
+// field. Picking only the symbol-keyed `[Symbol.match]` member keeps RegExp
+// INSTANCES assignable — `{ status: /^ship/ }` still typechecks — while
+// contributing ZERO string keys to completion (the language service never
+// lists symbol keys as members).
+type RegExpShorthand = Pick<RegExp, typeof Symbol.match>;
+
+// The exact-value (direct-equality) arm of a matcher. A plain object keeps its
+// bare type so embedded-document key completions stay available. A NON-plain
+// object type (Date, ObjectId, …) would leak its 40+ prototype members if kept
+// bare; instead we keep only its symbol-keyed subset, which real instances
+// still satisfy (they carry those symbols) yet contributes nothing to the key
+// list. Objects with no symbol keys fall back to `object` intersected with the
+// comparators (still an object, still no leaked keys). Scalars keep bare `T`.
+type ExactValue<T> =
+  IsPlainObject<T> extends true ? T
+  : [T] extends [object] ?
+    [Extract<keyof T, symbol>] extends [never] ?
+      object & ComparatorMatchers<T>
+    : Pick<T, Extract<keyof T, symbol>>
+  : T;
+
 export type MatchersForType<T extends unknown> =
-  | T
+  | ExactValue<T>
   | RawMatchersForType<T>
   | Notted<RawMatchersForType<T>>
-  | (T extends (infer U)[] ? U : T)
-  | (T extends string ? RegExp : never);
+  | (T extends (infer U)[] ? ExactValue<U> : never)
+  | (T extends string ? RegExpShorthand : never);
 
-export type RawMatchQuery<Schema extends Document> = {
+// The field→matcher map at the heart of a raw match query. Factored out so
+// `$elemMatch`'s document-element operand can reuse it verbatim without
+// re-spelling the mapped type.
+type MatchFieldMap<Schema extends Document> = {
   [selector in FieldSelector<Schema>]?: MatchersForType<
     InferFieldSelector<Schema, selector>
   >;
-} & {
+};
+
+export type RawMatchQuery<Schema extends Document> = MatchFieldMap<Schema> & {
   $expr?: unknown;
 };
 

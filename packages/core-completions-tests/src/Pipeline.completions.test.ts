@@ -15,12 +15,11 @@ import { createCompletionTester, type CompletionProbe } from "./harness";
  * entries are lost suggestions, and both fail the test.
  *
  * This suite runs in the ordinary root vitest job (`bun run test:ci`).
- * Positions that are KNOWN BAD today keep their exact ideal assertion but
- * are marked `it.fails` (with a `KNOWN BAD` comment naming the offending
- * type): vitest passes them while the defect exists and FAILS them the
- * moment the type is fixed — remove the `.fails` modifier then to promote
- * the test to a regression guard. Do not weaken an ideal list to make a
- * test pass.
+ * Known-bad positions keep their exact ideal assertion but are marked
+ * `it.fails` with a `KNOWN BAD` comment naming the offending type: vitest
+ * passes them while the defect exists and FAILS them the moment the type
+ * is fixed — remove the `.fails` modifier then to promote the test to a
+ * regression guard. Do not weaken an ideal list to make a test pass.
  */
 
 const FIXTURE = `
@@ -157,18 +156,19 @@ describe("match", () => {
     expectExactly(probe, FIELD_MATCH_OPERATORS, { memberCompletion: true });
   });
 
-  // KNOWN BAD: MatchersForType<T> includes `T extends string ? RegExp :
-  // never` so direct-regex matching (`{ status: /^ship/ }`) typechecks —
-  // but RegExp is an object type, so its PROPERTIES (exec, test, compile,
-  // flags, …) leak into the key list of every string field.
-  it.fails("suggests exactly the matchers for a string field", () => {
+  // Guards the RegExpShorthand arm of MatchersForType: direct-regex
+  // matching (`{ status: /^ship/ }`) must typecheck via a symbol-keyed
+  // RegExp subset, so RegExp's PROPERTIES (exec, test, compile, flags, …)
+  // never leak into the key list of string fields.
+  it("suggests exactly the matchers for a string field", () => {
     const probe = at(`orders.match({ status: { ‸ } });`);
     expectExactly(probe, FIELD_MATCH_OPERATORS, { memberCompletion: true });
   });
 
-  // KNOWN BAD: MatchersForType<Date> carries the bare `T` (exact-value
-  // match arm), and Date's 40+ methods (getDate, setHours, …) leak in.
-  it.fails("suggests exactly the matchers for a Date field", () => {
+  // Guards ExactValue<T>: the exact-value match arm must carry Date via
+  // its symbol-keyed subset so Date's 40+ methods (getDate, setHours, …)
+  // never leak in while `{ createdAt: someDate }` keeps compiling.
+  it("suggests exactly the matchers for a Date field", () => {
     const probe = at(`orders.match({ createdAt: { ‸ } });`);
     expectExactly(probe, FIELD_MATCH_OPERATORS, { memberCompletion: true });
   });
@@ -192,12 +192,11 @@ describe("match", () => {
     });
   });
 
-  // KNOWN BAD twice over: the $elemMatch operand is the bare element type,
-  // so (1) one union arm resolves to a PipeSafeError whose literal key
-  // "~pipesafe.error" is offered to the user, and (2) the matcher keys
-  // MongoDB accepts inside $elemMatch ({ qty: { $gt: 5 } }, { $gte: 80 })
-  // are not offered (nor accepted) at all.
-  it.fails("suggests element keys plus matchers inside $elemMatch", () => {
+  // Guards ElemMatchQuery: the $elemMatch operand is a real element query
+  // (element fields + matchers, so `{ qty: { $gt: 5 } }` typechecks), and
+  // no union arm may resolve to a PipeSafeError whose literal key
+  // "~pipesafe.error" would be offered to the user.
+  it("suggests element keys plus matchers inside $elemMatch", () => {
     const probe = at(`orders.match({ items: { $elemMatch: { ‸ } } });`);
     expectExactly(probe, [...FIELD_MATCH_OPERATORS, "sku", "qty"], {
       memberCompletion: true,
@@ -218,35 +217,38 @@ describe("sort", () => {
 });
 
 describe("set", () => {
-  // KNOWN BAD (too broad): SetQuery keys are a plain `[key: string]` index
-  // signature. New computed keys are legal, but existing schema fields
-  // should still be offered; instead there is no contextual key list at
-  // all (isMemberCompletion=false) and the editor floods ~1000 globals.
-  it.fails("suggests exactly the field selectors as keys", () => {
+  // Guards the FieldSelectorKeys hint on SetQuery: new computed keys stay
+  // legal via the index signature, but existing schema fields must be
+  // offered as a contextual key list (without the hint,
+  // isMemberCompletion=false and the editor floods ~1000 globals).
+  it("suggests exactly the field selectors as keys", () => {
     const probe = at(`orders.set({ ‸ });`);
     expectExactly(probe, FIELD_SELECTOR_KEYS, { memberCompletion: true });
   });
 
-  // KNOWN BAD (too broad): the string arms of SetQuery's value union are
-  // `` `$${string}` `` + NoDollarString, which absorb the finite
-  // FieldReference<Schema> union under normalization (see the
-  // AUTOCOMPLETE-ONLY notes in stages/set.ts) — typing `"` in a value
-  // position suggests nothing.
+  // KNOWN BAD (verified impossible with the current value-union shape):
+  // the bare `$${string}` structural arm absorbs the finite
+  // FieldReference<Schema> union, so nothing is suggested. The
+  // `` `$${string}` & {} `` non-absorption trick trades this for a WORSE
+  // leak — a string-flavored intersection is not primitive-flagged and
+  // spills String.prototype (at/charAt/...) into the object-literal key
+  // completions of every sibling value position, breaking the
+  // expression-operators test. See the KNOWN LIMITATION note in
+  // stages/set.ts. Ideal includes "$$REMOVE" (a documented
+  // autocomplete member).
   it.fails("suggests exactly the field references for a string value", () => {
     const probe = at(`orders.set({ total: "‸" });`);
-    expectExactly(probe, FIELD_REFS);
+    expectExactly(probe, [...FIELD_REFS, "$$REMOVE"]);
   });
 
-  // KNOWN BAD: AnyLiteral<Schema> carries bare Date | ObjectId arms, so
-  // their methods (getDate, toHexString, _bsontype, …) leak into the
-  // operator-key list of every expression-object value position.
-  it.fails(
-    "suggests exactly the expression operators for a $-keyed value object",
-    () => {
-      const probe = at(`orders.set({ total: { ‸ } });`);
-      expectExactly(probe, EXPRESSION_OPERATORS, { memberCompletion: true });
-    }
-  );
+  // Guards ResolveToPrimitive's literal-value arm: Date/ObjectId are
+  // carried as the keyless `object` so their methods (getDate, toHexString,
+  // _bsontype, …) never leak into expression-object key lists while
+  // Date/ObjectId VALUES stay assignable.
+  it("suggests exactly the expression operators for a $-keyed value object", () => {
+    const probe = at(`orders.set({ total: { ‸ } });`);
+    expectExactly(probe, EXPRESSION_OPERATORS, { memberCompletion: true });
+  });
 
   it("suggests exactly the type-matching field references inside a typed operand", () => {
     const probe = at(`orders.set({ total: { $add: ["‸"] } });`);
@@ -256,9 +258,9 @@ describe("set", () => {
 });
 
 describe("project", () => {
-  // KNOWN BAD (too broad): same `[key: string]` index signature as set —
-  // no contextual keys, global-identifier flood.
-  it.fails("suggests exactly the field selectors as keys", () => {
+  // Guards the FieldSelectorKeys hint on ProjectQuery: same mechanism as
+  // set — without it there are no contextual keys, only a global flood.
+  it("suggests exactly the field selectors as keys", () => {
     const probe = at(`orders.project({ ‸ });`);
     expectExactly(probe, FIELD_SELECTOR_KEYS, { memberCompletion: true });
   });
@@ -270,22 +272,21 @@ describe("group", () => {
     expectExactly(probe, ["_id"], { memberCompletion: true });
   });
 
-  // KNOWN BAD: grouping by any field is valid MongoDB, but AnyLiteral only
-  // offers references that infer to primitives — array/document refs
-  // ($tags, $shipping, $items, $items.sku, …) are missing.
-  it.fails("suggests exactly the field references for _id", () => {
+  // Guards the FieldReference<Schema> arms on GroupQuery (both the _id arm
+  // and the index-signature arm): grouping by ANY field is valid MongoDB,
+  // so array/document refs ($tags, $shipping, $items, …) must be offered
+  // and accepted alongside the primitive-inferring ones.
+  it("suggests exactly the field references for _id", () => {
     const probe = at(`orders.group({ _id: "‸" });`);
     expectExactly(probe, FIELD_REFS);
   });
 
-  // KNOWN BAD: same AnyLiteral Date/ObjectId method leak as in set.
-  it.fails(
-    "suggests exactly the accumulator operators inside an accumulator object",
-    () => {
-      const probe = at(`orders.group({ _id: null, total: { ‸ } });`);
-      expectExactly(probe, ACCUMULATOR_OPERATORS, { memberCompletion: true });
-    }
-  );
+  // Guards the same ResolveToPrimitive fix as the set expression-object
+  // test — accumulator objects must offer only accumulator operators.
+  it("suggests exactly the accumulator operators inside an accumulator object", () => {
+    const probe = at(`orders.group({ _id: null, total: { ‸ } });`);
+    expectExactly(probe, ACCUMULATOR_OPERATORS, { memberCompletion: true });
+  });
 
   it("suggests exactly the numeric field references for $sum", () => {
     const probe = at(`orders.group({ _id: null, total: { $sum: "‸" } });`);

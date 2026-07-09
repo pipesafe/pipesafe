@@ -41,13 +41,15 @@ Every test pins the IDEAL completion list for its position and asserts
   _contextual_ key list — `false` inside an object literal means the editor
   falls back to ~1000 global identifiers.
 
-Positions that are known-bad today keep their exact ideal assertion but are
-marked `it.fails`, with a `KNOWN BAD` comment naming the offending type:
-vitest passes them while the defect exists and FAILS them the moment the
-type is fixed — remove the `.fails` modifier then to promote the test to a
-regression guard. **Do not weaken an ideal list to make a test pass** — fix
-the type, or if the ideal itself was wrong, change the list in a reviewed
-commit.
+Known-bad positions keep their exact ideal assertion but are marked
+`it.fails` with a `KNOWN BAD` comment naming the offending type: vitest
+passes them while the defect exists and FAILS them the moment the type is
+fixed — remove the `.fails` modifier then to promote the test. One position
+remains known-bad: set string-value field-reference completions (the
+non-absorption trick provably trades the missing suggestions for a
+String.prototype leak in sibling object positions — see stages/set.ts).
+**Do not weaken an ideal list to make a test pass** — fix the type, or if
+the ideal itself was wrong, change the list in a reviewed commit.
 
 The ideal operator/accumulator vocabularies mirror the core registries
 (`ExpressionSpec`, `AccumulatorSpec`): registering a new operator means

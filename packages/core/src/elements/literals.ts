@@ -9,9 +9,21 @@ export type LiteralOrFieldReferenceInferringTo<Schema extends Document, T> =
 
 type Primitive = boolean | number | Date | NoDollarString | ObjectId;
 
+// Completion-safe literal-VALUE arm: Date/ObjectId are carried as the keyless
+// `object` so their ~50 members (getDate, toHexString, _bsontype, …) stop
+// polluting the operator-key completions of every expression-object value
+// position, while Date/ObjectId VALUES (a `new Date()`, an ObjectId variable)
+// stay assignable. `object` (not `{}`) is load-bearing: `{}` also accepts
+// primitive strings, which would break the replaceRoot "$missing" rejection
+// pin. The ref-target arm below keeps the full `Primitive` (Date/ObjectId
+// included) so field references still resolve their real types — do NOT widen
+// that arm to `PrimitiveLiteralValue`.
+type PrimitiveLiteralValue = boolean | number | NoDollarString | object;
+
 export type ResolveToPrimitive<Schema extends Document> =
   Schema extends Document ?
-    Primitive | FieldReferencesThatInferTo<Schema, Primitive | string>
+    | PrimitiveLiteralValue
+    | FieldReferencesThatInferTo<Schema, Primitive | string>
   : never;
 
 export type ArrayLiterals<Schema extends Document> =

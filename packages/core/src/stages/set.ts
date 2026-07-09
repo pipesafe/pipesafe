@@ -1,4 +1,5 @@
 import { InferNestedFieldReference } from "../elements/fieldReference";
+import { FieldSelectorKeys } from "../elements/fieldSelector";
 import { Expression } from "../elements/expressions";
 import { AnyLiteral, ExpressionShaped } from "../elements/literals";
 import { ValidateNestedValue } from "../elements/validation";
@@ -8,26 +9,54 @@ import { FlattenDotSet, HasDottedKeys } from "../utils/paths";
 import { ApplySetUpdates } from "../utils/updates";
 
 /**
- * `$`-shaped values (`$`-strings, `$`-keyed objects) are accepted
- * STRUCTURALLY here and re-checked by `ValidateSetQuery`. Rejecting them
- * through the deep `AnyLiteral | Expression` union instead accumulates
- * relation depth on the shared call-checking stack and surfaces spurious
- * statement-level TS2589s next to the real error.
+ * The value union for a `$set` assignment. `$`-shaped values (`$`-strings,
+ * `$`-keyed objects) are accepted STRUCTURALLY here and re-checked by
+ * `ValidateSetQuery`. Rejecting them through the deep `AnyLiteral |
+ * Expression` union instead accumulates relation depth on the shared
+ * call-checking stack and surfaces spurious statement-level TS2589s next to
+ * the real error.
  *
  * `Expression<Schema>` and `"$$REMOVE"` are AUTOCOMPLETE-ONLY members:
  * for checking they are subsumed by `ExpressionShaped` and `` `$${string}` ``
  * respectively (every valid expression is expression-shaped; "$$REMOVE" is
  * a $-string), so neither can decide acceptance — do not "fix" acceptance
  * bugs by editing them.
+ *
+ * KNOWN LIMITATION (verified, do not "fix" casually): the bare
+ * `` `$${string}` `` arm absorbs any finite `FieldReference<Schema>`
+ * member under union normalization, so field references do NOT autocomplete
+ * at string-value positions. The `` `$${string}` & {} `` non-absorption
+ * trick is NOT usable here: a string-flavored intersection is no longer
+ * primitive-flagged, so it leaks all of String.prototype (at/charAt/…)
+ * into the object-literal key completions of every sibling value position
+ * (`{ total: { ‸ } }`), trading one leak for a worse one. Splitting
+ * acceptance and hints across separate intersection members fails the same
+ * way (property types are intersected before completion). Pinned by the
+ * it.fails test in core-completions-tests.
+ */
+type SetValue<Schema extends Document> =
+  | AnyLiteral<Schema>
+  | Expression<Schema>
+  | `$${string}`
+  | ExpressionShaped
+  | "$$REMOVE";
+
+/**
+ * `$set` query. The `[k: string]` index signature keeps arbitrary new keys
+ * (including brand-new dotted paths) legal AND governs value acceptance
+ * (`SetValue<Schema>`); the intersected `FieldSelectorKeys` is an
+ * AUTOCOMPLETE-ONLY hint that surfaces the schema's existing field selectors
+ * as key suggestions. Its value type is `unknown` on purpose — key
+ * completion does not depend on it, and instantiating the deep
+ * `SetValue<Schema>` union once per field-selector key (as the reviewed
+ * design first spelled it) blows the whole-project typecheck from ~7s to a
+ * multi-minute hang. `unknown & SetValue<Schema>` (the effective type at a
+ * known-selector key, via the index signature) is still `SetValue<Schema>`,
+ * so acceptance and value completions are unchanged.
  */
 export type SetQuery<Schema extends Document> = {
-  [k: string]:
-    | AnyLiteral<Schema>
-    | Expression<Schema>
-    | `$${string}`
-    | ExpressionShaped
-    | "$$REMOVE";
-};
+  [k: string]: SetValue<Schema>;
+} & FieldSelectorKeys<Schema, unknown>;
 
 /**
  * Key-filtered validation wrapper for `Pipeline.set`:

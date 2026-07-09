@@ -1,4 +1,5 @@
 import {
+  FieldReference,
   FieldReferencesThatInferTo,
   InferNestedFieldReference,
 } from "../elements/fieldReference";
@@ -198,12 +199,24 @@ export type ResolveAccumulatorFunction<Schema extends Document, Accumulator> =
 export type GroupQuery<Schema extends Document> = {
   // `$$`-system variables ($$NOW, $$ROOT, ...) are valid _id expressions;
   // AnyLiteral's string arm is NoDollarString, so they need their own arm.
-  _id: AnyLiteral<Schema> | Expression<Schema> | `$$${string}` | null;
+  // `FieldReference<Schema>` is likewise its own arm: grouping by any field —
+  // including array/document refs like `$tags`/`$shipping`/`$items` — is valid
+  // MongoDB, but AnyLiteral only offers references that infer to PRIMITIVES.
+  // It must appear on BOTH arms: the `[key: string]` index signature below
+  // covers _id, so suggested refs must typecheck against it too (same
+  // precedent as the `` `$$${string}` `` arm — an _id-only addition makes the
+  // index signature reject them).
+  _id:
+    | AnyLiteral<Schema>
+    | Expression<Schema>
+    | FieldReference<Schema>
+    | `$$${string}`
+    | null;
 } & {
-  // The index signature covers _id too, so it must also carry the `$$` arm
-  // (an intersection member rejecting _id would reject the whole query).
-  // ExpressionShaped accepts $-keyed values structurally: rejecting at
-  // the constraint would misreport the error on sibling
+  // The index signature covers _id too, so it must also carry the `$$` and
+  // FieldReference arms (an intersection member rejecting _id would reject the
+  // whole query). ExpressionShaped accepts $-keyed values structurally:
+  // rejecting at the constraint would misreport the error on sibling
   // keys. The NAME check happens in ValidateGroupQuery instead — the key
   // must be registered (AccumulatorSpec) or allow-listed
   // (UnimplementedAccumulators, e.g. $stdDevPop/$top/$mergeObjects);
@@ -212,6 +225,7 @@ export type GroupQuery<Schema extends Document> = {
     | AnyLiteral<Schema>
     | AccumulatorFunction<Schema>
     | ExpressionShaped
+    | FieldReference<Schema>
     | `$$${string}`
     | null;
 };
