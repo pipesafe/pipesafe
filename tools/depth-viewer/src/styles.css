@@ -6,6 +6,7 @@
   --fg-dim: #8b949e;
   --accent: #58a6ff;
   --accent-bad: #f85149;
+  --accent-warn: #d29922;
   --owned: #7ee787;
   --border: #30363d;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -295,8 +296,15 @@ pre,
   padding-left: 12px;
 }
 
-.chain-step.is-at-limit {
+/* The one step that genuinely tripped a TS2589 ceiling — the real failure. */
+.chain-step.is-trigger {
   border-left-color: var(--accent-bad);
+}
+
+/* Steps after the failure: the type has collapsed to `any`, so their counters
+   can't be assessed (the count spike the collapse produces, then zeros). */
+.chain-step.is-unassessable {
+  border-left-color: var(--accent-warn);
 }
 
 .chain-step-header {
@@ -322,6 +330,15 @@ pre,
 
 .chain-depth.depth-limit {
   background: rgba(248, 81, 73, 0.12);
+}
+
+/* A counter that could not be assessed (measured against a collapsed `any`). */
+.depth-na {
+  color: var(--accent-warn);
+}
+
+.chain-depth.depth-na {
+  background: rgba(210, 153, 34, 0.12);
 }
 
 .chain-step .source-snippet {

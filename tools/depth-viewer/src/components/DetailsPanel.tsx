@@ -27,6 +27,20 @@ export function DetailsPanel({ data, file, symbol }: Props) {
     [symbol.entriesByKind]
   );
 
+  // The first step to trip ANY ceiling is the genuine failure (red). Once it
+  // does, the accumulated type collapses to `any`, so every LATER step is
+  // unassessable (amber "N/A"): the huge instantiation-count spike on the next
+  // step is a by-product of that collapse — not an independent count limit — and
+  // every reading after is taken against `any`. Depth's running-max also pins
+  // those steps at 100, another carried artefact. `-1` when nothing tripped.
+  const firstHitIndex = useMemo(
+    () =>
+      symbol.inferred?.chain?.findIndex(
+        (s) => s.hitDepthLimit || s.hitCountLimit || s.hitTailLimit
+      ) ?? -1,
+    [symbol.inferred?.chain]
+  );
+
   // Group references by name + resolved target, with counts.
   const referenceRows = useMemo(() => {
     const tally = new Map<
@@ -87,96 +101,113 @@ export function DetailsPanel({ data, file, symbol }: Props) {
             TS2589 — read straight from the depth-stats-patched <code>tsc</code>{" "}
             trace, not walked from the resolved type. <strong>depth</strong>{" "}
             (instantiation nesting, ceiling <code>{DEPTH_CEILING}</code>)
-            truncates only the
-            <em> deepest</em> branch to <code>any</code> when it saturates — the
-            rest of the type keeps resolving, which is why a resolved type still
-            shows at depth {DEPTH_CEILING} (look for the buried <code>any</code>
-            ). <strong>count</strong> (instantiations in one check unit, ceiling{" "}
-            <code>{COUNT_CEILING.toLocaleString()}</code>) is the one that
-            collapses the <em>whole</em> accumulated type to <code>any</code>.{" "}
-            <strong>tail</strong> (tail-recursive conditional types, ceiling{" "}
-            <code>{TAIL_CEILING}</code>) can trip TS2589 at low depth.{" "}
-            <span className="depth-limit">⚠ marks a step at a ceiling</span>;
-            the <em>resolved type</em> is what the checker actually computed
-            here.
+            truncates only the <em>deepest</em> branch to <code>any</code> when
+            it saturates. <strong>count</strong> (instantiations in one check
+            unit, ceiling <code>{COUNT_CEILING.toLocaleString()}</code>) is the
+            one that collapses the <em>whole</em> accumulated type to{" "}
+            <code>any</code>. <strong>tail</strong> (tail-recursive conditional
+            types, ceiling <code>{TAIL_CEILING}</code>) can trip TS2589 at low
+            depth. The{" "}
+            <span className="depth-limit">
+              ⚠ red step is the genuine failure
+            </span>{" "}
+            — the first counter to hit its ceiling. Every step after it reads{" "}
+            <span className="depth-na">amber N/A</span>: the type has already
+            collapsed to <code>any</code>, so the count spike the collapse
+            itself produces and every later reading can't be assessed. The{" "}
+            <em>resolved type</em> is what the checker actually computed here.
           </p>
           <div className="chain">
-            {symbol.inferred.chain.map((step, i) => (
-              <div
-                key={i}
-                className={`chain-step${step.hitDepthLimit || step.hitTailLimit || step.hitCountLimit ? " is-at-limit" : ""}`}
-              >
-                <div className="chain-step-header">
-                  <span className="mono">{step.label}</span>
-                  {step.maxDepth !== undefined && (
-                    <span
-                      className={`chain-depth${step.hitDepthLimit ? " depth-limit" : ""}`}
-                      title={
-                        (step.depthInferred ?
-                          `depth derived from nested steps (this step short-circuited after the type errored): `
-                        : `peak instantiation depth (ceiling ${DEPTH_CEILING}): `) +
-                        `${step.maxDepth}` +
-                        (step.ownDepth !== undefined ?
-                          ` · this step's own resolution added: ${step.ownDepth}`
-                        : "")
-                      }
-                    >
-                      {step.hitDepthLimit && "⚠ "}
-                      depth {step.depthInferred && "≈"}
-                      {fmtCount(step.maxDepth)}
-                    </span>
-                  )}
-                  {step.maxCount !== undefined && (
-                    <span
-                      className={`chain-depth${step.hitCountLimit ? " depth-limit" : ""}`}
-                      title={
-                        step.hitCountLimit ?
-                          `This step hit the instantiation-count ceiling (${COUNT_CEILING.toLocaleString()}) and the type collapsed to \`any\`. tsc bails at the ceiling, so the exact total is unknown; it had reached ${step.maxCount.toLocaleString()} when it stopped. A deeply-nested type detonates into millions of instantiations right as instantiation depth saturates — so this depth-driven failure trips the count ceiling at the same step.`
-                        : `Marginal instantiations this step performed (ceiling ${COUNT_CEILING.toLocaleString()} collapses the whole type to \`any\`): ${step.maxCount.toLocaleString()}. Reads 0 once an earlier step has collapsed the type.`
-                      }
-                    >
-                      {step.hitCountLimit ?
-                        `⚠ count ≥${fmtCount(COUNT_CEILING)}`
-                      : `count ${fmtCount(step.maxCount)}`}
-                    </span>
-                  )}
-                  {step.maxTail !== undefined && step.maxTail > 0 && (
-                    <span
-                      className={`chain-depth${step.hitTailLimit ? " depth-limit" : ""}`}
-                      title={`peak tail-recursion count (ceiling ${TAIL_CEILING}): ${step.maxTail}`}
-                    >
-                      {step.hitTailLimit && "⚠ "}
-                      tail {fmtCount(step.maxTail)}
-                    </span>
-                  )}
-                  <span className="muted">
-                    {" · line "}
-                    {step.callLine}
-                    {step.declaredAt && (
-                      <>
-                        {" · sig at "}
-                        {step.declaredAt.file.replace(/^packages\//, "")}:
-                        {step.declaredAt.line}
+            {symbol.inferred.chain.map((step, i) => {
+              const isTrigger = i === firstHitIndex;
+              const isUnassessable = firstHitIndex !== -1 && i > firstHitIndex;
+              return (
+                <div
+                  key={i}
+                  className={`chain-step${
+                    isTrigger ? " is-trigger"
+                    : isUnassessable ? " is-unassessable"
+                    : ""
+                  }`}
+                >
+                  <div className="chain-step-header">
+                    <span className="mono">{step.label}</span>
+                    {isUnassessable ?
+                      <span
+                        className="chain-depth depth-na"
+                        title={`Not assessable. An earlier step tripped a TS2589 ceiling and the accumulated type collapsed to \`any\`. Any counter here is meaningless: the instantiation-count spike on the step right after the failure is a by-product of that collapse (not an independent count limit), depth stays pinned at ${DEPTH_CEILING} as a carried running-max, and every later step resolves against \`any\`.`}
+                      >
+                        N/A
+                      </span>
+                    : <>
+                        {step.maxDepth !== undefined && (
+                          <span
+                            className={`chain-depth${isTrigger && step.hitDepthLimit ? " depth-limit" : ""}`}
+                            title={
+                              `peak instantiation depth (ceiling ${DEPTH_CEILING}): ${step.maxDepth}` +
+                              (step.ownDepth !== undefined ?
+                                ` · this step's own resolution added: ${step.ownDepth}`
+                              : "")
+                            }
+                          >
+                            {isTrigger && step.hitDepthLimit && "⚠ "}
+                            depth {fmtCount(step.maxDepth)}
+                          </span>
+                        )}
+                        {step.maxCount !== undefined && (
+                          <span
+                            className={`chain-depth${isTrigger && step.hitCountLimit ? " depth-limit" : ""}`}
+                            title={
+                              isTrigger && step.hitCountLimit ?
+                                `This step hit the instantiation-count ceiling (${COUNT_CEILING.toLocaleString()}) — the genuine failure, which collapses the whole type to \`any\`. tsc bails at the ceiling, so the exact total is unknown; it had reached ${step.maxCount.toLocaleString()} when it stopped.`
+                              : `Marginal instantiations this step performed (ceiling ${COUNT_CEILING.toLocaleString()} collapses the whole type to \`any\`): ${step.maxCount.toLocaleString()}.`
+                            }
+                          >
+                            {isTrigger && step.hitCountLimit ?
+                              `⚠ count ≥${fmtCount(COUNT_CEILING)}`
+                            : `count ${fmtCount(step.maxCount)}`}
+                          </span>
+                        )}
+                        {step.maxTail !== undefined && step.maxTail > 0 && (
+                          <span
+                            className={`chain-depth${isTrigger && step.hitTailLimit ? " depth-limit" : ""}`}
+                            title={`peak tail-recursion count (ceiling ${TAIL_CEILING}): ${step.maxTail}`}
+                          >
+                            {isTrigger && step.hitTailLimit && "⚠ "}
+                            tail {fmtCount(step.maxTail)}
+                          </span>
+                        )}
                       </>
-                    )}
-                  </span>
-                </div>
-                {step.declaredReturnType && (
+                    }
+                    <span className="muted">
+                      {" · line "}
+                      {step.callLine}
+                      {step.declaredAt && (
+                        <>
+                          {" · sig at "}
+                          {step.declaredAt.file.replace(/^packages\//, "")}:
+                          {step.declaredAt.line}
+                        </>
+                      )}
+                    </span>
+                  </div>
+                  {step.declaredReturnType && (
+                    <pre className="source-snippet inferred-display">
+                      <code>
+                        <span className="muted">declared: </span>
+                        {step.declaredReturnType}
+                      </code>
+                    </pre>
+                  )}
                   <pre className="source-snippet inferred-display">
                     <code>
-                      <span className="muted">declared: </span>
-                      {step.declaredReturnType}
+                      <span className="muted">resolved: </span>
+                      {step.resolvedType}
                     </code>
                   </pre>
-                )}
-                <pre className="source-snippet inferred-display">
-                  <code>
-                    <span className="muted">resolved: </span>
-                    {step.resolvedType}
-                  </code>
-                </pre>
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         </section>
       )}
