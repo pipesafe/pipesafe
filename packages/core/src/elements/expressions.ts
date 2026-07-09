@@ -55,16 +55,27 @@ type ArrayOperand<Schema extends Document, Op extends string> =
  * Set-operator operand — everything `ArrayOperand` accepts plus the
  * array-producing operators that commonly feed set operators but sit
  * outside `ArrayProducingExpression`'s circularity-avoiding core:
- * `$reduce` (accumulate-then-dedupe) and `$ifNull` (defaulting an optional
- * array field to `[]`) — plus `$$`-system/`let`-variable references
- * (`$setUnion: ["$labels", "$$localTags"]` inside a $lookup-let
- * sub-pipeline is valid MongoDB; element inference degrades to `unknown`).
- * The branded arm comes from `ArrayOperand` with the set operator's own
- * name.
+ * `$reduce` (accumulate-then-dedupe), `$ifNull` (defaulting an optional
+ * array field to `[]`), and the set operators THEMSELVES — each resolves to
+ * an array, so `$setUnion: [{ $setIntersection: [...] }, ...]` is valid
+ * MongoDB. The mutual recursion (a set operator's operand references
+ * `SetOperand`, which references the set operators) is safe because
+ * `ExpressionSpec` is an interface and resolves lazily. Plus
+ * `$$`-system/`let`-variable references (`$setUnion: ["$labels",
+ * "$$localTags"]` inside a $lookup-let sub-pipeline is valid MongoDB;
+ * element inference degrades to `unknown`). The branded arm comes from
+ * `ArrayOperand` with the set operator's own name.
  */
 type SetOperand<Schema extends Document, Op extends string> =
   | ArrayOperand<Schema, Op>
-  | ExpressionFor<Schema, "$reduce" | "$ifNull">
+  | ExpressionFor<
+      Schema,
+      | "$reduce"
+      | "$ifNull"
+      | "$setUnion"
+      | "$setIntersection"
+      | "$setDifference"
+    >
   | `$$${string}`;
 
 /**
@@ -720,10 +731,6 @@ export type MapExpression<Schema extends Document> = ExpressionFor<
   Schema,
   "$map"
 >;
-export type ReduceExpression<Schema extends Document> = ExpressionFor<
-  Schema,
-  "$reduce"
->;
 export type SetUnionExpression<Schema extends Document> = ExpressionFor<
   Schema,
   "$setUnion"
@@ -735,11 +742,6 @@ export type SetIntersectionExpression<Schema extends Document> = ExpressionFor<
 export type SetDifferenceExpression<Schema extends Document> = ExpressionFor<
   Schema,
   "$setDifference"
->;
-/** Union of the set-operator expression shapes (all in the array category). */
-export type SetExpression<Schema extends Document> = ExpressionFor<
-  Schema,
-  "$setUnion" | "$setIntersection" | "$setDifference"
 >;
 export type DateToStringExpression<Schema extends Document> = ExpressionFor<
   Schema,
@@ -987,12 +989,15 @@ type UnionScopedArrayElements<
  * ($map's or $reduce's `in`). `$$var` / `$$var.path` references resolve
  * through `Vars`; single-`$` references resolve against the ROOT schema (a
  * `$path` inside $map/$reduce still reads the root document in MongoDB);
- * `$ifNull` / `$concatArrays` recurse WITH the scope (the array-shaping
- * operators `$$`-references realistically flow through); any other operator
- * routes to the scope-free `InferExpression` dispatch (its $map/$reduce
- * arms rebind their own scopes; outer variables degrade to `unknown`
- * there). `$`-less literals resolve member-wise, mirroring
- * InferNestedFieldReference.
+ * `$ifNull` / `$concatArrays` / `$cond` recurse WITH the scope (the
+ * array-shaping and branching operators `$$`-references realistically flow
+ * through — `$cond` in particular is a hot shape inside `in`, and its
+ * scope-free branch would resolve a bare `$$this`/`$$value` operand as a
+ * LITERAL string, leaking `"$$this"` into the result rather than degrading
+ * to the element type). Any other operator routes to the scope-free
+ * `InferExpression` dispatch (its $map/$reduce arms rebind their own scopes;
+ * outer variables degrade to `unknown` there, never to a wrong type). `$`-less
+ * literals resolve member-wise, mirroring InferNestedFieldReference.
  */
 type InferScopedExpression<
   Schema extends Document,
@@ -1029,6 +1034,15 @@ type InferScopedExpression<
         UnionScopedArrayElements<Schema, Vars, Operands>[]
       : unknown
     : never
+  : [OperatorKeyOf<Expr>] extends ["$cond"] ?
+    // Only the two branches contribute to the result; each is resolved WITH
+    // the scope so `$$this`/`$$value` operands resolve instead of leaking as
+    // literal strings. `$cond` keeps nulls (no null-stripping, unlike
+    // $ifNull), which the member-wise literal walk preserves.
+    Expr extends { $cond: readonly [unknown, infer TrueVal, infer FalseVal] } ?
+      | InferScopedExpression<Schema, Vars, TrueVal>
+      | InferScopedExpression<Schema, Vars, FalseVal>
+    : unknown
   : InferExpression<Schema, Expr>;
 
 /**
@@ -1163,11 +1177,12 @@ type InferDependentExpression<Schema extends Document, Expr> =
     }
   ) ?
     InferReduceExpression<Schema, ArraySource, Init, In>
-  : Expr extends { $setUnion: infer Operands } ?
-    Operands extends readonly unknown[] ?
-      UnionArrayElements<Schema, Operands>[]
-    : never
-  : Expr extends { $setIntersection: infer Operands } ?
+  : Expr extends (
+    { $setUnion: infer Operands } | { $setIntersection: infer Operands }
+  ) ?
+    // $setUnion and $setIntersection share one element-inference shape (the
+    // union of operand element types); intersection is an over-approximation
+    // that never widens past the union, same as union.
     Operands extends readonly unknown[] ?
       UnionArrayElements<Schema, Operands>[]
     : never

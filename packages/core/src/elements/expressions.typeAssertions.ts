@@ -498,6 +498,53 @@ type _ReduceInitNoThisInfer = InferExpression<
 >;
 type _Assert_ReduceInitNoThis = Assert<Equal<_ReduceInitNoThisInfer, unknown>>;
 
+// $cond inside $map `in` resolves scoped `$$this` operands instead of leaking
+// them as literal strings: the then-branch `$$this.id` resolves to the element
+// field type (string), unioned with the literal else-branch (0). Before the
+// scoped `$cond` arm this inferred `("$$this.id" | 0)[]` — a wrong type.
+type _MapCondScopedInfer = InferExpression<
+  SetSchema,
+  { $map: { input: "$items"; in: { $cond: [true, "$$this.id", 0] } } }
+>;
+type _Assert_MapCondScopedInfer = Assert<
+  Equal<_MapCondScopedInfer, (string | 0)[]>
+>;
+
+// $cond inside $reduce `in` resolves BOTH `$$value` (seeded by initialValue)
+// and `$$this` — never the literal strings "$$value"/"$$this".
+type _ReduceCondScopedInfer = InferExpression<
+  SetSchema,
+  {
+    $reduce: {
+      input: "$nums";
+      initialValue: 0;
+      in: { $cond: [true, "$$value", "$$this"] };
+    };
+  }
+>;
+type _Assert_ReduceCondScopedInfer = Assert<
+  Equal<_ReduceCondScopedInfer, number>
+>;
+
+// A set operator is a valid operand of ANOTHER set operator: each resolves to
+// an array, so `$setUnion: [{ $setIntersection: [...] }, ...]` is valid
+// MongoDB (the mutual recursion is safe — `ExpressionSpec` is an interface).
+type _Assert_SetUnionAcceptsNestedSetOp = Assert<
+  Equal<
+    { $setIntersection: ["$tags", "$tags"] } extends (
+      SetUnionOperandElement<SetSchema>
+    ) ?
+      true
+    : false,
+    true
+  >
+>;
+type _NestedSetOpInfer = InferExpression<
+  SetSchema,
+  { $setUnion: [{ $setIntersection: ["$tags", "$tags"] }, "$tags"] }
+>;
+type _Assert_NestedSetOpInfer = Assert<Equal<_NestedSetOpInfer, string[]>>;
+
 export type {
   _Assert_SetUnionBrand,
   _Assert_SetIntersectionBrand,
@@ -521,6 +568,10 @@ export type {
   _Assert_ReduceConcatInfer,
   _Assert_ReduceThisInfer,
   _Assert_ReduceInitNoThis,
+  _Assert_MapCondScopedInfer,
+  _Assert_ReduceCondScopedInfer,
+  _Assert_SetUnionAcceptsNestedSetOp,
+  _Assert_NestedSetOpInfer,
 };
 
 // ---------------------------------------------------------------------------
