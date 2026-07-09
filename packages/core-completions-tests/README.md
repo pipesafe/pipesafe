@@ -41,10 +41,13 @@ Every test pins the IDEAL completion list for its position and asserts
   _contextual_ key list — `false` inside an object literal means the editor
   falls back to ~1000 global identifiers.
 
-Positions that are known-bad today are annotated with `KNOWN BAD` comments
-naming the offending type, and their tests FAIL BY DESIGN until the type is
-fixed. **Do not weaken an ideal list to make a test pass** — fix the type,
-or if the ideal itself was wrong, change the list in a reviewed commit.
+Positions that are known-bad today keep their exact ideal assertion but are
+marked `it.fails`, with a `KNOWN BAD` comment naming the offending type:
+vitest passes them while the defect exists and FAILS them the moment the
+type is fixed — remove the `.fails` modifier then to promote the test to a
+regression guard. **Do not weaken an ideal list to make a test pass** — fix
+the type, or if the ideal itself was wrong, change the list in a reviewed
+commit.
 
 The ideal operator/accumulator vocabularies mirror the core registries
 (`ExpressionSpec`, `AccumulatorSpec`): registering a new operator means
@@ -53,10 +56,10 @@ reminder.
 
 ## Running
 
-- `bun run test:completions` (from the repo root), or `bun run test` here.
-- This package is **excluded from the root `test:ci`** (and therefore from
-  the pre-commit hook) because it intentionally fails while the known leaks
-  exist. CI runs it as a dedicated advisory (non-gating) job.
+Part of the ordinary root vitest run — `bun run test:ci` (CI's single test
+job and the pre-commit hook) picks this package up like any other. To run
+just this suite: `bun run test` inside this package, or
+`bunx vitest run packages/core-completions-tests` from the root.
 
 Note: object-literal keys that need quoting come back with the quotes in
 the entry name (`'"shipping.city"'`); string-literal completions come back

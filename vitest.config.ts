@@ -15,10 +15,6 @@ export default defineConfig({
       "**/.{idea,git,cache,output,temp}/**",
       "**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build}.config.*",
       "**/.claude/**",
-      // IDE-autocomplete tests pin the IDEAL completion lists and fail by
-      // design until the known leaks are fixed — CI runs them as a
-      // dedicated advisory job (`bun run test:completions`), not here.
-      "packages/core-completions-tests/**",
     ],
   },
 });

@@ -51,7 +51,6 @@
     "format:fix": "prettier --write .",
     "test": "vitest",
     "test:ci": "vitest run",
-    "test:completions": "bun run --filter @pipesafe/core-completions-tests test",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
     "typecheck": "tsc --noEmit --project tsconfig.json",
