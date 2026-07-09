@@ -47,6 +47,29 @@ jobs:
       - name: Test
         run: bun run test:ci
 
+  autocomplete:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # The suite pins the IDEAL completion list per cursor position with
+      # exact matches (packages/core-completions-tests); several positions
+      # are known to leak today, so this step is advisory — it reports but
+      # does not gate. Flip continue-on-error off once the ideals are met.
+      - name: IDE autocomplete tests (advisory)
+        run: bun run test:completions
+        continue-on-error: true
+
   format:
     runs-on: ubuntu-latest
 

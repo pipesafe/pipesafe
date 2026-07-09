@@ -12,23 +12,23 @@ import { fileURLToPath } from "node:url";
  * therefore reproduces what a user sees in the editor, modulo client-side
  * fuzzy filtering and snippet decoration.
  *
- * Mechanics: one language service is created over the core package's real
- * tsconfig + source files, plus a single VIRTUAL file inside `src/` that
- * never exists on disk. Each probe swaps the virtual file's content
- * (bumping its version so the service re-parses only that file) and asks
- * for completions at the `‸` cursor marker.
+ * Mechanics: one language service is created over this package's tsconfig,
+ * plus a single VIRTUAL file inside `src/` that never exists on disk. The
+ * virtual file imports `@pipesafe/core`, which the tsconfig `paths` entry
+ * maps to core's source entry point. Each probe swaps the virtual file's
+ * content (bumping its version so the service re-parses only that file)
+ * and asks for completions at the `‸` cursor marker.
  */
 
 const CURSOR = "‸";
 
-/** packages/core — resolved relative to this file (test/completions/). */
+/** packages/core-completions-tests — resolved relative to this file (src/). */
 const packageRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "..",
   ".."
 );
 
-/** Virtual probe file. Lives (virtually) in src/ so `./index` resolves. */
+/** Virtual probe file: lives (virtually) in this package's src/. */
 const virtualFileName = path.join(packageRoot, "src", "__completionProbe__.ts");
 
 export interface CompletionProbe {

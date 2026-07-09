@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.options.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // The completion harness type-checks against core's SOURCE types (the
+    // same surface `typecheck:packages` validates), so the tests need no
+    // prior `bun run build` and type fixes show up without rebuilding.
+    // Point this at ../core/dist/index.d.mts instead to probe the published
+    // declaration surface.
+    "paths": {
+      "@pipesafe/core": ["../core/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  // The vitest file is executed by vitest, not part of the completion
+  // program — excluding it keeps the language-service program lean.
+  "exclude": ["**/*.test.ts"]
+}
