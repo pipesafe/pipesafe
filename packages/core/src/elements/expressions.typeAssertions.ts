@@ -412,6 +412,18 @@ type _SetDifferenceInfer = InferExpression<
 >;
 type _Assert_SetDifferenceInfer = Assert<Equal<_SetDifferenceInfer, number[]>>;
 
+// $setUnion/$setIntersection over an OPTIONAL array field must infer the
+// element type, NOT the unsound `never[]`: `maybeTags?: string[]` resolves to
+// `string[] | undefined`, which fails a bare `extends (infer T)[]` and would
+// collapse to `never`. The null-strip in GetArrayElement keeps it an array.
+type _SetUnionOptionalFieldInfer = InferExpression<
+  SetSchema,
+  { $setUnion: ["$maybeTags"] }
+>;
+type _Assert_SetUnionOptionalFieldInfer = Assert<
+  Equal<_SetUnionOptionalFieldInfer, string[]>
+>;
+
 // ----------------------------------------------------------------------------
 // Scoped $$this / $$value inference for $map and $reduce
 // ----------------------------------------------------------------------------
@@ -559,6 +571,7 @@ export type {
   _Assert_SetUnionInfer,
   _Assert_SetIntersectionInfer,
   _Assert_SetDifferenceInfer,
+  _Assert_SetUnionOptionalFieldInfer,
   _Assert_MapThisPathInfer,
   _Assert_MapThisInfer,
   _Assert_MapCustomAsInfer,

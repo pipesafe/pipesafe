@@ -870,7 +870,11 @@ type GetArrayElement<Schema extends Document, Item> =
     // them from the result, a wrong type).
     unknown
   : Item extends FieldReference<Schema> ?
-    InferFieldReference<Schema, Item> extends (infer T)[] ?
+    // Null-strip first: an OPTIONAL array field is `T[] | undefined`, which
+    // fails `extends (infer T)[]` and would collapse to `never` (an unsound,
+    // narrower-than-reality element type that poisons the whole union). It is
+    // still an array, so contribute its element type.
+    NonNullable<InferFieldReference<Schema, Item>> extends (infer T)[] ?
       T // Field reference to array - extract element type
     : never
   : HasOperatorKey<Item> extends true ?
@@ -894,7 +898,10 @@ type InferArrayElementType<Schema extends Document, ArraySource> =
   ArraySource extends readonly (infer E)[] ? E
   : // Field reference to array - get element type
   ArraySource extends FieldReference<Schema> ?
-    InferFieldReference<Schema, ArraySource> extends (infer T)[] ?
+    // Null-strip first (see GetArrayElement): an optional array field is
+    // `T[] | undefined`; without this it degrades to `unknown` instead of the
+    // precise element type.
+    NonNullable<InferFieldReference<Schema, ArraySource>> extends (infer T)[] ?
       T
     : unknown
   : HasOperatorKey<ArraySource> extends true ?
