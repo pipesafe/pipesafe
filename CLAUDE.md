@@ -148,14 +148,15 @@ The type system is organized into modular building blocks located in `packages/c
   `$ifNull`, `$cond`, `$literal`; a missing arm degrades to `unknown`). Per-operator
   types, category key sets and unions, `Expression`, and the fixed-return arm of
   `InferExpression` are all derived.
-  Categories are declared ONCE in `EXPRESSION_OPERATOR_CATEGORIES` (a
-  `satisfies Record<keyof ExpressionSpec, ExpressionCategory>` map — a missing or
-  extra operator is a compile error at the map itself); the exported runtime name
-  arrays (`*_EXPRESSION_OPERATORS`, `EXPRESSION_OPERATORS`) and the category
-  unions both DERIVE from it. Valid-but-unmodeled operators are allow-listed by
-  name in `UnimplementedExpressionOps` (never widen it to `` `$${string}` ``).
-  Adding an operator = one registry entry + its `EXPRESSION_OPERATOR_CATEGORIES`
-  line + deleting its allow-list line (+ one dependent arm if applicable).
+  Categories are declared by membership in the per-category const arrays
+  (`*_EXPRESSION_OPERATORS`), each paired with its inferred union
+  (`(typeof X)[number]`); `EXPRESSION_OPERATORS` is their spread, whose
+  `satisfies readonly (keyof ExpressionSpec)[]` rejects non-registry names at
+  the declaration (a registry entry missing from the arrays is caught by the
+  completions suite's exact-match ideals). Valid-but-unmodeled operators are
+  allow-listed by name in `UnimplementedExpressionOps` (never widen it to
+  `` `$${string}` ``). Adding an operator = one registry entry + its category
+  array line + deleting its allow-list line (+ one dependent arm if applicable).
 
 - **literals.ts**: Literal value type constraints
 
@@ -201,12 +202,14 @@ TODO: Document the rest of the stages
 
 - Use `bun` as the package manager (specified in package.json)
 - TypeScript strict mode is enabled
-- NEVER use assertion pins to keep a type and a runtime constant (or two
-  parallel declarations) in sync. Make sync structural: derive the type from
-  the constant (`(typeof ARR)[number]`), derive the constant from a single
-  `satisfies Record<keyof Registry, …>`-checked declaration, or otherwise
-  funnel both through one source — a forgotten update must fail at the
-  declaration site, not in a remote assertion file
+- Name lists follow ONE pattern: declare a `const ARR = […] as const` array,
+  infer its string union immediately below it (`type X = (typeof ARR)[number]`
+  — keep each array/union PAIR adjacent, don't group arrays and then types),
+  compose bigger lists/unions by spreading arrays and unioning types, and use
+  `Record<Union, V>` when an object-shaped companion is needed. NEVER use
+  assertion pins to keep a type and a runtime constant in sync — derive one
+  from the other, or `satisfies`-check at the declaration, so a forgotten
+  update fails at the declaration site, not in a remote assertion file
 - Suppressing prettier/lint findings is unacceptable — no `// prettier-ignore`
   or `// eslint-disable*` anywhere; restructure the code until the tools pass.
   In assertion files, put `@ts-expect-error` on the exact line the error

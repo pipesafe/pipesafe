@@ -187,11 +187,11 @@ export type ArrayInput<Schema extends Document> =
  *   cannot be stored in a registry entry; the hand-written arm is the
  *   irreducible per-operator inference code. A missing arm degrades to
  *   `unknown`, never to a wrong type or a dropped field.
- * The operator's CATEGORY is declared once in `EXPRESSION_OPERATOR_CATEGORIES`
- * (below the registry) — a `satisfies Record<keyof ExpressionSpec, …>` map
- * that the runtime name lists and the category unions (`ArrayExpression`,
- * ...) both derive from; forgetting a new operator there is a compile error
- * at the map itself.
+ * The operator's CATEGORY is declared by membership in the matching
+ * `*_EXPRESSION_OPERATORS` const array (below the registry); the category
+ * unions and the combined `EXPRESSION_OPERATORS` list derive from those
+ * arrays, and the composed list's `satisfies` rejects non-registry names
+ * at the declaration.
  *
  * Being an interface, members resolve lazily and mutual recursion with the
  * derived `Expression` union is safe.
@@ -589,17 +589,82 @@ export type ExpressionsReturning<Schema extends Document, T> = ExpressionFor<
 >;
 
 // ---------------------------------------------------------------------------
-// Operator categories — ONE declaration per operator, in a runtime map that
-// is simultaneously the source of (a) the exported runtime operator-name
-// lists (via Object.keys / filter), (b) the category key unions (via
-// `OpsInCategory` over the map's type), and (c) its own correctness:
-// `satisfies Record<keyof ExpressionSpec<Document>, ExpressionCategory>`
-// makes a MISSING registry key a compile error (Record totality) and an
-// extra/typo'd key a compile error (excess property checking) — sync is by
-// construction; never re-introduce assertion pins for it.
+// Runtime operator-name lists. The pattern, used throughout the package:
+// declare a const array, infer its string union right next to it
+// (`(typeof X)[number]`), compose bigger lists by spreading, and use
+// `Record<Union, V>` where an object-shaped view is needed. The `satisfies`
+// on the composed list rejects any name that is not a registry key AT THE
+// declaration; a registry entry missing from these lists is caught by the
+// completions suite's exact-match ideals. Never keep the two sides in sync
+// with assertion pins.
 // ---------------------------------------------------------------------------
 
-/** Closed set of registry categories — every operator declares exactly one. */
+export const ARRAY_EXPRESSION_OPERATORS = [
+  "$concatArrays",
+  "$size",
+  "$arrayElemAt",
+  "$filter",
+  "$map",
+  "$sum",
+] as const;
+type ArrayOps = (typeof ARRAY_EXPRESSION_OPERATORS)[number];
+
+export const DATE_EXPRESSION_OPERATORS = [
+  "$dateToString",
+  "$dateTrunc",
+  "$dateAdd",
+  "$dateSubtract",
+  "$toDate",
+] as const;
+type DateOps = (typeof DATE_EXPRESSION_OPERATORS)[number];
+
+export const ARITHMETIC_EXPRESSION_OPERATORS = [
+  "$add",
+  "$subtract",
+  "$multiply",
+  "$divide",
+  "$mod",
+] as const;
+type ArithmeticOps = (typeof ARITHMETIC_EXPRESSION_OPERATORS)[number];
+
+export const STRING_EXPRESSION_OPERATORS = ["$concat"] as const;
+type StringOps = (typeof STRING_EXPRESSION_OPERATORS)[number];
+
+export const CONDITIONAL_EXPRESSION_OPERATORS = ["$ifNull", "$cond"] as const;
+type ConditionalOps = (typeof CONDITIONAL_EXPRESSION_OPERATORS)[number];
+
+export const VARIABLE_EXPRESSION_OPERATORS = ["$let"] as const;
+type VariableOps = (typeof VARIABLE_EXPRESSION_OPERATORS)[number];
+
+// No derived union: nothing consumes a literal-category operator type.
+export const LITERAL_EXPRESSION_OPERATORS = ["$literal"] as const;
+
+export const COMPARISON_EXPRESSION_OPERATORS = [
+  "$in",
+  "$eq",
+  "$ne",
+  "$gt",
+  "$gte",
+  "$lt",
+  "$lte",
+] as const;
+type ComparisonOps = (typeof COMPARISON_EXPRESSION_OPERATORS)[number];
+
+/** Every registered expression operator — the per-category lists spread
+ * together. */
+export const EXPRESSION_OPERATORS = [
+  ...ARRAY_EXPRESSION_OPERATORS,
+  ...DATE_EXPRESSION_OPERATORS,
+  ...ARITHMETIC_EXPRESSION_OPERATORS,
+  ...STRING_EXPRESSION_OPERATORS,
+  ...CONDITIONAL_EXPRESSION_OPERATORS,
+  ...VARIABLE_EXPRESSION_OPERATORS,
+  ...LITERAL_EXPRESSION_OPERATORS,
+  ...COMPARISON_EXPRESSION_OPERATORS,
+] as const satisfies readonly (keyof ExpressionSpec<Document>)[];
+type ExpressionOperator = (typeof EXPRESSION_OPERATORS)[number];
+
+/** Closed set of registry categories. */
 export type ExpressionCategory =
   | "array"
   | "date"
@@ -610,79 +675,21 @@ export type ExpressionCategory =
   | "literal"
   | "comparison";
 
-const EXPRESSION_OPERATOR_CATEGORIES = {
-  $concatArrays: "array",
-  $size: "array",
-  $arrayElemAt: "array",
-  $filter: "array",
-  $map: "array",
-  $sum: "array",
-  $dateToString: "date",
-  $dateTrunc: "date",
-  $dateAdd: "date",
-  $dateSubtract: "date",
-  $toDate: "date",
-  $add: "arithmetic",
-  $subtract: "arithmetic",
-  $multiply: "arithmetic",
-  $divide: "arithmetic",
-  $mod: "arithmetic",
-  $concat: "string",
-  $ifNull: "conditional",
-  $cond: "conditional",
-  $let: "variable",
-  $literal: "literal",
-  $in: "comparison",
-  $eq: "comparison",
-  $ne: "comparison",
-  $gt: "comparison",
-  $gte: "comparison",
-  $lt: "comparison",
-  $lte: "comparison",
-} as const satisfies Record<keyof ExpressionSpec<Document>, ExpressionCategory>;
+/** Object-shaped view of the lists: category → its operator array. */
+export const EXPRESSION_OPERATORS_BY_CATEGORY = {
+  array: ARRAY_EXPRESSION_OPERATORS,
+  date: DATE_EXPRESSION_OPERATORS,
+  arithmetic: ARITHMETIC_EXPRESSION_OPERATORS,
+  string: STRING_EXPRESSION_OPERATORS,
+  conditional: CONDITIONAL_EXPRESSION_OPERATORS,
+  variable: VARIABLE_EXPRESSION_OPERATORS,
+  literal: LITERAL_EXPRESSION_OPERATORS,
+  comparison: COMPARISON_EXPRESSION_OPERATORS,
+} as const satisfies Record<ExpressionCategory, readonly ExpressionOperator[]>;
 
-type ExpressionOperatorCategories = typeof EXPRESSION_OPERATOR_CATEGORIES;
-type ExpressionOperator = keyof ExpressionOperatorCategories;
-
-/** Registry keys filed under category `C` — derived from the categories
- * map. Schema-free by construction, so the filter runs once and is
- * alias-cached globally. */
-export type OpsInCategory<C extends ExpressionCategory> = {
-  [K in ExpressionOperator]: ExpressionOperatorCategories[K] extends C ? K
-  : never;
-}[ExpressionOperator];
-
-/** Every registered expression operator, exported for tooling (docs, the
- * IDE autocomplete tests) — derived from the categories map. */
-export const EXPRESSION_OPERATORS = Object.keys(
-  EXPRESSION_OPERATOR_CATEGORIES
-) as readonly ExpressionOperator[];
-
-const opsInCategory = <C extends ExpressionCategory>(
-  category: C
-): readonly OpsInCategory<C>[] =>
-  EXPRESSION_OPERATORS.filter(
-    (op) => EXPRESSION_OPERATOR_CATEGORIES[op] === category
-  ) as OpsInCategory<C>[];
-
-// Runtime operator-name lists, one per category — derived views over the
-// categories map, exported for tooling alongside EXPRESSION_OPERATORS.
-export const ARRAY_EXPRESSION_OPERATORS = opsInCategory("array");
-export const DATE_EXPRESSION_OPERATORS = opsInCategory("date");
-export const ARITHMETIC_EXPRESSION_OPERATORS = opsInCategory("arithmetic");
-export const STRING_EXPRESSION_OPERATORS = opsInCategory("string");
-export const CONDITIONAL_EXPRESSION_OPERATORS = opsInCategory("conditional");
-export const VARIABLE_EXPRESSION_OPERATORS = opsInCategory("variable");
-export const LITERAL_EXPRESSION_OPERATORS = opsInCategory("literal");
-export const COMPARISON_EXPRESSION_OPERATORS = opsInCategory("comparison");
-
-type ArrayOps = OpsInCategory<"array">;
-type DateOps = OpsInCategory<"date">;
-type ArithmeticOps = OpsInCategory<"arithmetic">;
-type StringOps = OpsInCategory<"string">;
-type ConditionalOps = OpsInCategory<"conditional">;
-type VariableOps = OpsInCategory<"variable">;
-type ComparisonOps = OpsInCategory<"comparison">;
+/** Registry keys filed under category `C` — derived from the lists. */
+export type OpsInCategory<C extends ExpressionCategory> =
+  (typeof EXPRESSION_OPERATORS_BY_CATEGORY)[C][number];
 
 // Per-operator expression types (public API, derived).
 export type ConcatArraysExpression<Schema extends Document> = ExpressionFor<

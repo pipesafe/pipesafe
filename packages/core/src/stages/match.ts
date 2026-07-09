@@ -11,32 +11,54 @@ import type { BSONType } from "bson";
 
 // ---------------------------------------------------------------------------
 // Runtime operator-name lists — THE single source of every matcher key.
-// Each key union below derives from its array (`(typeof X)[number]`) and
-// every ComparatorMatchers/Notted/RawMatchQuery key is mapped from one of
-// those unions, so a name exists in exactly one place — sync is by
-// construction; never re-introduce assertion pins for it. Exported so
-// tooling (docs, the IDE autocomplete tests) consumes the same names.
+// The pattern, used throughout the package: declare a const array, infer
+// its string union right next to it (`(typeof X)[number]`), and compose
+// bigger lists/unions by spreading. Every ComparatorMatchers/Notted/
+// RawMatchQuery key is mapped from one of these unions, so a name exists in
+// exactly one place — sync is by construction; never re-introduce assertion
+// pins for it. Exported so tooling (docs, the IDE autocomplete tests)
+// consumes the same names.
 // ---------------------------------------------------------------------------
 
 export const EQUALITY_MATCHERS = ["$eq", "$ne"] as const;
+type EqualityMatchers = (typeof EQUALITY_MATCHERS)[number];
+
 /** $in and $nin work for all types. */
 export const IN_MATCHERS = ["$in", "$nin"] as const;
+type InMatchers = (typeof IN_MATCHERS)[number];
+
 export const CONTINUOUS_MATCHERS = ["$gte", "$lte", "$gt", "$lt"] as const;
+type ContinuousMatchers = (typeof CONTINUOUS_MATCHERS)[number];
+
 // $exists and $type carry different operand types, so each needs its own
-// singleton for the mapped keys in ComparatorMatchers; the exported group
-// is their spread.
+// singleton pair for the mapped keys in ComparatorMatchers; the exported
+// group is their spread.
 const EXISTS_MATCHERS = ["$exists"] as const;
+type ExistsMatcher = (typeof EXISTS_MATCHERS)[number];
+
 const TYPE_MATCHERS = ["$type"] as const;
+type TypeMatcher = (typeof TYPE_MATCHERS)[number];
+
 export const EXISTENCE_MATCHERS = [
   ...EXISTS_MATCHERS,
   ...TYPE_MATCHERS,
 ] as const;
+
 export const SIZE_MATCHERS = ["$size"] as const;
+type SizeMatcher = (typeof SIZE_MATCHERS)[number];
+
 /** $all only makes sense for arrays. */
 export const ARRAY_ONLY_MATCHERS = ["$all"] as const;
+type ArrayOnlyMatcher = (typeof ARRAY_ONLY_MATCHERS)[number];
+
 export const ELEMENT_MATCHERS = ["$elemMatch"] as const;
+type ElementMatcher = (typeof ELEMENT_MATCHERS)[number];
+
 export const REGEX_MATCHERS = ["$regex"] as const;
+type RegexMatcher = (typeof REGEX_MATCHERS)[number];
+
 export const NOT_MATCHERS = ["$not"] as const;
+type NotMatcher = (typeof NOT_MATCHERS)[number];
 
 /** Every field-level matcher key ($not included via the Notted wrapper). */
 export const FIELD_MATCH_OPERATORS = [
@@ -52,28 +74,18 @@ export const FIELD_MATCH_OPERATORS = [
 ] as const;
 
 export const LOGICAL_MATCH_OPERATORS = ["$and", "$or", "$nor"] as const;
+/** The top-level logical operators — single source for MatchQuery and the
+ * ResolveMatchOutput dispatch. */
+export type LogicalMatchOperators = (typeof LOGICAL_MATCH_OPERATORS)[number];
+
+const EXPR_MATCH_OPERATORS = ["$expr"] as const;
+type ExprMatchOperator = (typeof EXPR_MATCH_OPERATORS)[number];
 
 /** Every non-field top-level MatchQuery key: the logical operators + $expr. */
 export const TOP_LEVEL_MATCH_OPERATORS = [
   ...LOGICAL_MATCH_OPERATORS,
-  "$expr",
+  ...EXPR_MATCH_OPERATORS,
 ] as const;
-
-type ElementMatcher = (typeof ELEMENT_MATCHERS)[number];
-type InMatchers = (typeof IN_MATCHERS)[number];
-type ArrayOnlyMatcher = (typeof ARRAY_ONLY_MATCHERS)[number];
-type EqualityMatchers = (typeof EQUALITY_MATCHERS)[number];
-type ContinuousMatchers = (typeof CONTINUOUS_MATCHERS)[number];
-type ExistsMatcher = (typeof EXISTS_MATCHERS)[number];
-type TypeMatcher = (typeof TYPE_MATCHERS)[number];
-type SizeMatcher = (typeof SIZE_MATCHERS)[number];
-type RegexMatcher = (typeof REGEX_MATCHERS)[number];
-type NotMatcher = (typeof NOT_MATCHERS)[number];
-/** The non-logical top-level key ($expr) — derived, not re-spelled. */
-type ExprMatchOperator = Exclude<
-  (typeof TOP_LEVEL_MATCH_OPERATORS)[number],
-  LogicalMatchOperators
->;
 
 // MongoDB accepts both numeric codes (BSONType) and string aliases for $type operator
 type BSONTypeAlias = keyof typeof BSONType;
@@ -224,10 +236,6 @@ type MatchFieldMap<Schema extends Document> = {
 export type RawMatchQuery<Schema extends Document> = MatchFieldMap<Schema> & {
   [m in ExprMatchOperator]?: unknown;
 };
-
-/** The top-level logical operators — single source for MatchQuery and the
- * ResolveMatchOutput dispatch. */
-export type LogicalMatchOperators = (typeof LOGICAL_MATCH_OPERATORS)[number];
 
 export type MatchQuery<Schema extends Document> =
   | { [Op in LogicalMatchOperators]?: MatchQuery<Schema>[] }

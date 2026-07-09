@@ -140,29 +140,24 @@ export type UnimplementedAccumulators =
   | "$topN";
 
 /**
- * Every registered accumulator operator — runtime twin of
- * `keyof AccumulatorSpec`, exported so tooling (docs, the IDE autocomplete
- * tests) consumes the same names the types are built from. Sync with the
- * registry is enforced AT THE DECLARATION: `satisfies Record<keyof
- * AccumulatorSpec, …>` makes a missing accumulator a compile error (Record
- * totality) and an extra/typo'd one a compile error (excess property
- * checking) — never re-introduce assertion pins for this.
+ * Every registered accumulator operator, exported so tooling (docs, the
+ * IDE autocomplete tests) consumes the same names the types are built
+ * from. The `satisfies` rejects any name that is not an `AccumulatorSpec`
+ * key AT THE declaration; a registry entry missing from this list is
+ * caught by the completions suite's exact-match ideal. Never keep the two
+ * in sync with assertion pins.
  */
-const ACCUMULATOR_OPERATOR_SET = {
-  $sum: true,
-  $avg: true,
-  $min: true,
-  $max: true,
-  $count: true,
-  $push: true,
-  $addToSet: true,
-  $first: true,
-  $last: true,
-} as const satisfies Record<keyof AccumulatorSpec<Document>, true>;
-
-export const ACCUMULATOR_OPERATORS = Object.keys(
-  ACCUMULATOR_OPERATOR_SET
-) as readonly (keyof AccumulatorSpec<Document>)[];
+export const ACCUMULATOR_OPERATORS = [
+  "$sum",
+  "$avg",
+  "$min",
+  "$max",
+  "$count",
+  "$push",
+  "$addToSet",
+  "$first",
+  "$last",
+] as const satisfies readonly (keyof AccumulatorSpec<Document>)[];
 
 /** Single-operator accumulator shape(s) for `Op` (distributes over unions). */
 type AccumulatorFor<Schema extends Document, Op> =
