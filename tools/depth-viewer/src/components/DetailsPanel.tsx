@@ -126,13 +126,18 @@ export function DetailsPanel({ data, file, symbol }: Props) {
                       {fmtCount(step.maxDepth)}
                     </span>
                   )}
-                  {step.maxCount !== undefined && step.maxCount > 0 && (
+                  {step.maxCount !== undefined && (
                     <span
                       className={`chain-depth${step.hitCountLimit ? " depth-limit" : ""}`}
-                      title={`instantiations this step performed (ceiling ${COUNT_CEILING.toLocaleString()} collapses the whole type to \`any\`): ${step.maxCount.toLocaleString()}`}
+                      title={
+                        step.hitCountLimit ?
+                          `This step hit the instantiation-count ceiling (${COUNT_CEILING.toLocaleString()}) and the type collapsed to \`any\`. tsc bails at the ceiling, so the exact total is unknown; it had reached ${step.maxCount.toLocaleString()} when it stopped. A deeply-nested type detonates into millions of instantiations right as instantiation depth saturates — so this depth-driven failure trips the count ceiling at the same step.`
+                        : `Marginal instantiations this step performed (ceiling ${COUNT_CEILING.toLocaleString()} collapses the whole type to \`any\`): ${step.maxCount.toLocaleString()}. Reads 0 once an earlier step has collapsed the type.`
+                      }
                     >
-                      {step.hitCountLimit && "⚠ "}
-                      count {fmtCount(step.maxCount)}
+                      {step.hitCountLimit ?
+                        `⚠ count ≥${fmtCount(COUNT_CEILING)}`
+                      : `count ${fmtCount(step.maxCount)}`}
                     </span>
                   )}
                   {step.maxTail !== undefined && step.maxTail > 0 && (

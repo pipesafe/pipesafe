@@ -539,8 +539,26 @@ function buildInitializerChain(
   // Trace record per step, in execution order, for marginal-count deltas.
   const records: (DepthRecord | undefined)[] = [];
   for (const call of calls) {
+    // `call.getStart()` on a chained call returns the start of the whole
+    // left-folded expression (the `new Pipeline()` at the chain root), so every
+    // step would report the same line. Report the *invocation site* instead —
+    // the `.set` member name for a property-access call, the `["set"]` key for an
+    // element-access call — so each step shows its own source line. New/plain
+    // calls fall back to the call's own start.
+    const siteNode: ts.Node =
+      (
+        ts.isCallExpression(call) &&
+        ts.isPropertyAccessExpression(call.expression)
+      ) ?
+        call.expression.name
+      : (
+        ts.isCallExpression(call) &&
+        ts.isElementAccessExpression(call.expression)
+      ) ?
+        call.expression.argumentExpression
+      : call;
     const callLine =
-      sf.getLineAndCharacterOfPosition(call.getStart(sf)).line + 1;
+      sf.getLineAndCharacterOfPosition(siteNode.getStart(sf)).line + 1;
     let label: string;
     let member: string | undefined;
     if (ts.isNewExpression(call)) {
