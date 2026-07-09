@@ -13,6 +13,7 @@
   "exclude": ["**/dist/**/*", "**/node_modules/**", ".claude/worktrees/**"],
   "references": [
     { "path": "./packages/core" },
-    { "path": "./packages/manifold" }
+    { "path": "./packages/manifold" },
+    { "path": "./packages/function-bundler" }
   ]
 }

@@ -1,0 +1,47 @@
+{
+  "name": "@pipesafe/function-bundler",
+  "version": "0.1.0",
+  "description": "PipeSafe Function Bundler - bundles file-based $function bodies (imports included) into self-contained scripts for MongoDB server-side execution",
+  "author": "Ryan Peggs & Tim Vyas",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pipesafe/pipesafe.git",
+    "directory": "packages/function-bundler"
+  },
+  "keywords": [
+    "mongodb",
+    "aggregation",
+    "function",
+    "server-side",
+    "bundler",
+    "esbuild",
+    "pipesafe"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "build:watch": "tsdown --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "esbuild": "^0.25.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

@@ -23,12 +23,16 @@ pipesafe/
 │   │   ├── benchmarking/        # TypeScript performance benchmarks
 │   │   └── LICENSE              # Apache License 2.0
 │   │
-│   └── manifold/                # DAG orchestration (ELv2 - commercial)
-│       ├── src/
-│       │   ├── model/           # Model - materializable pipelines
-│       │   └── project/         # Project - DAG orchestrator
-│       ├── examples/            # DAG usage examples
-│       └── LICENSE              # Elastic License 2.0
+│   ├── manifold/                # DAG orchestration (ELv2 - commercial)
+│   │   ├── src/
+│   │   │   ├── model/           # Model - materializable pipelines
+│   │   │   └── project/         # Project - DAG orchestrator
+│   │   ├── examples/            # DAG usage examples
+│   │   └── LICENSE              # Elastic License 2.0
+│   │
+│   └── function-bundler/        # $function module bundler (Apache 2.0)
+│       ├── src/                 # bundleServerFunction (esbuild)
+│       └── LICENSE              # Apache License 2.0
 │
 └── package.json                 # Root workspace config (private)
 ```
@@ -37,11 +41,13 @@ pipesafe/
 
 - **@pipesafe/core (Apache 2.0)**: Core pipeline builder. Fully OSI-approved, can be used anywhere.
 - **@pipesafe/manifold (ELv2)**: DAG execution and materialization features. Commercial-friendly but not OSI-approved.
+- **@pipesafe/function-bundler (Apache 2.0)**: Optional companion to core — bundles file-based `$function` bodies (esbuild).
 
 ### Package Dependencies
 
 - `@pipesafe/manifold` has `@pipesafe/core` as a **peer dependency** pinned to core's
   current major (`>=2.0.0 <3.0.0`); widen it whenever core takes a major bump
+- `@pipesafe/core` has `@pipesafe/function-bundler` as an **optional peer dependency** — lazily `require`d only when a `serverFn()` file-based `$function` body is used
 - During development, `workspace:*` links them locally
 - Users install both packages explicitly
 
@@ -191,6 +197,14 @@ Located in `packages/core/src/stages/`:
   - **Union Support**: `FilterUnion<Union, Query>` validates each union member against query fields
   - Advanced query validation with `MatchersForType<T>` and `ComparatorMatchers<T>`
 
+- **`$function` (elements/, not a stage)**: server-side JavaScript expression operator, usable in any expression position
+  - **Registry entry**: `$function` in `ExpressionSpec` (`elements/expressions.ts`) — `body` is a real TS function (or a `serverFn()` `ServerFunctionRef` for file-based bodies); `args` are literals/field refs/expressions (`FunctionArg`). The body slot is the signature-LESS `Function` interface ON PURPOSE — a call signature there would join contextual-type intersections and conflict with `FunctionSlots`' computed signature. Result is literal-dependent (`returns` omitted; the arm extracts the body's return type)
+  - **Correlation**: `DeepValidateFunctions<Schema, V>` (`elements/function.ts`) rewrites every `$function`'s expected `body` signature from its `args` (recursive over the written literal — works at any nesting depth); applied via intersection at `match`/`set`/`group`/`project`/`replaceRoot` signatures. Gated by a `ContainsFunction` boolean probe — resolves to `unknown` for `$function`-free literals so the rewrite-relation costs nothing unless the operator is used (see `elements/function.contextual-typing.md` for design notes + benchmarks)
+  - **Contextual params**: `FunctionSlots<Schema, A>` (additional intersected member on `set`/`project`/`replaceRoot`, with a second inferred type param `A` defaulting to `{}`) gives UNANNOTATED body params computed types at top-level keys — `body: (a) => a * 2, args: ["$age"]` gets `a: number`
+  - **Inference**: result type = body's return type; `undefined`/`void` → `null`; `any` return → `PipeSafeError` brand (`NormalizeFunctionReturn`)
+  - **Runtime**: `utils/serializeFunction.ts` serializes bodies at the `Pipeline._chain` choke point — acorn free-variable purity check (must be self-contained), arrow→`function(){}` wrapping (MongoDB requirement), `serverFn` refs bundled via the optional `@pipesafe/function-bundler` package
+  - **Lint**: `@pipesafe/core/eslint-plugin` ships `no-impure-function-body` (outer-scope refs, async/generators)
+
 TODO: Document the rest of the stages
 
 ## Development Patterns
@@ -294,6 +308,7 @@ from `RequiresMsg` (utils/errors.ts):
 - `fieldSelector.ts` — `GetFieldTypeOrError` (branded sibling of `GetFieldType` for user-surfacing call sites)
 - `lookup.ts` — `LookupForeignFieldOrError` (no foreign field with a compatible type, with passthrough for upstream errors)
 - `expressions.ts` `InferExpression` — the exactly-one-operator brand for multi-`$`-key objects
+- `expressions.ts` — `NormalizeFunctionReturn` (a `$function` body whose return type infers as `any` — in practice unannotated params — brands the inferred output instead of leaking `any`)
 
 ### Pipeline method signature patterns
 
@@ -302,6 +317,8 @@ Different stages need different patterns to make brands fire at the chained call
 - **Direct typing** (`(\$q: Q<Schema>)` — no generic): `sort`. Use when the query type is a finite-key mapped type and the return type doesn't need the literal query.
 - **Constraint + validation intersection** (`<const Q extends XxxQuery<Schema>>(\$q: Q & ValidateXxxQuery<Schema, Q>)`): `set`, `project`, `group`. THE pattern for stages with `[key: string]:` index signatures (which suppress per-value checks) — Q stays the raw inference/contextual-typing position while the key-filtered wrapper re-checks the literal and brands offending keys (a bare mapped wrapper breaks contextual typing of nested expression literals — group's compound-`_id` is the counterexample). Project's validate/resolve mode parameters default from the same alias — the second computation is an alias-cache hit, so the modes are NOT hoisted into method generics.
 - **Generic constraint** (`<const M extends Q<Schema>>(\$q: M)`): `match`, `replaceRoot`, `facet`. Default pattern when the query type has finite, schema-derived keys. Inner-value brands (e.g. `$gte` on a string) fire from the constraint check; call-site excess-property checking is suppressed but the resulting "is not assignable to PipeSafeError" message is still readable.
+- **Correlation intersection** (`... & DeepValidateFunctions<Schema, Q>`): `match`, `set`, `group`, `project`, `replaceRoot`. Used to correlate two properties of one literal — `$function`'s `args` rewrite the expected `body` signature (`elements/function.ts`). The rewritten slot must be wrapped in `NoInfer` (otherwise the body slot back-feeds inference and corrupts the inferred literal) and must NOT reference the literal's own `body` type (self-referential contextual types trigger TS7023 circularity). Don't thread it through a reverse-inference type like `ValidateProjectQuery` — that corrupts `P`'s inference; intersect at the signature instead. Gate deep rewrites behind a cheap boolean probe (`ContainsFunction`) so `$function`-free literals collapse the member to `unknown`.
+- **Second-type-param contextual slots** (`<const S extends Q<Schema>, A extends Record<string, unknown> = {}>(\$q: S & ... & FunctionSlots<Schema, A>)`): `set`, `project`, `replaceRoot`. Conditionals over the in-flight literal param never resolve when TS computes contextual types — but conditionals over a SEPARATE, independently inferred param do. `FunctionSlots<Schema, A>` reverse-infers a per-key `$function` args map into `A` and supplies computed body-param signatures from it, so unannotated params at top-level keys get real types. Load-bearing details: (1) the conditional's check position is itself an inference site — shield it (`[unknown] extends [NoInfer<A[K]>]`) or plain values leak into `A`; (2) the loose body slot in the registry's `$function` operand must be the signature-less `Function` interface — any call signature there joins the contextual intersection and two differing signatures make TS bail (params silently `any`); (3) this does NOT work on stages with UNION constraints (`MatchQuery`) — the extra type variable makes the literal param collapse to its constraint and pinned rejections stop firing; (4) args captured through slots arrive as lazy reverse-mapped structures — force-evaluate (`DeepMutable` in elements/function.ts) before operator-key dispatch or inference degrades to `unknown`. NESTED slots (functions inside `$add`/`$cond` etc.) were fully prototyped and deliberately NOT shipped: ~4x total typecheck cost, ~2-5s per `$function` call site — see `elements/function.contextual-typing.md` for the full prototype record and capture mechanics.
 
 ### Error code: prefer TS2322 over TS2353
 
@@ -319,6 +336,10 @@ When a `<const P>`-inferred literal is used as the brand's `Ctx` (or as part of 
 
 - **`Pipeline.group`'s call-site brand surfacing** for `$sum: '$stringField'` etc. now fires via the key-filtered `ValidateGroupQuery` intersection (`$group: G & ValidateGroupQuery<Schema, G>`). Two hard-won constraints, both pinned in `Pipeline.callSite.typeAssertions.ts`: the intersection form is REQUIRED (a bare mapped wrapper at the parameter position breaks contextual typing of compound-`_id` patterns like `_id: { date: { $dateToString: ... } }` — both the bare and concrete-`_id` variants were tried and failed), and the wrapper must be key-FILTERED so a fully-valid query validates against `{}` (a full-map intersection cost 3× whole-project check time). Validation covers `$sum`/`$avg` (numeric) and `$min`/`$max` (BSON-comparable: number, date, string, boolean); extending it = adding the key to `CheckedAccumulatorOps` after registering the operand in `AccumulatorSpec`.
 - **Nested value validation** (`$set`/`$project` values and group `_id` at any literal depth) is handled by the shared kernel in `elements/validation.ts` (`ValidateNestedValue`): unknown refs, malformed expression objects (multi-operator, or operator keys mixed with plain keys), invalid operands of REGISTERED operators, AND operator/accumulator names outside registry + allow-list all brand at the chained call site. Valid-but-unmodeled MongoDB is enumerated BY NAME (`UnimplementedExpressionOps` in elements/expressions.ts, `UnimplementedAccumulators` in stages/group.ts — accepted with no operand validation; inference degrades them to `unknown`); never widen those lists to `` `$${string}` ``. `$$`-system variables and widened (non-literal) value types stay accepted. Remaining structural-only interiors: expression OPERAND interiors reached through permissive operand arms (`$cond`/`$ifNull` conditional operands, `$filter.cond`, `$let.in`— all`unknown`-typed in the registry) and `replaceRoot`'s bare `Document` arm.
+
+- **`$function` body params are auto-typed only at top-level keys of `set`/`project`/`replaceRoot`** (via `FunctionSlots` — see the signature-patterns section). NESTED `$function` (inside `$add`/`$cond`/accumulators) and `match` `$expr` bodies need annotated params: nested contextual typing was prototyped and works but costs ~2-5s of typecheck per `$function` call site (`elements/function.contextual-typing.md`), and `MatchQuery`'s union constraint breaks the slots inference. Unannotated params there fail loudly as TS7006 (the loose body slot is the signature-less `Function`, so no contextual type arrives); annotations are then fully validated by `DeepValidateFunctions`. A body whose return infers `any` additionally brands the output (`NormalizeFunctionReturn`).
+- **`$function` purity is enforced by lint + runtime, not the type system** — function bodies are opaque to types. Layers: `no-impure-function-body` ESLint rule (editor/CI), acorn free-variable analysis at stage-add time (`utils/serializeFunction.ts`). Bodies needing imports use `serverFn()` + the optional `@pipesafe/function-bundler` package.
+- **MongoDB only executes `function(){}` syntax** as `$function` bodies — an arrow-source string is coerced to a BSON `Code` value instead of being invoked. The serializer wraps arrows in `function() { return (<arrow>).apply(null, arguments); }`.
 
 ### Regression guard
 

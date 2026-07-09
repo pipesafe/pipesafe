@@ -5,6 +5,16 @@ import { defineConfig } from "eslint/config";
 
 const ignorePatterns = [".claude/**/*", "**/dist/**/*", "benchmarks/**/*"];
 
+// PipeSafe's own $function lint rule (a built artifact — tolerate a missing
+// dist so `bun run lint` still works on a fresh clone before the first
+// build; the pre-commit hook runs build alongside lint).
+let pipesafePlugin = null;
+try {
+  pipesafePlugin = (await import("@pipesafe/core/eslint-plugin")).default;
+} catch {
+  // not built yet — rule simply not applied
+}
+
 export default defineConfig([
   { ignores: ignorePatterns },
   {
@@ -15,6 +25,14 @@ export default defineConfig([
   {
     files: ["**/*.{js,mjs,cjs,ts,mts,cts}"],
     languageOptions: { globals: globals.browser },
+  },
+  {
+    // CommonJS fixtures/scripts get Node globals (module, require, ...).
+    files: ["**/*.cjs"],
+    languageOptions: {
+      globals: globals.node,
+      sourceType: "commonjs",
+    },
   },
   {
     ...tseslint.configs.strictTypeChecked[0],
@@ -63,4 +81,17 @@ export default defineConfig([
       ],
     },
   },
+  // Enforce self-contained $function bodies in our own sources and examples.
+  // Test and type-assertion files are exempt — they intentionally exercise
+  // the invalid cases.
+  ...(pipesafePlugin ?
+    [
+      {
+        files: ["packages/**/*.ts"],
+        ignores: ["**/*.test.ts", "**/*.typeAssertions.ts"],
+        plugins: { pipesafe: pipesafePlugin },
+        rules: { "pipesafe/no-impure-function-body": "error" },
+      },
+    ]
+  : []),
 ]);

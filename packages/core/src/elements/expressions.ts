@@ -1,4 +1,4 @@
-import { Document } from "../utils/objects";
+import { Document, IsAnyType } from "../utils/objects";
 import {
   MultiOperatorError,
   PipeSafeError,
@@ -129,7 +129,44 @@ type ComparisonOperand<Schema extends Document> =
   | DateExpression<Schema>
   | ArithmeticExpression<Schema>
   | StringExpression<Schema>
-  | ConditionalExpression<Schema>;
+  | ConditionalExpression<Schema>
+  | CustomExpression<Schema>;
+
+/**
+ * Marker for a file-based $function body, created by `serverFn()`
+ * (utils/serializeFunction.ts).
+ *
+ * Inline bodies must be self-contained (no closures/imports). A body that
+ * needs imports lives in its own module instead; at pipeline-build time the
+ * optional `@pipesafe/function-bundler` package bundles that module —
+ * dependencies included — into a self-contained body string.
+ */
+export interface ServerFunctionRef<
+  F extends (...args: any[]) => unknown = (...args: any[]) => unknown,
+> {
+  readonly "~pipesafe.serverFn": true;
+  /** Typing only — never serialized; param/return types flow from here */
+  readonly fn: F;
+  /** Absolute file:// URL of the module (from `import.meta.resolve`) */
+  readonly url: string;
+  /** Named export holding the function, defaults to "default" */
+  readonly exportName: string;
+}
+
+/**
+ * Valid argument to a $function body — literals, field references, or
+ * nested expressions. Each arg is evaluated server-side and passed as the
+ * corresponding parameter to the body.
+ */
+export type FunctionArg<Schema extends Document> =
+  | null
+  | AnyLiteral<Schema>
+  | FieldReference<Schema>
+  | Expression<Schema>
+  // `$$`-system variables ($$NOW, $$ROOT, ...) are valid MongoDB whose
+  // inference is not modeled — accepted here, resolved to a permissive
+  // param type by ResolveFunctionArg (elements/function.ts)
+  | `$$${string}`;
 
 /** The `[left, right]` pair shape shared by all binary comparison operators. */
 type ComparisonPair<Schema extends Document> = readonly [
@@ -415,6 +452,35 @@ export interface ExpressionSpec<Schema extends Document> {
     returns: boolean;
     category: "comparison";
   };
+
+  // --- Custom operators (server-side JavaScript) -----------------------------
+  /**
+   * Executes server-side JavaScript. `body` is a real TS function (or a
+   * `serverFn()` reference to a file-based body — see
+   * utils/serializeFunction.ts); `args` are expressions resolved per
+   * document and passed as the body's parameters. The result is the body's
+   * return type — literal-dependent, so `returns` is omitted and the
+   * inference lives in the matching `InferDependentExpression` arm.
+   *
+   * The body slot is typed `Function` (the signature-LESS interface, which
+   * every function is assignable to) rather than `(...args: any[]) => unknown`
+   * DELIBERATELY: a call signature here would join the contextual-type
+   * intersection at stage call sites and conflict with the computed
+   * signature supplied by `FunctionSlots` (elements/function.ts) — two
+   * differing signatures make TS bail and unannotated params lose their
+   * types. The args↔body correlation cannot live here either (relating two
+   * properties of one literal requires a generic call site to infer that
+   * literal); `DeepValidateFunctions` (elements/function.ts) is that check,
+   * intersected at the Pipeline method signatures.
+   */
+  $function: {
+    operand: {
+      body: Function | ServerFunctionRef;
+      args: readonly FunctionArg<Schema>[];
+      lang: "js";
+    };
+    category: "custom";
+  };
 }
 
 /**
@@ -485,7 +551,6 @@ export type UnimplementedExpressionOps =
   | "$switch"
   // Custom
   | "$accumulator"
-  | "$function"
   // Data size
   | "$binarySize"
   | "$bsonSize"
@@ -629,7 +694,8 @@ export type ExpressionCategory =
   | "conditional"
   | "variable"
   | "literal"
-  | "comparison";
+  | "comparison"
+  | "custom";
 
 /** Registry keys whose entry declares `category: C`. */
 export type OpsInCategory<C extends ExpressionCategory> = {
@@ -647,6 +713,7 @@ type StringOps = OpsInCategory<"string">;
 type ConditionalOps = OpsInCategory<"conditional">;
 type VariableOps = OpsInCategory<"variable">;
 type ComparisonOps = OpsInCategory<"comparison">;
+type CustomOps = OpsInCategory<"custom">;
 
 // Per-operator expression types (public API, derived).
 export type ConcatArraysExpression<Schema extends Document> = ExpressionFor<
@@ -709,6 +776,10 @@ export type ConcatExpression<Schema extends Document> = ExpressionFor<
   Schema,
   "$concat"
 >;
+export type FunctionExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  "$function"
+>;
 
 // Category unions (derived views over the registry).
 export type ArrayExpression<Schema extends Document> = ExpressionFor<
@@ -738,6 +809,10 @@ export type VariableExpression<Schema extends Document> = ExpressionFor<
 export type ComparisonExpression<Schema extends Document> = ExpressionFor<
   Schema,
   ComparisonOps
+>;
+export type CustomExpression<Schema extends Document> = ExpressionFor<
+  Schema,
+  CustomOps
 >;
 
 /**
@@ -872,6 +947,28 @@ type UnionIfNullOperandTypes<
   : never;
 
 /**
+ * Normalize a $function body's return type to its BSON wire shape:
+ * BSON has no `undefined`, so the server coerces undefined/void returns
+ * to null. `string | undefined` becomes `string | null`.
+ *
+ * An `any` return (in practice: unannotated body parameters, which become
+ * contextually `any` and drag the return type with them) never leaks into
+ * the output schema — it surfaces as a branded error instead.
+ */
+type NormalizeFunctionReturn<R> =
+  IsAnyType<R> extends true ?
+    PipeSafeError<
+      RequiresMsg<
+        "Operator",
+        "$function",
+        "explicitly typed body parameters and a non-'any' return type"
+      >
+    >
+  : [R] extends [void] ? null
+  : R extends undefined ? null
+  : R;
+
+/**
  * Hand-written inference arms for the literal-dependent operators — the only
  * per-operator inference code left after the registry rebuild.
  *
@@ -897,6 +994,16 @@ type InferDependentExpression<Schema extends Document, Expr> =
   : Expr extends { $cond: readonly [unknown, infer TrueVal, infer FalseVal] } ?
     InferCondOperand<Schema, TrueVal> | InferCondOperand<Schema, FalseVal>
   : Expr extends { $literal: infer Value } ? Value
+  : // $function: the result is the body's return type — for both inline
+  // bodies and `serverFn()` references. A body left as the bare `Function`
+  // interface (widened, no call signature) has no return type to extract
+  // and falls through to the `unknown` tail.
+  Expr extends (
+    { $function: { body: ServerFunctionRef<(...a: any[]) => infer R> } }
+  ) ?
+    NormalizeFunctionReturn<R>
+  : Expr extends { $function: { body: (...a: any[]) => infer R } } ?
+    NormalizeFunctionReturn<R>
   : // No matching arm (out-of-lockstep operator, or a malformed operand
     // shape the patterns don't match): degrade to `unknown`, mirroring the
     // dispatch tail — `never` here would DROP the field from resolvers.

@@ -269,5 +269,29 @@ describe("Project", () => {
         expect(result.warnings[0]?.models).toContain("model3");
       });
     });
+
+    describe("build errors", () => {
+      it("surfaces an impure $function body as an aggregated validation error, not a raw crash", () => {
+        const OUTSIDE = 5;
+        const badModel = new Model({
+          name: "bad_model",
+          from: sourceCollection,
+          pipeline: (p) =>
+            p.set({
+              computed: {
+                $function: { body: () => OUTSIDE, args: [], lang: "js" },
+              },
+            }),
+          materialize: { type: "collection", mode: Model.Mode.Replace },
+        });
+
+        // Building the model's pipeline serializes the body and throws; the
+        // Project constructor collects that as a validation error rather than
+        // letting the raw exception escape mid-discovery.
+        expect(() => new Project({ name: "test", models: [badModel] })).toThrow(
+          /has validation errors[\s\S]*bad_model[\s\S]*OUTSIDE/
+        );
+      });
+    });
   });
 });

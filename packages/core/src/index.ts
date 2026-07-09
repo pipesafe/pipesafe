@@ -42,6 +42,21 @@ export type {
   FieldPath,
   InferFieldReference,
 } from "./elements/fieldReference";
+export type {
+  Expression,
+  InferExpression,
+  FunctionExpression,
+  FunctionArg,
+  ServerFunctionRef,
+} from "./elements/expressions";
+
+// $function runtime utilities
+export {
+  serverFn,
+  serializeFunctionBody,
+  isServerFunctionRef,
+} from "./utils/serializeFunction";
+export { MONGO_SERVER_GLOBALS } from "./utils/mongoServerGlobals";
 
 // Stage type re-exports for advanced usage
 export type { LimitQuery, ResolveLimitOutput } from "./stages/limit";

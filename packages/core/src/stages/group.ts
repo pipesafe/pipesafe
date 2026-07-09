@@ -13,7 +13,12 @@ import {
   ConditionalExpression,
   ExpressionsReturning,
 } from "../elements/expressions";
-import { Document, OmitNeverValues, Prettify } from "../utils/objects";
+import {
+  Document,
+  OmitNeverValues,
+  Prettify,
+  IsAnyType,
+} from "../utils/objects";
 import { NoDollarString } from "../utils/strings";
 import {
   HasOperatorKey,
@@ -199,15 +204,6 @@ export type GroupQuery<Schema extends Document> = {
 };
 
 /**
- * The IsAny guard is load-bearing for CheckedAccumulatorOps below:
- * FlexibleAccumulatorOperand collapses to `any` (its
- * LiteralOrFieldReferenceInferringTo<Schema, any> arm), and
- * `Extract<any, PipeSafeError<string>>` is `any` — without the guard
- * $push/$addToSet/$first/$last would wrongly join the derived set.
- */
-type IsAny<T> = 0 extends 1 & T ? true : false;
-
-/**
  * The accumulators whose operands ValidateGroupQuery re-checks — DERIVED
  * from the registry: exactly the entries whose operand union carries a
  * PipeSafeError brand arm (the brand is what the re-check surfaces).
@@ -218,7 +214,11 @@ type IsAny<T> = 0 extends 1 & T ? true : false;
  * the documenting pin in group.typeAssertions.ts).
  */
 export type CheckedAccumulatorOps = {
-  [K in keyof AccumulatorSpec<Document>]: IsAny<
+  // The IsAnyType guard is load-bearing: FlexibleAccumulatorOperand
+  // collapses to `any` (its LiteralOrFieldReferenceInferringTo<Schema, any>
+  // arm), and `Extract<any, PipeSafeError<string>>` is `any` — without the
+  // guard $push/$addToSet/$first/$last would wrongly join the derived set.
+  [K in keyof AccumulatorSpec<Document>]: IsAnyType<
     AccumulatorSpec<Document>[K]["operand"]
   > extends true ?
     never

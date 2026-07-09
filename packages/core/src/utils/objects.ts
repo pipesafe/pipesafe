@@ -15,6 +15,13 @@ export type UnionToIntersection<U> =
   (U extends any ? (k: U) => void : never) extends (k: infer I) => void ? I
   : never;
 
+/**
+ * Predicate that returns `true` only for the `any` type. Relies on the fact
+ * that `1 & any` is `any`, and `0 extends any` while `0 extends 1` is false
+ * for every other T.
+ */
+export type IsAnyType<T> = 0 extends 1 & T ? true : false;
+
 // Make a union of object types mutually exclusive: each branch is augmented
 // with `?: never` for keys that exist in *other* branches but not its own,
 // so a value satisfying multiple branches at once is rejected.

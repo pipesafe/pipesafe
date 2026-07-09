@@ -343,6 +343,59 @@ const _facet_bad = new Pipeline<User>().facet({
   bad: (p) => p.sort({ naem: 1 }),
 });
 
+// ============================================================================
+// $function — body annotation must match the args' resolved types
+// (correlation via the DeepValidateFunctions intersections; see
+// elements/function.typeAssertions.ts for full coverage).
+// ============================================================================
+
+const _set_function_bad = new Pipeline<User>().set({
+  bad: {
+    $function: {
+      // @ts-expect-error  param annotated string but '$age' resolves to number
+      body: (a: string) => a.length,
+      args: ["$age"],
+      lang: "js",
+    },
+  },
+});
+
+// $function — arity must match the args
+const _set_function_arity = new Pipeline<User>().set({
+  bad: {
+    $function: {
+      // @ts-expect-error  two params but only one arg
+      body: (a: number, b: number) => a + b,
+      args: ["$age"],
+      lang: "js",
+    },
+  },
+});
+
+// $function — project path validates the same way
+const _project_function_bad = new Pipeline<User>().project({
+  bad: {
+    $function: {
+      // @ts-expect-error  param annotated number but '$name' resolves to string
+      body: (n: number) => n + 1,
+      args: ["$name"],
+      lang: "js",
+    },
+  },
+});
+
+// $function — valid usages stay accepted (positive regression checks)
+const _set_function_ok = new Pipeline<User>().set({
+  doubled: {
+    $function: { body: (a: number) => a * 2, args: ["$age"], lang: "js" },
+  },
+});
+const _project_function_ok = new Pipeline<User>().project({
+  shout: {
+    $function: { body: (n: string) => `${n}!`, args: ["$name"], lang: "js" },
+  },
+});
+
 export {
   _match_bad,
   _sort_bad,
@@ -387,4 +440,9 @@ export {
   _replaceRoot_bad,
   _unwind_bad,
   _facet_bad,
+  _set_function_bad,
+  _set_function_arity,
+  _project_function_bad,
+  _set_function_ok,
+  _project_function_ok,
 };
