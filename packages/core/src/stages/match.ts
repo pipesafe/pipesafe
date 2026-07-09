@@ -9,13 +9,54 @@ import {
 } from "../elements/fieldSelector";
 import type { BSONType } from "bson";
 
-type ElementMatcher = "$elemMatch";
-type InMatchers = "$in" | "$nin"; // $in and $nin work for all types
-type ArrayOnlyMatcher = "$all"; // $all only makes sense for arrays
+// ---------------------------------------------------------------------------
+// Runtime operator-name lists — THE source the matcher-key unions derive
+// from (`(typeof X)[number]`), exported so tooling (docs, the IDE
+// autocomplete tests) consumes the same names the types are built from.
+// `FIELD_MATCH_OPERATORS` is pinned against `keyof ComparatorMatchers` in
+// match.typeAssertions.ts so the spread combination cannot drift.
+// ---------------------------------------------------------------------------
 
-type EqualityMatchers = "$eq" | "$ne";
+export const EQUALITY_MATCHERS = ["$eq", "$ne"] as const;
+/** $in and $nin work for all types. */
+export const IN_MATCHERS = ["$in", "$nin"] as const;
+export const CONTINUOUS_MATCHERS = ["$gte", "$lte", "$gt", "$lt"] as const;
+export const EXISTENCE_MATCHERS = ["$exists", "$type"] as const;
+export const SIZE_MATCHERS = ["$size"] as const;
+/** $all only makes sense for arrays. */
+export const ARRAY_ONLY_MATCHERS = ["$all"] as const;
+export const ELEMENT_MATCHERS = ["$elemMatch"] as const;
+export const REGEX_MATCHERS = ["$regex"] as const;
+export const NOT_MATCHERS = ["$not"] as const;
 
-type ContinuousMatchers = "$gte" | "$lte" | "$gt" | "$lt";
+/** Every field-level matcher key ($not included via the Notted wrapper). */
+export const FIELD_MATCH_OPERATORS = [
+  ...EQUALITY_MATCHERS,
+  ...IN_MATCHERS,
+  ...CONTINUOUS_MATCHERS,
+  ...EXISTENCE_MATCHERS,
+  ...SIZE_MATCHERS,
+  ...ARRAY_ONLY_MATCHERS,
+  ...ELEMENT_MATCHERS,
+  ...REGEX_MATCHERS,
+  ...NOT_MATCHERS,
+] as const;
+
+export const LOGICAL_MATCH_OPERATORS = ["$and", "$or", "$nor"] as const;
+
+/** Every non-field top-level MatchQuery key: the logical operators + $expr. */
+export const TOP_LEVEL_MATCH_OPERATORS = [
+  ...LOGICAL_MATCH_OPERATORS,
+  "$expr",
+] as const;
+
+type ElementMatcher = (typeof ELEMENT_MATCHERS)[number];
+type InMatchers = (typeof IN_MATCHERS)[number];
+type ArrayOnlyMatcher = (typeof ARRAY_ONLY_MATCHERS)[number];
+type EqualityMatchers = (typeof EQUALITY_MATCHERS)[number];
+type ContinuousMatchers = (typeof CONTINUOUS_MATCHERS)[number];
+type SizeMatcher = (typeof SIZE_MATCHERS)[number];
+type RegexMatcher = (typeof REGEX_MATCHERS)[number];
 
 // MongoDB accepts both numeric codes (BSONType) and string aliases for $type operator
 type BSONTypeAlias = keyof typeof BSONType;
@@ -68,13 +109,13 @@ export type ComparatorMatchers<T extends unknown> = Prettify<
   } & {
     [m in ContinuousMatchers]?: NumericOperand<T, m>;
   } & {
-    $size?: SizeOperand<T>;
+    [m in SizeMatcher]?: SizeOperand<T>;
   } & {
     [m in ArrayOnlyMatcher]?: ArrayValueOperand<T, m>;
   } & {
     [m in ElementMatcher]?: ArrayElementOperand<T, m>;
   } & {
-    $regex?: RegexOperand<T>;
+    [m in RegexMatcher]?: RegexOperand<T>;
   }
 >;
 
@@ -106,7 +147,7 @@ export type RawMatchQuery<Schema extends Document> = {
 
 /** The top-level logical operators — single source for MatchQuery and the
  * ResolveMatchOutput dispatch. */
-export type LogicalMatchOperators = "$and" | "$or" | "$nor";
+export type LogicalMatchOperators = (typeof LOGICAL_MATCH_OPERATORS)[number];
 
 export type MatchQuery<Schema extends Document> =
   | { [Op in LogicalMatchOperators]?: MatchQuery<Schema>[] }

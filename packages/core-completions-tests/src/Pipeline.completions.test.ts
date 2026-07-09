@@ -1,4 +1,10 @@
 import { describe, expect, it } from "vitest";
+import {
+  ACCUMULATOR_OPERATORS,
+  EXPRESSION_OPERATORS,
+  FIELD_MATCH_OPERATORS,
+  TOP_LEVEL_MATCH_OPERATORS,
+} from "@pipesafe/core";
 import { createCompletionTester, type CompletionProbe } from "./harness";
 
 /**
@@ -109,107 +115,46 @@ const FIELD_REFS = [
 const NUMERIC_FIELD_REFS = ["$price", "$quantity"];
 
 /**
- * The matcher keys offered for EVERY field type. Type-inapplicable
- * matchers ($size on a number, $regex on a Date, …) are deliberately
- * present: the library keeps every key and brands the OPERAND with a
- * PipeSafeError, so the user gets "requires an array field" instead of
- * "unknown property".
+ * The operator vocabularies (FIELD_MATCH_OPERATORS,
+ * TOP_LEVEL_MATCH_OPERATORS, EXPRESSION_OPERATORS, ACCUMULATOR_OPERATORS)
+ * are imported from @pipesafe/core — the same exported arrays core derives
+ * its operator-key unions from, and pinned against the registries by
+ * core's typeAssertions. Type-inapplicable matchers ($size on a number,
+ * $regex on a Date, …) are deliberately part of the ideal: the library
+ * keeps every matcher key and brands the OPERAND with a PipeSafeError, so
+ * the user gets "requires an array field" instead of "unknown property".
+ * Allow-listed Unimplemented* operators are accepted by validation but not
+ * modeled, so they are (for now) not part of the ideal lists.
  */
-const MATCHERS = [
-  "$eq",
-  "$ne",
-  "$in",
-  "$nin",
-  "$gt",
-  "$gte",
-  "$lt",
-  "$lte",
-  "$exists",
-  "$type",
-  "$size",
-  "$all",
-  "$elemMatch",
-  "$regex",
-  "$not",
-];
-
-const LOGICAL_OPERATORS = ["$and", "$or", "$nor", "$expr"];
-
-/**
- * Every operator registered in ExpressionSpec (elements/expressions.ts).
- * When an operator is added to the registry it must be added here too —
- * the exact match failing on a new operator is the reminder. Allow-listed
- * UnimplementedExpressionOps are accepted by validation but not modeled,
- * so they are (for now) not part of the ideal list.
- */
-const EXPRESSION_OPERATORS = [
-  "$add",
-  "$arrayElemAt",
-  "$concat",
-  "$concatArrays",
-  "$cond",
-  "$dateAdd",
-  "$dateSubtract",
-  "$dateToString",
-  "$dateTrunc",
-  "$divide",
-  "$eq",
-  "$filter",
-  "$gt",
-  "$gte",
-  "$ifNull",
-  "$in",
-  "$let",
-  "$literal",
-  "$lt",
-  "$lte",
-  "$map",
-  "$mod",
-  "$multiply",
-  "$ne",
-  "$size",
-  "$subtract",
-  "$sum",
-  "$toDate",
-];
-
-/**
- * Every accumulator registered in AccumulatorSpec (stages/group.ts). Same
- * maintenance rule as EXPRESSION_OPERATORS; allow-listed
- * UnimplementedAccumulators stay out until they are modeled.
- */
-const ACCUMULATOR_OPERATORS = [
-  "$addToSet",
-  "$avg",
-  "$count",
-  "$first",
-  "$last",
-  "$max",
-  "$min",
-  "$push",
-  "$sum",
-];
 
 // ---------------------------------------------------------------------------
 
 describe("match", () => {
   it("suggests exactly the field selectors and logical operators as top-level keys", () => {
     const probe = at(`orders.match({ ‸ });`);
-    expectExactly(probe, [...FIELD_SELECTOR_KEYS, ...LOGICAL_OPERATORS], {
-      memberCompletion: true,
-    });
+    expectExactly(
+      probe,
+      [...FIELD_SELECTOR_KEYS, ...TOP_LEVEL_MATCH_OPERATORS],
+      {
+        memberCompletion: true,
+      }
+    );
   });
 
   it("suggests the same keys inside a nested $and", () => {
     const probe = at(`orders.match({ $and: [{ ‸ }] });`);
-    expectExactly(probe, [...FIELD_SELECTOR_KEYS, ...LOGICAL_OPERATORS], {
-      memberCompletion: true,
-    });
+    expectExactly(
+      probe,
+      [...FIELD_SELECTOR_KEYS, ...TOP_LEVEL_MATCH_OPERATORS],
+      {
+        memberCompletion: true,
+      }
+    );
   });
 
   it("suggests exactly the matchers for a number field", () => {
     const probe = at(`orders.match({ price: { ‸ } });`);
-    expectExactly(probe, MATCHERS, { memberCompletion: true });
+    expectExactly(probe, FIELD_MATCH_OPERATORS, { memberCompletion: true });
   });
 
   // KNOWN BAD: MatchersForType<T> includes `T extends string ? RegExp :
@@ -218,31 +163,31 @@ describe("match", () => {
   // flags, …) leak into the key list of every string field.
   it.fails("suggests exactly the matchers for a string field", () => {
     const probe = at(`orders.match({ status: { ‸ } });`);
-    expectExactly(probe, MATCHERS, { memberCompletion: true });
+    expectExactly(probe, FIELD_MATCH_OPERATORS, { memberCompletion: true });
   });
 
   // KNOWN BAD: MatchersForType<Date> carries the bare `T` (exact-value
   // match arm), and Date's 40+ methods (getDate, setHours, …) leak in.
   it.fails("suggests exactly the matchers for a Date field", () => {
     const probe = at(`orders.match({ createdAt: { ‸ } });`);
-    expectExactly(probe, MATCHERS, { memberCompletion: true });
+    expectExactly(probe, FIELD_MATCH_OPERATORS, { memberCompletion: true });
   });
 
   it("suggests exactly the matchers for an array field", () => {
     const probe = at(`orders.match({ tags: { ‸ } });`);
-    expectExactly(probe, MATCHERS, { memberCompletion: true });
+    expectExactly(probe, FIELD_MATCH_OPERATORS, { memberCompletion: true });
   });
 
   it("suggests element keys plus matchers for an embedded-document field", () => {
     const probe = at(`orders.match({ shipping: { ‸ } });`);
-    expectExactly(probe, [...MATCHERS, "city", "zip"], {
+    expectExactly(probe, [...FIELD_MATCH_OPERATORS, "city", "zip"], {
       memberCompletion: true,
     });
   });
 
   it("suggests element keys plus matchers for an array-of-documents field", () => {
     const probe = at(`orders.match({ items: { ‸ } });`);
-    expectExactly(probe, [...MATCHERS, "sku", "qty"], {
+    expectExactly(probe, [...FIELD_MATCH_OPERATORS, "sku", "qty"], {
       memberCompletion: true,
     });
   });
@@ -254,7 +199,7 @@ describe("match", () => {
   // are not offered (nor accepted) at all.
   it.fails("suggests element keys plus matchers inside $elemMatch", () => {
     const probe = at(`orders.match({ items: { $elemMatch: { ‸ } } });`);
-    expectExactly(probe, [...MATCHERS, "sku", "qty"], {
+    expectExactly(probe, [...FIELD_MATCH_OPERATORS, "sku", "qty"], {
       memberCompletion: true,
     });
   });

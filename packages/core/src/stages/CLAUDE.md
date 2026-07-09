@@ -36,8 +36,10 @@ aliases behind `PassThrough` (defaults evaluate eagerly).
   "Operator/Accumulator/Stage '<x>' requires <constraint>." skeleton.
 - Accumulators register in `AccumulatorSpec` (group.ts), mirroring the
   expression registry: one entry + one resolver arm if operand-dependent —
-  and DELETE the key from `UnimplementedAccumulators` (the by-name
-  allow-list; never widen it to `` `$${string}` ``).
+  plus add the name to the exported `ACCUMULATOR_OPERATORS` runtime array
+  (pinned against the registry) and DELETE the key from
+  `UnimplementedAccumulators` (the by-name allow-list; never widen it to
+  `` `$${string}` ``).
 
 ## When adding a stage
 

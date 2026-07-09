@@ -148,10 +148,13 @@ The type system is organized into modular building blocks located in `packages/c
   `$ifNull`, `$cond`, `$literal`; a missing arm degrades to `unknown`). Per-operator
   types, category key sets and unions (derived from the per-entry `category`),
   `Expression`, and the fixed-return arm of `InferExpression` are all derived.
+  Each category also has an exported RUNTIME name array (`*_EXPRESSION_OPERATORS`,
+  plus the spread `EXPRESSION_OPERATORS`); the category unions derive from those
+  arrays and per-category pins verify them against the entries' `category` fields.
   Valid-but-unmodeled operators are allow-listed by name in
   `UnimplementedExpressionOps` (never widen it to `` `$${string}` ``). Adding an
-  operator = one registry entry + deleting its allow-list line (+ one dependent arm
-  if applicable).
+  operator = one registry entry + its category-array line + deleting its allow-list
+  line (+ one dependent arm if applicable).
 
 - **literals.ts**: Literal value type constraints
 

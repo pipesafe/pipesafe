@@ -613,12 +613,13 @@ export type ExpressionsReturning<Schema extends Document, T> = ExpressionFor<
   OpsReturning<Schema, T>
 >;
 
-// Category key sets — DERIVED from the registry's per-entry `category`
-// field, so an operator's category is declared exactly once, on its entry.
-// Schema-free by construction: entry keys and categories don't depend on
-// Schema, so the filter runs once against `ExpressionSpec<Document>` and is
-// alias-cached globally. `_EveryOpCategorized`
-// (expressions.typeAssertions.ts) pins that no entry omits its category.
+// Category key sets — the category unions derive from the runtime operator
+// arrays below; the registry's per-entry `category` field remains the
+// authority, enforced by the per-category pins and `_EveryOpCategorized`
+// (expressions.typeAssertions.ts). `OpsInCategory` is schema-free by
+// construction: entry keys and categories don't depend on Schema, so the
+// filter runs once against `ExpressionSpec<Document>` and is alias-cached
+// globally.
 
 /** Closed set of registry categories — every entry declares exactly one. */
 export type ExpressionCategory =
@@ -640,13 +641,72 @@ export type OpsInCategory<C extends ExpressionCategory> = {
   : never;
 }[keyof ExpressionSpec<Document>];
 
-type ArrayOps = OpsInCategory<"array">;
-type DateOps = OpsInCategory<"date">;
-type ArithmeticOps = OpsInCategory<"arithmetic">;
-type StringOps = OpsInCategory<"string">;
-type ConditionalOps = OpsInCategory<"conditional">;
-type VariableOps = OpsInCategory<"variable">;
-type ComparisonOps = OpsInCategory<"comparison">;
+// ---------------------------------------------------------------------------
+// Runtime operator-name lists — one array per registry category, exported so
+// tooling (docs, the IDE autocomplete tests) consumes the same names the
+// types are built from. The category unions below derive from these arrays
+// (`(typeof X)[number]`); per-category pins in expressions.typeAssertions.ts
+// verify each array against the registry's per-entry `category` field
+// (via `OpsInCategory`), so an operator added to only one side — entry or
+// array — fails the build.
+// ---------------------------------------------------------------------------
+
+export const ARRAY_EXPRESSION_OPERATORS = [
+  "$concatArrays",
+  "$size",
+  "$arrayElemAt",
+  "$filter",
+  "$map",
+  "$sum",
+] as const;
+export const DATE_EXPRESSION_OPERATORS = [
+  "$dateToString",
+  "$dateTrunc",
+  "$dateAdd",
+  "$dateSubtract",
+  "$toDate",
+] as const;
+export const ARITHMETIC_EXPRESSION_OPERATORS = [
+  "$add",
+  "$subtract",
+  "$multiply",
+  "$divide",
+  "$mod",
+] as const;
+export const STRING_EXPRESSION_OPERATORS = ["$concat"] as const;
+export const CONDITIONAL_EXPRESSION_OPERATORS = ["$ifNull", "$cond"] as const;
+export const VARIABLE_EXPRESSION_OPERATORS = ["$let"] as const;
+export const LITERAL_EXPRESSION_OPERATORS = ["$literal"] as const;
+export const COMPARISON_EXPRESSION_OPERATORS = [
+  "$in",
+  "$eq",
+  "$ne",
+  "$gt",
+  "$gte",
+  "$lt",
+  "$lte",
+] as const;
+
+/** Every registered expression operator — the spread of the per-category
+ * lists, pinned against `keyof ExpressionSpec` so it cannot drift. */
+export const EXPRESSION_OPERATORS = [
+  ...ARRAY_EXPRESSION_OPERATORS,
+  ...DATE_EXPRESSION_OPERATORS,
+  ...ARITHMETIC_EXPRESSION_OPERATORS,
+  ...STRING_EXPRESSION_OPERATORS,
+  ...CONDITIONAL_EXPRESSION_OPERATORS,
+  ...VARIABLE_EXPRESSION_OPERATORS,
+  ...LITERAL_EXPRESSION_OPERATORS,
+  ...COMPARISON_EXPRESSION_OPERATORS,
+] as const;
+
+type ArrayOps = (typeof ARRAY_EXPRESSION_OPERATORS)[number];
+type DateOps = (typeof DATE_EXPRESSION_OPERATORS)[number];
+type ArithmeticOps = (typeof ARITHMETIC_EXPRESSION_OPERATORS)[number];
+type StringOps = (typeof STRING_EXPRESSION_OPERATORS)[number];
+type ConditionalOps = (typeof CONDITIONAL_EXPRESSION_OPERATORS)[number];
+type VariableOps = (typeof VARIABLE_EXPRESSION_OPERATORS)[number];
+type ComparisonOps = (typeof COMPARISON_EXPRESSION_OPERATORS)[number];
 
 // Per-operator expression types (public API, derived).
 export type ConcatArraysExpression<Schema extends Document> = ExpressionFor<

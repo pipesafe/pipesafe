@@ -138,6 +138,24 @@ export type UnimplementedAccumulators =
   | "$top"
   | "$topN";
 
+/**
+ * Every registered accumulator operator — runtime twin of
+ * `keyof AccumulatorSpec`, exported so tooling (docs, the IDE autocomplete
+ * tests) consumes the same names the types are built from. Pinned against
+ * the registry in group.typeAssertions.ts so the two cannot drift.
+ */
+export const ACCUMULATOR_OPERATORS = [
+  "$sum",
+  "$avg",
+  "$min",
+  "$max",
+  "$count",
+  "$push",
+  "$addToSet",
+  "$first",
+  "$last",
+] as const;
+
 /** Single-operator accumulator shape(s) for `Op` (distributes over unions). */
 type AccumulatorFor<Schema extends Document, Op> =
   Op extends keyof AccumulatorSpec<Schema> ?
