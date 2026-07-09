@@ -6,7 +6,7 @@ import {
   serverFn,
 } from "./serializeFunction";
 import { Pipeline } from "../pipeline/Pipeline";
-import { useMemoryMongo } from "./useMemoryMongo";
+import { useMemoryMongo } from "../utils/useMemoryMongo";
 import applyTax from "./fixtures/serverFunctions/applyTax.server";
 
 // ============================================================================

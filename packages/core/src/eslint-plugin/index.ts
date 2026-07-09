@@ -1,4 +1,4 @@
-import { MONGO_SERVER_GLOBALS } from "../utils/mongoServerGlobals";
+import { MONGO_SERVER_GLOBALS } from "../function-helpers/mongoServerGlobals";
 
 /**
  * ESLint plugin for PipeSafe — edit/CI-time enforcement of `$function`

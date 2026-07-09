@@ -134,7 +134,7 @@ type ComparisonOperand<Schema extends Document> =
 
 /**
  * Marker for a file-based $function body, created by `serverFn()`
- * (utils/serializeFunction.ts).
+ * (function-helpers/serializeFunction.ts).
  *
  * Inline bodies must be self-contained (no closures/imports). A body that
  * needs imports lives in its own module instead; at pipeline-build time the
@@ -457,7 +457,7 @@ export interface ExpressionSpec<Schema extends Document> {
   /**
    * Executes server-side JavaScript. `body` is a real TS function (or a
    * `serverFn()` reference to a file-based body — see
-   * utils/serializeFunction.ts); `args` are expressions resolved per
+   * function-helpers/serializeFunction.ts); `args` are expressions resolved per
    * document and passed as the body's parameters. The result is the body's
    * return type — literal-dependent, so `returns` is omitted and the
    * inference lives in the matching `InferDependentExpression` arm.

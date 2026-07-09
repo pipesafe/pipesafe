@@ -13,3 +13,5 @@ Fix and harden the `$function` operator following review:
 - The `no-impure-function-body` ESLint rule now also analyzes bodies passed by identifier reference, flags a closure that shadows a server-global name, and rejects nested async/generator/dynamic-import — kept in lockstep with the runtime check by a shared conformance corpus. The pre-commit hook builds before linting so the rule can't be silently skipped
 - `@pipesafe/function-bundler` resolves the default export of a CommonJS module (`module.exports = fn`)
 - `new Project()` surfaces a model's `$function` build failure as an aggregated validation error instead of crashing mid-construction
+- `Promise` removed from `MONGO_SERVER_GLOBALS`: the server engine is synchronous and never resolves a returned Promise, so bodies referencing it are now rejected up front (matching the existing async/generator rejection)
+- `$function` runtime support (`serializeFunction.ts`, `mongoServerGlobals.ts`, the purity corpus) moved from `src/utils/` to `src/function-helpers/` — no public API change; all entry-point exports are unchanged

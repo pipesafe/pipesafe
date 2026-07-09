@@ -55,8 +55,8 @@ export {
   serverFn,
   serializeFunctionBody,
   isServerFunctionRef,
-} from "./utils/serializeFunction";
-export { MONGO_SERVER_GLOBALS } from "./utils/mongoServerGlobals";
+} from "./function-helpers/serializeFunction";
+export { MONGO_SERVER_GLOBALS } from "./function-helpers/mongoServerGlobals";
 
 // Stage type re-exports for advanced usage
 export type { LimitQuery, ResolveLimitOutput } from "./stages/limit";

@@ -2,7 +2,7 @@
  * Identifiers available to server-side JavaScript executed by MongoDB's
  * `$function` operator. A `$function` body may reference these freely —
  * anything else outside the function's own scope cannot be serialized and
- * is rejected by the purity check (utils/serializeFunction.ts) and the
+ * is rejected by the purity check (function-helpers/serializeFunction.ts) and the
  * `no-impure-function-body` ESLint rule.
  *
  * Intentionally excludes `console`, `print`, timers, `Promise`, and other
@@ -23,7 +23,9 @@ export const MONGO_SERVER_GLOBALS: ReadonlySet<string> = new Set([
   "Math",
   "Number",
   "Object",
-  "Promise",
+  // NO `Promise`: the server engine is synchronous (no event loop /
+  // microtask draining), so a returned Promise is never resolved — the
+  // same constraint that rejects async/generator bodies outright.
   "Proxy",
   "Reflect",
   "RegExp",

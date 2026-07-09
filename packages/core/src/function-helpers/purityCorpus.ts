@@ -3,7 +3,7 @@
  *
  * The SAME invariant — a body must be self-contained, synchronous, and
  * module-free — is enforced twice: at runtime by `serializeFunctionBody`
- * (utils/serializeFunction.ts, acorn free-variable analysis) and at
+ * (function-helpers/serializeFunction.ts, acorn free-variable analysis) and at
  * edit/CI time by the `no-impure-function-body` ESLint rule
  * (eslint-plugin/index.ts, eslint-scope analysis). The two implementations
  * share no analysis code, so without a common corpus they could silently
@@ -68,6 +68,11 @@ export const PURITY_CORPUS: readonly PurityCase[] = [
   {
     name: "console (not a server global)",
     code: "(a) => { console.log(a); return a; }",
+    valid: false,
+  },
+  {
+    name: "Promise (not a server global — engine is synchronous)",
+    code: "(a) => Promise.resolve(a)",
     valid: false,
   },
   {

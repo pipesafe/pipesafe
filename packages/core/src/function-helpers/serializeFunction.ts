@@ -1,5 +1,5 @@
 import type { parse as AcornParse } from "acorn";
-import { Document } from "./objects";
+import { Document } from "../utils/objects";
 import { MONGO_SERVER_GLOBALS } from "./mongoServerGlobals";
 import { ServerFunctionRef } from "../elements/expressions";
 

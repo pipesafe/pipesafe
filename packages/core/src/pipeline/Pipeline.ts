@@ -31,7 +31,7 @@ import {
   ValidateProjectQuery,
 } from "../stages/project";
 import { DeepValidateFunctions, FunctionSlots } from "../elements/function";
-import { serializeFunctionBodies } from "../utils/serializeFunction";
+import { serializeFunctionBodies } from "../function-helpers/serializeFunction";
 import {
   ReplaceRootQuery,
   ResolveReplaceRootOutput,
