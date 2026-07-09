@@ -30,6 +30,8 @@ import {
   ResolveProjectOutput,
   ValidateProjectQuery,
 } from "../stages/project";
+import { DeepValidateFunctions, FunctionSlots } from "../elements/function";
+import { serializeFunctionBodies } from "../utils/serializeFunction";
 import {
   ReplaceRootQuery,
   ResolveReplaceRootOutput,
@@ -184,7 +186,11 @@ export class Pipeline<
       Mode,
       UsedStages | NewStage
     >({
-      pipeline: [...this.pipeline, ...newStages],
+      // serializeFunctionBodies replaces $function bodies (typed functions
+      // or serverFn refs) with their self-contained source strings — this
+      // single choke point covers every stage method, custom(), and
+      // embedded sub-pipelines
+      pipeline: [...this.pipeline, ...serializeFunctionBodies(newStages)],
       client: this.client,
       collectionName: this.collectionName,
       databaseName: this.databaseName,
@@ -203,7 +209,14 @@ export class Pipeline<
 
   // $match step
   match<const M extends MatchQuery<PreviousStageDocs>>(
-    $match: M
+    // DeepValidateFunctions correlates $function bodies (e.g. inside $expr)
+    // with their args; identity for everything else. NOTE: no FunctionSlots
+    // member here — MatchQuery is a union constraint, and inference to an
+    // intersection with a second type variable makes M collapse to its
+    // constraint (verified: the '$gte on string' pin stops firing). $expr
+    // $function bodies therefore need annotated params (unannotated ones
+    // fail loudly as TS7006 since the loose body slot is signature-less).
+    $match: M & DeepValidateFunctions<PreviousStageDocs, M>
   ): Pipeline<
     StartingDocs,
     ResolveMatchOutput<PreviousStageDocs, M>,
@@ -215,8 +228,18 @@ export class Pipeline<
     ]);
   }
 
-  set<const S extends SetQuery<PreviousStageDocs>>(
-    $set: S & ValidateSetQuery<PreviousStageDocs, S>
+  set<
+    const S extends SetQuery<PreviousStageDocs>,
+    A extends Record<string, unknown> = {},
+  >(
+    // DeepValidateFunctions correlates any $function body with its args at
+    // any depth (identity for everything else); FunctionSlots contextually
+    // types UNANNOTATED body params for top-level $function values via the
+    // independently inferred per-key args map A (elements/function.ts)
+    $set: S &
+      ValidateSetQuery<PreviousStageDocs, S> &
+      DeepValidateFunctions<PreviousStageDocs, S> &
+      FunctionSlots<PreviousStageDocs, A>
   ): Pipeline<
     StartingDocs,
     ResolveSetOutput<PreviousStageDocs, S>,
@@ -408,7 +431,11 @@ export class Pipeline<
   // while ValidateGroupQuery re-checks accumulator operands — key-filtered,
   // so a fully-valid query validates against `{}` (see stages/group.ts).
   group<const G extends GroupQuery<PreviousStageDocs>>(
-    $group: G & ValidateGroupQuery<PreviousStageDocs, G>
+    // DeepValidateFunctions correlates $function bodies (e.g. in _id or
+    // $push operands) with their args; identity for everything else
+    $group: G &
+      ValidateGroupQuery<PreviousStageDocs, G> &
+      DeepValidateFunctions<PreviousStageDocs, G>
   ): Pipeline<
     StartingDocs,
     ResolveGroupOutput<PreviousStageDocs, G>,
@@ -428,8 +455,17 @@ export class Pipeline<
   // expression literals once its value arms are conditionals (same failure
   // class as group's compound-_id) — while ValidateProjectQuery re-checks
   // keys, projection mode, and values.
-  project<const P extends ProjectQuery<PreviousStageDocs>>(
-    $project: P & ValidateProjectQuery<PreviousStageDocs, P>
+  project<
+    const P extends ProjectQuery<PreviousStageDocs>,
+    A extends Record<string, unknown> = {},
+  >(
+    // DeepValidateFunctions correlates $function bodies with their args;
+    // FunctionSlots contextually types unannotated body params for
+    // top-level $function values (elements/function.ts)
+    $project: P &
+      ValidateProjectQuery<PreviousStageDocs, P> &
+      DeepValidateFunctions<PreviousStageDocs, P> &
+      FunctionSlots<PreviousStageDocs, A>
   ): Pipeline<
     StartingDocs,
     ResolveProjectOutput<PreviousStageDocs, P>,
@@ -441,8 +477,16 @@ export class Pipeline<
     ]);
   }
 
-  replaceRoot<const R extends ReplaceRootQuery<PreviousStageDocs>>(
-    $replaceRoot: R
+  replaceRoot<
+    const R extends ReplaceRootQuery<PreviousStageDocs>,
+    A extends Record<string, unknown> = {},
+  >(
+    // DeepValidateFunctions correlates $function bodies in newRoot with
+    // their args; FunctionSlots contextually types unannotated body params
+    // when newRoot itself is a $function (elements/function.ts)
+    $replaceRoot: R &
+      DeepValidateFunctions<PreviousStageDocs, R> &
+      FunctionSlots<PreviousStageDocs, A>
   ): Pipeline<
     StartingDocs,
     ResolveReplaceRootOutput<PreviousStageDocs, R>,

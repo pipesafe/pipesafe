@@ -28,6 +28,11 @@
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
+    },
+    "./eslint-plugin": {
+      "types": "./dist/eslint-plugin/index.d.mts",
+      "import": "./dist/eslint-plugin/index.mjs",
+      "require": "./dist/eslint-plugin/index.cjs"
     }
   },
   "files": [
@@ -40,9 +45,19 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "mongodb": "^6.17.0"
+    "mongodb": "^6.17.0",
+    "@pipesafe/function-bundler": ">=0.1.0 <1.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "@pipesafe/function-bundler": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@pipesafe/function-bundler": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "acorn": "^8.16.0"
   }
 }

@@ -1,10 +1,9 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["./src/index.ts", "./src/eslint-plugin/index.ts"],
+  entry: ["./src/index.ts"],
   format: ["esm", "cjs"],
-  dts: { resolver: "tsc" },
+  dts: true,
   clean: false,
   unbundle: true,
-  deps: { skipNodeModulesBundle: true },
 });

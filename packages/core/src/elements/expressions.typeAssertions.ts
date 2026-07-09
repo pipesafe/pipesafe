@@ -294,6 +294,7 @@ type _DerivedLiteralDependentOps = Assert<
     | "$ifNull"
     | "$cond"
     | "$literal"
+    | "$function"
   >
 >;
 
