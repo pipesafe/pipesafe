@@ -1,8 +1,47 @@
-import { Document, Prettify } from "../utils/objects";
+import { Document, OmitNeverValues, Prettify } from "../utils/objects";
 import { PassThrough, PipeSafeError } from "../utils/errors";
 import { FieldPathsThatInferToForLookup } from "../elements/fieldReference";
+import { Expression } from "../elements/expressions";
+import { AnyLiteral, ExpressionShaped } from "../elements/literals";
+import { ValidateNestedValue } from "../elements/validation";
 import { FlattenDotSet, IsDottedKey } from "../utils/paths";
 import { ApplySetUpdates } from "../utils/updates";
+
+/**
+ * `let` variable bindings for $lookup correlated sub-pipelines. Values are
+ * field references or expressions evaluated against the LOCAL (outer)
+ * documents; the sub-pipeline reads them as `$$variableName` references,
+ * typically inside a `$match` stage's `$expr`.
+ *
+ * `$`-shaped values are accepted STRUCTURALLY (mirroring `SetQuery` — a
+ * `let` binding is a $set-value-shaped expression over the local docs) and
+ * re-checked by `ValidateLookupLetQuery`; `Expression<Schema>` is
+ * autocomplete-only, subsumed by `ExpressionShaped` for checking.
+ */
+export type LookupLet<Schema extends Document> = {
+  [variableName: string]:
+    | AnyLiteral<Schema>
+    | Expression<Schema>
+    | `$${string}`
+    | ExpressionShaped
+    | null;
+};
+
+/**
+ * Key-filtered validation wrapper for `Pipeline.lookup`'s `let` bindings,
+ * wired as the `Let & ValidateLookupLetQuery<Schema, Let>` intersection
+ * (THE pattern for index-signature query types). Re-uses the shared
+ * nested-validation kernel, so unknown local `$`-refs, malformed expression
+ * objects, and invalid operands brand at the offending value; a fully valid
+ * `let` validates against `{}`. The `string extends keyof Q` guard skips
+ * the walk when Q is not a literal (the constraint-failure fallback
+ * re-instantiates the wrapper with `LookupLet<Schema>` itself).
+ */
+export type ValidateLookupLetQuery<Schema extends Document, Q> =
+  string extends keyof Q ? {}
+  : OmitNeverValues<{
+      [K in keyof Q]: ValidateNestedValue<Schema, Q[K]>;
+    }>;
 
 /**
  * A dotted `as` path NESTS in MongoDB — `as: "user.orders"` writes

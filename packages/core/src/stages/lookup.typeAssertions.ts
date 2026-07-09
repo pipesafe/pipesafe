@@ -721,3 +721,179 @@ export type {
   _Assert_PassthroughForeign,
   _Assert_PassthroughLocal,
 };
+
+// ============================================================================
+// $lookup with `let` + correlated sub-pipeline
+// ============================================================================
+// `let` binds variables from the LOCAL (outer) documents for use as `$$var`
+// references inside the sub-pipeline (typically within `$match.$expr`).
+// Before `let` was supported this whole pattern required the `custom()`
+// escape hatch.
+
+import type { ObjectId } from "mongodb";
+
+type _Bundle = {
+  _id: ObjectId;
+  user: ObjectId;
+  articles?: ObjectId[];
+  newsletters: ObjectId[];
+};
+
+type _Newsletter = {
+  _id: ObjectId;
+  name: string;
+  articles: ObjectId[];
+};
+
+type _Reaction = {
+  _id: ObjectId;
+  article: ObjectId;
+  user: ObjectId;
+};
+
+declare const _newslettersCollection: _Collection<_Newsletter>;
+declare const _reactionsCollection: _Collection<_Reaction>;
+declare const _bundleId: ObjectId;
+
+type _PipelineDocs<P> = P extends _Pipeline<any, infer D, any, any> ? D : never;
+
+// Stage 1: collect article ids from both the optional direct `articles`
+// array and the looked-up newsletters' articles. Exercises $setUnion,
+// $ifNull, and the $reduce accumulate pattern with $$this / $$value —
+// all resolved through `project`'s const-generic (readonly) literal.
+const _bundleArticleIds = new _Pipeline<_Bundle>()
+  .match({ _id: _bundleId })
+  .lookup({
+    from: _newslettersCollection,
+    localField: "newsletters",
+    foreignField: "_id",
+    as: "newsletterArticles",
+  })
+  .project({
+    user: 1,
+    allArticleIds: {
+      $setUnion: [
+        { $ifNull: ["$articles", []] },
+        {
+          $reduce: {
+            input: "$newsletterArticles",
+            initialValue: [],
+            in: {
+              $concatArrays: ["$$value", { $ifNull: ["$$this.articles", []] }],
+            },
+          },
+        },
+      ],
+    },
+  });
+
+type _Assert_BundleArticleIds = Assert<
+  Equal<
+    _PipelineDocs<typeof _bundleArticleIds>,
+    { _id: ObjectId; user: ObjectId; allArticleIds: ObjectId[] }
+  >
+>;
+
+// Stage 2: correlated $lookup — `let` exposes local fields to the
+// sub-pipeline, which filters via $expr and reshapes via $project. The
+// final $setDifference subtracts the reacted ids (extracted with a
+// $$this-scoped $map) from allArticleIds.
+const _unreadArticleIds = _bundleArticleIds
+  .lookup({
+    from: _reactionsCollection,
+    let: { articleIds: "$allArticleIds", userId: "$user" },
+    as: "reactions",
+    pipeline: (p) =>
+      p
+        .match({
+          $expr: {
+            $and: [
+              { $in: ["$article", "$$articleIds"] },
+              { $eq: ["$user", "$$userId"] },
+            ],
+          },
+        })
+        .project({ article: 1, _id: 0 }),
+  })
+  .project({
+    unreadArticleIds: {
+      $setDifference: [
+        "$allArticleIds",
+        { $map: { input: "$reactions", in: "$$this.article" } },
+      ],
+    },
+  });
+
+type _Assert_UnreadArticleIds = Assert<
+  Equal<
+    _PipelineDocs<typeof _unreadArticleIds>,
+    { _id: ObjectId; unreadArticleIds: ObjectId[] }
+  >
+>;
+
+// Negative: `let` values must be valid field references on the LOCAL schema
+// (or literals / expressions) — unknown field paths are rejected.
+const _lookupLet_badRef = _basePipeline.lookup({
+  from: _scalarForeignCollection,
+  as: "joined",
+  // @ts-expect-error  '$missing' is not a field reference on LocalDoc
+  let: { v: "$missing" },
+  pipeline: (p) => p,
+});
+
+// Negative: `let` values flow through the shared nested-validation kernel,
+// so a typo'd operator inside a `let` expression brands too.
+const _lookupLet_typoOperator = _basePipeline.lookup({
+  from: _scalarForeignCollection,
+  as: "joined",
+  // @ts-expect-error  '$conct' is not a recognized aggregation operator
+  let: { v: { $conct: ["$scalarRef", "!"] } },
+  pipeline: (p) => p,
+});
+
+// Negative: MongoDB rejects `$lookup` with 'let' and no 'pipeline'
+// (FailedToParse) — the localField/foreignField form only accepts `let`
+// when a `pipeline` is given.
+const _lookupLet_withoutPipeline = _basePipeline.lookup({
+  from: _scalarForeignCollection,
+  localField: "scalarRef",
+  foreignField: "_id",
+  as: "joined",
+  // @ts-expect-error  'let' requires 'pipeline' (MongoDB FailedToParse)
+  let: { v: "$scalarRef" },
+});
+
+// Positive: `let` + `pipeline` + localField/foreignField together are
+// valid (MongoDB executes the equality join AND the correlated pipeline).
+// The sub-pipeline consumes the bound variable through a set operator —
+// `$$`-variable operands must be accepted in array positions, degrading
+// to unknown-element inference.
+const _lookupLet_withLocalField = _bundleArticleIds.lookup({
+  from: _reactionsCollection,
+  localField: "allArticleIds",
+  foreignField: "article",
+  as: "reactions",
+  let: { articleIds: "$allArticleIds" },
+  pipeline: (p) =>
+    p.project({ merged: { $setUnion: [["$article"], "$$articleIds"] } }),
+});
+
+type _Assert_LookupLetWithLocalField = Assert<
+  Equal<
+    _PipelineDocs<typeof _lookupLet_withLocalField>["reactions"],
+    { _id: ObjectId; merged: unknown[] }[]
+  >
+>;
+
+void _bundleArticleIds;
+void _unreadArticleIds;
+void _lookupLet_badRef;
+void _lookupLet_typoOperator;
+void _lookupLet_withoutPipeline;
+void _lookupLet_withLocalField;
+
+export type {
+  _Assert_BundleArticleIds,
+  _Assert_UnreadArticleIds,
+  _Assert_LookupLetWithLocalField,
+};
