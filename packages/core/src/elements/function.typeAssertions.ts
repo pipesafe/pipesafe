@@ -23,6 +23,7 @@ type User = {
   name: string;
   age: number;
   score?: number | undefined;
+  rating: number | null;
   tags: string[];
   joinedAt: Date;
 };
@@ -73,7 +74,8 @@ type TagCountTest = Assert<
   Equal<InferOutputType<typeof tagCount>["tagCount"], number>
 >;
 
-// Test 4: optional field arg — NonNullable applied, param is `number`
+// Test 4: optional field arg — only `undefined` is stripped (BSON has no
+// undefined), so the param is `number`.
 const fromOptional = new Pipeline<User>().set({
   bumped: {
     $function: { body: (s: number) => s + 1, args: ["$score"], lang: "js" },
@@ -81,6 +83,52 @@ const fromOptional = new Pipeline<User>().set({
 });
 type FromOptionalTest = Assert<
   Equal<InferOutputType<typeof fromOptional>["bumped"], number>
+>;
+
+// Test 4b: a NULLABLE field keeps its `null` — the server passes null through,
+// so the param type is `number | null`, and a body that handles null infers a
+// `number` result.
+const fromNullable = new Pipeline<User>().set({
+  ratingOr0: {
+    $function: {
+      body: (r: number | null) => r ?? 0,
+      args: ["$rating"],
+      lang: "js",
+    },
+  },
+});
+type FromNullableTest = Assert<
+  Equal<InferOutputType<typeof fromNullable>["ratingOr0"], number>
+>;
+
+// A non-null annotation is REJECTED for a nullable arg — proves `null` is not
+// silently stripped (before the fix `$rating` resolved to `number`).
+const _nullableRejectsNarrow = new Pipeline<User>().set({
+  bad: {
+    $function: {
+      // @ts-expect-error  '$rating' resolves to number | null; a `number` param cannot accept null
+      body: (r: number) => r,
+      args: ["$rating"],
+      lang: "js",
+    },
+  },
+});
+
+// Test 4c: an object-literal arg resolves nested `$field` references at depth.
+// `{ n: "$name", a: "$age" }` becomes `{ n: string; a: number }`; this body
+// only type-checks because the refs are resolved (not left as the literal
+// strings "$name"/"$age").
+const objectArg = new Pipeline<User>().set({
+  combined: {
+    $function: {
+      body: (o: { n: string; a: number }) => o.n + String(o.a),
+      args: [{ n: "$name", a: "$age" }],
+      lang: "js",
+    },
+  },
+});
+type ObjectArgTest = Assert<
+  Equal<InferOutputType<typeof objectArg>["combined"], string>
 >;
 
 // Test 5: wider annotation than the arg type is allowed (contravariance)
@@ -568,6 +616,8 @@ void doubled;
 void mixedArgs;
 void tagCount;
 void fromOptional;
+void fromNullable;
+void objectArg;
 void widerAnnotation;
 void returnsUndefined;
 void returnsVoid;
@@ -587,6 +637,7 @@ void unannotatedProject;
 void anyReturn;
 void _wrongAnnotation;
 void _wrongArity;
+void _nullableRejectsNarrow;
 void _unannotatedBodyChecked;
 void _nestedUnannotated;
 void deepAnnotated;
@@ -605,6 +656,8 @@ export type {
   MixedArgsTest,
   TagCountTest,
   FromOptionalTest,
+  FromNullableTest,
+  ObjectArgTest,
   WiderAnnotationTest,
   ReturnsUndefinedTest,
   ReturnsVoidTest,

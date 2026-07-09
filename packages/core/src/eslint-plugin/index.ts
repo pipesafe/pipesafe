@@ -45,11 +45,21 @@ interface AstNode {
 
 interface ScopeReference {
   identifier: { name: string; loc: unknown };
-  resolved: { name: string; scope?: { block?: unknown } } | null;
+  resolved: {
+    name: string;
+    scope?: { block?: unknown; type?: string };
+  } | null;
+}
+
+interface EslintVariable {
+  name: string;
+  defs: { node: AstNode }[];
 }
 
 interface EslintScope {
   through: ScopeReference[];
+  variables: EslintVariable[];
+  upper: EslintScope | null;
 }
 
 interface RuleContext {
@@ -57,6 +67,7 @@ interface RuleContext {
     scopeManager: {
       acquire(node: AstNode, inner?: boolean): EslintScope | null;
     };
+    getScope(node: AstNode): EslintScope;
   };
   report(descriptor: {
     node: unknown;
@@ -71,6 +82,88 @@ function isFunctionNode(node: AstNode | undefined): node is AstNode {
     (node.type === "FunctionExpression" ||
       node.type === "ArrowFunctionExpression")
   );
+}
+
+/**
+ * If `node` is an identifier bound (once) to a function literal — `const fn =
+ * () => ... ` or `function fn() {}` — return that function node so a
+ * `body: fn` reference is analyzed like an inline body. Anything ambiguous
+ * (reassigned, imported, non-function) returns undefined and is left alone.
+ */
+function resolveFunctionLiteral(
+  idNode: AstNode,
+  context: RuleContext
+): AstNode | undefined {
+  const name = idNode.name as string;
+  let scope: EslintScope | null = context.sourceCode.getScope(idNode);
+  while (scope) {
+    const variable = scope.variables.find((v) => v.name === name);
+    if (variable) {
+      if (variable.defs.length !== 1) return undefined;
+      const defNode = variable.defs[0]?.node;
+      if (!defNode) return undefined;
+      if (defNode.type === "FunctionDeclaration") return defNode;
+      const init = defNode["init"] as AstNode | undefined;
+      if (defNode.type === "VariableDeclarator" && isFunctionNode(init))
+        return init;
+      return undefined;
+    }
+    scope = scope.upper;
+  }
+  return undefined;
+}
+
+/**
+ * Report async/generator functions (at any depth) and dynamic `import()`
+ * anywhere inside `fnNode` — none can run in MongoDB's synchronous,
+ * module-less server engine. Skips `parent` back-references to avoid cycles.
+ */
+function reportDisallowedConstructs(
+  fnNode: AstNode,
+  context: RuleContext
+): void {
+  const visit = (n: AstNode): void => {
+    if (
+      n.type === "FunctionExpression" ||
+      n.type === "ArrowFunctionExpression" ||
+      n.type === "FunctionDeclaration"
+    ) {
+      if (n.async === true) context.report({ node: n, messageId: "asyncBody" });
+      if (n.generator === true)
+        context.report({ node: n, messageId: "generatorBody" });
+    }
+    if (n.type === "ImportExpression")
+      context.report({ node: n, messageId: "dynamicImport" });
+    for (const key of Object.keys(n)) {
+      if (
+        key === "parent" ||
+        key === "type" ||
+        key === "loc" ||
+        key === "range" ||
+        key === "start" ||
+        key === "end"
+      )
+        continue;
+      const child = n[key] as unknown;
+      if (Array.isArray(child)) {
+        for (const c of child) {
+          if (
+            c &&
+            typeof c === "object" &&
+            typeof (c as AstNode).type === "string"
+          )
+            visit(c as AstNode);
+        }
+      } else if (
+        child &&
+        typeof child === "object" &&
+        typeof (child as AstNode).type === "string"
+      ) {
+        visit(child as AstNode);
+      }
+    }
+  };
+  visit(fnNode);
 }
 
 /** Is this Property the `body` of an object that is the value of a `$function` property? */
@@ -96,7 +189,7 @@ const noImpureFunctionBody = {
     type: "problem" as const,
     docs: {
       description:
-        "$function bodies run inside MongoDB's isolated JS engine and must be self-contained: no outer-scope references and no async/generators",
+        "$function bodies run inside MongoDB's isolated JS engine and must be self-contained: no outer-scope references, no async/generators, and no dynamic import",
     },
     messages: {
       outerScope:
@@ -104,6 +197,8 @@ const noImpureFunctionBody = {
       asyncBody:
         "$function body cannot be async — MongoDB server-side JavaScript is synchronous.",
       generatorBody: "$function body cannot be a generator function.",
+      dynamicImport:
+        "$function body cannot use dynamic import() — MongoDB's server-side JavaScript cannot load modules.",
     },
     schema: [],
   },
@@ -111,15 +206,25 @@ const noImpureFunctionBody = {
     return {
       Property(node: AstNode): void {
         if (!isFunctionBodyProperty(node)) return;
-        const fn = node.value as AstNode;
-        if (!isFunctionNode(fn)) return;
+        let fn = node.value as AstNode;
+        // A body given as a bare identifier (`body: helper`) is resolved to
+        // its function-literal definition and analyzed like an inline body,
+        // so factoring the body into a `const` doesn't bypass the rule.
+        if (fn.type === "Identifier") {
+          const resolved = resolveFunctionLiteral(fn, context);
+          if (!resolved) return;
+          fn = resolved;
+        }
+        const fnType: unknown = fn.type;
+        if (
+          fnType !== "FunctionExpression" &&
+          fnType !== "ArrowFunctionExpression" &&
+          fnType !== "FunctionDeclaration"
+        )
+          return;
 
-        if (fn.async === true) {
-          context.report({ node: fn, messageId: "asyncBody" });
-        }
-        if (fn.generator === true) {
-          context.report({ node: fn, messageId: "generatorBody" });
-        }
+        // async/generator (top-level or nested) and dynamic import().
+        reportDisallowedConstructs(fn, context);
 
         // Free variables: references that pass through the function's scope
         // resolve outside it (or nowhere). `through` includes references
@@ -129,13 +234,22 @@ const noImpureFunctionBody = {
         const reported = new Set<string>();
         for (const ref of scope.through) {
           const name = ref.identifier.name;
-          if (MONGO_SERVER_GLOBALS.has(name) || reported.has(name)) continue;
+          if (reported.has(name)) continue;
+          const resolved = ref.resolved;
           // A named function expression's self-reference resolves in the
           // wrapper function-expression-name scope, whose block is the
           // function node itself — that binding serializes with the body
           // and is NOT an outer-scope reference (`function fib(n) {
           // return fib(n - 1); }` is self-contained).
-          if (ref.resolved?.scope?.block === fn) continue;
+          if (resolved?.scope?.block === fn) continue;
+          // A reference that resolves to a USER binding in an inner scope is a
+          // real closure — flag it even when its name matches a server global
+          // (the user shadowed the global). A reference that is unresolved,
+          // or resolves to the global scope, is a predefined global: allowed
+          // only when it is an actual MongoDB server-side global.
+          const isUserBinding =
+            resolved !== null && resolved.scope?.type !== "global";
+          if (!isUserBinding && MONGO_SERVER_GLOBALS.has(name)) continue;
           reported.add(name);
           context.report({
             node: ref.identifier,

@@ -57,10 +57,22 @@ export function bundleServerFunction(ref: ServerFunctionModuleRef): string {
   // "use strict" directive at the top of the bundle, and directives are
   // illegal in functions with non-simple parameter lists.
   const exportAccess = JSON.stringify(ref.exportName);
+  const isDefault = ref.exportName === "default";
   return [
     "function() {",
     output.text,
     `  var __pipesafe_export = __pipesafe_fn[${exportAccess}];`,
+    // A CommonJS module (`module.exports = fn`) has no "default" property —
+    // esbuild's iife globalName holds the function itself. Fall back to the
+    // module value when the default export is requested and the namespace is
+    // itself callable.
+    ...(isDefault ?
+      [
+        `  if (typeof __pipesafe_export !== "function" && typeof __pipesafe_fn === "function") {`,
+        "    __pipesafe_export = __pipesafe_fn;",
+        "  }",
+      ]
+    : []),
     `  if (typeof __pipesafe_export !== "function") {`,
     `    throw new Error("PipeSafe: export " + ${exportAccess} + " of bundled $function module is not a function");`,
     "  }",

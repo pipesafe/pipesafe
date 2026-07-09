@@ -1,5 +1,4 @@
-import { createRequire } from "node:module";
-import { parse } from "acorn";
+import type { parse as AcornParse } from "acorn";
 import { Document } from "./objects";
 import { MONGO_SERVER_GLOBALS } from "./mongoServerGlobals";
 import { ServerFunctionRef } from "../elements/expressions";
@@ -21,6 +20,88 @@ import { ServerFunctionRef } from "../elements/expressions";
  * on load, tsc compiles ahead of time, Node's type-stripping blanks
  * annotations).
  */
+
+// ---------------------------------------------------------------------------
+// Lazy Node/acorn loading
+// ---------------------------------------------------------------------------
+//
+// `acorn` and Node's `module` builtin are needed ONLY when a $function body
+// is actually serialized. Importing them statically would drag `node:module`
+// (and acorn) into the module graph of `@pipesafe/core`, breaking
+// browser/edge bundling even for consumers that never use $function. Both are
+// therefore obtained lazily, synchronously, through a `require` acquired
+// without any static `node:module` import.
+
+type NodeRequire = (id: string) => unknown;
+
+let cachedRequire: NodeRequire | undefined;
+let cachedParse: typeof AcornParse | undefined;
+
+function nodeRequire(): NodeRequire {
+  if (cachedRequire) return cachedRequire;
+  // `process.getBuiltinModule` (Node >= 20.16 / 22.3) returns the `module`
+  // builtin synchronously and — unlike a static `import "node:module"` — is
+  // invisible to bundlers, so it never forces Node builtins into a browser
+  // build. Referenced through `globalThis` so this file has no compile-time
+  // dependency on Node globals.
+  const proc = (
+    globalThis as {
+      process?: { getBuiltinModule?: (id: string) => unknown };
+    }
+  ).process;
+  const mod = proc?.getBuiltinModule?.("module") as
+    | { createRequire?: (url: string | URL) => NodeRequire }
+    | undefined;
+  if (!mod?.createRequire) {
+    throw new Error(
+      "PipeSafe: serializing a $function body requires a Node.js runtime " +
+        "(>= 20.16). Server-side function bodies are a Node-only feature."
+    );
+  }
+  cachedRequire = mod.createRequire(import.meta.url);
+  return cachedRequire;
+}
+
+function acornParse(code: string): unknown {
+  if (!cachedParse) {
+    cachedParse = (nodeRequire()("acorn") as { parse: typeof AcornParse })
+      .parse;
+  }
+  return cachedParse(code, { ecmaVersion: "latest" });
+}
+
+/**
+ * Visit every child ESTree node of `node` (arrays and single slots),
+ * skipping the non-node bookkeeping slots. Shared by `hoistVarScoped` and
+ * `visitExpression`'s generic fallback so the "what counts as a child node"
+ * rule lives in exactly one place.
+ */
+function forEachChildNode(
+  node: AnyNode,
+  visit: (child: AnyNode) => void
+): void {
+  for (const key of Object.keys(node)) {
+    if (key === "type" || key === "start" || key === "end" || key === "loc")
+      continue;
+    const child = node[key] as unknown;
+    if (Array.isArray(child)) {
+      for (const c of child) {
+        if (
+          c &&
+          typeof c === "object" &&
+          typeof (c as AnyNode).type === "string"
+        )
+          visit(c as AnyNode);
+      }
+    } else if (
+      child &&
+      typeof child === "object" &&
+      typeof (child as AnyNode).type === "string"
+    ) {
+      visit(child as AnyNode);
+    }
+  }
+}
 
 // Loose node view over acorn's ESTree output — the walker dispatches on
 // `type` and reads child slots dynamically. Frequently accessed slots are
@@ -131,16 +212,7 @@ function hoistVarScoped(node: AnyNode | null, scope: Scope): void {
     default:
       break;
   }
-  for (const key of Object.keys(node)) {
-    if (key === "type" || key === "start" || key === "end" || key === "loc")
-      continue;
-    const child = node[key] as unknown;
-    if (Array.isArray(child)) {
-      for (const c of child) hoistVarScoped(c as AnyNode, scope);
-    } else if (child && typeof child === "object") {
-      hoistVarScoped(child as AnyNode, scope);
-    }
-  }
+  forEachChildNode(node, (child) => hoistVarScoped(child, scope));
 }
 
 /** Declare block-scoped bindings (`let`/`const`/`class`/`function`) of a statement list. */
@@ -217,6 +289,17 @@ function visitFunction(
   parent: Scope,
   report: (name: string) => void
 ): void {
+  // Applies to the root body AND every nested function: MongoDB's
+  // server-side engine is synchronous, so an async/generator anywhere in
+  // the body cannot run there.
+  if (node.async === true) {
+    throw new Error(
+      "PipeSafe: $function body cannot be async — MongoDB server-side JavaScript is synchronous."
+    );
+  }
+  if (node.generator === true) {
+    throw new Error("PipeSafe: $function body cannot be a generator function.");
+  }
   const scope: Scope = { names: new Set(), parent };
   if (node.id) declareInScope(scope, (node.id as AnyNode).name as string);
   for (const param of (node.params as AnyNode[]) ?? []) {
@@ -359,26 +442,16 @@ function visitExpression(
     case "BreakStatement":
     case "ContinueStatement":
       return; // labels are not variable references
+    case "ImportExpression":
+      // Dynamic `import()` cannot resolve modules inside MongoDB's engine;
+      // reject it here so the failure surfaces at pipeline-build time rather
+      // than on the server.
+      throw new Error(
+        "PipeSafe: $function body cannot use dynamic import() — server-side JavaScript cannot load modules."
+      );
     default: {
       // Generic fallback: visit every child node/array
-      for (const key of Object.keys(node)) {
-        if (key === "type" || key === "start" || key === "end" || key === "loc")
-          continue;
-        const child = node[key] as unknown;
-        if (Array.isArray(child)) {
-          for (const c of child) {
-            if (c && typeof c === "object" && "type" in (c as object)) {
-              visitExpression(c as AnyNode, scope, report);
-            }
-          }
-        } else if (
-          child &&
-          typeof child === "object" &&
-          "type" in (child as object)
-        ) {
-          visitExpression(child as AnyNode, scope, report);
-        }
-      }
+      forEachChildNode(node, (child) => visitExpression(child, scope, report));
       return;
     }
   }
@@ -387,9 +460,7 @@ function visitExpression(
 function parseFunctionExpression(src: string): { node: AnyNode; emit: string } {
   const tryParse = (code: string): AnyNode | undefined => {
     try {
-      const program = parse(code, {
-        ecmaVersion: "latest",
-      }) as unknown as AnyNode;
+      const program = acornParse(code) as AnyNode;
       const stmt = (program.body as AnyNode[])[0];
       if (stmt && stmt.type === "ExpressionStatement")
         return stmt.expression as AnyNode;
@@ -435,7 +506,11 @@ export function serializeFunctionBody(
   fn: (...args: never[]) => unknown
 ): string {
   const src = Function.prototype.toString.call(fn);
-  if (src.includes("[native code]")) {
+  // Native/bound functions stringify as `function name() { [native code] }`.
+  // Match that specific body shape rather than a bare substring, so a
+  // legitimate body that merely CONTAINS the text "[native code]" (in a
+  // string or regex literal) is not misclassified.
+  if (/\{\s*\[native code\]\s*\}/.test(src)) {
     throw new Error(
       "PipeSafe: $function body is a native or bound function and cannot be serialized — " +
         "pass a plain arrow function or function expression."
@@ -443,15 +518,11 @@ export function serializeFunctionBody(
   }
 
   const { node: fnNode, emit } = parseFunctionExpression(src);
-  if (fnNode.async === true) {
-    throw new Error(
-      "PipeSafe: $function body cannot be async — MongoDB server-side JavaScript is synchronous."
-    );
-  }
-  if (fnNode.generator === true) {
-    throw new Error("PipeSafe: $function body cannot be a generator function.");
-  }
 
+  // async/generator (at the root or nested), dynamic import, and outer-scope
+  // references are all rejected inside the walk: visitFunction throws on
+  // async/generator functions and visitExpression throws on dynamic import,
+  // so the checks cover the whole body rather than only its top level.
   const freeVariables = new Set<string>();
   const rootScope: Scope = { names: new Set(), parent: null };
   visitFunction(fnNode, rootScope, (name) => {
@@ -525,9 +596,8 @@ let cachedBundler: FunctionBundler | undefined;
 
 function loadBundler(): FunctionBundler {
   if (!cachedBundler) {
-    const requireFn = createRequire(import.meta.url);
     try {
-      cachedBundler = requireFn(
+      cachedBundler = nodeRequire()(
         "@pipesafe/function-bundler"
       ) as FunctionBundler;
     } catch {
@@ -551,40 +621,90 @@ function isPlainObject(value: unknown): value is Document {
   return proto === Object.prototype || proto === null;
 }
 
+// A given inline body / bundled module is invariant, so serialization is
+// memoized: pipelines are frequently rebuilt (e.g. per request, or by
+// `Model._buildPipeline` which manifold calls repeatedly), and re-parsing or
+// re-bundling the same body on every build is wasted work. Inline bodies key
+// on the function reference; serverFn refs key on url + export name.
+const inlineBodyCache = new WeakMap<object, string>();
+const serverFnBundleCache = new Map<string, string>();
+
 function resolveBody(body: unknown): unknown {
   if (typeof body === "function") {
-    return serializeFunctionBody(body as (...args: never[]) => unknown);
+    const cached = inlineBodyCache.get(body);
+    if (cached !== undefined) return cached;
+    const source = serializeFunctionBody(body as (...args: never[]) => unknown);
+    inlineBodyCache.set(body, source);
+    return source;
   }
   if (isServerFunctionRef(body)) {
-    return loadBundler().bundleServerFunction({
+    const key = `${body.url}\0${body.exportName}`;
+    const cached = serverFnBundleCache.get(key);
+    if (cached !== undefined) return cached;
+    const bundled = loadBundler().bundleServerFunction({
       url: body.url,
       exportName: body.exportName,
     });
+    serverFnBundleCache.set(key, bundled);
+    return bundled;
   }
   return body;
 }
 
+/**
+ * Recursively replace `$function` bodies with their serialized source.
+ * Returns the SAME reference when nothing in the subtree changed, so a
+ * `$function`-free stage is never deep-cloned (structural sharing keeps the
+ * common case allocation-free).
+ *
+ * Non-plain objects — Date, RegExp, and BSON wrapper types (ObjectId,
+ * Decimal128, ...) — pass through untouched: recursing into them would
+ * rebuild them as plain objects and corrupt the value. A `$function` spec is
+ * always a plain object literal (the type system enforces this), so bodies
+ * are never hidden inside such values in practice.
+ */
 function walkValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(walkValue);
-  if (!isPlainObject(value)) return value; // Date, RegExp, BSON types, functions, primitives
+  if (Array.isArray(value)) {
+    let changed = false;
+    const out = value.map((el) => {
+      const next = walkValue(el);
+      if (next !== el) changed = true;
+      return next;
+    });
+    return changed ? out : value;
+  }
+  if (!isPlainObject(value)) return value;
+  let changed = false;
   const out: Document = {};
   for (const [key, child] of Object.entries(value)) {
     if (key === "$function" && isPlainObject(child)) {
-      const spec = walkValue(child) as Document; // args may nest $function
-      spec["body"] = resolveBody(child["body"]);
-      out[key] = spec;
+      // Walk the $function operand: `body` is serialized; other keys (`args`,
+      // which may nest further $functions, and `lang`) are walked normally.
+      // A $function object with no `body` key is left without one — never
+      // given a phantom `body: undefined`.
+      let specChanged = false;
+      const spec: Document = {};
+      for (const [k, v] of Object.entries(child)) {
+        const next = k === "body" ? resolveBody(v) : walkValue(v);
+        spec[k] = next;
+        if (next !== v) specChanged = true;
+      }
+      const nextChild = specChanged ? spec : child;
+      out[key] = nextChild;
+      if (nextChild !== child) changed = true;
     } else {
-      out[key] = walkValue(child);
+      const next = walkValue(child);
+      out[key] = next;
+      if (next !== child) changed = true;
     }
   }
-  return out;
+  return changed ? out : value;
 }
 
 /**
  * Replace every `$function` body (at any depth, including inside `custom()`
- * stages and sub-pipelines) with its serialized source string. Values that
- * are not plain objects/arrays — Date, RegExp, BSON types — pass through
- * untouched.
+ * stages and sub-pipelines) with its serialized source string. Stages with
+ * no `$function` are returned by reference, unmodified.
  */
 export function serializeFunctionBodies(stages: Document[]): Document[] {
   return stages.map((stage) => walkValue(stage) as Document);

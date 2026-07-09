@@ -1,7 +1,14 @@
 import { InferExpression, ServerFunctionRef } from "./expressions";
-import { GetFieldTypeWithoutArrays } from "./fieldReference";
+import {
+  GetFieldTypeWithoutArrays,
+  InferNestedFieldReference,
+} from "./fieldReference";
 import { NotAnExpression } from "../utils/dispatch";
-import { Document, NonExpandableTypes } from "../utils/objects";
+import {
+  Document,
+  ExcludeUndefined,
+  NonExpandableTypes,
+} from "../utils/objects";
 
 // ============================================================================
 // $function — args → body parameter correlation
@@ -78,11 +85,17 @@ type ResolveFunctionArg<Schema extends Document, Arg> =
   // params cryptically; `unknown` would reject valid annotations.)
   [Arg] extends [`$$${string}`] ? any
   : [Arg] extends [`$${infer Path}`] ?
-    NonNullable<GetFieldTypeWithoutArrays<Schema, Path>>
+    // Strip only `undefined` (optional fields), NOT `null`: BSON has no
+    // `undefined`, but a `number | null` field is passed to the body as
+    // `number | null`, so the param type must keep the `null`.
+    ExcludeUndefined<GetFieldTypeWithoutArrays<Schema, Path>>
   : [Arg] extends [object] ?
     InferExpression<Schema, DeepMutable<Arg>> extends infer R ?
       [R] extends [NotAnExpression] ?
-        Arg
+        // A plain object arg (no operator key) is a nested structure that
+        // may still contain `$field` references — resolve them at any depth
+        // rather than passing the raw literal (`{ x: "$age" }` → `{ x: number }`).
+        InferNestedFieldReference<Schema, DeepMutable<Arg>>
       : R
     : never
   : Arg;

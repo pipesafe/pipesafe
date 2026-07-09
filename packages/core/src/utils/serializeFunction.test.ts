@@ -160,6 +160,31 @@ describe("serializeFunctionBody", () => {
     );
   });
 
+  it("does not mistake a body containing '[native code]' text for a native function", () => {
+    expect(() =>
+      serializeFunctionBody((s: string) => s.replace("[native code]", ""))
+    ).not.toThrow();
+    const src = serializeFunctionBody((x: string) =>
+      x === "[native code]" ? 0 : 1
+    );
+    expect(src).toContain("[native code]");
+  });
+
+  it("rejects nested async functions and dynamic import", () => {
+    expect(() =>
+      serializeFunctionBody((a: number) => {
+        async function h(): Promise<number> {
+          return a;
+        }
+        return h;
+      })
+    ).toThrow(/async/);
+    const dynImport = new Function(
+      "return ((x) => import('mod') || x)"
+    ) as () => (x: unknown) => unknown;
+    expect(() => serializeFunctionBody(dynImport())).toThrow(/import/);
+  });
+
   it("throws on async functions", () => {
     expect(() => serializeFunctionBody(async (a: number) => a)).toThrow(
       /async/
@@ -239,6 +264,20 @@ describe("serializeFunctionBodies", () => {
     expect(stage?.["$match"].id).toBe(id);
     expect(stage?.["$match"].pattern).toBe(pattern);
     expect(stage?.["$match"].missing).toBeNull();
+  });
+
+  it("returns $function-free stages by reference (no deep clone)", () => {
+    const stage = { $match: { age: { $gte: 3 } }, nested: { a: [1, 2, 3] } };
+    const [out] = serializeFunctionBodies([stage]);
+    expect(out).toBe(stage);
+  });
+
+  it("does not inject a phantom body into a $function object without one", () => {
+    const [stage] = serializeFunctionBodies([
+      { $set: { x: { $function: { args: ["$age"], lang: "js" } } } },
+    ]);
+    const spec = stage?.["$set"].x.$function as Record<string, unknown>;
+    expect("body" in spec).toBe(false);
   });
 
   it("serializes $function bodies nested in arrays and objects", () => {

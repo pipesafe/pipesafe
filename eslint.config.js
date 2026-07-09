@@ -27,6 +27,14 @@ export default defineConfig([
     languageOptions: { globals: globals.browser },
   },
   {
+    // CommonJS fixtures/scripts get Node globals (module, require, ...).
+    files: ["**/*.cjs"],
+    languageOptions: {
+      globals: globals.node,
+      sourceType: "commonjs",
+    },
+  },
+  {
     ...tseslint.configs.strictTypeChecked[0],
     rules: {
       // Prevent cross-package relative imports - use package names instead

@@ -1,16 +1,25 @@
+# Runs sequentially (piped) with build FIRST: the pipesafe/no-impure-function-body
+# lint rule loads from core's built dist and eslint.config.js skips it when dist is
+# stale/absent, so linting before building would silently drop the rule. `priority`
+# pins the order and `piped` stops at the first failure. (Sequential also avoids two
+# tsdown builds racing on dist.)
 pre-commit:
-  parallel: true
+  piped: true
   commands:
     build:
+      priority: 1
       run: bun run build
       stage_fixed: true
     lint:
+      priority: 2
       run: bun run lint:fix
       stage_fixed: true
     format:
+      priority: 3
       run: bun run format:fix
       stage_fixed: true
     test:
+      priority: 4
       run: bun run test:ci
       stage_fixed: true
 
