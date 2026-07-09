@@ -6,7 +6,13 @@
     "benchmarking/**/*.ts",
     "benchmarks/**/*.ts"
   ],
-  "exclude": ["node_modules", "dist"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    // Generated depth-viewer stress fixtures deliberately trip TS2589 and
+    // would both fail the compile and swamp the instantiation budget.
+    "examples/_*.ts"
+  ],
   "compilerOptions": {
     "noEmit": true,
     "composite": false,
