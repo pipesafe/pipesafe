@@ -10,7 +10,14 @@
     "packages/core/benchmarking/**/*.ts",
     "packages/manifold/examples/**/*.ts"
   ],
-  "exclude": ["**/dist/**/*", "**/node_modules/**", ".claude/worktrees/**"],
+  "exclude": [
+    "**/dist/**/*",
+    "**/node_modules/**",
+    ".claude/worktrees/**",
+    // Generated depth-viewer stress fixtures deliberately trip TS2589 —
+    // they are trace fodder for tools/depth-viewer, not checkable code.
+    "packages/core/examples/_*.ts"
+  ],
   "references": [
     { "path": "./packages/core" },
     { "path": "./packages/manifold" }

@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "types": ["node"],
+    "noEmit": true,
+    "composite": true,
+    "outDir": "./dist/.tsbuild-node"
+  },
+  "include": [
+    "vite.config.ts",
+    "rebuild-plugin.ts",
+    "build.ts",
+    "patch-tsc.ts",
+    "patch-tsc.test.ts",
+    "query.ts"
+  ]
+}
