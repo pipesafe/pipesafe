@@ -8,11 +8,14 @@
     ".claude/**/*.ts",
     "packages/core/examples/**/*.ts",
     "packages/core/benchmarking/**/*.ts",
-    "packages/manifold/examples/**/*.ts"
+    "packages/manifold/examples/**/*.ts",
+    "packages/intake/examples/**/*.ts"
   ],
   "exclude": ["**/dist/**/*", "**/node_modules/**", ".claude/worktrees/**"],
   "references": [
     { "path": "./packages/core" },
-    { "path": "./packages/manifold" }
+    { "path": "./packages/manifold" },
+    { "path": "./packages/infra" },
+    { "path": "./packages/intake" }
   ]
 }

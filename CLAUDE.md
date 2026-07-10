@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Monorepo Structure
 
-This is a **bun workspaces monorepo** with two packages under different licenses:
+This is a **bun workspaces monorepo** with packages under different licenses:
 
 ```
 pipesafe/
@@ -23,11 +23,30 @@ pipesafe/
 │   │   ├── benchmarking/        # TypeScript performance benchmarks
 │   │   └── LICENSE              # Apache License 2.0
 │   │
-│   ├── manifold/                # DAG orchestration (ELv2 - commercial)
+│   ├── manifold/                # Transformations: batch + event-driven (ELv2 - commercial)
 │   │   ├── src/
 │   │   │   ├── model/           # Model - materializable pipelines
-│   │   │   └── project/         # Project - DAG orchestrator
+│   │   │   ├── project/         # Project - DAG orchestrator (batch)
+│   │   │   └── events/          # ChangeSubscription + dispatch strategies (scaffold)
 │   │   ├── examples/            # DAG usage examples
+│   │   └── LICENSE              # Elastic License 2.0
+│   │
+│   ├── infra/                   # Shared cloud infra engine (ELv2 - commercial)
+│   │   ├── src/
+│   │   │   ├── provider/        # InfraProvider - Pulumi program-factory seam
+│   │   │   ├── state/           # MongoDB-backed Pulumi state + deploy locks
+│   │   │   └── secrets/         # SecretRef - named secret references
+│   │   └── LICENSE              # Elastic License 2.0
+│   │
+│   ├── intake/                  # Cloud data ingestion (ELv2 - commercial)
+│   │   ├── src/
+│   │   │   ├── webhook/         # Webhook - declarative webhook sources
+│   │   │   ├── fetcher/         # Fetcher - REST enrichment/polling units
+│   │   │   ├── envelope/        # IntakeEnvelope - queue + idempotency ledger
+│   │   │   ├── verify/          # Signature verification schemes
+│   │   │   └── intake/          # Intake - orchestrator (dev/replay/deploy)
+│   │   ├── examples/            # Ingestion usage examples
+│   │   ├── ARCHITECTURE.md      # Design doc + phased roadmap
 │   │   └── LICENSE              # Elastic License 2.0
 │   │
 │   └── core-completions-tests/  # IDE-autocomplete regression tests (private)
@@ -39,19 +58,31 @@ pipesafe/
 ### Licensing Rationale
 
 - **@pipesafe/core (Apache 2.0)**: Core pipeline builder. Fully OSI-approved, can be used anywhere.
-- **@pipesafe/manifold (ELv2)**: DAG execution and materialization features. Commercial-friendly but not OSI-approved.
+- **@pipesafe/manifold (ELv2)**: Transformations - batch DAG execution/materialization today, event-driven (change-stream subscriptions + dispatch strategies, scaffold) next. Owns ALL change-stream reactivity: intake's fetcher triggers are one usecase; mid-DAG reactive transformations for non-intake users are the same primitive. Commercial-friendly but not OSI-approved.
+- **@pipesafe/infra (ELv2)**: Shared cloud infrastructure engine (Pulumi with MongoDB-backed state). A suite concern by design: intake consumes it today, manifold (scheduled materialization) later — nothing in it may reference domain concepts.
+- **@pipesafe/intake (ELv2)**: Cloud data ingestion (webhooks + REST fetchers into MongoDB). Scaffold phase — see `packages/intake/ARCHITECTURE.md` for the design and phased roadmap.
 
 ### Package Dependencies
 
-- `@pipesafe/manifold` has `@pipesafe/core` as a **peer dependency** pinned to core's
-  current major (`>=2.0.0 <3.0.0`); widen it whenever core takes a major bump
+- `@pipesafe/manifold` has `@pipesafe/core` as a **peer dependency**. Peer ranges on
+  sibling packages must SPAN from the current workspace version through the next
+  pending major (e.g. `>=1.1.0 <3.0.0` while core 2.0 changesets are pending) —
+  a range the workspace version doesn't satisfy makes bun auto-install the peer
+  from the registry, which 404s for unpublished packages and breaks every install.
+  Tighten lower bounds after the release train ships
+- `@pipesafe/infra` peers on `@pipesafe/core`; `@pipesafe/intake` peers on
+  `@pipesafe/core`, `@pipesafe/infra`, AND `@pipesafe/manifold` (it composes
+  manifold's event layer - intake never owns change-stream machinery)
 - During development, `workspace:*` links them locally
-- Users install both packages explicitly
+- Users install the packages they need explicitly
+- all four packages are in the changesets `linked` group, so they release at
+  matching version numbers (infra/intake will jump from 0.1.0 to the group's
+  version line on their first release)
 
 ## Development Commands
 
-- **Build**: `bun run build` - Builds both packages via TypeScript project references
-- **Build Watch**: `bun run build:watch` - Watch mode for both packages
+- **Build**: `bun run build` - Builds all workspace packages via tsdown
+- **Build Watch**: `bun run build:watch` - Watch mode for all packages
 - **Clean**: `bun run clean` - Remove dist directories
 - **Lint**: `bun run lint` - Run ESLint
 - **Format**: `bun run format` - Run Prettier
@@ -109,6 +140,12 @@ Note: The interactive `bun run changeset` command doesn't work in non-TTY enviro
 - **Project**: Located in `packages/manifold/src/project/Project.ts`. DAG orchestrator that manages models, resolves dependencies, validates the graph, and executes models in topological order. Models are provided at construction time and validated immediately (immutable after creation). Auto-discovers all dependencies (upstream via `from` and lookup via `lookup`/`unionWith` stages) - just specify leaf models.
 
 - **Source**: Located in `packages/core/src/source/Source.ts`. Unified interface that both `Collection` and `Model` implement, allowing them to be used interchangeably as pipeline sources.
+
+- **Webhook / Fetcher / Intake** (scaffold): Located in `packages/intake/src/`. Declarative ingestion units (verified webhook endpoints landing raw `IntakeEnvelope`s; REST enrichment/polling fetchers landing typed docs) plus the orchestrator that runs them locally and deploys them. Intake's domain ENDS at landing documents - reacting to them is manifold's event layer (a fetcher's webhook trigger lowers to a `ChangeSubscription`). Landing collections are core `Collection<T>`s, so ingested data feeds Pipelines and Models directly. Design + roadmap: `packages/intake/ARCHITECTURE.md`.
+
+- **ChangeSubscription / DispatchConfig** (scaffold): Located in `packages/manifold/src/events/`. The event-driven half of manifold: react to change-stream events on any `Source` by invoking a consumer, delivered via pluggable strategies (`watcherBridge` container, in-process `changeStreamWatcher`, `ledgerPoller` leases). The full event-driven design (reactive Model refresh, subscriptions in the Project DAG, Atlas Triggers as a delivery mechanism) is deferred - see ARCHITECTURE.md "Deferred work".
+
+- **InfraProvider / PulumiBackend** (scaffold): Located in `packages/infra/src/`. The shared provisioning engine — a Pulumi program-factory seam over provider-neutral resource specs, with Pulumi state stored in MongoDB (optionally a separate ops cluster). Suite-shared by design; must stay free of domain concepts.
 
 ### Type System Architecture
 
@@ -257,7 +294,7 @@ TODO: Document the rest of the stages
 ### Workflow for Type Assertions
 
 1. **Use IDE/LSP for fast iteration** - The TypeScript LSP provides instant feedback without running builds
-2. **The real type gate is per-package**: `bun run typecheck:packages` (from the root; runs `tsc --noEmit` in core then manifold — manifold needs a fresh core `bun run build` first). The root `bun run typecheck` resolves project references to built `dist/` declarations and does NOT re-check `packages/*/src` — including the `*.typeAssertions.ts` files
+2. **The real type gate is per-package**: `bun run typecheck:packages` (from the root; runs `tsc --noEmit` in core, manifold, infra, then intake — the later packages resolve their siblings through built `dist/` declarations, so run a fresh `bun run build` first). The root `bun run typecheck` resolves project references to built `dist/` declarations and does NOT re-check `packages/*/src` — including the `*.typeAssertions.ts` files
 3. **When types don't match**, use `inspect-types.ts` to see the actual inferred type:
    ```bash
    bun run tsx .claude/inspect-types.ts <variableName> [fileName]
