@@ -1,5 +1,61 @@
 # @pipesafe/core
 
+## 2.0.0
+
+### Major Changes
+
+- f488fa7: Type-system standardisation. Every stage now follows one convention —
+  `XxxQuery` (acceptance) / `ValidateXxxQuery` (rejection, where needed) /
+  `ResolveXxxOutput` (output schema), Schema-first, with `PassThrough` error
+  forwarding on every non-terminal resolver — backed by an operator-key
+  dispatch kernel, a single expression/accumulator registry
+  (`ExpressionSpec` / `AccumulatorSpec`), and a shared operand kernel.
+
+  New validation at chained call sites: unknown field references, malformed
+  expression objects, invalid operands of registered operators, and
+  operator/accumulator names outside the registry + explicit allow-lists
+  (`UnimplementedExpressionOps`, `UnimplementedAccumulators`) all brand with
+  a `PipeSafeError` at the offending value — including `$set`/`$project`
+  values at any literal depth, `$group` `_id` and accumulator operands
+  (`$sum`/`$avg` numeric; `$min`/`$max` BSON-comparable), and typo'd
+  operator names. Valid-but-unmodeled MongoDB stays accepted (allow-listed
+  by name, `unknown` inference), as do `$$`-system variables and widened
+  values; expression values inside generic-schema pipeline helpers now
+  compile.
+
+  Fixes: `$count` forwards upstream error schemas; `{_id: 1, name: 0}`
+  projections no longer falsely brand as mixed-mode; `$cond` no longer
+  strips `null`/`undefined` from branches; the `$unwind` brand fires at
+  chained call sites; `$`-keyed objects no longer pass as object literals;
+  `$set` rejections no longer emit a spurious TS2589; `as const` operands
+  type-check (readonly operand positions); dotted `$lookup` `as` paths nest
+  in the output schema. `$$`-system variables now infer as `unknown` instead
+  of silently dropping the field from the output schema (`$$REMOVE` still
+  removes), and are accepted in `$group` `_id`/accumulator positions
+  (`$max: "$$NOW"` compiles); `$concat` validates its operands (typo'd
+  `$`-refs and non-string refs brand instead of shipping); the
+  trigonometry operators and `$toUUID` are allow-listed (no longer falsely
+  brand as typos); unknown dotted `$project` inclusion keys brand instead of
+  silently resolving to a `never` leaf.
+
+  Breaking: `@pipesafe/manifold` now requires `@pipesafe/core` 2.x
+  (peer dependency `>=2.0.0 <3.0.0`); `ResolveCountOutput` gained a `Schema`
+  first type parameter; `MergeOptions` is REMOVED — use `MergeQuery`
+  (deprecated aliases are no longer shipped; renames land in majors);
+  several internal type names changed. Whole-project type instantiations
+  drop ~40% for equivalent pipelines; a CI budget gate
+  (`bun run budget:check`) now guards type-level performance.
+
+### Minor Changes
+
+- 1d856dd: Export the runtime operator-name vocabularies as authoritative const arrays: grouped match matcher arrays (with `FIELD_MATCH_OPERATORS` / `TOP_LEVEL_MATCH_OPERATORS` spread combinations), per-category expression operator arrays (with the `EXPRESSION_OPERATORS` spread and an `EXPRESSION_OPERATORS_BY_CATEGORY` record), and `ACCUMULATOR_OPERATORS`. The operator-key unions derive from these arrays by construction (`(typeof ARR)[number]`), and the registries conform to them via `satisfies` checks at the array declarations.
+- 1d856dd: Fix IDE autocomplete across Pipeline call sites: match string/Date fields no longer leak RegExp/Date methods (symbol-keyed exact-value arms), `$elemMatch` offers element fields plus matchers and now accepts per-field element queries (`{ $elemMatch: { qty: { $gt: 5 } } }`), `$set`/`$project` suggest existing field selectors as keys while keeping arbitrary new keys legal, expression/accumulator value objects suggest only their operators (Date/ObjectId methods no longer leak), and `$group`'s `_id` suggests and accepts references to array/document fields (`{ _id: "$shipping" }`).
+- 1d856dd: `$$`-system variables are now an enumerated vocabulary (new `SYSTEM_VARIABLES` export) accepted and autocompleted wherever the wide `$$` namespace used to be: `$set`/`$project` string values (which now also autocomplete field references), `$group` `_id` and accumulator operands, `$replaceRoot`'s `newRoot` (previously rejected system variables entirely), and the nested-validation kernel. An unlisted `$$variable` is rejected — as an `UnknownSystemVariableError` brand in nested positions or a "Did you mean" constraint error at top level — while `$let`/`$map`/`$filter`-bound user variables remain accepted inside the operand interiors that bind them. Aggregation-command-level `let` variables are not modeled yet.
+
+### Patch Changes
+
+- fbf7b47: Remove the internal test helper `useMemoryMongo` from the public entry point. It statically imported `mongodb-memory-server` and `vitest` (dev-only dependencies), so merely importing `@pipesafe/core` in ESM environments failed with `Cannot find package 'mongodb-memory-server'` unless consumers installed it themselves (#100).
+
 ## 1.1.0
 
 ### Minor Changes
