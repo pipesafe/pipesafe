@@ -1,8 +1,10 @@
 /**
  * Intake - the orchestrator
  *
- * Analogous to manifold's Project: constructed with the declarative units,
- * validated immediately, immutable afterwards. Owns local execution
+ * Analogous to manifold's Project: constructed with the declarative units
+ * and immutable after construction. Construction-time validation (like
+ * Project's) lands in Phase 1; until then validate() throws. Owns local
+ * execution
  * (dev/replay) and delegates provisioning to @pipesafe/infra's engine
  * (plan/deploy/status/teardown), composing the ingestion-specific resource
  * specs - gateway, consumers, bridge, sweeper - for the chosen provider.

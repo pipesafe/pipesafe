@@ -16,12 +16,24 @@ export interface VerifyContext {
   getSecret(ref: SecretRef): Promise<string>;
 }
 
+/**
+ * Decouples "accept the request" from "a signature was verified", so
+ * schemes like `none` can accept dev traffic while the envelope honestly
+ * records `verified: false`.
+ */
+export interface VerifyResult {
+  /** Accept the request? The gateway rejects (401) when false. */
+  accepted: boolean;
+  /** Recorded on the envelope: did signature verification actually pass? */
+  verified: boolean;
+}
+
 export interface Verifier {
   /** e.g. "stripe", "hmac-sha256", "none", or a custom scheme name. */
   readonly scheme: string;
   /** Declared so deploys know which secrets to provision. */
   readonly secretRefs: readonly SecretRef[];
-  verify(ctx: VerifyContext): Promise<boolean>;
+  verify(ctx: VerifyContext): Promise<VerifyResult>;
 }
 
 const notImplemented = (scheme: string): Verifier["verify"] => {
@@ -64,7 +76,7 @@ export const verifiers = {
     return {
       scheme: "none",
       secretRefs: [],
-      verify: () => Promise.resolve(true),
+      verify: () => Promise.resolve({ accepted: true, verified: false }),
     };
   },
 

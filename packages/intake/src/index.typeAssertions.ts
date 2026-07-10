@@ -79,8 +79,9 @@ const _customers = new Fetcher({
   output: { collection: "stripe_customers", key: "id", mode: "upsert" },
 });
 
+// The output collection includes the writer-set `_id` (from output.key)
 type FetcherOutputTest = Assert<
-  Equal<typeof _customers.output, Collection<StripeCustomer>>
+  Equal<typeof _customers.output, Collection<StripeCustomer & { _id: string }>>
 >;
 
 // ============================================================================
@@ -91,10 +92,16 @@ type EventsAreASourceTest = Assert<
   IsAssignable<typeof stripe.events, Source<IntakeEnvelope<StripeEvent>>>
 >;
 type OutputIsASourceTest = Assert<
-  IsAssignable<typeof _customers.output, Source<StripeCustomer>>
+  IsAssignable<
+    typeof _customers.output,
+    Source<StripeCustomer & { _id: string }>
+  >
 >;
 type OutputInferenceTest = Assert<
-  Equal<InferSourceType<typeof _customers.output>, StripeCustomer>
+  Equal<
+    InferSourceType<typeof _customers.output>,
+    StripeCustomer & { _id: string }
+  >
 >;
 
 export type {

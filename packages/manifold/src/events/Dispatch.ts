@@ -43,7 +43,11 @@ export interface ChangeStreamWatcherDispatch {
  */
 export interface LedgerPollerDispatch {
   strategy: "ledgerPoller";
-  /** 5-field cron expression for the polling schedule, UTC. */
+  /**
+   * 5-field cron expression for the polling schedule, UTC. Providers
+   * translate to native syntax; expressions constraining both day fields
+   * are rejected (not portably expressible).
+   */
   schedule?: string;
   leaseSeconds?: number;
 }

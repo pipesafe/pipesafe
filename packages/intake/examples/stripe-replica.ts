@@ -29,8 +29,6 @@ type StripeEvent = {
 };
 
 type StripeCustomer = {
-  /** Set by intake's upsert writer from the natural key (`output.key`). */
-  _id: string;
   id: string;
   email: string;
   name: string;

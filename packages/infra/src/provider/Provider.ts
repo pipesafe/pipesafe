@@ -62,7 +62,12 @@ export interface ContainerServiceSpec {
 export interface ScheduleSpec {
   kind: "schedule";
   name: string;
-  /** 5-field cron expression, UTC. */
+  /**
+   * 5-field cron expression, UTC. Providers translate to their native
+   * syntax (e.g. EventBridge Scheduler's 6-field form); expressions that
+   * constrain BOTH day-of-month and day-of-week are rejected at deploy
+   * time - their Vixie OR-semantics are not portably expressible.
+   */
   cron: string;
   /** Logical name of the {@link FunctionSpec} to invoke. */
   functionName: string;
@@ -93,9 +98,10 @@ export interface InfraProgramSpec {
 
 /**
  * An inline Pulumi program. Placeholder signature until Phase 3 wires the
- * Pulumi Automation API dependency (where this aligns with `PulumiFn`).
+ * Pulumi Automation API dependency; the return value carries stack outputs
+ * (e.g. endpoint URLs), matching the Automation API's `PulumiFn`.
  */
-export type InfraProgram = () => Promise<void>;
+export type InfraProgram = () => Promise<Record<string, unknown> | void>;
 
 /**
  * The provider seam. One implementation per cloud; selection happens at

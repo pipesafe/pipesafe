@@ -32,7 +32,7 @@ export type {
   FetchContext,
   IntakeLogger,
 } from "./fetcher/Fetcher";
-export type { Verifier, VerifyContext } from "./verify/Verifier";
+export type { Verifier, VerifyContext, VerifyResult } from "./verify/Verifier";
 export type {
   IntakeConfig,
   DeployOptions,

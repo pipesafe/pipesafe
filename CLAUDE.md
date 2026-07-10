@@ -45,6 +45,7 @@ pipesafe/
 │       │   ├── envelope/        # IntakeEnvelope - queue + idempotency ledger
 │       │   ├── verify/          # Signature verification schemes
 │       │   └── intake/          # Intake - orchestrator (dev/replay/deploy)
+│       ├── examples/            # Ingestion usage examples
 │       ├── ARCHITECTURE.md      # Design doc + phased roadmap
 │       └── LICENSE              # Elastic License 2.0
 │
@@ -73,8 +74,8 @@ pipesafe/
 
 ## Development Commands
 
-- **Build**: `bun run build` - Builds both packages via TypeScript project references
-- **Build Watch**: `bun run build:watch` - Watch mode for both packages
+- **Build**: `bun run build` - Builds all workspace packages via tsdown
+- **Build Watch**: `bun run build:watch` - Watch mode for all packages
 - **Clean**: `bun run clean` - Remove dist directories
 - **Lint**: `bun run lint` - Run ESLint
 - **Format**: `bun run format` - Run Prettier
@@ -245,7 +246,7 @@ TODO: Document the rest of the stages
 ### Workflow for Type Assertions
 
 1. **Use IDE/LSP for fast iteration** - The TypeScript LSP provides instant feedback without running builds
-2. **The real type gate is per-package**: `bun run typecheck:packages` (from the root; runs `tsc --noEmit` in core then manifold — manifold needs a fresh core `bun run build` first). The root `bun run typecheck` resolves project references to built `dist/` declarations and does NOT re-check `packages/*/src` — including the `*.typeAssertions.ts` files
+2. **The real type gate is per-package**: `bun run typecheck:packages` (from the root; runs `tsc --noEmit` in core, manifold, infra, then intake — the later packages resolve their siblings through built `dist/` declarations, so run a fresh `bun run build` first). The root `bun run typecheck` resolves project references to built `dist/` declarations and does NOT re-check `packages/*/src` — including the `*.typeAssertions.ts` files
 3. **When types don't match**, use `inspect-types.ts` to see the actual inferred type:
    ```bash
    bun run tsx .claude/inspect-types.ts <variableName> [fileName]

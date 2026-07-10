@@ -35,7 +35,11 @@ export type FetcherTrigger<TEvent extends Document> =
       filter?: (envelope: IntakeEnvelope<TEvent>) => boolean;
     }
   | {
-      /** 5-field cron expression, UTC. */
+      /**
+       * 5-field cron expression, UTC. See infra's `ScheduleSpec.cron` for
+       * the portability contract (providers translate; both-day-fields
+       * expressions are rejected).
+       */
       schedule: string;
     };
 
@@ -52,7 +56,11 @@ export interface FetchContext {
 export interface FetcherOutput<TDoc extends Document> {
   collection: string;
   database?: string;
-  /** Natural-key field for idempotent upserts, e.g. "id" for Stripe. */
+  /**
+   * Natural-key field for idempotent upserts, e.g. "id" for Stripe. The
+   * writer also sets `_id` from this key, so stored docs are
+   * `TDoc & { _id: string }` and downstream Model.Mode.Upsert composes.
+   */
   key: keyof TDoc & string;
   /** "upsert" (default) is required for effectively-once processing. */
   mode?: "upsert" | "append";
@@ -87,15 +95,16 @@ export class Fetcher<
 > {
   /**
    * The typed output landing collection - a core Source, directly usable
-   * as a Model's `from`.
+   * as a Model's `from`. Stored docs carry `_id` (set by the upsert
+   * writer from the natural key), so the type includes it.
    */
-  readonly output: Collection<TDoc>;
+  readonly output: Collection<TDoc & { _id: string }>;
 
   private readonly config: FetcherConfig<TName, TEvent, TDoc>;
 
   constructor(config: FetcherConfig<TName, TEvent, TDoc>) {
     this.config = config;
-    this.output = new Collection<TDoc>({
+    this.output = new Collection<TDoc & { _id: string }>({
       collectionName: config.output.collection,
       databaseName: config.output.database,
     });
