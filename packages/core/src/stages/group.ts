@@ -1,4 +1,5 @@
 import {
+  FieldReference,
   FieldReferencesThatInferTo,
   InferNestedFieldReference,
 } from "../elements/fieldReference";
@@ -7,6 +8,7 @@ import {
   AnyLiteral,
   ExpressionShaped,
   LiteralOrFieldReferenceInferringTo,
+  SystemVariable,
 } from "../elements/literals";
 import {
   Expression,
@@ -26,6 +28,7 @@ import {
   PipeSafeError,
   RequiresMsg,
   UnknownAccumulatorError,
+  UnknownSystemVariableError,
 } from "../utils/errors";
 import { ExpressionOperand } from "../elements/operands";
 
@@ -138,6 +141,27 @@ export type UnimplementedAccumulators =
   | "$top"
   | "$topN";
 
+/**
+ * Every accumulator operator — AUTHORITATIVE; `AccumulatorSpec` conforms
+ * to this list, not the other way around. Exported so tooling (docs, the
+ * IDE autocomplete tests) consumes the same names the types are built
+ * from. The `satisfies` is the cheapest compile-time tie: an error here
+ * reads "the registry is missing an entry for this accumulator". (A
+ * registry key absent from this list is caught by the completions suite's
+ * exact-match ideal.) Never keep the two in sync with assertion pins.
+ */
+export const ACCUMULATOR_OPERATORS = [
+  "$sum",
+  "$avg",
+  "$min",
+  "$max",
+  "$count",
+  "$push",
+  "$addToSet",
+  "$first",
+  "$last",
+] as const satisfies readonly (keyof AccumulatorSpec<Document>)[];
+
 /** Single-operator accumulator shape(s) for `Op` (distributes over unions). */
 type AccumulatorFor<Schema extends Document, Op> =
   Op extends keyof AccumulatorSpec<Schema> ?
@@ -178,14 +202,28 @@ export type ResolveAccumulatorFunction<Schema extends Document, Accumulator> =
   : never;
 
 export type GroupQuery<Schema extends Document> = {
-  // `$$`-system variables ($$NOW, $$ROOT, ...) are valid _id expressions;
-  // AnyLiteral's string arm is NoDollarString, so they need their own arm.
-  _id: AnyLiteral<Schema> | Expression<Schema> | `$$${string}` | null;
+  // The enumerated `$$`-system variables ($$NOW, $$ROOT, ...) are valid _id
+  // expressions; AnyLiteral's string arm is NoDollarString, so they need
+  // their own arm — finite, so they autocomplete and an unlisted `$$var`
+  // rejects at the constraint.
+  // `FieldReference<Schema>` is likewise its own arm: grouping by any field —
+  // including array/document refs like `$tags`/`$shipping`/`$items` — is valid
+  // MongoDB, but AnyLiteral only offers references that infer to PRIMITIVES.
+  // It must appear on BOTH arms: the `[key: string]` index signature below
+  // covers _id, so suggested refs must typecheck against it too (same
+  // precedent as the `` `$$${string}` `` arm — an _id-only addition makes the
+  // index signature reject them).
+  _id:
+    | AnyLiteral<Schema>
+    | Expression<Schema>
+    | FieldReference<Schema>
+    | SystemVariable
+    | null;
 } & {
-  // The index signature covers _id too, so it must also carry the `$$` arm
-  // (an intersection member rejecting _id would reject the whole query).
-  // ExpressionShaped accepts $-keyed values structurally: rejecting at
-  // the constraint would misreport the error on sibling
+  // The index signature covers _id too, so it must also carry the `$$` and
+  // FieldReference arms (an intersection member rejecting _id would reject the
+  // whole query). ExpressionShaped accepts $-keyed values structurally:
+  // rejecting at the constraint would misreport the error on sibling
   // keys. The NAME check happens in ValidateGroupQuery instead — the key
   // must be registered (AccumulatorSpec) or allow-listed
   // (UnimplementedAccumulators, e.g. $stdDevPop/$top/$mergeObjects);
@@ -194,7 +232,8 @@ export type GroupQuery<Schema extends Document> = {
     | AnyLiteral<Schema>
     | AccumulatorFunction<Schema>
     | ExpressionShaped
-    | `$$${string}`
+    | FieldReference<Schema>
+    | SystemVariable
     | null;
 };
 
@@ -267,11 +306,19 @@ type ValidateAccumulatorValue<Schema extends Document, A> =
     [keyof AccumulatorSpec<Schema> | UnimplementedAccumulators]
   ) ?
     OperatorKeyOf<A> extends infer Op extends CheckedAccumulatorOps ?
-      // `$$`-system variables ($$NOW, $$ROOT, ...) are valid MongoDB in any
-      // accumulator position (mirrors the kernel's tier-1 `$$` arm in
+      // The enumerated `$$`-system variables are valid MongoDB in any
+      // accumulator position (mirrors the kernel's tier-1 arm in
       // ValidateNestedValue) — schema-free, and checked before the operand
-      // relation so they never reach the brand.
-      A[Op & keyof A] extends `$$${string}` ? never
+      // relation so they never reach the comparable/numeric brand. An
+      // UNLISTED `$$var` brands as an unknown system variable instead of a
+      // misleading operand/field message.
+      A[Op & keyof A] extends SystemVariable ? never
+      : A[Op & keyof A] extends `$$${string}` ?
+        {
+          [K in Op & string]: UnknownSystemVariableError<
+            A[Op & keyof A] & string
+          >;
+        }
       : string extends keyof Schema ?
         never // operand checks are meaningless on a wide/index-signature schema
       : // $min/$max: ANY non-`$` string literal is a comparable. The union

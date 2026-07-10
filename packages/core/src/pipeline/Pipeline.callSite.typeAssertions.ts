@@ -321,9 +321,7 @@ const _project_unknown = new Pipeline<User>().project({
 });
 
 // replaceRoot — newRoot referencing a missing field should fail. The
-// rejection reports on both the call line (constraint mismatch) and the
-// value line, so each carries a directive.
-// @ts-expect-error  the replaceRoot constraint rejects the query object
+// rejection lands as a single TS2322 at the offending value line.
 const _replaceRoot_bad = new Pipeline<User>().replaceRoot({
   // @ts-expect-error  '$missing' is not a valid field reference
   newRoot: "$missing",

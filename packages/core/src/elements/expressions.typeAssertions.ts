@@ -3,8 +3,6 @@ import type { PipeSafeError } from "../utils/errors";
 import type { Assert, AssertPipeSafeError, Equal } from "../utils/tests";
 import type {
   ExpressionSpec,
-  ExpressionCategory,
-  OpsInCategory,
   LiteralDependentOps,
   UnimplementedExpressionOps,
   AddExpression,
@@ -266,20 +264,6 @@ type _Assert_SizeAcceptsArrayRef = Assert<
   Equal<"$tags" extends SizeOperand<ArithSchema> ? true : false, true>
 >;
 
-// ---------------------------------------------------------------------------
-// Registry category lockstep: every ExpressionSpec entry declares a category
-// (the key sets are DERIVED from it). An entry with a missing/typo'd
-// category would silently vanish from its category union — this pin turns
-// that into a compile failure.
-// ---------------------------------------------------------------------------
-
-type _EveryOpCategorized = Assert<
-  Equal<
-    Exclude<keyof ExpressionSpec<Document>, OpsInCategory<ExpressionCategory>>,
-    never
-  >
->;
-
 // The literal-dependent set is DERIVED from `returns`-omission on registry
 // entries. This pin (a) documents the current set and (b) catches both
 // drift directions: an entry that accidentally drops its `returns` joins
@@ -312,7 +296,6 @@ type _RegistryAllowListDisjoint = Assert<
 
 export type {
   _DerivedLiteralDependentOps,
-  _EveryOpCategorized,
   _RegistryAllowListDisjoint,
   _Assert_AddBrand,
   _Assert_SubtractBrand,

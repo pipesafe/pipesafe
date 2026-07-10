@@ -3,15 +3,52 @@ import { Document, ForbidKeys } from "../utils/objects";
 import { NoDollarString } from "../utils/strings";
 import { FieldReferencesThatInferTo } from "./fieldReference";
 
+/**
+ * MongoDB's documented `$$`-system variables, enumerated BY NAME — the
+ * AUTHORITATIVE list (never widen a consumer to `` `$$${string}` `` where a
+ * finite vocabulary is wanted). Finite literals are primitive-flagged, so
+ * they autocomplete at string-value positions without absorbing sibling
+ * literals and contribute nothing to object-literal key completions. An
+ * unlisted `$$var` at a position typed with this union is rejected at the
+ * constraint (undefined variables are runtime errors in MongoDB anyway);
+ * `$let`/`$map`/`$filter`-bound user variables remain accepted inside the
+ * operand interiors that bind them (`unknown`-typed).
+ */
+export const SYSTEM_VARIABLES = [
+  "$$NOW",
+  "$$CLUSTER_TIME",
+  "$$ROOT",
+  "$$CURRENT",
+  "$$REMOVE",
+  "$$DESCEND",
+  "$$PRUNE",
+  "$$KEEP",
+  "$$SEARCH_META",
+  "$$USER_ROLES",
+] as const;
+export type SystemVariable = (typeof SYSTEM_VARIABLES)[number];
+
 export type LiteralOrFieldReferenceInferringTo<Schema extends Document, T> =
   | T
   | FieldReferencesThatInferTo<Schema, T>;
 
 type Primitive = boolean | number | Date | NoDollarString | ObjectId;
 
+// Completion-safe literal-VALUE arm: Date/ObjectId are carried as the keyless
+// `object` so their ~50 members (getDate, toHexString, _bsontype, …) stop
+// polluting the operator-key completions of every expression-object value
+// position, while Date/ObjectId VALUES (a `new Date()`, an ObjectId variable)
+// stay assignable. `object` (not `{}`) is load-bearing: `{}` also accepts
+// primitive strings, which would break the replaceRoot "$missing" rejection
+// pin. The ref-target arm below keeps the full `Primitive` (Date/ObjectId
+// included) so field references still resolve their real types — do NOT widen
+// that arm to `PrimitiveLiteralValue`.
+type PrimitiveLiteralValue = boolean | number | NoDollarString | object;
+
 export type ResolveToPrimitive<Schema extends Document> =
   Schema extends Document ?
-    Primitive | FieldReferencesThatInferTo<Schema, Primitive | string>
+    | PrimitiveLiteralValue
+    | FieldReferencesThatInferTo<Schema, Primitive | string>
   : never;
 
 export type ArrayLiterals<Schema extends Document> =

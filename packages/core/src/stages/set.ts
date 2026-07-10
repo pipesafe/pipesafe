@@ -1,6 +1,14 @@
-import { InferNestedFieldReference } from "../elements/fieldReference";
+import {
+  FieldReference,
+  InferNestedFieldReference,
+} from "../elements/fieldReference";
+import { FieldSelectorKeys } from "../elements/fieldSelector";
 import { Expression } from "../elements/expressions";
-import { AnyLiteral, ExpressionShaped } from "../elements/literals";
+import {
+  AnyLiteral,
+  ExpressionShaped,
+  SystemVariable,
+} from "../elements/literals";
 import { ValidateNestedValue } from "../elements/validation";
 import { PassThrough } from "../utils/errors";
 import { Document, OmitNeverValues, Prettify } from "../utils/objects";
@@ -8,26 +16,50 @@ import { FlattenDotSet, HasDottedKeys } from "../utils/paths";
 import { ApplySetUpdates } from "../utils/updates";
 
 /**
- * `$`-shaped values (`$`-strings, `$`-keyed objects) are accepted
- * STRUCTURALLY here and re-checked by `ValidateSetQuery`. Rejecting them
- * through the deep `AnyLiteral | Expression` union instead accumulates
- * relation depth on the shared call-checking stack and surfaces spurious
- * statement-level TS2589s next to the real error.
+ * The value union for a `$set` assignment. `$`-keyed OBJECTS are accepted
+ * STRUCTURALLY (`ExpressionShaped`) and re-checked by `ValidateSetQuery`;
+ * `$`-STRING values resolve to finite unions so they both autocomplete AND
+ * reject typos at the constraint (a typo'd ref errors with a single TS2820
+ * "Did you mean '$name'?" at the value — no validation walk needed for the
+ * string case).
  *
- * `Expression<Schema>` and `"$$REMOVE"` are AUTOCOMPLETE-ONLY members:
- * for checking they are subsumed by `ExpressionShaped` and `` `$${string}` ``
- * respectively (every valid expression is expression-shaped; "$$REMOVE" is
- * a $-string), so neither can decide acceptance — do not "fix" acceptance
- * bugs by editing them.
+ * Every string arm is FINITE — `FieldReference<Schema>` (schema-derived)
+ * and `SystemVariable` (the enumerated `$$` vocabulary, "$$REMOVE"
+ * included). No wide `` `$${string}` `` template exists here: a template
+ * wide enough to accept arbitrary `$`-strings necessarily ABSORBS the
+ * finite ref literals out of autocomplete (same predicate decides both),
+ * and the `` & {} `` non-absorption spelling leaks String.prototype into
+ * sibling object-literal completions. Finite literals have neither
+ * problem.
+ *
+ * `Expression<Schema>` is an AUTOCOMPLETE-ONLY member: for checking it is
+ * subsumed by `ExpressionShaped` (every valid expression is
+ * expression-shaped), so it cannot decide acceptance — do not "fix"
+ * acceptance bugs by editing it.
+ */
+type SetValue<Schema extends Document> =
+  | AnyLiteral<Schema>
+  | Expression<Schema>
+  | FieldReference<Schema>
+  | SystemVariable
+  | ExpressionShaped;
+
+/**
+ * `$set` query. The `[k: string]` index signature keeps arbitrary new keys
+ * (including brand-new dotted paths) legal AND governs value acceptance
+ * (`SetValue<Schema>`); the intersected `FieldSelectorKeys` is an
+ * AUTOCOMPLETE-ONLY hint that surfaces the schema's existing field selectors
+ * as key suggestions. Its value type is `unknown` on purpose — key
+ * completion does not depend on it, and instantiating the deep
+ * `SetValue<Schema>` union once per field-selector key (as the reviewed
+ * design first spelled it) blows the whole-project typecheck from ~7s to a
+ * multi-minute hang. `unknown & SetValue<Schema>` (the effective type at a
+ * known-selector key, via the index signature) is still `SetValue<Schema>`,
+ * so acceptance and value completions are unchanged.
  */
 export type SetQuery<Schema extends Document> = {
-  [k: string]:
-    | AnyLiteral<Schema>
-    | Expression<Schema>
-    | `$${string}`
-    | ExpressionShaped
-    | "$$REMOVE";
-};
+  [k: string]: SetValue<Schema>;
+} & FieldSelectorKeys<Schema, unknown>;
 
 /**
  * Key-filtered validation wrapper for `Pipeline.set`:

@@ -1,4 +1,4 @@
-import { Document, Prettify } from "../utils/objects";
+import { Document, IsPlainObject, Prettify } from "../utils/objects";
 import { DollarPrefixed } from "../utils/strings";
 import { PassThrough, PipeSafeError, RequiresMsg } from "../utils/errors";
 import { FieldOperand } from "../elements/operands";
@@ -9,13 +9,83 @@ import {
 } from "../elements/fieldSelector";
 import type { BSONType } from "bson";
 
-type ElementMatcher = "$elemMatch";
-type InMatchers = "$in" | "$nin"; // $in and $nin work for all types
-type ArrayOnlyMatcher = "$all"; // $all only makes sense for arrays
+// ---------------------------------------------------------------------------
+// Runtime operator-name lists — THE single source of every matcher key.
+// The pattern, used throughout the package: declare a const array, infer
+// its string union right next to it (`(typeof X)[number]`), and compose
+// bigger lists/unions by spreading. Every ComparatorMatchers/Notted/
+// RawMatchQuery key is mapped from one of these unions, so a name exists in
+// exactly one place — sync is by construction; never re-introduce assertion
+// pins for it. Exported so tooling (docs, the IDE autocomplete tests)
+// consumes the same names.
+// ---------------------------------------------------------------------------
 
-type EqualityMatchers = "$eq" | "$ne";
+export const EQUALITY_MATCHERS = ["$eq", "$ne"] as const;
+type EqualityMatchers = (typeof EQUALITY_MATCHERS)[number];
 
-type ContinuousMatchers = "$gte" | "$lte" | "$gt" | "$lt";
+/** $in and $nin work for all types. */
+export const IN_MATCHERS = ["$in", "$nin"] as const;
+type InMatchers = (typeof IN_MATCHERS)[number];
+
+export const CONTINUOUS_MATCHERS = ["$gte", "$lte", "$gt", "$lt"] as const;
+type ContinuousMatchers = (typeof CONTINUOUS_MATCHERS)[number];
+
+// $exists and $type carry different operand types, so each needs its own
+// singleton pair for the mapped keys in ComparatorMatchers; the exported
+// group is their spread.
+const EXISTS_MATCHERS = ["$exists"] as const;
+type ExistsMatcher = (typeof EXISTS_MATCHERS)[number];
+
+const TYPE_MATCHERS = ["$type"] as const;
+type TypeMatcher = (typeof TYPE_MATCHERS)[number];
+
+export const EXISTENCE_MATCHERS = [
+  ...EXISTS_MATCHERS,
+  ...TYPE_MATCHERS,
+] as const;
+
+export const SIZE_MATCHERS = ["$size"] as const;
+type SizeMatcher = (typeof SIZE_MATCHERS)[number];
+
+/** $all only makes sense for arrays. */
+export const ARRAY_ONLY_MATCHERS = ["$all"] as const;
+type ArrayOnlyMatcher = (typeof ARRAY_ONLY_MATCHERS)[number];
+
+export const ELEMENT_MATCHERS = ["$elemMatch"] as const;
+type ElementMatcher = (typeof ELEMENT_MATCHERS)[number];
+
+export const REGEX_MATCHERS = ["$regex"] as const;
+type RegexMatcher = (typeof REGEX_MATCHERS)[number];
+
+export const NOT_MATCHERS = ["$not"] as const;
+type NotMatcher = (typeof NOT_MATCHERS)[number];
+
+/** Every field-level matcher key ($not included via the Notted wrapper). */
+export const FIELD_MATCH_OPERATORS = [
+  ...EQUALITY_MATCHERS,
+  ...IN_MATCHERS,
+  ...CONTINUOUS_MATCHERS,
+  ...EXISTENCE_MATCHERS,
+  ...SIZE_MATCHERS,
+  ...ARRAY_ONLY_MATCHERS,
+  ...ELEMENT_MATCHERS,
+  ...REGEX_MATCHERS,
+  ...NOT_MATCHERS,
+] as const;
+
+export const LOGICAL_MATCH_OPERATORS = ["$and", "$or", "$nor"] as const;
+/** The top-level logical operators — single source for MatchQuery and the
+ * ResolveMatchOutput dispatch. */
+export type LogicalMatchOperators = (typeof LOGICAL_MATCH_OPERATORS)[number];
+
+const EXPR_MATCH_OPERATORS = ["$expr"] as const;
+type ExprMatchOperator = (typeof EXPR_MATCH_OPERATORS)[number];
+
+/** Every non-field top-level MatchQuery key: the logical operators + $expr. */
+export const TOP_LEVEL_MATCH_OPERATORS = [
+  ...LOGICAL_MATCH_OPERATORS,
+  ...EXPR_MATCH_OPERATORS,
+] as const;
 
 // MongoDB accepts both numeric codes (BSONType) and string aliases for $type operator
 type BSONTypeAlias = keyof typeof BSONType;
@@ -46,8 +116,25 @@ type ArrayValueOperand<T, Op extends string> =
   [T] extends [(infer U)[]] ? U[]
   : PipeSafeError<RequiresMsg<"Operator", Op, "an array field">>;
 
-type ArrayElementOperand<T, Op extends string> =
-  [T] extends [(infer U)[]] ? U
+// `$elemMatch`'s operand is a match query against the array's ELEMENT type,
+// NOT the bare element. `ElemMatchFields` contributes the per-field map only
+// when the element is a document (so `{ qty: { $gt: 5 } }` typechecks and its
+// keys complete); scalar elements route through the comparator arms below.
+// `U extends Document` (not just `IsPlainObject`) is what satisfies
+// MatchFieldMap's constraint in the true branch.
+type ElemMatchFields<U> =
+  IsPlainObject<U> extends true ?
+    U extends Document ?
+      MatchFieldMap<U>
+    : never
+  : never;
+
+// The `$elemMatch` operand: field-map (document elements) plus the
+// element-level comparators (`{ $gte: 80 }`, `{ $not: … }`). A non-array
+// field brands.
+type ElemMatchQuery<T, Op extends string> =
+  [T] extends [(infer U)[]] ?
+    ElemMatchFields<U> | ComparatorMatchers<U> | Notted<ComparatorMatchers<U>>
   : PipeSafeError<RequiresMsg<"Operator", Op, "an array field">>;
 
 type RegexOperand<T> = FieldOperand<
@@ -59,8 +146,9 @@ type RegexOperand<T> = FieldOperand<
 
 export type ComparatorMatchers<T extends unknown> = Prettify<
   /* Always */ {
-    $exists?: boolean;
-    $type?: SomeBSONType | SomeBSONType[];
+    [m in ExistsMatcher]?: boolean;
+  } & {
+    [m in TypeMatcher]?: SomeBSONType | SomeBSONType[];
   } & {
     [m in EqualityMatchers]?: T;
   } & {
@@ -68,14 +156,29 @@ export type ComparatorMatchers<T extends unknown> = Prettify<
   } & {
     [m in ContinuousMatchers]?: NumericOperand<T, m>;
   } & {
-    $size?: SizeOperand<T>;
+    [m in SizeMatcher]?: SizeOperand<T>;
   } & {
     [m in ArrayOnlyMatcher]?: ArrayValueOperand<T, m>;
   } & {
-    [m in ElementMatcher]?: ArrayElementOperand<T, m>;
+    [m in ElementMatcher]?: ElemMatchQuery<T, m>;
   } & {
-    $regex?: RegexOperand<T>;
+    [m in RegexMatcher]?: RegexOperand<T>;
   }
+>;
+
+// `ComparatorMatchers` restricted to the keys that make sense on a NON-array
+// element — the operand set applied in the recursive element-passthrough arm
+// of `RawMatchersForType`. Dropping the array-only keys ($size/$all/$elemMatch)
+// stops their `PipeSafeError` operands (the element is not itself an array)
+// from leaking a `~pipesafe.error` key into completion, while the shared
+// comparators keep implicit element-operator matching intact. Built by
+// composition over `ComparatorMatchers` — never re-spelling the operand
+// constraints.
+type ArrayOnlyMatcherKeys = SizeMatcher | ArrayOnlyMatcher | ElementMatcher;
+
+export type ScalarMatchers<T> = Omit<
+  ComparatorMatchers<T>,
+  ArrayOnlyMatcherKeys
 >;
 
 // `[T] extends [(infer U)[]]` rather than naked `T extends ...` — the
@@ -84,29 +187,55 @@ export type ComparatorMatchers<T extends unknown> = Prettify<
 // 'delivered'` hovers with the full union rather than just one branch.
 export type RawMatchersForType<T extends unknown> =
   [T] extends [(infer U)[]] ?
-    ComparatorMatchers<T> | RawMatchersForType<U> // Element matcher (passthrough)
+    ComparatorMatchers<T> | ScalarMatchers<U> // Element matcher (passthrough)
   : ComparatorMatchers<T>;
 
-export type Notted<T> = { $not: T } | { $not: Notted<T> };
+export type Notted<T> =
+  | { [m in NotMatcher]: T }
+  | { [m in NotMatcher]: Notted<T> };
+
+// A bare `RegExp` in the exact-value position leaks all its prototype members
+// (exec, test, flags, source, …) into the key-completion list of every string
+// field. Picking only the symbol-keyed `[Symbol.match]` member keeps RegExp
+// INSTANCES assignable — `{ status: /^ship/ }` still typechecks — while
+// contributing ZERO string keys to completion (the language service never
+// lists symbol keys as members).
+type RegExpShorthand = Pick<RegExp, typeof Symbol.match>;
+
+// The exact-value (direct-equality) arm of a matcher. A plain object keeps its
+// bare type so embedded-document key completions stay available. A NON-plain
+// object type (Date, ObjectId, …) would leak its 40+ prototype members if kept
+// bare; instead we keep only its symbol-keyed subset, which real instances
+// still satisfy (they carry those symbols) yet contributes nothing to the key
+// list. Objects with no symbol keys fall back to `object` intersected with the
+// comparators (still an object, still no leaked keys). Scalars keep bare `T`.
+type ExactValue<T> =
+  IsPlainObject<T> extends true ? T
+  : [T] extends [object] ?
+    [Extract<keyof T, symbol>] extends [never] ?
+      object & ComparatorMatchers<T>
+    : Pick<T, Extract<keyof T, symbol>>
+  : T;
 
 export type MatchersForType<T extends unknown> =
-  | T
+  | ExactValue<T>
   | RawMatchersForType<T>
   | Notted<RawMatchersForType<T>>
-  | (T extends (infer U)[] ? U : T)
-  | (T extends string ? RegExp : never);
+  | (T extends (infer U)[] ? ExactValue<U> : never)
+  | (T extends string ? RegExpShorthand : never);
 
-export type RawMatchQuery<Schema extends Document> = {
+// The field→matcher map at the heart of a raw match query. Factored out so
+// `$elemMatch`'s document-element operand can reuse it verbatim without
+// re-spelling the mapped type.
+type MatchFieldMap<Schema extends Document> = {
   [selector in FieldSelector<Schema>]?: MatchersForType<
     InferFieldSelector<Schema, selector>
   >;
-} & {
-  $expr?: unknown;
 };
 
-/** The top-level logical operators — single source for MatchQuery and the
- * ResolveMatchOutput dispatch. */
-export type LogicalMatchOperators = "$and" | "$or" | "$nor";
+export type RawMatchQuery<Schema extends Document> = MatchFieldMap<Schema> & {
+  [m in ExprMatchOperator]?: unknown;
+};
 
 export type MatchQuery<Schema extends Document> =
   | { [Op in LogicalMatchOperators]?: MatchQuery<Schema>[] }

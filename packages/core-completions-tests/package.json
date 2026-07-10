@@ -1,0 +1,15 @@
+{
+  "name": "@pipesafe/core-completions-tests",
+  "version": "0.0.0",
+  "private": true,
+  "description": "IDE-autocomplete regression tests for @pipesafe/core, driven through the TypeScript language service",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@pipesafe/core": "workspace:*",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.15"
+  }
+}
