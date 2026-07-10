@@ -438,10 +438,10 @@ export class Project {
     // here as via source.aggregate().execute().
     const source = model.getSource();
     const sourceDb = model.getSourceDatabase() ?? dbName;
-    const db = client.db(sourceDb, source.getOutputDbOptions?.());
+    const db = client.db(sourceDb, source.getOutputDbOptions());
     const collection = db.collection(
       sourceCollection,
-      source.getOutputCollectionOptions?.()
+      source.getOutputCollectionOptions()
     );
 
     const cursor = collection.aggregate(pipeline, aggregateOptions);

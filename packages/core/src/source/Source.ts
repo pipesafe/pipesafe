@@ -33,16 +33,14 @@ export interface Source<T = unknown> {
    * Driver `DbOptions` to apply when reading from this source, if any.
    * - For collections: the options the collection was configured with
    * - For models: undefined (materialized output has no configured options)
-   *
-   * Optional so custom Source implementations remain compatible.
    */
-  getOutputDbOptions?(): DbOptions | undefined;
+  getOutputDbOptions(): DbOptions | undefined;
 
   /**
    * Driver `CollectionOptions` to apply when reading from this source, if any.
    * Same shape as {@link Source.getOutputDbOptions}.
    */
-  getOutputCollectionOptions?(): CollectionOptions | undefined;
+  getOutputCollectionOptions(): CollectionOptions | undefined;
 
   /** @internal Phantom type for inference - do not use directly */
   readonly __outputType: T;
