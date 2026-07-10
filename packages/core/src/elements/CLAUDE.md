@@ -25,13 +25,12 @@ brand as typos).
    too, or `<const>`-inferred readonly literals fall through the arm and
    the resolver silently drops the field.
 2. Add the operator to its `*_EXPRESSION_OPERATORS` const array — the
-   single category declaration; the union paired under each array, the
-   spread `EXPRESSION_OPERATORS` (whose `satisfies readonly (keyof
-ExpressionSpec)[]` rejects typo'd/unregistered names at the
-   declaration), and the category unions (`StringExpression` etc.) all
-   derive from the arrays — never sync them with assertion pins. A
-   registry entry missing from the arrays is caught by the completions
-   suite's exact-match ideals.
+   AUTHORITATIVE category declaration. The union paired under each array,
+   the spread `EXPRESSION_OPERATORS`, and the category unions
+   (`StringExpression` etc.) all derive from the arrays — never sync them
+   with assertion pins. The spread's `satisfies` surfaces a missing
+   registry entry at the array declaration; a registry key absent from
+   the arrays is caught by the completions suite's exact-match ideals.
 3. Only if the RESULT depends on the literal arguments: OMIT `returns`
    from the entry (the omission IS the declaration — `LiteralDependentOps`
    is derived from it) and add an arm to `InferDependentExpression`. TS
@@ -54,6 +53,24 @@ derives automatically. Do NOT hand-write expression object types.
   result kind; the operand brand reports at the input position. Don't "fix"
   this by making inference fail on bad operands.
 - `NotAnExpression` (sentinel, not `never`) means "treat as literal".
+
+## Completion safety
+
+Completion lists are API surface, pinned exactly by
+`packages/core-completions-tests`. The four invariants (no wide templates
+next to finite literal unions, no `& {}` string intersections, no bare
+non-plain object types in object-completed unions, `FieldSelectorKeys`
+hints for index-signature queries) live in the root CLAUDE.md — read them
+before touching any Query/operand union.
+
+- `ResolveToPrimitive`'s literal-value arm carries Date/ObjectId as the
+  keyless `object` — `{}` is NOT equivalent (it accepts primitive strings
+  and breaks the replaceRoot `"$missing"` rejection pin).
+- `SYSTEM_VARIABLES`/`SystemVariable` (literals.ts) is the enumerated `$$`
+  vocabulary — never widen a consumer back to `` `$$${string}` ``. The
+  validation kernel brands unlisted names with `UnknownSystemVariableError`;
+  `$let`/`$map`/`$filter`-bound user variables never reach the walk (their
+  binding interiors are `unknown`-typed).
 
 ## Gotchas
 

@@ -69,7 +69,9 @@ export {
   LITERAL_EXPRESSION_OPERATORS,
   COMPARISON_EXPRESSION_OPERATORS,
   EXPRESSION_OPERATORS,
+  EXPRESSION_OPERATORS_BY_CATEGORY,
 } from "./elements/expressions";
+export type { ExpressionCategory, OpsInCategory } from "./elements/expressions";
 export { ACCUMULATOR_OPERATORS } from "./stages/group";
 export { SYSTEM_VARIABLES } from "./elements/literals";
 export type { SystemVariable } from "./elements/literals";

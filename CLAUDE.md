@@ -23,12 +23,15 @@ pipesafe/
 │   │   ├── benchmarking/        # TypeScript performance benchmarks
 │   │   └── LICENSE              # Apache License 2.0
 │   │
-│   └── manifold/                # DAG orchestration (ELv2 - commercial)
-│       ├── src/
-│       │   ├── model/           # Model - materializable pipelines
-│       │   └── project/         # Project - DAG orchestrator
-│       ├── examples/            # DAG usage examples
-│       └── LICENSE              # Elastic License 2.0
+│   ├── manifold/                # DAG orchestration (ELv2 - commercial)
+│   │   ├── src/
+│   │   │   ├── model/           # Model - materializable pipelines
+│   │   │   └── project/         # Project - DAG orchestrator
+│   │   ├── examples/            # DAG usage examples
+│   │   └── LICENSE              # Elastic License 2.0
+│   │
+│   └── core-completions-tests/  # IDE-autocomplete regression tests (private)
+│       └── src/                 # LanguageService harness + exact-ideal suite
 │
 └── package.json                 # Root workspace config (private)
 ```
@@ -120,6 +123,10 @@ The type system is organized into modular building blocks located in `packages/c
     paths — load-bearing for union narrowing; use `GetFieldTypeOrError` at
     user-surfacing call sites)
   - `InferFieldSelector<Schema, Selector>`: Infers the type at a given field selector
+  - `FieldSelectorKeys<Schema, V>`: AUTOCOMPLETE-ONLY optional mapped hint
+    intersected into `[key: string]` queries (set/project) so existing fields
+    complete as keys; pass `V = unknown` — instantiating a deep value union
+    per selector key hangs the whole-project typecheck
   - Array index access supported (e.g., `"items.0.name"`)
 
 - **fieldReference.ts**: Field references for use in expression values (prefixed with `$`)
@@ -159,7 +166,16 @@ The type system is organized into modular building blocks located in `packages/c
   `` `$${string}` ``). Adding an operator = one registry entry + its category
   array line + deleting its allow-list line (+ one dependent arm if applicable).
 
-- **literals.ts**: Literal value type constraints
+- **literals.ts**: Literal value type constraints — `AnyLiteral`,
+  `ExpressionShaped` (structural `$`-keyed acceptance), and
+  `ResolveToPrimitive`, whose literal-value arm carries Date/ObjectId as the
+  keyless `object` so their methods never pollute object-literal key
+  completions (`{}` is NOT equivalent — it also accepts primitive strings and
+  breaks the replaceRoot rejection pin). Also home of `SYSTEM_VARIABLES` /
+  `SystemVariable` — the enumerated `$$`-variable vocabulary (never widen a
+  consumer back to `` `$$${string}` ``); `$let`/`$map`/`$filter`-bound USER
+  variables live in `unknown`-typed operand interiors instead, and
+  aggregation-command-level `let` variables are not modeled yet
 
 #### Utility Types (`packages/core/src/utils/`)
 
@@ -189,13 +205,24 @@ Located in `packages/core/src/stages/`:
     - Equality: `$eq`, `$ne`
     - Comparison: `$gt`, `$gte`, `$lt`, `$lte` (for numbers and dates)
     - Existence: `$exists`, `$type`
-    - Arrays: `$size`, `$in`, `$nin`, `$all`, `$elemMatch`
+    - Arrays: `$size`, `$in`, `$nin`, `$all`, `$elemMatch` — `$elemMatch`
+      takes a real element QUERY (`ElemMatchQuery`: element fields +
+      matchers, so `{ $elemMatch: { qty: { $gt: 5 } } }` typechecks)
     - Regex: Direct RegExp or `$regex` operator for strings
     - Logical: `$and`, `$or`, `$nor`, `$not`
     - Expressions: `$expr`
   - **Type Narrowing**: `ResolveMatchOutput<Schema, Query>` filters union types based on query
   - **Union Support**: `FilterUnion<Union, Query>` validates each union member against query fields
   - Advanced query validation with `MatchersForType<T>` and `ComparatorMatchers<T>`
+  - **Completion-safe exact-value arms**: `ExactValue<T>` keeps plain objects
+    bare (embedded-document keys should complete) but carries non-plain
+    instance types (Date, ObjectId, …) via their symbol-keyed subsets
+    (`Pick<T, Extract<keyof T, symbol>>`), and the direct-regex arm is
+    `RegExpShorthand = Pick<RegExp, typeof Symbol.match>` — instances stay
+    assignable while zero prototype members reach the completion list.
+    `ScalarMatchers<U>` (ComparatorMatchers minus array-only keys) is the
+    recursive element-passthrough arm, keeping the `PipeSafeError` brand key
+    out of completions
 
 TODO: Document the rest of the stages
 
@@ -262,6 +289,41 @@ Uses `mongodb-memory-server` for isolated testing with pre-seeded test data.
 
 Always use the project's tsconfig.json for type checking. The project uses strict settings (`exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`, etc.) that differ from TypeScript defaults. Use `bun run build` for validation, not `tsc` on individual files.
 
+## IDE Autocomplete: completions are API surface
+
+`packages/core-completions-tests` pins the EXACT completion list of every
+Pipeline call-site cursor position (keys, matcher lists, expression/
+accumulator operators, `$`-refs, `$$`-system variables). The harness drives
+`LanguageService.getCompletionsAtPosition` — the same API tsserver uses — so
+the suite tests exactly what an editor shows. Ideals are exact-match
+(`expectExactly`): an extra entry is a leak, a missing one is a lost
+suggestion. The operator vocabularies come from the exported authoritative
+arrays, so registering an operator flows into the ideals automatically — a
+registry key missing from its array is caught HERE. Run via `bun run
+test:ci`; a known-bad position keeps its exact ideal but is marked
+`it.fails` (see the package README). Do not weaken an ideal to make a test
+pass.
+
+Completion-safety invariants (all proven empirically; violating any one
+regresses the suite):
+
+- A wide template (`` `$${string}` ``) in a union ERASES its finite literal
+  siblings from string completions — the same matching predicate decides
+  acceptance and union literal-removal. Use finite unions
+  (`FieldReference<Schema>`, `SystemVariable`) instead of catch-alls.
+- The `(template & {})` non-absorption trick is BANNED in value unions:
+  a string-flavored intersection is not primitive-flagged, so it spills
+  `String.prototype` into the object-literal key completions of every
+  sibling value position.
+- Non-plain object types (Date, RegExp, ObjectId) as bare union members
+  contribute their prototype members as object-literal keys. Carry them via
+  symbol-keyed subsets (match's `ExactValue`) or the keyless `object`
+  (literals' `ResolveToPrimitive`).
+- `[key: string]`-only query types give tsserver NO contextual keys (the
+  editor floods ~1000 globals). Intersect `FieldSelectorKeys<Schema,
+unknown>` as the autocomplete hint; keep the index signature for
+  arbitrary new keys.
+
 ## Compile-Time Errors: `PipeSafeError<Msg>`
 
 Compile-time validation errors are surfaced through a single branded interface:
@@ -285,6 +347,7 @@ Accumulator        '$op' requires <constraint>.
 Accumulator        '$op' is not a recognized accumulator.
 Stage              '$stage' <constraint>.
 Field              'name' is not on the schema.
+Variable           '$$name' is not a recognized system variable.
 Foreign collection has no <constraint>.
 Expression objects must have exactly one operator.
 ```
@@ -294,7 +357,7 @@ Conventions:
 - Trailing period.
 - No parenthetical "what would work" hints — those belong in docs, not the brand.
 - Quote `$op` / field names with single quotes.
-- Use **Operator** for `$match` / expression operators, **Accumulator** for `$group` operands (`$sum`, `$avg`, etc.), **Stage** for `$project` / `$unwind` etc., **Foreign collection** for `$lookup` constraints where the joined schema is the cause (the stage was used correctly; the schema is missing a compatible field).
+- Use **Operator** for `$match` / expression operators, **Accumulator** for `$group` operands (`$sum`, `$avg`, etc.), **Stage** for `$project` / `$unwind` etc., **Variable** for `$$`-references outside the `SYSTEM_VARIABLES` enumeration, **Foreign collection** for `$lookup` constraints where the joined schema is the cause (the stage was used correctly; the schema is missing a compatible field).
 - Pick the subject by what the user needs to fix: the operator/accumulator/stage they wrote, the field they referenced, or the foreign collection's schema they joined against.
 
 ### Where brands fire
@@ -311,6 +374,12 @@ from `RequiresMsg` (utils/errors.ts):
 - `fieldSelector.ts` — `GetFieldTypeOrError` (branded sibling of `GetFieldType` for user-surfacing call sites)
 - `lookup.ts` — `LookupForeignFieldOrError` (no foreign field with a compatible type, with passthrough for upstream errors)
 - `expressions.ts` `InferExpression` — the exactly-one-operator brand for multi-`$`-key objects
+- `validation.ts` — `UnknownOperatorError` (names outside registry + allow-list) and
+  `UnknownSystemVariableError` (unlisted `$$`-vars in nested positions)
+- NOTE: `$set`/`$project` STRING values reject at the CONSTRAINT, not via brands —
+  their value unions are all-finite (`FieldReference<Schema> | SystemVariable |
+NoDollarString | …`), so a typo'd ref gets TypeScript's native TS2820
+  "Did you mean '$name'?" with a spelling suggestion
 
 ### Pipeline method signature patterns
 
@@ -335,7 +404,7 @@ When a `<const P>`-inferred literal is used as the brand's `Ctx` (or as part of 
 ### Known limitations
 
 - **`Pipeline.group`'s call-site brand surfacing** for `$sum: '$stringField'` etc. now fires via the key-filtered `ValidateGroupQuery` intersection (`$group: G & ValidateGroupQuery<Schema, G>`). Two hard-won constraints, both pinned in `Pipeline.callSite.typeAssertions.ts`: the intersection form is REQUIRED (a bare mapped wrapper at the parameter position breaks contextual typing of compound-`_id` patterns like `_id: { date: { $dateToString: ... } }` — both the bare and concrete-`_id` variants were tried and failed), and the wrapper must be key-FILTERED so a fully-valid query validates against `{}` (a full-map intersection cost 3× whole-project check time). Validation covers `$sum`/`$avg` (numeric) and `$min`/`$max` (BSON-comparable: number, date, string, boolean); extending it = adding the key to `CheckedAccumulatorOps` after registering the operand in `AccumulatorSpec`.
-- **Nested value validation** (`$set`/`$project` values and group `_id` at any literal depth) is handled by the shared kernel in `elements/validation.ts` (`ValidateNestedValue`): unknown refs, malformed expression objects (multi-operator, or operator keys mixed with plain keys), invalid operands of REGISTERED operators, AND operator/accumulator names outside registry + allow-list all brand at the chained call site. Valid-but-unmodeled MongoDB is enumerated BY NAME (`UnimplementedExpressionOps` in elements/expressions.ts, `UnimplementedAccumulators` in stages/group.ts — accepted with no operand validation; inference degrades them to `unknown`); never widen those lists to `` `$${string}` ``. `$$`-system variables and widened (non-literal) value types stay accepted. Remaining structural-only interiors: expression OPERAND interiors reached through permissive operand arms (`$cond`/`$ifNull` conditional operands, `$filter.cond`, `$let.in`— all`unknown`-typed in the registry) and `replaceRoot`'s bare `Document` arm.
+- **Nested value validation** (`$set`/`$project` values and group `_id` at any literal depth) is handled by the shared kernel in `elements/validation.ts` (`ValidateNestedValue`): unknown refs, malformed expression objects (multi-operator, or operator keys mixed with plain keys), invalid operands of REGISTERED operators, AND operator/accumulator names outside registry + allow-list all brand at the chained call site. Valid-but-unmodeled MongoDB is enumerated BY NAME (`UnimplementedExpressionOps` in elements/expressions.ts, `UnimplementedAccumulators` in stages/group.ts — accepted with no operand validation; inference degrades them to `unknown`); never widen those lists to `` `$${string}` ``. `$$`-system variables are the enumerated `SYSTEM_VARIABLES` only (unlisted names brand with `UnknownSystemVariableError` in nested positions, or reject at the constraint at top level); widened (non-literal) value types stay accepted. Remaining structural-only interiors: expression OPERAND interiors reached through permissive operand arms (`$cond`/`$ifNull` conditional operands, `$filter.cond`, `$let.in`— all`unknown`-typed in the registry) and `replaceRoot`'s bare `Document` arm.
 
 ### Regression guard
 

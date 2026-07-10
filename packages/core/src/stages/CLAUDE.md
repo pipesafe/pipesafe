@@ -47,16 +47,24 @@ aliases behind `PassThrough` (defaults evaluate eagerly).
 ## When adding a stage
 
 Touch: the new trio module here, the `Pipeline` method, a
-`<stage>.typeAssertions.ts`, and ONE per-stage block in
+`<stage>.typeAssertions.ts`, ONE per-stage block in
 `stages.contract.typeAssertions.ts` (the file is grouped by stage; a
 block holds the stage's PassThrough, method-wiring, and Query-alias
-pins together). Nothing compile-enforces the contract entries — don't
-skip them.
+pins together), and — if the stage adds any cursor position a user
+completes at — its exact ideals in `packages/core-completions-tests`.
+Follow the completion-safety invariants (root CLAUDE.md): all-finite
+string arms (`FieldReference`/`SystemVariable`, no `` `$${string}` ``
+catch-alls), `FieldSelectorKeys<Schema, unknown>` hint on
+index-signature queries, no bare non-plain object types in value
+unions. Nothing compile-enforces the contract entries — don't skip
+them.
 
 ## Verifying
 
 `bun run typecheck:packages` (from the root; the root `bun run typecheck`
-does NOT check package sources). The regression guards that must never be
-weakened:
-`stages.contract.typeAssertions.ts` and
-`../pipeline/Pipeline.callSite.typeAssertions.ts`.
+does NOT check package sources), `bun run test:ci` (includes the
+exact-ideal completions suite), and `bun run budget:check`. The regression
+guards that must never be weakened:
+`stages.contract.typeAssertions.ts`,
+`../pipeline/Pipeline.callSite.typeAssertions.ts`, and the completion
+ideals in `packages/core-completions-tests`.

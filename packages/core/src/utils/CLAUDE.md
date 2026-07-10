@@ -9,7 +9,10 @@ runtime code here.)
 
 - **errors.ts** — `PipeSafeError` (the brand), `PassThrough` (the first
   early exit every resolver wraps in), `RequiresMsg` (brand-message
-  skeleton). All compile-time error surfacing flows through these.
+  skeleton), and the not-recognized family (`UnknownOperatorError`,
+  `UnknownAccumulatorError`, `UnknownFieldError`,
+  `UnknownSystemVariableError`) so each message is spelled once. All
+  compile-time error surfacing flows through these.
 - **dispatch.ts** — operator-key classification (`OperatorKeyOf`,
   `HasOperatorKey`, `HasSingleOperatorKey`, `NotAnExpression`). Values are
   classified by `$`-key BEFORE any schema-parameterized work.
