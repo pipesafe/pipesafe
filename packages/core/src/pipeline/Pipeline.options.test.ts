@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { Db, MongoClient } from "mongodb";
+import { Db, MongoClient, ReadConcern } from "mongodb";
 import { useMemoryMongo } from "../utils/useMemoryMongo";
 import { Collection } from "../collection/Collection";
 import { Database } from "../database/Database";
@@ -16,10 +16,12 @@ describe("Connection and query options", async () => {
   const DBName = client.db().databaseName;
 
   it("applies DbOptions and CollectionOptions to the driver objects", () => {
+    // DbOptions.readConcern requires a ReadConcern instance (unlike
+    // CollectionOptions, which accepts the { level } shorthand)
     const db = new Database({
       client,
       databaseName: DBName,
-      options: { readConcern: { level: "majority" } },
+      options: { readConcern: new ReadConcern("majority") },
     });
     const collection = db.collection<TestDoc>("docs", {
       readPreference: "secondaryPreferred",
@@ -31,11 +33,12 @@ describe("Connection and query options", async () => {
   });
 
   it("merges execute-level options per key over inherited options", () => {
+    const majority = new ReadConcern("majority");
     const collection = new Collection<TestDoc>({
       client,
       databaseName: DBName,
       collectionName: "merge_docs",
-      dbOptions: { readConcern: { level: "majority" } },
+      dbOptions: { readConcern: majority },
       collectionOptions: {
         readConcern: { level: "majority" },
         readPreference: "primary",
@@ -53,7 +56,7 @@ describe("Connection and query options", async () => {
 
       // Provided keys override; the rest of the inherited options survive
       expect(dbSpy).toHaveBeenLastCalledWith(DBName, {
-        readConcern: { level: "majority" },
+        readConcern: majority,
         retryWrites: false,
       });
       expect(collectionSpy).toHaveBeenLastCalledWith("merge_docs", {
