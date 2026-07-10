@@ -3,6 +3,7 @@ import {
   ACCUMULATOR_OPERATORS,
   EXPRESSION_OPERATORS,
   FIELD_MATCH_OPERATORS,
+  SYSTEM_VARIABLES,
   TOP_LEVEL_MATCH_OPERATORS,
 } from "@pipesafe/core";
 import { createCompletionTester, type CompletionProbe } from "./harness";
@@ -226,19 +227,14 @@ describe("set", () => {
     expectExactly(probe, FIELD_SELECTOR_KEYS, { memberCompletion: true });
   });
 
-  // KNOWN BAD (verified impossible with the current value-union shape):
-  // the bare `$${string}` structural arm absorbs the finite
-  // FieldReference<Schema> union, so nothing is suggested. The
-  // `` `$${string}` & {} `` non-absorption trick trades this for a WORSE
-  // leak — a string-flavored intersection is not primitive-flagged and
-  // spills String.prototype (at/charAt/...) into the object-literal key
-  // completions of every sibling value position, breaking the
-  // expression-operators test. See the KNOWN LIMITATION note in
-  // stages/set.ts. Ideal includes "$$REMOVE" (a documented
-  // autocomplete member).
-  it.fails("suggests exactly the field references for a string value", () => {
+  // Guards SetValue's all-finite string arms: FieldReference<Schema> plus
+  // the enumerated SYSTEM_VARIABLES — no wide `$${string}` template exists
+  // to absorb the literals (a template wide enough to accept arbitrary
+  // $-strings provably erases the refs from completions, and its `& {}`
+  // spelling leaks String.prototype into sibling object positions).
+  it("suggests exactly the field references and system variables for a string value", () => {
     const probe = at(`orders.set({ total: "‸" });`);
-    expectExactly(probe, [...FIELD_REFS, "$$REMOVE"]);
+    expectExactly(probe, [...FIELD_REFS, ...SYSTEM_VARIABLES]);
   });
 
   // Guards ResolveToPrimitive's literal-value arm: Date/ObjectId are

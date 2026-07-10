@@ -3,6 +3,31 @@ import { Document, ForbidKeys } from "../utils/objects";
 import { NoDollarString } from "../utils/strings";
 import { FieldReferencesThatInferTo } from "./fieldReference";
 
+/**
+ * MongoDB's documented `$$`-system variables, enumerated BY NAME — the
+ * AUTHORITATIVE list (never widen a consumer to `` `$$${string}` `` where a
+ * finite vocabulary is wanted). Finite literals are primitive-flagged, so
+ * they autocomplete at string-value positions without absorbing sibling
+ * literals and contribute nothing to object-literal key completions. An
+ * unlisted `$$var` at a position typed with this union is rejected at the
+ * constraint (undefined variables are runtime errors in MongoDB anyway);
+ * `$let`/`$map`/`$filter`-bound user variables remain accepted inside the
+ * operand interiors that bind them (`unknown`-typed).
+ */
+export const SYSTEM_VARIABLES = [
+  "$$NOW",
+  "$$CLUSTER_TIME",
+  "$$ROOT",
+  "$$CURRENT",
+  "$$REMOVE",
+  "$$DESCEND",
+  "$$PRUNE",
+  "$$KEEP",
+  "$$SEARCH_META",
+  "$$USER_ROLES",
+] as const;
+export type SystemVariable = (typeof SYSTEM_VARIABLES)[number];
+
 export type LiteralOrFieldReferenceInferringTo<Schema extends Document, T> =
   | T
   | FieldReferencesThatInferTo<Schema, T>;
