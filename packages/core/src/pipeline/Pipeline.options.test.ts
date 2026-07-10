@@ -69,6 +69,22 @@ describe("Connection and query options", async () => {
     }
   });
 
+  it("exposes configured options through the Source accessors", () => {
+    const dbOptions = { readConcern: new ReadConcern("majority") };
+    const collectionOptions = { readPreference: "secondaryPreferred" } as const;
+    const collection = new Collection<TestDoc>({
+      client,
+      collectionName: "accessor_docs",
+      dbOptions,
+      collectionOptions,
+    });
+
+    // Consumers reading a Collection through the Source interface (e.g.
+    // manifold's Project) rely on these to honor the configured options
+    expect(collection.getOutputDbOptions()).toBe(dbOptions);
+    expect(collection.getOutputCollectionOptions()).toBe(collectionOptions);
+  });
+
   it("passes AggregateOptions through Pipeline.execute", async () => {
     const collection = new Collection<TestDoc>({
       client,

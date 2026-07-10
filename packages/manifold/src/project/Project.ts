@@ -31,8 +31,10 @@ export type RunOptions = {
   /** Database name (falls back to project default) */
   databaseName?: string;
   /**
-   * Driver `AggregateOptions` applied to every model's aggregation
-   * (e.g. `maxTimeMS`, `allowDiskUse`, `hint`, `comment`).
+   * Driver `AggregateOptions` applied to every collection-mode model's
+   * aggregation (e.g. `maxTimeMS`, `allowDiskUse`, `hint`, `comment`).
+   * View materialization is DDL (`createCollection`) and runs no
+   * aggregation, so these options do not apply to it.
    */
   aggregateOptions?: AggregateOptions;
   /** Callbacks */
@@ -430,10 +432,17 @@ export class Project {
     }
 
     // Execute aggregation
-    // Use source database for reading, output stage handles writing to correct db
+    // Use source database for reading, output stage handles writing to correct db.
+    // Honor any driver options configured on the source (e.g. a Collection
+    // created with dbOptions/collectionOptions) so reads behave the same
+    // here as via source.aggregate().execute().
+    const source = model.getSource();
     const sourceDb = model.getSourceDatabase() ?? dbName;
-    const db = client.db(sourceDb);
-    const collection = db.collection(sourceCollection);
+    const db = client.db(sourceDb, source.getOutputDbOptions?.());
+    const collection = db.collection(
+      sourceCollection,
+      source.getOutputCollectionOptions?.()
+    );
 
     const cursor = collection.aggregate(pipeline, aggregateOptions);
     await cursor.toArray();

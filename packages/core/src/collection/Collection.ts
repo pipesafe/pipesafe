@@ -77,6 +77,14 @@ export class Collection<Docs extends Document> implements Source<Docs> {
     return this.databaseName;
   }
 
+  getOutputDbOptions(): DbOptions | undefined {
+    return this.dbOptions;
+  }
+
+  getOutputCollectionOptions(): CollectionOptions | undefined {
+    return this.collectionOptions;
+  }
+
   private getClient() {
     const client = this.client ?? pipesafe.client;
     if (!client) {

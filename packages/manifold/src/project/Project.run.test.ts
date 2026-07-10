@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { Collection as MongoCollection } from "mongodb";
+import {
+  Collection as MongoCollection,
+  Db,
+  MongoClient,
+  ReadConcern,
+} from "mongodb";
 import { Collection } from "@pipesafe/core";
 import { useMemoryMongo } from "../../../core/src/utils/useMemoryMongo";
 import { Model } from "../model/Model";
@@ -379,6 +384,55 @@ describe("Project.run()", async () => {
       } finally {
         aggregateSpy.mockRestore();
       }
+    });
+  });
+
+  describe("source driver options", () => {
+    it("honors the source Collection's db/collection options when reading", async () => {
+      const db = client.db();
+      await db.collection<RawDoc>("raw_docs_opts").insertMany(sampleDocs);
+
+      const majority = new ReadConcern("majority");
+      const optionedSource = new Collection<RawDoc>({
+        collectionName: "raw_docs_opts",
+        dbOptions: { readConcern: majority },
+        collectionOptions: { readPreference: "secondaryPreferred" },
+      });
+      const optionedModel = new Model({
+        name: "staging_opts",
+        from: optionedSource,
+        pipeline: (p) => p.match({ active: true }),
+        materialize: { type: "collection", mode: Model.Mode.Replace },
+      });
+      const project = new Project({
+        name: "options_project",
+        models: [optionedModel],
+      });
+
+      const dbSpy = vi.spyOn(MongoClient.prototype, "db");
+      const collectionSpy = vi.spyOn(Db.prototype, "collection");
+      try {
+        const result = await project.run({
+          client,
+          databaseName: db.databaseName,
+        });
+
+        expect(result.success).toBe(true);
+        // The source read resolves the db/collection with the options the
+        // Collection was configured with — same as aggregate().execute()
+        expect(dbSpy).toHaveBeenCalledWith(db.databaseName, {
+          readConcern: majority,
+        });
+        expect(collectionSpy).toHaveBeenCalledWith("raw_docs_opts", {
+          readPreference: "secondaryPreferred",
+        });
+      } finally {
+        dbSpy.mockRestore();
+        collectionSpy.mockRestore();
+      }
+
+      const stagingDocs = await db.collection("staging_opts").find().toArray();
+      expect(stagingDocs).toHaveLength(2);
     });
   });
 

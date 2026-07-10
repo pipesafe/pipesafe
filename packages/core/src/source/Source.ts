@@ -5,6 +5,8 @@
  * This file exists to avoid circular imports between Pipeline and Model.
  */
 
+import type { CollectionOptions, DbOptions } from "mongodb";
+
 /**
  * Interface that both Collection and Model implement.
  * Allows them to be used interchangeably as pipeline sources.
@@ -26,6 +28,21 @@ export interface Source<T = unknown> {
    * - For models: returns the output database (or undefined for default)
    */
   getOutputDatabase(): string | undefined;
+
+  /**
+   * Driver `DbOptions` to apply when reading from this source, if any.
+   * - For collections: the options the collection was configured with
+   * - For models: undefined (materialized output has no configured options)
+   *
+   * Optional so custom Source implementations remain compatible.
+   */
+  getOutputDbOptions?(): DbOptions | undefined;
+
+  /**
+   * Driver `CollectionOptions` to apply when reading from this source, if any.
+   * Same shape as {@link Source.getOutputDbOptions}.
+   */
+  getOutputCollectionOptions?(): CollectionOptions | undefined;
 
   /** @internal Phantom type for inference - do not use directly */
   readonly __outputType: T;

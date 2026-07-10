@@ -230,6 +230,18 @@ export class Model<
   }
 
   /**
+   * A model's materialized output collection has no configured driver
+   * options — reads of it use driver defaults.
+   */
+  getOutputDbOptions(): undefined {
+    return undefined;
+  }
+
+  getOutputCollectionOptions(): undefined {
+    return undefined;
+  }
+
+  /**
    * Build the pipeline stages for this model.
    */
   getPipelineStages(): Document[] {
