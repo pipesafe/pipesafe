@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { Db, MongoClient } from "mongodb";
 import { useMemoryMongo } from "../utils/useMemoryMongo";
 import { Collection } from "../collection/Collection";
 import { Database } from "../database/Database";
@@ -27,6 +28,42 @@ describe("Connection and query options", async () => {
     const mongoCollection = collection["getCollection"]();
     expect(mongoCollection.readConcern?.level).toBe("majority");
     expect(mongoCollection.readPreference?.mode).toBe("secondaryPreferred");
+  });
+
+  it("merges execute-level options per key over inherited options", () => {
+    const collection = new Collection<TestDoc>({
+      client,
+      databaseName: DBName,
+      collectionName: "merge_docs",
+      dbOptions: { readConcern: { level: "majority" } },
+      collectionOptions: {
+        readConcern: { level: "majority" },
+        readPreference: "primary",
+      },
+    });
+
+    const dbSpy = vi.spyOn(MongoClient.prototype, "db");
+    const collectionSpy = vi.spyOn(Db.prototype, "collection");
+    try {
+      // Cursor is lazy, so no server round-trip happens here
+      collection.aggregate().execute({
+        dbOptions: { retryWrites: false },
+        collectionOptions: { readPreference: "secondaryPreferred" },
+      });
+
+      // Provided keys override; the rest of the inherited options survive
+      expect(dbSpy).toHaveBeenLastCalledWith(DBName, {
+        readConcern: { level: "majority" },
+        retryWrites: false,
+      });
+      expect(collectionSpy).toHaveBeenLastCalledWith("merge_docs", {
+        readConcern: { level: "majority" },
+        readPreference: "secondaryPreferred",
+      });
+    } finally {
+      dbSpy.mockRestore();
+      collectionSpy.mockRestore();
+    }
   });
 
   it("passes AggregateOptions through Pipeline.execute", async () => {

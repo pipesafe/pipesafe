@@ -727,9 +727,9 @@ export class Pipeline<
       client?: MongoClient;
       databaseName?: string;
       collectionName?: string;
-      /** Driver `DbOptions`, overriding any inherited from the source */
+      /** Driver `DbOptions`, merged per key over any inherited from the source */
       dbOptions?: DbOptions;
-      /** Driver `CollectionOptions`, overriding any inherited from the source */
+      /** Driver `CollectionOptions`, merged per key over any inherited from the source */
       collectionOptions?: CollectionOptions;
       /** Driver `AggregateOptions` (e.g. `session`, `maxTimeMS`, `allowDiskUse`) */
       aggregateOptions?: AggregateOptions;
@@ -740,8 +740,11 @@ export class Pipeline<
     tagClient(client);
 
     const db = args.databaseName ?? this.databaseName;
-    const dbOptions = args.dbOptions ?? this.dbOptions;
-    const collectionOptions = args.collectionOptions ?? this.collectionOptions;
+    const dbOptions = mergeOptions(this.dbOptions, args.dbOptions);
+    const collectionOptions = mergeOptions(
+      this.collectionOptions,
+      args.collectionOptions
+    );
 
     const collection = args.collectionName ?? this.collectionName;
     if (!collection) throw new Error("No collection name provided");
@@ -751,6 +754,19 @@ export class Pipeline<
       .collection(collection, collectionOptions)
       .aggregate(this.getPipeline(), args.aggregateOptions);
   }
+}
+
+/**
+ * Shallow-merge execute-time options over inherited ones, so callers only
+ * override the keys they provide. Preserves `undefined` when neither side
+ * is set (rather than materializing an empty options object).
+ */
+function mergeOptions<T extends object>(
+  inherited: T | undefined,
+  overrides: T | undefined
+): T | undefined {
+  if (inherited && overrides) return { ...inherited, ...overrides };
+  return overrides ?? inherited;
 }
 
 export type InferOutputType<P extends Pipeline<any, any, any, any>> =
