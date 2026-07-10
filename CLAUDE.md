@@ -61,8 +61,12 @@ pipesafe/
 
 ### Package Dependencies
 
-- `@pipesafe/manifold` has `@pipesafe/core` as a **peer dependency** pinned to core's
-  current major (`>=2.0.0 <3.0.0`); widen it whenever core takes a major bump
+- `@pipesafe/manifold` has `@pipesafe/core` as a **peer dependency**. Peer ranges on
+  sibling packages must SPAN from the current workspace version through the next
+  pending major (e.g. `>=1.1.0 <3.0.0` while core 2.0 changesets are pending) —
+  a range the workspace version doesn't satisfy makes bun auto-install the peer
+  from the registry, which 404s for unpublished packages and breaks every install.
+  Tighten lower bounds after the release train ships
 - `@pipesafe/infra` peers on `@pipesafe/core`; `@pipesafe/intake` peers on
   `@pipesafe/core`, `@pipesafe/infra`, AND `@pipesafe/manifold` (it composes
   manifold's event layer - intake never owns change-stream machinery)
