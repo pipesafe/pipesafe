@@ -43,6 +43,39 @@ export type {
   InferFieldReference,
 } from "./elements/fieldReference";
 
+// Runtime operator-name lists — the same arrays the operator-key unions
+// are derived from (grouped per kind, plus a spread combination each).
+export {
+  EQUALITY_MATCHERS,
+  IN_MATCHERS,
+  CONTINUOUS_MATCHERS,
+  EXISTENCE_MATCHERS,
+  SIZE_MATCHERS,
+  ARRAY_ONLY_MATCHERS,
+  ELEMENT_MATCHERS,
+  REGEX_MATCHERS,
+  NOT_MATCHERS,
+  FIELD_MATCH_OPERATORS,
+  LOGICAL_MATCH_OPERATORS,
+  TOP_LEVEL_MATCH_OPERATORS,
+} from "./stages/match";
+export {
+  ARRAY_EXPRESSION_OPERATORS,
+  DATE_EXPRESSION_OPERATORS,
+  ARITHMETIC_EXPRESSION_OPERATORS,
+  STRING_EXPRESSION_OPERATORS,
+  CONDITIONAL_EXPRESSION_OPERATORS,
+  VARIABLE_EXPRESSION_OPERATORS,
+  LITERAL_EXPRESSION_OPERATORS,
+  COMPARISON_EXPRESSION_OPERATORS,
+  EXPRESSION_OPERATORS,
+  EXPRESSION_OPERATORS_BY_CATEGORY,
+} from "./elements/expressions";
+export type { ExpressionCategory, OpsInCategory } from "./elements/expressions";
+export { ACCUMULATOR_OPERATORS } from "./stages/group";
+export { SYSTEM_VARIABLES } from "./elements/literals";
+export type { SystemVariable } from "./elements/literals";
+
 // Stage type re-exports for advanced usage
 export type { LimitQuery, ResolveLimitOutput } from "./stages/limit";
 export type { SkipQuery, ResolveSkipOutput } from "./stages/skip";

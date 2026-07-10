@@ -33,6 +33,15 @@
         "mongodb": "^6.17.0",
       },
     },
+    "packages/core-completions-tests": {
+      "name": "@pipesafe/core-completions-tests",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@pipesafe/core": "workspace:*",
+        "typescript": "^5.9.3",
+        "vitest": "^4.0.15",
+      },
+    },
     "packages/infra": {
       "name": "@pipesafe/infra",
       "version": "0.1.0",
@@ -284,6 +293,8 @@
     "@oxc-project/types": ["@oxc-project/types@0.122.0", "", {}, "sha512-oLAl5kBpV4w69UtFZ9xqcmTi+GENWOcPF7FCrczTiBbmC0ibXxCwyvZGbO39rCVEuLGAZM84DH0pUIyyv/YJzA=="],
 
     "@pipesafe/core": ["@pipesafe/core@workspace:packages/core"],
+
+    "@pipesafe/core-completions-tests": ["@pipesafe/core-completions-tests@workspace:packages/core-completions-tests"],
 
     "@pipesafe/infra": ["@pipesafe/infra@workspace:packages/infra"],
 
