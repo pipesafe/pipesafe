@@ -67,8 +67,9 @@ pipesafe/
   manifold's event layer - intake never owns change-stream machinery)
 - During development, `workspace:*` links them locally
 - Users install the packages they need explicitly
-- infra and intake are versioned independently (not in the changesets `linked`
-  group) while pre-MVP
+- all four packages are in the changesets `linked` group, so they release at
+  matching version numbers (infra/intake will jump from 0.1.0 to the group's
+  version line on their first release)
 
 ## Development Commands
 
