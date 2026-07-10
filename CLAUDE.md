@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Monorepo Structure
 
-This is a **bun workspaces monorepo** with two packages under different licenses:
+This is a **bun workspaces monorepo** with packages under different licenses:
 
 ```
 pipesafe/
@@ -23,11 +23,29 @@ pipesafe/
 │   │   ├── benchmarking/        # TypeScript performance benchmarks
 │   │   └── LICENSE              # Apache License 2.0
 │   │
-│   └── manifold/                # DAG orchestration (ELv2 - commercial)
+│   ├── manifold/                # DAG orchestration (ELv2 - commercial)
+│   │   ├── src/
+│   │   │   ├── model/           # Model - materializable pipelines
+│   │   │   └── project/         # Project - DAG orchestrator
+│   │   ├── examples/            # DAG usage examples
+│   │   └── LICENSE              # Elastic License 2.0
+│   │
+│   ├── infra/                   # Shared cloud infra engine (ELv2 - commercial)
+│   │   ├── src/
+│   │   │   ├── provider/        # InfraProvider - Pulumi program-factory seam
+│   │   │   ├── state/           # MongoDB-backed Pulumi state + deploy locks
+│   │   │   └── secrets/         # SecretRef - named secret references
+│   │   └── LICENSE              # Elastic License 2.0
+│   │
+│   └── intake/                  # Cloud data ingestion (ELv2 - commercial)
 │       ├── src/
-│       │   ├── model/           # Model - materializable pipelines
-│       │   └── project/         # Project - DAG orchestrator
-│       ├── examples/            # DAG usage examples
+│       │   ├── webhook/         # Webhook - declarative webhook sources
+│       │   ├── fetcher/         # Fetcher - REST enrichment/polling units
+│       │   ├── envelope/        # IntakeEnvelope - queue + idempotency ledger
+│       │   ├── verify/          # Signature verification schemes
+│       │   ├── dispatch/        # Change-stream dispatch strategies
+│       │   └── intake/          # Intake - orchestrator (dev/replay/deploy)
+│       ├── ARCHITECTURE.md      # Design doc + phased roadmap
 │       └── LICENSE              # Elastic License 2.0
 │
 └── package.json                 # Root workspace config (private)
@@ -37,13 +55,19 @@ pipesafe/
 
 - **@pipesafe/core (Apache 2.0)**: Core pipeline builder. Fully OSI-approved, can be used anywhere.
 - **@pipesafe/manifold (ELv2)**: DAG execution and materialization features. Commercial-friendly but not OSI-approved.
+- **@pipesafe/infra (ELv2)**: Shared cloud infrastructure engine (Pulumi with MongoDB-backed state). A suite concern by design: intake consumes it today, manifold (scheduled materialization) later — nothing in it may reference domain concepts.
+- **@pipesafe/intake (ELv2)**: Cloud data ingestion (webhooks + REST fetchers into MongoDB). Scaffold phase — see `packages/intake/ARCHITECTURE.md` for the design and phased roadmap.
 
 ### Package Dependencies
 
 - `@pipesafe/manifold` has `@pipesafe/core` as a **peer dependency** pinned to core's
   current major (`>=2.0.0 <3.0.0`); widen it whenever core takes a major bump
+- `@pipesafe/infra` peers on `@pipesafe/core`; `@pipesafe/intake` peers on both
+  `@pipesafe/core` and `@pipesafe/infra`
 - During development, `workspace:*` links them locally
-- Users install both packages explicitly
+- Users install the packages they need explicitly
+- infra and intake are versioned independently (not in the changesets `linked`
+  group) while pre-MVP
 
 ## Development Commands
 
@@ -106,6 +130,10 @@ Note: The interactive `bun run changeset` command doesn't work in non-TTY enviro
 - **Project**: Located in `packages/manifold/src/project/Project.ts`. DAG orchestrator that manages models, resolves dependencies, validates the graph, and executes models in topological order. Models are provided at construction time and validated immediately (immutable after creation). Auto-discovers all dependencies (upstream via `from` and lookup via `lookup`/`unionWith` stages) - just specify leaf models.
 
 - **Source**: Located in `packages/core/src/source/Source.ts`. Unified interface that both `Collection` and `Model` implement, allowing them to be used interchangeably as pipeline sources.
+
+- **Webhook / Fetcher / Intake** (scaffold): Located in `packages/intake/src/`. Declarative ingestion units (verified webhook endpoints landing raw `IntakeEnvelope`s; REST enrichment/polling fetchers landing typed docs) plus the orchestrator that runs them locally and deploys them. Landing collections are core `Collection<T>`s, so ingested data feeds Pipelines and Models directly. Design + roadmap: `packages/intake/ARCHITECTURE.md`.
+
+- **InfraProvider / PulumiBackend** (scaffold): Located in `packages/infra/src/`. The shared provisioning engine — a Pulumi program-factory seam over provider-neutral resource specs, with Pulumi state stored in MongoDB (optionally a separate ops cluster). Suite-shared by design; must stay free of domain concepts.
 
 ### Type System Architecture
 
