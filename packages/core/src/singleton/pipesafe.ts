@@ -1,6 +1,6 @@
 import { MongoClient, MongoClientOptions, DbOptions } from "mongodb";
 import { Database } from "../database/Database";
-import { tagClient } from "./tagClient";
+import { DRIVER_INFO, markTagged, tagClient } from "./tagClient";
 
 class PipeSafe {
   client: MongoClient | undefined;
@@ -15,8 +15,22 @@ class PipeSafe {
    */
   connect(url: string, options?: MongoClientOptions) {
     if (this.client) throw new Error("Already connected");
-    this.client = new MongoClient(url, options);
-    tagClient(this.client);
+    // Do NOT collapse the branches into tagClient() alone: tagClient uses
+    // appendMetadata, which needs mongodb >= 6.18, while the peer floor is
+    // lower — the constructor-level driverInfo below works on the whole
+    // peer range. With a user driverInfo we must append instead (the
+    // constructor option holds a single entry), so that path is
+    // best-effort on drivers without appendMetadata.
+    if (options?.driverInfo) {
+      this.client = new MongoClient(url, options);
+      tagClient(this.client);
+    } else {
+      this.client = new MongoClient(url, {
+        ...options,
+        driverInfo: DRIVER_INFO,
+      });
+      markTagged(this.client);
+    }
     return this.client;
   }
 
