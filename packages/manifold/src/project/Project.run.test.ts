@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { Collection as MongoCollection } from "mongodb";
 import { Collection } from "@pipesafe/core";
 import { useMemoryMongo } from "../../../core/src/utils/useMemoryMongo";
 import { Model } from "../model/Model";
@@ -345,6 +346,39 @@ describe("Project.run()", async () => {
       expect(firstName).toBe("staging");
       expect(firstStats).toHaveProperty("durationMs");
       expect(firstStats.durationMs).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe("aggregate options", () => {
+    it("passes aggregateOptions to every model aggregation", async () => {
+      const db = client.db();
+      await db.collection<RawDoc>("raw_docs").insertMany(sampleDocs);
+
+      const aggregateSpy = vi.spyOn(MongoCollection.prototype, "aggregate");
+      try {
+        const result = await simpleProject.run({
+          client,
+          databaseName: db.databaseName,
+          aggregateOptions: {
+            allowDiskUse: true,
+            comment: "project-run-options",
+          },
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.modelsRun).toEqual(["staging", "aggregate"]);
+
+        // One aggregation per model, each receiving the options
+        expect(aggregateSpy).toHaveBeenCalledTimes(2);
+        for (const call of aggregateSpy.mock.calls) {
+          expect(call[1]).toMatchObject({
+            allowDiskUse: true,
+            comment: "project-run-options",
+          });
+        }
+      } finally {
+        aggregateSpy.mockRestore();
+      }
     });
   });
 

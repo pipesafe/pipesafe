@@ -25,6 +25,8 @@ import {
   ListIndexesOptions,
   CreateCollectionOptions,
   DropCollectionOptions,
+  DbOptions,
+  CollectionOptions,
 } from "mongodb";
 import { Pipeline } from "../pipeline/Pipeline";
 import { Document } from "../utils/objects";
@@ -41,15 +43,23 @@ export class Collection<Docs extends Document> implements Source<Docs> {
   private client: MongoClient | undefined;
   private databaseName: string | undefined;
   private collectionName: string;
+  private dbOptions: DbOptions | undefined;
+  private collectionOptions: CollectionOptions | undefined;
 
   constructor(args: {
     client?: MongoClient | undefined;
     databaseName?: string | undefined;
     collectionName: string;
+    /** Driver `DbOptions` applied when resolving the database */
+    dbOptions?: DbOptions | undefined;
+    /** Driver `CollectionOptions` (read/write concern, read preference, etc.) */
+    collectionOptions?: CollectionOptions | undefined;
   }) {
     this.client = args.client;
     this.databaseName = args.databaseName;
     this.collectionName = args.collectionName;
+    this.dbOptions = args.dbOptions;
+    this.collectionOptions = args.collectionOptions;
     tagClient(this.client);
   }
 
@@ -79,11 +89,14 @@ export class Collection<Docs extends Document> implements Source<Docs> {
 
   private getDatabase() {
     const client = this.getClient();
-    return this.databaseName ? client.db(this.databaseName) : client.db();
+    return client.db(this.databaseName, this.dbOptions);
   }
 
   private getCollection(): MongoCollection<Docs> {
-    return this.getDatabase().collection<Docs>(this.collectionName);
+    return this.getDatabase().collection<Docs>(
+      this.collectionName,
+      this.collectionOptions
+    );
   }
 
   // Aggregation
@@ -93,6 +106,8 @@ export class Collection<Docs extends Document> implements Source<Docs> {
       client: this.client,
       databaseName: this.databaseName,
       collectionName: this.collectionName,
+      dbOptions: this.dbOptions,
+      collectionOptions: this.collectionOptions,
     });
   }
 

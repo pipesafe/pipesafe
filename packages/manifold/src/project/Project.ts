@@ -5,7 +5,7 @@
  * and executes them in topological order.
  */
 
-import { MongoClient } from "mongodb";
+import { AggregateOptions, MongoClient } from "mongodb";
 import { pipesafe, tagClient } from "@pipesafe/core";
 import { Model, isModel } from "../model/Model";
 
@@ -30,6 +30,11 @@ export type RunOptions = {
   client?: MongoClient;
   /** Database name (falls back to project default) */
   databaseName?: string;
+  /**
+   * Driver `AggregateOptions` applied to every model's aggregation
+   * (e.g. `maxTimeMS`, `allowDiskUse`, `hint`, `comment`).
+   */
+  aggregateOptions?: AggregateOptions;
   /** Callbacks */
   onModelStart?: (name: string) => void;
   onModelComplete?: (name: string, stats: ModelRunStats) => void;
@@ -269,6 +274,7 @@ export class Project {
       dryRun = false,
       client,
       databaseName,
+      aggregateOptions,
       onModelStart,
       onModelComplete,
       onModelError,
@@ -315,7 +321,12 @@ export class Project {
           onModelStart?.(modelName);
 
           try {
-            await this.executeModel(model, mongoClient, dbName);
+            await this.executeModel(
+              model,
+              mongoClient,
+              dbName,
+              aggregateOptions
+            );
 
             const modelStats: ModelRunStats = {
               durationMs: Date.now() - modelStart,
@@ -361,7 +372,8 @@ export class Project {
   private async executeModel(
     model: Model<any, any, any, any>,
     client: MongoClient,
-    dbName: string | undefined
+    dbName: string | undefined,
+    aggregateOptions: AggregateOptions | undefined
   ): Promise<void> {
     // Build pipeline with output stage
     const pipeline = model.buildPipeline();
@@ -423,7 +435,7 @@ export class Project {
     const db = client.db(sourceDb);
     const collection = db.collection(sourceCollection);
 
-    const cursor = collection.aggregate(pipeline);
+    const cursor = collection.aggregate(pipeline, aggregateOptions);
     await cursor.toArray();
   }
 
