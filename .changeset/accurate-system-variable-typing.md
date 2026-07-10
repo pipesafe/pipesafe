@@ -28,3 +28,20 @@ Accurate types for `$$`-system variables and `$let`/`$map`/`$filter` bound varia
   and `$cond`/`$ifNull`/comparison operands accept the enumerated system
   variables (`$gte: ["$expiresAt", "$$NOW"]`).
 - `$map.as` is now optional (MongoDB defaults the binding to `$$this`).
+- ONE variable environment: `SystemVariables<Schema>` seeds every `Vars`
+  parameter, binders extend it, and resolution is a single lookup —
+  system and user variables are not separate code paths.
+  `VariableReferences<Vars>` derives the finite `$$` acceptance
+  vocabulary, so dotted variable paths are first-class at top-level value
+  positions and in completions: `$set: { n: "$$ROOT.name" }`,
+  `$group: { latest: { $max: "$$ROOT.joinedAt" } }`, and typed operands
+  accept `"$$ROOT.price"`-style dotted rewrites.
+- `$lookup` supports `let`: binding values are validated and inferred
+  against the OUTER schema/environment, the bindings become the
+  sub-pipeline builder's environment (`Pipeline`'s new `Env` generic), and
+  every sub-pipeline stage reseeds `$$ROOT`/`$$CURRENT` to the FOREIGN
+  schema — matching MongoDB's scoping, verified against a real server.
+  Bound names autocomplete inside the sub-pipeline (`"$$order_qty"`),
+  resolve to accurate types, and out-of-scope `$$`-names reject.
+  Nested lookups inherit outer bindings; `$unionWith`/`$facet`
+  sub-builders propagate the environment.

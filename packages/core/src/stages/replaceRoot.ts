@@ -3,7 +3,11 @@ import {
   InferNestedFieldReference,
 } from "../elements/fieldReference";
 import { Expression } from "../elements/expressions";
-import { AnyLiteral, SystemVariable } from "../elements/literals";
+import {
+  AnyLiteral,
+  SystemVariables,
+  VariableReferences,
+} from "../elements/literals";
 import { Document, Prettify } from "../utils/objects";
 import { PassThrough } from "../utils/errors";
 
@@ -13,15 +17,22 @@ import { PassThrough } from "../utils/errors";
  * Replaces the input document with the specified document.
  * The newRoot can be:
  * - A field reference: "$someField"
- * - An enumerated `$$`-system variable: "$$ROOT", "$$CURRENT", ...
+ * - A `$$`-variable reference from the environment: "$$ROOT",
+ *   "$$ROOT.shipping", a lookup-let binding, ...
  * - An expression: { $add: ["$field1", "$field2"] }
  * - A nested object with field references and expressions
  * - A literal value
+ *
+ * `Vars` is the stage's variable environment (Pipeline threads lookup-let
+ * bindings through it; defaults to the system seed).
  */
-export type ReplaceRootQuery<Schema extends Document> = {
+export type ReplaceRootQuery<
+  Schema extends Document,
+  Vars extends Document = SystemVariables<Schema>,
+> = {
   newRoot:
     | FieldReference<Schema>
-    | SystemVariable
+    | VariableReferences<Vars>
     | Expression<Schema>
     | AnyLiteral<Schema>
     | Document; // For nested objects with field references and expressions
@@ -38,9 +49,10 @@ export type ReplaceRootQuery<Schema extends Document> = {
 export type ResolveReplaceRootOutput<
   Schema extends Document,
   Query,
+  Vars extends Document = SystemVariables<Schema>,
 > = PassThrough<
   Schema,
   Query extends { newRoot: infer NewRoot } ?
-    Prettify<InferNestedFieldReference<Schema, NewRoot>>
+    Prettify<InferNestedFieldReference<Schema, NewRoot, Vars>>
   : never
 >;

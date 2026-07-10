@@ -12,6 +12,7 @@
  */
 
 import { Pipeline } from "./Pipeline";
+import { Collection } from "../collection/Collection";
 import { Document } from "../utils/objects";
 
 type User = {
@@ -113,10 +114,20 @@ const _set_bad_typo_op_nested = new Pipeline<User>().set({
 const _set_generic_helper_ok = <D extends Document>(p: Pipeline<D, D>): void =>
   void p.set({ x: { $toUpper: "$y" }, y: { $add: [1, 2] } });
 
-// set — `$$`-system variables are not field references; they are accepted.
+// set — `$$`-system variables are not field references; they are accepted,
+// including DOTTED paths into the document-typed ones (VariableReferences);
+// a bad dotted path rejects at the constraint (finite union → TS2820-style
+// spelling suggestion, no validation walk needed).
 const _set_system_var_ok = new Pipeline<User>().set({
   a: { b: "$$REMOVE" },
   now: "$$NOW",
+  rootName: "$$ROOT.name",
+  currentAge: "$$CURRENT.age",
+});
+
+const _set_bad_sysvar_path_top = new Pipeline<User>().set({
+  // @ts-expect-error  '$$ROOT.naem' is not in the environment's vocabulary
+  x: "$$ROOT.naem",
 });
 
 // set — $concat operands are validated ELEMENT-WISE (ValidateConcatValue):
@@ -424,6 +435,55 @@ const _facet_bad = new Pipeline<User>().facet({
   bad: (p) => p.sort({ naem: 1 }),
 });
 
+// ---------------------------------------------------------------------------
+// lookup `let` — bindings are validated against the OUTER schema/environment
+// and enter the sub-pipeline's environment (Pipeline's Env generic), where
+// they are accepted at string-value positions, resolve inside expressions,
+// and out-of-scope `$$`-names still reject.
+// ---------------------------------------------------------------------------
+
+type Order = { _id: string; sku: string; qty: number };
+declare const _ordersColl: Collection<Order>;
+
+const _lookup_let_ok = new Pipeline<User>().lookup({
+  from: _ordersColl,
+  as: "orders",
+  let: { userName: "$name", minQty: 2, rootAge: "$$ROOT.age" },
+  pipeline: (p) =>
+    p.match({ $expr: { $eq: ["$sku", "$$userName"] } }).set({
+      forUser: "$$userName",
+      boosted: { $add: ["$$minQty", "$qty"] },
+      viaForeignRoot: "$$ROOT.qty",
+    }),
+});
+
+const _lookup_let_bad_outer_ref = new Pipeline<User>().lookup({
+  from: _ordersColl,
+  as: "orders",
+  let: {
+    // @ts-expect-error  '$naem' is not on the OUTER schema
+    u: "$naem",
+  },
+  pipeline: (p) => p.limit(1),
+});
+
+// An Env'd Pipeline accepts its bindings at string-value positions. The
+// out-of-scope REJECTION ("$$typo") is pinned type-level in
+// validation.typeAssertions.ts instead of via a call: a failing value's
+// constraint elaboration force-evaluates the full value unions, and doing
+// that first-time at a call site surfaces a spurious TS2589 — a
+// PRE-EXISTING depth limitation (it reproduces on main for a plain
+// no-`let` lookup whose fresh foreign schema first evaluates the unions
+// inside the lambda's checking stack), not an Env regression.
+declare const _envPipeline: Pipeline<
+  Order,
+  Order,
+  "runtime",
+  never,
+  { u: string }
+>;
+const _lookup_let_env_binding_ok = _envPipeline.set({ ok: "$$u" });
+
 export {
   _match_bad,
   _sort_bad,
@@ -477,4 +537,8 @@ export {
   _replaceRoot_bad,
   _unwind_bad,
   _facet_bad,
+  _set_bad_sysvar_path_top,
+  _lookup_let_ok,
+  _lookup_let_bad_outer_ref,
+  _lookup_let_env_binding_ok,
 };

@@ -1,7 +1,8 @@
 import { ObjectId, Timestamp } from "mongodb";
 import { Document, ForbidKeys } from "../utils/objects";
-import { NoDollarString } from "../utils/strings";
+import { NoDollarString, WithoutDollar } from "../utils/strings";
 import {
+  FieldPath,
   FieldReferencesThatInferTo,
   GetFieldTypeWithoutArrays,
 } from "./fieldReference";
@@ -59,6 +60,74 @@ export interface SystemVariableSpec<Schema extends Document> {
   $$USER_ROLES: { _id: string; role: string; db: string }[];
 }
 
+/**
+ * THE variable ENVIRONMENT seed: every system variable, keyed by NAME
+ * (without the `$$` prefix) — derived from SystemVariableSpec by key remap.
+ * There is exactly ONE variable-threading mechanism in the library: every
+ * `Vars` parameter defaults to this seed, `$let`/`$map`/`$filter` binding
+ * arms EXTEND it (BindVariable/BindLetVars in expressions.ts), and
+ * `$lookup.let` sub-pipelines reseed it over the foreign schema with the
+ * `let` bindings layered on (Pipeline's `Env` generic + PipelineVars).
+ * Resolution is a single env lookup — system and user variables are not
+ * separate code paths.
+ */
+export type SystemVariables<Schema extends Document> = {
+  [K in keyof SystemVariableSpec<Schema> as K extends `$$${infer Name}` ? Name
+  : never]: SystemVariableSpec<Schema>[K];
+};
+
+/** The seed's names — schema-independent (the mapped-as keys don't depend
+ * on Schema). User bindings can never collide: MongoDB requires user
+ * variable names to begin lowercase. */
+export type SystemVariableName = keyof SystemVariables<Document>;
+
+/**
+ * `true` when the environment carries USER bindings on top of the seed —
+ * i.e. we are inside a `$let`/`$map`/`$filter` interior or a `$lookup.let`
+ * sub-pipeline. The validation kernel forks on this: registry operand
+ * relations are Vars-blind, so they are skipped in favor of a name/ref walk
+ * wherever a bound `$$var` could appear inside an operand.
+ */
+export type HasUserBindings<Vars extends Document> =
+  [Exclude<keyof Vars, SystemVariableName>] extends [never] ? false : true;
+
+/**
+ * The environment a Pipeline stage validates/infers under: the seed for the
+ * stage's CURRENT schema, with the Pipeline's user `Env` (from an enclosing
+ * `$lookup.let`) layered on. The empty-Env fast path returns the plain seed
+ * so ordinary pipelines share one alias-cache entry per schema.
+ */
+export type PipelineVars<Schema extends Document, Env extends Document> =
+  [keyof Env] extends [never] ? SystemVariables<Schema>
+  : // ONE mapped type, values resolved lazily on key access — an
+    // Omit/Prettify spelling stacks extra instantiation layers, and this
+    // type is evaluated at the DEEPEST point of lookup-lambda checking
+    // (first evaluation of a merged env happens inside the sub-builder).
+    {
+      [K in keyof SystemVariables<Schema> | keyof Env]: K extends keyof Env ?
+        Env[K]
+      : K extends keyof SystemVariables<Schema> ? SystemVariables<Schema>[K]
+      : never;
+    };
+
+/**
+ * The finite `$$`-reference VOCABULARY of an environment — the acceptance
+ * companion of the resolvers below, used by top-level value unions
+ * (set/project/group/replaceRoot) so every in-scope variable autocompletes
+ * and an out-of-scope one rejects at the constraint with TS's native
+ * spelling suggestion. Each entry contributes its exact name plus dotted
+ * paths into its type ("$$ROOT.name", "$$order.qty" for a lookup-let
+ * binding). Wide-keyed entries ($$SEARCH_META) contribute no dotted arm —
+ * `string extends FieldPath<...>` would create a banned wide template —
+ * and unknown-typed ones (FieldPath<unknown> = never) none either.
+ */
+export type VariableReferences<Vars extends Document> = {
+  [K in keyof Vars & string]:
+    | `$$${K}`
+    | (string extends FieldPath<Vars[K]> ? never
+      : `$$${K}.${FieldPath<Vars[K]>}`);
+}[keyof Vars & string];
+
 /** Brands (and the bare `never` of e.g. a null-typed path) → `unknown`. */
 type DegradeErrorToUnknown<T> =
   [T] extends [PipeSafeError<string>] ? unknown : T;
@@ -68,69 +137,49 @@ type KeepBrand<T> = [T] extends [PipeSafeError<string>] ? T : never;
 
 /**
  * INFERENCE-side resolution of a `$$`-variable reference string, optionally
- * carrying a dotted path ("$$ROOT.name", "$$item.qty"). `Vars` is the
- * variable environment threaded down by the `$let`/`$map`/`$filter` binding
- * arms (names WITHOUT the `$$` prefix); bound names are checked before the
- * system vocabulary (they cannot collide in valid MongoDB — user variable
- * names must begin lowercase). FORGIVING, mirroring InferExpression:
- * anything unresolvable (unknown variable name, bad path, opaque variable
- * type) degrades to `unknown` — never to a wrong type, and never to
- * `never`, which would silently DROP the field from resolvers (rejection is
- * validation's job). The one deliberate `never` is `$$REMOVE`, whose
- * field-dropping IS the MongoDB semantics.
+ * carrying a dotted path ("$$ROOT.name", "$$item.qty"), against the ONE
+ * environment (`Vars`, defaulting to the system seed). FORGIVING, mirroring
+ * InferExpression: anything unresolvable (unknown variable name, bad path,
+ * opaque variable type) degrades to `unknown` — never to a wrong type, and
+ * never to `never`, which would silently DROP the field from resolvers
+ * (rejection is validation's job). The one deliberate `never` is `$$REMOVE`,
+ * whose field-dropping IS the MongoDB semantics (carried by the seed).
  */
 export type InferVariableReference<
   Schema extends Document,
   V extends string,
-  Vars extends Document = {},
+  Vars extends Document = SystemVariables<Schema>,
 > =
   V extends `$$${infer Name}.${infer Path}` ?
     Name extends keyof Vars ?
       DegradeErrorToUnknown<GetFieldTypeWithoutArrays<Vars[Name], Path>>
-    : `$$${Name}` extends keyof SystemVariableSpec<Schema> ?
-      DegradeErrorToUnknown<
-        GetFieldTypeWithoutArrays<SystemVariableSpec<Schema>[`$$${Name}`], Path>
-      >
     : unknown
   : V extends `$$${infer Name}` ?
-    Name extends keyof Vars ? Vars[Name]
-    : V extends keyof SystemVariableSpec<Schema> ? SystemVariableSpec<Schema>[V]
+    Name extends keyof Vars ?
+      Vars[Name]
     : unknown
   : never;
 
 /**
- * VALIDATION-side sibling of InferVariableReference — same resolution
- * order, opposite temperament. Contract (matching the validation kernel):
- * `never` = valid, anything else is the branded replacement. Unknown names
- * brand with UnknownSystemVariableError; a dotted path into a known
- * variable resolves through GetFieldTypeWithoutArrays — the same authority
- * inference uses — so a bad path gets the Field brand. Paths into
+ * VALIDATION-side sibling of InferVariableReference — same single-lookup
+ * resolution, opposite temperament. Contract (matching the validation
+ * kernel): `never` = valid, anything else is the branded replacement.
+ * Unknown names brand with UnknownSystemVariableError; a dotted path into a
+ * known variable resolves through GetFieldTypeWithoutArrays — the same
+ * authority inference uses — so a bad path gets the Field brand. Paths into
  * variables whose type is not statically known (opaque system variables,
- * bound variables that themselves degraded to `unknown`) are skipped,
- * mirroring the kernel's wide-schema guards.
+ * bound variables that themselves degraded to `unknown`) are skipped.
  */
 export type ValidateVariableReference<
   Schema extends Document,
   V extends string,
-  Vars extends Document = {},
+  Vars extends Document = SystemVariables<Schema>,
 > =
-  V extends SystemVariable ? never
-  : V extends `$$${infer Name}.${infer Path}` ?
+  V extends `$$${infer Name}.${infer Path}` ?
     Name extends keyof Vars ?
       unknown extends Vars[Name] ?
-        never // bound variable of unknown type — nothing to check against
+        never // variable of statically unknown type — nothing to check
       : KeepBrand<GetFieldTypeWithoutArrays<Vars[Name], Path>>
-    : `$$${Name}` extends keyof SystemVariableSpec<Schema> ?
-      string extends keyof Schema ?
-        never // $$ROOT/$$CURRENT paths are meaningless on a wide schema
-      : unknown extends SystemVariableSpec<Schema>[`$$${Name}`] ?
-        never // opaque variable ($$DESCEND, ...) — nothing to check against
-      : KeepBrand<
-          GetFieldTypeWithoutArrays<
-            SystemVariableSpec<Schema>[`$$${Name}`],
-            Path
-          >
-        >
     : UnknownSystemVariableError<`$$${Name}`>
   : V extends `$$${infer Name}` ?
     Name extends keyof Vars ?
@@ -139,18 +188,26 @@ export type ValidateVariableReference<
   : never;
 
 /**
- * The `$$`-sibling of FieldReferencesThatInferTo: system variables whose
+ * The `$$`-sibling of FieldReferencesThatInferTo: variable references whose
  * accurate type is assignable to `T`, for typed operand sets ($dateAdd's
- * `startDate` accepts "$$NOW", array operands accept "$$USER_ROLES", ...).
- * Finite (a subset of the enumerated SYSTEM_VARIABLES), so operand unions
- * stay completion-safe. `$$REMOVE`'s `never` is excluded explicitly
- * (`never` is assignable to every target).
+ * `startDate` accepts "$$NOW", array operands accept "$$USER_ROLES", a
+ * numeric operand accepts "$$ROOT.price"). The dotted arms REUSE the
+ * schema's cached ref→type map (FieldReferencesThatInferTo) via prefix
+ * rewrite instead of building a second map. All arms are finite, so operand
+ * unions stay completion-safe. `$$REMOVE`'s `never` is excluded explicitly
+ * (`never` is assignable to every target). Operand sets are registry-level
+ * (Vars-blind) by design: inside binder/lookup-let interiors the operand
+ * relation is skipped entirely, so bound names never reach these sets.
  */
-export type SystemVariablesThatInferTo<Schema extends Document, T> = {
-  [K in SystemVariable]: [SystemVariableSpec<Schema>[K]] extends [never] ? never
-  : SystemVariableSpec<Schema>[K] extends T ? K
-  : never;
-}[SystemVariable];
+export type SystemVariablesThatInferTo<Schema extends Document, T> =
+  | {
+      [K in SystemVariable]: [SystemVariableSpec<Schema>[K]] extends [never] ?
+        never
+      : SystemVariableSpec<Schema>[K] extends T ? K
+      : never;
+    }[SystemVariable]
+  | `$$ROOT.${WithoutDollar<FieldReferencesThatInferTo<Schema, T> & string>}`
+  | `$$CURRENT.${WithoutDollar<FieldReferencesThatInferTo<Schema, T> & string>}`;
 
 export type LiteralOrFieldReferenceInferringTo<Schema extends Document, T> =
   | T

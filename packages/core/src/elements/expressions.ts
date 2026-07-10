@@ -1,4 +1,4 @@
-import { Document, Prettify } from "../utils/objects";
+import { Document } from "../utils/objects";
 import {
   MultiOperatorError,
   PipeSafeError,
@@ -19,9 +19,11 @@ import {
 } from "./fieldReference";
 import {
   AnyLiteral,
+  ExpressionShaped,
   InferVariableReference,
-  SystemVariable,
+  SystemVariables,
   SystemVariablesThatInferTo,
+  VariableReferences,
 } from "./literals";
 
 // ============================================================================
@@ -125,7 +127,7 @@ type ConditionalOperand<Schema extends Document> =
   | null
   | AnyLiteral<Schema>
   | FieldReference<Schema>
-  | SystemVariable
+  | VariableReferences<SystemVariables<Schema>>
   | Expression<Schema>;
 
 /**
@@ -137,7 +139,7 @@ type ComparisonOperand<Schema extends Document> =
   | null
   | AnyLiteral<Schema>
   | FieldReference<Schema>
-  | SystemVariable
+  | VariableReferences<SystemVariables<Schema>>
   | ArrayExpression<Schema>
   | DateExpression<Schema>
   | ArithmeticExpression<Schema>
@@ -816,6 +818,36 @@ export type Expression<Schema extends Document> = ExpressionFor<
   keyof ExpressionSpec<Schema>
 >;
 
+/**
+ * THE general computed-value union — what an expression-valued position
+ * accepts ($set/$project values, `$lookup.let` values). Spelled once here so
+ * stages don't re-spell it (stages must not import each other).
+ *
+ * Every string arm is FINITE — `FieldReference<Schema>` (schema-derived)
+ * and `VariableReferences<Vars>` (the environment's `$$` vocabulary: exact
+ * names plus dotted paths, lookup-let bindings included). No wide
+ * `` `$${string}` `` template exists here: a template wide enough to accept
+ * arbitrary `$`-strings necessarily ABSORBS the finite ref literals out of
+ * autocomplete (same predicate decides both), and the `` & {} ``
+ * non-absorption spelling leaks String.prototype into sibling object-literal
+ * completions. Finite literals have neither problem — and a typo'd ref
+ * errors with TS's native TS2820 "Did you mean '$name'?" at the value.
+ *
+ * `Expression<Schema>` is an AUTOCOMPLETE-ONLY member: for checking it is
+ * subsumed by `ExpressionShaped` (every valid expression is
+ * expression-shaped), so it cannot decide acceptance — do not "fix"
+ * acceptance bugs by editing it.
+ */
+export type ExpressionValue<
+  Schema extends Document,
+  Vars extends Document = SystemVariables<Schema>,
+> =
+  | AnyLiteral<Schema>
+  | Expression<Schema>
+  | FieldReference<Schema>
+  | VariableReferences<Vars>
+  | ExpressionShaped;
+
 // ----------------------------------------------------------------------------
 // Inference — operator-key dispatch
 // ----------------------------------------------------------------------------
@@ -845,7 +877,7 @@ export type LiteralDependentOps = {
 type UnionArrayElements<
   Schema extends Document,
   Arrays extends readonly unknown[],
-  Vars extends Document = {},
+  Vars extends Document = SystemVariables<Schema>,
 > =
   Arrays extends readonly [infer First, ...infer Rest] ?
     | GetArrayElement<Schema, First, Vars>
@@ -859,7 +891,7 @@ type UnionArrayElements<
 type GetArrayElement<
   Schema extends Document,
   Item,
-  Vars extends Document = {},
+  Vars extends Document = SystemVariables<Schema>,
 > =
   Item extends readonly (infer E)[] ?
     E // Array literal - extract element type
@@ -896,7 +928,7 @@ type GetArrayElement<
 export type InferArrayElementType<
   Schema extends Document,
   ArraySource,
-  Vars extends Document = {},
+  Vars extends Document = SystemVariables<Schema>,
 > =
   // Array literal - extract element type
   ArraySource extends readonly (infer E)[] ? E
@@ -927,7 +959,7 @@ type InferConditionalOperandValue<
   Schema extends Document,
   Operand,
   SwallowsNull extends boolean,
-  Vars extends Document = {},
+  Vars extends Document = SystemVariables<Schema>,
 > =
   Operand extends null ?
     SwallowsNull extends true ?
@@ -955,13 +987,13 @@ type InferConditionalOperandValue<
 type InferIfNullOperand<
   Schema extends Document,
   Operand,
-  Vars extends Document = {},
+  Vars extends Document = SystemVariables<Schema>,
 > = InferConditionalOperandValue<Schema, Operand, true, Vars>;
 
 type InferCondOperand<
   Schema extends Document,
   Operand,
-  Vars extends Document = {},
+  Vars extends Document = SystemVariables<Schema>,
 > = InferConditionalOperandValue<Schema, Operand, false, Vars>;
 
 /**
@@ -971,7 +1003,7 @@ type InferCondOperand<
 type UnionIfNullOperandTypes<
   Schema extends Document,
   Operands extends readonly unknown[],
-  Vars extends Document = {},
+  Vars extends Document = SystemVariables<Schema>,
 > =
   Operands extends readonly [infer First, ...infer Rest] ?
     | InferIfNullOperand<Schema, First, Vars>
@@ -991,12 +1023,14 @@ export type BoundAsName<Operand> =
     : As
   : "this";
 
-/** Bind one variable name (shadowing any outer binding of the same name). */
-export type BindVariable<
-  Vars extends Document,
-  Name extends string,
-  T,
-> = Prettify<Omit<Vars, Name> & { [K in Name]: T }>;
+/** Bind one variable name (shadowing any outer binding of the same name).
+ *  ONE mapped type with lazy values — Omit/Prettify spellings stack extra
+ *  instantiation layers at the deepest points of binder-interior checking. */
+export type BindVariable<Vars extends Document, Name extends string, T> = {
+  [K in keyof Vars | Name]: K extends Name ? T
+  : K extends keyof Vars ? Vars[K]
+  : never;
+};
 
 /**
  * Evaluate a $let `vars` block in the OUTER environment and bind the
@@ -1010,15 +1044,12 @@ export type BindLetVars<
   Schema extends Document,
   LetVars,
   Vars extends Document,
-> = Prettify<
-  Omit<Vars, keyof LetVars & string> & {
-    [K in keyof LetVars & string]: InferNestedFieldReference<
-      Schema,
-      LetVars[K],
-      Vars
-    >;
-  }
->;
+> = {
+  [K in (keyof LetVars & string) | keyof Vars]: K extends keyof LetVars ?
+    InferNestedFieldReference<Schema, LetVars[K], Vars>
+  : K extends keyof Vars ? Vars[K]
+  : never;
+};
 
 /**
  * Hand-written inference arms for the literal-dependent operators — the only
@@ -1037,7 +1068,7 @@ export type BindLetVars<
 type InferDependentExpression<
   Schema extends Document,
   Expr,
-  Vars extends Document = {},
+  Vars extends Document = SystemVariables<Schema>,
 > =
   Expr extends { $concatArrays: infer Arrays } ?
     Arrays extends readonly unknown[] ?
@@ -1090,7 +1121,7 @@ type InferDependentExpression<
 export type InferExpression<
   Schema extends Document,
   Expr,
-  Vars extends Document = {},
+  Vars extends Document = SystemVariables<Schema>,
 > =
   [OperatorKeyOf<Expr>] extends [never] ? NotAnExpression
   : HasSingleOperatorKey<Expr> extends false ? MultiOperatorError

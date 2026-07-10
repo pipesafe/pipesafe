@@ -58,7 +58,12 @@ import {
   UnimplementedExpressionOps,
 } from "./expressions";
 import { GetFieldTypeWithoutArrays } from "./fieldReference";
-import { InferVariableReference, ValidateVariableReference } from "./literals";
+import {
+  HasUserBindings,
+  InferVariableReference,
+  SystemVariables,
+  ValidateVariableReference,
+} from "./literals";
 import { WithoutDollar } from "../utils/strings";
 
 /**
@@ -78,7 +83,7 @@ import { WithoutDollar } from "../utils/strings";
 export type ValidateExpressionValue<
   Schema extends Document,
   V,
-  Vars extends Document = {},
+  Vars extends Document = SystemVariables<Schema>,
 > =
   [Exclude<keyof V & string, `$${string}`>] extends [never] ?
     HasSingleOperatorKey<V> extends false ? MultiOperatorError
@@ -99,7 +104,7 @@ export type ValidateExpressionValue<
       : [OperatorKeyOf<V>] extends ["$map"] ? ValidateMapValue<Schema, V, Vars>
       : ValidateFilterValue<Schema, V, Vars>
     : [OperatorKeyOf<V>] extends [keyof ExpressionSpec<Schema>] ?
-      [keyof Vars] extends [never] ?
+      HasUserBindings<Vars> extends false ?
         // Schema-FREE fast-accept (mirrors group's ValidateAccumulatorValue):
         // an operand valid against the EMPTY schema is valid against any
         // schema — the ref arms collapse to `never` under `{}`, so only
@@ -116,12 +121,20 @@ export type ValidateExpressionValue<
         [V] extends [ExpressionFor<Schema, OperatorKeyOf<V>>] ? never
         : ExpressionFor<Schema, OperatorKeyOf<V>>
       : // FORGIVING re-check inside a binder interior (non-empty Vars): the
-      // operator name is registered (this branch), and the operand TREE is
-      // walked so bad refs, unknown `$$`-variables, and typo'd nested
-      // operators still brand — but the Vars-blind operand relation is
-      // skipped; operand TYPE errors there are runtime MongoDB's to
-      // report. $literal interiors are verbatim values, never walked.
-      [OperatorKeyOf<V>] extends ["$literal"] ? never
+      // Vars-blind registry relation runs as a FAST-ACCEPT only (anything
+      // it accepts is valid; it must not REJECT here — a bound `$$var` in
+      // a typed operand position fails it), and the leftovers get the
+      // operand TREE walk so bad refs, unknown `$$`-variables, and typo'd
+      // nested operators still brand. The fast-accepts are ALSO the cycle
+      // breaker: exploration with the registry's own WIDE shapes (V =
+      // ExpressionFor<Schema, Op> itself, reached through operand unions
+      // during inference) self-accepts here — without it the walk recurses
+      // registry→operand-union→registry forever and only TS's instantiation
+      // depth limiter stops it (TS2589 at every lookup-let sub-pipeline
+      // stage). $literal interiors are verbatim values, never walked.
+      [V] extends [ExpressionFor<{}, OperatorKeyOf<V>>] ? never
+      : [V] extends [ExpressionFor<Schema, OperatorKeyOf<V>>] ? never
+      : [OperatorKeyOf<V>] extends ["$literal"] ? never
       : ValidateNestedValue<
         Schema,
         V[OperatorKeyOf<V> & keyof V],
@@ -151,7 +164,7 @@ export type ValidateExpressionValue<
 type ValidateConcatValue<
   Schema extends Document,
   V,
-  Vars extends Document = {},
+  Vars extends Document = SystemVariables<Schema>,
 > =
   V extends { readonly $concat: infer Arr } ?
     Arr extends readonly unknown[] ?
@@ -180,7 +193,7 @@ type ValidateConcatValue<
 type ValidateConcatElement<
   Schema extends Document,
   E,
-  Vars extends Document = {},
+  Vars extends Document = SystemVariables<Schema>,
 > =
   E extends `$$${string}` ?
     ValidateVariableReference<Schema, E, Vars> extends infer Err ?
@@ -213,7 +226,11 @@ type ValidateConcatElement<
  * computations share one alias-cache entry). Malformed shapes get the
  * registry's expected operand shape.
  */
-type ValidateLetValue<Schema extends Document, V, Vars extends Document = {}> =
+type ValidateLetValue<
+  Schema extends Document,
+  V,
+  Vars extends Document = SystemVariables<Schema>,
+> =
   V extends { $let: { vars: infer LetVars; in: infer In } } ?
     ValidateNestedValue<Schema, LetVars, Vars> extends infer VarsErr ?
       ValidateNestedValue<
@@ -260,7 +277,7 @@ type ValidateArrayInputValue<
   Schema extends Document,
   Input,
   Op extends "$map" | "$filter",
-  Vars extends Document = {},
+  Vars extends Document = SystemVariables<Schema>,
 > =
   Input extends `$$${string}` ?
     ValidateVariableReference<Schema, Input, Vars> extends infer Err ?
@@ -285,7 +302,7 @@ type ValidateArrayInputValue<
   // for generic-schema helpers and skips the Schema operand types for
   // literal inputs.
   [Input] extends [RegistryArrayInputOperand<{}, Op>] ? never
-  : [keyof Vars] extends [never] ?
+  : HasUserBindings<Vars> extends false ?
     string extends keyof Schema ?
       never // operand checks are meaningless on a wide/index-signature schema
     : [Input] extends [RegistryArrayInputOperand<Schema, Op>] ? never
@@ -298,7 +315,11 @@ type ValidateArrayInputValue<
  * inference's $map arm computes. The replacement keeps sibling operand
  * keys (`as`) as-is so the TS2322 lands on the offending member only.
  */
-type ValidateMapValue<Schema extends Document, V, Vars extends Document = {}> =
+type ValidateMapValue<
+  Schema extends Document,
+  V,
+  Vars extends Document = SystemVariables<Schema>,
+> =
   V extends { $map: infer MapOperand } ?
     MapOperand extends { input: infer Input; in: infer In } ?
       ValidateArrayInputValue<Schema, Input, "$map", Vars> extends (
@@ -341,7 +362,7 @@ type ValidateMapValue<Schema extends Document, V, Vars extends Document = {}> =
 type ValidateFilterValue<
   Schema extends Document,
   V,
-  Vars extends Document = {},
+  Vars extends Document = SystemVariables<Schema>,
 > =
   V extends { $filter: infer FilterOperand } ?
     FilterOperand extends { input: infer Input; cond: infer Cond } ?
@@ -393,7 +414,7 @@ type ValidateFilterValue<
 export type ValidateNestedValue<
   Schema extends Document,
   V,
-  Vars extends Document = {},
+  Vars extends Document = SystemVariables<Schema>,
 > =
   V extends `$$${string}` ? ValidateVariableReference<Schema, V, Vars>
   : V extends `$${string}` ?
@@ -424,7 +445,7 @@ export type ValidateNestedValue<
 type ValidateObjectValue<
   Schema extends Document,
   V,
-  Vars extends Document = {},
+  Vars extends Document = SystemVariables<Schema>,
 > =
   true extends (
     {
@@ -452,7 +473,7 @@ type ValidateObjectValue<
 type ValidateArrayValue<
   Schema extends Document,
   V extends readonly unknown[],
-  Vars extends Document = {},
+  Vars extends Document = SystemVariables<Schema>,
 > =
   true extends (
     {

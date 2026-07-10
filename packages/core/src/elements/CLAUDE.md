@@ -66,15 +66,28 @@ before touching any Query/operand union.
 - `ResolveToPrimitive`'s literal-value arm carries Date/ObjectId as the
   keyless `object` — `{}` is NOT equivalent (it accepts primitive strings
   and breaks the replaceRoot `"$missing"` rejection pin).
-- `SYSTEM_VARIABLES`/`SystemVariable` (literals.ts) is the enumerated `$$`
-  vocabulary — never widen a consumer back to `` `$$${string}` ``.
-  `SystemVariableSpec` carries each variable's ACCURATE type ($$NOW → Date,
-  $$ROOT → Schema, $$REMOVE → the load-bearing `never`), and
+- There is ONE variable-threading mechanism: `SystemVariables<Schema>`
+  (literals.ts — derived from `SystemVariableSpec`, which carries each
+  variable's ACCURATE type: $$NOW → Date, $$ROOT → Schema, $$REMOVE → the
+  load-bearing `never`) is the DEFAULT of every `Vars` parameter;
+  `$let`/`$map`/`$filter` binding arms extend it (BindLetVars/BindVariable
+  in expressions.ts — shared by inference and validation, so the two
+  environments cannot diverge), and `$lookup.let` reseeds it over the
+  foreign schema via Pipeline's `Env` generic (PipelineVars).
   `InferVariableReference`/`ValidateVariableReference` resolve `"$$name"`/
-dotted`"$$name.path"` strings against it and the `Vars` environment the
-  `$let`/`$map`/`$filter`binding arms thread down (BindLetVars/BindVariable
-in expressions.ts — shared by inference and validation, so the two
-environments cannot diverge). Unlisted/unbound names brand with`UnknownSystemVariableError`.
+dotted`"$$name.path"`by a single env lookup; unlisted/unbound names
+brand with`UnknownSystemVariableError`. `VariableReferences<Vars>` is
+  the env's finite acceptance vocabulary. The env-merge types
+  (PipelineVars/ResolveLookupLetEnv/BindLetVars/BindVariable) are ONE
+  mapped type each with lazy values — Omit/Prettify spellings stack
+  instantiation layers at the deepest point of lookup-lambda checking and
+  tripped TS2589.
+- The validation kernel's binder-interior (forgiving) branches run the
+  Vars-blind registry relation as FAST-ACCEPT ONLY, then walk. The
+  fast-accept doubles as the cycle breaker: without it, exploration with
+  the registry's own wide shapes recurses registry→operand-union→registry
+  until TS's depth limiter (TS2589 at every lookup-let sub-pipeline
+  stage).
 - ValidateArrayInputValue's non-`$`-string arm RELATES against the
   registry's input operand; do NOT "improve" it into a ValidateNestedValue
   re-entry — $filter is a member of ArrayProducingExpression (hence of

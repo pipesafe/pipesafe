@@ -10,6 +10,7 @@
 
 import { ValidateExpressionValue, ValidateNestedValue } from "./validation";
 import { ExpressionFor } from "./expressions";
+import { PipelineVars, VariableReferences } from "./literals";
 import { PipeSafeError } from "../utils/errors";
 import { Assert, Equal } from "../utils/tests";
 
@@ -127,6 +128,35 @@ type _UnknownSystemVariable = Assert<
   Equal<
     ValidateNestedValue<User, "$$now">,
     PipeSafeError<"Variable '$$now' is not a recognized system variable.">
+  >
+>;
+
+// ---------------------------------------------------------------------------
+// The environment vocabulary (VariableReferences over PipelineVars): a
+// lookup-let binding is accepted by exact name (and dotted paths into
+// document-typed bindings); an out-of-scope `$$`-name is NOT in the finite
+// union, so call sites reject it at the constraint. Pinned type-level: a
+// failing value's constraint elaboration at a call site force-evaluates
+// the full value unions and can trip TS's depth limiter (pre-existing).
+// ---------------------------------------------------------------------------
+
+type _LetEnv = PipelineVars<User, { u: string; order: { qty: number } }>;
+type _EnvVocabularyAcceptsBinding = Assert<
+  Equal<"$$u" extends VariableReferences<_LetEnv> ? true : false, true>
+>;
+type _EnvVocabularyAcceptsBindingPath = Assert<
+  Equal<"$$order.qty" extends VariableReferences<_LetEnv> ? true : false, true>
+>;
+type _EnvVocabularyRejectsUnknown = Assert<
+  Equal<"$$typo" extends VariableReferences<_LetEnv> ? true : false, false>
+>;
+type _EnvWalkAcceptsBinding = Assert<
+  Equal<ValidateNestedValue<User, "$$u", _LetEnv>, never>
+>;
+type _EnvWalkBrandsUnknown = Assert<
+  Equal<
+    ValidateNestedValue<User, "$$typo", _LetEnv>,
+    PipeSafeError<"Variable '$$typo' is not a recognized system variable.">
   >
 >;
 
@@ -279,6 +309,11 @@ export type {
   _SystemVariablePathInvalid,
   _SystemVariablePathIntoNonDocument,
   _UnknownSystemVariable,
+  _EnvVocabularyAcceptsBinding,
+  _EnvVocabularyAcceptsBindingPath,
+  _EnvVocabularyRejectsUnknown,
+  _EnvWalkAcceptsBinding,
+  _EnvWalkBrandsUnknown,
   _LetValid,
   _LetBadVarsRef,
   _LetUnknownVarInBody,
