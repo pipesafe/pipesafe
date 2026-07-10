@@ -3,7 +3,7 @@ import {
   InferNestedFieldReference,
 } from "../elements/fieldReference";
 import { Expression } from "../elements/expressions";
-import { AnyLiteral } from "../elements/literals";
+import { AnyLiteral, SystemVariable } from "../elements/literals";
 import { Document, Prettify } from "../utils/objects";
 import { PassThrough } from "../utils/errors";
 
@@ -13,6 +13,7 @@ import { PassThrough } from "../utils/errors";
  * Replaces the input document with the specified document.
  * The newRoot can be:
  * - A field reference: "$someField"
+ * - An enumerated `$$`-system variable: "$$ROOT", "$$CURRENT", ...
  * - An expression: { $add: ["$field1", "$field2"] }
  * - A nested object with field references and expressions
  * - A literal value
@@ -20,6 +21,7 @@ import { PassThrough } from "../utils/errors";
 export type ReplaceRootQuery<Schema extends Document> = {
   newRoot:
     | FieldReference<Schema>
+    | SystemVariable
     | Expression<Schema>
     | AnyLiteral<Schema>
     | Document; // For nested objects with field references and expressions

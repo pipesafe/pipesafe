@@ -11,6 +11,7 @@ import { HasOperatorKey } from "../utils/dispatch";
 import { ExpandDottedKey, IsDottedKey } from "../utils/paths";
 import { NoDollarString, WithoutDollar } from "../utils/strings";
 import {
+  FieldReference,
   GetFieldTypeWithoutArrays,
   InferNestedFieldReference,
 } from "../elements/fieldReference";
@@ -21,6 +22,7 @@ import {
   GetFieldTypeOrError,
 } from "../elements/fieldSelector";
 import { ValidateNestedValue } from "../elements/validation";
+import { SystemVariable } from "../elements/literals";
 
 /**
  * $project stage query type
@@ -44,16 +46,16 @@ type ProjectValue<Schema extends Document> =
   // TS2589).
   | number
   | boolean
-  // Structural acceptance of `$`-strings: unknown refs are
-  // branded by ValidateProjectQuery's value walk instead of rejecting
-  // through the deep refs union on the constraint path. NOTE: a
-  // `FieldReference<Schema>` member here would be ABSORBED by this bare
-  // template under union normalization; the `` `$${string}` & {} ``
-  // non-absorption spelling defeats that but is NOT usable either — the
-  // string-flavored intersection leaks String.prototype into the
-  // object-literal key completions of every sibling value position
-  // (verified; see the KNOWN LIMITATION note in stages/set.ts).
-  | `$${string}`
+  // FINITE `$`-string arms (mirrors stages/set.ts): the schema-derived
+  // FieldReference union plus the enumerated SYSTEM_VARIABLES — both
+  // autocomplete, neither absorbs the other, and neither leaks
+  // String.prototype into object-literal completions (finite literals are
+  // primitive-flagged). A wide `` `$${string}` `` template here is provably
+  // unusable: it erases the ref literals from completions, and its
+  // `` & {} `` spelling leaks String.prototype. A typo'd ref or unlisted
+  // `$$var` now rejects at the constraint with a "Did you mean" hint.
+  | FieldReference<Schema>
+  | SystemVariable
   // Plain string values are valid MongoDB literal assignments in $project
   // (only numeric/boolean literals require $literal).
   | NoDollarString

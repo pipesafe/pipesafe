@@ -91,3 +91,12 @@ export type UnknownAccumulatorError<Op extends string> =
  */
 export type UnknownFieldError<Path extends string> =
   PipeSafeError<`Field '${Path}' is not on the schema.`>;
+
+/**
+ * An unlisted `$$`-variable — not one of the enumerated SYSTEM_VARIABLES
+ * (elements/literals.ts) and not bound by an enclosing `$let`/`$map`/
+ * `$filter` (whose interiors are `unknown`-typed and skip validation).
+ * Aggregation-command-level `let` variables are not modeled yet.
+ */
+export type UnknownSystemVariableError<Name extends string> =
+  PipeSafeError<`Variable '${Name}' is not a recognized system variable.`>;

@@ -260,6 +260,19 @@ describe("project", () => {
     const probe = at(`orders.project({ ‸ });`);
     expectExactly(probe, FIELD_SELECTOR_KEYS, { memberCompletion: true });
   });
+
+  // Guards ProjectValue's all-finite string arms (mirrors set): the
+  // schema-derived FieldReference union plus the enumerated system
+  // variables — no wide template to absorb them.
+  it("suggests exactly the field references and system variables for a string value", () => {
+    const probe = at(`orders.project({ display: "‸" });`);
+    expectExactly(probe, [...FIELD_REFS, ...SYSTEM_VARIABLES]);
+  });
+
+  it("suggests exactly the expression operators for a $-keyed value object", () => {
+    const probe = at(`orders.project({ total: { ‸ } });`);
+    expectExactly(probe, EXPRESSION_OPERATORS, { memberCompletion: true });
+  });
 });
 
 describe("group", () => {
@@ -272,9 +285,9 @@ describe("group", () => {
   // and the index-signature arm): grouping by ANY field is valid MongoDB,
   // so array/document refs ($tags, $shipping, $items, …) must be offered
   // and accepted alongside the primitive-inferring ones.
-  it("suggests exactly the field references for _id", () => {
+  it("suggests exactly the field references and system variables for _id", () => {
     const probe = at(`orders.group({ _id: "‸" });`);
-    expectExactly(probe, FIELD_REFS);
+    expectExactly(probe, [...FIELD_REFS, ...SYSTEM_VARIABLES]);
   });
 
   // Guards the same ResolveToPrimitive fix as the set expression-object
@@ -306,9 +319,9 @@ describe("path-string stages", () => {
     expectExactly(probe, ["newRoot"], { memberCompletion: true });
   });
 
-  it("replaceRoot newRoot suggests exactly the field references", () => {
+  it("replaceRoot newRoot suggests exactly the field references and system variables", () => {
     const probe = at(`orders.replaceRoot({ newRoot: "‸" });`);
-    expectExactly(probe, FIELD_REFS);
+    expectExactly(probe, [...FIELD_REFS, ...SYSTEM_VARIABLES]);
   });
 });
 

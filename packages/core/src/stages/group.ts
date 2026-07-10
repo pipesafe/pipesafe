@@ -8,6 +8,7 @@ import {
   AnyLiteral,
   ExpressionShaped,
   LiteralOrFieldReferenceInferringTo,
+  SystemVariable,
 } from "../elements/literals";
 import {
   Expression,
@@ -27,6 +28,7 @@ import {
   PipeSafeError,
   RequiresMsg,
   UnknownAccumulatorError,
+  UnknownSystemVariableError,
 } from "../utils/errors";
 import { ExpressionOperand } from "../elements/operands";
 
@@ -200,8 +202,10 @@ export type ResolveAccumulatorFunction<Schema extends Document, Accumulator> =
   : never;
 
 export type GroupQuery<Schema extends Document> = {
-  // `$$`-system variables ($$NOW, $$ROOT, ...) are valid _id expressions;
-  // AnyLiteral's string arm is NoDollarString, so they need their own arm.
+  // The enumerated `$$`-system variables ($$NOW, $$ROOT, ...) are valid _id
+  // expressions; AnyLiteral's string arm is NoDollarString, so they need
+  // their own arm — finite, so they autocomplete and an unlisted `$$var`
+  // rejects at the constraint.
   // `FieldReference<Schema>` is likewise its own arm: grouping by any field —
   // including array/document refs like `$tags`/`$shipping`/`$items` — is valid
   // MongoDB, but AnyLiteral only offers references that infer to PRIMITIVES.
@@ -213,7 +217,7 @@ export type GroupQuery<Schema extends Document> = {
     | AnyLiteral<Schema>
     | Expression<Schema>
     | FieldReference<Schema>
-    | `$$${string}`
+    | SystemVariable
     | null;
 } & {
   // The index signature covers _id too, so it must also carry the `$$` and
@@ -229,7 +233,7 @@ export type GroupQuery<Schema extends Document> = {
     | AccumulatorFunction<Schema>
     | ExpressionShaped
     | FieldReference<Schema>
-    | `$$${string}`
+    | SystemVariable
     | null;
 };
 
@@ -302,11 +306,19 @@ type ValidateAccumulatorValue<Schema extends Document, A> =
     [keyof AccumulatorSpec<Schema> | UnimplementedAccumulators]
   ) ?
     OperatorKeyOf<A> extends infer Op extends CheckedAccumulatorOps ?
-      // `$$`-system variables ($$NOW, $$ROOT, ...) are valid MongoDB in any
-      // accumulator position (mirrors the kernel's tier-1 `$$` arm in
+      // The enumerated `$$`-system variables are valid MongoDB in any
+      // accumulator position (mirrors the kernel's tier-1 arm in
       // ValidateNestedValue) — schema-free, and checked before the operand
-      // relation so they never reach the brand.
-      A[Op & keyof A] extends `$$${string}` ? never
+      // relation so they never reach the comparable/numeric brand. An
+      // UNLISTED `$$var` brands as an unknown system variable instead of a
+      // misleading operand/field message.
+      A[Op & keyof A] extends SystemVariable ? never
+      : A[Op & keyof A] extends `$$${string}` ?
+        {
+          [K in Op & string]: UnknownSystemVariableError<
+            A[Op & keyof A] & string
+          >;
+        }
       : string extends keyof Schema ?
         never // operand checks are meaningless on a wide/index-signature schema
       : // $min/$max: ANY non-`$` string literal is a comparable. The union
