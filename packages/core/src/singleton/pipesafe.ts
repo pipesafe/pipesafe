@@ -1,6 +1,6 @@
 import { MongoClient, MongoClientOptions, DbOptions } from "mongodb";
 import { Database } from "../database/Database";
-import { DRIVER_INFO, markTagged, tagClient } from "./tagClient";
+import { tagClient } from "./tagClient";
 
 class PipeSafe {
   client: MongoClient | undefined;
@@ -10,22 +10,13 @@ class PipeSafe {
    *
    * @param url MongoDB connection string
    * @param options Standard driver `MongoClientOptions` (timeouts, pool
-   * sizing, TLS, etc.). PipeSafe's driver metadata is preserved: a
-   * user-supplied `driverInfo` is appended to rather than replaced.
+   * sizing, TLS, etc.). PipeSafe's driver metadata is appended after any
+   * user-supplied `driverInfo`, never replacing it.
    */
   connect(url: string, options?: MongoClientOptions) {
     if (this.client) throw new Error("Already connected");
-    if (options?.driverInfo) {
-      // Keep the user's driverInfo and append PipeSafe's afterwards
-      this.client = new MongoClient(url, options);
-      tagClient(this.client);
-    } else {
-      this.client = new MongoClient(url, {
-        ...options,
-        driverInfo: DRIVER_INFO,
-      });
-      markTagged(this.client);
-    }
+    this.client = new MongoClient(url, options);
+    tagClient(this.client);
     return this.client;
   }
 

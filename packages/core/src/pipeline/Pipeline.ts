@@ -740,11 +740,12 @@ export class Pipeline<
     tagClient(client);
 
     const db = args.databaseName ?? this.databaseName;
-    const dbOptions = mergeOptions(this.dbOptions, args.dbOptions);
-    const collectionOptions = mergeOptions(
-      this.collectionOptions,
-      args.collectionOptions
-    );
+    // Per-key merge: execute-time options override inherited ones key by key
+    const dbOptions = { ...this.dbOptions, ...args.dbOptions };
+    const collectionOptions = {
+      ...this.collectionOptions,
+      ...args.collectionOptions,
+    };
 
     const collection = args.collectionName ?? this.collectionName;
     if (!collection) throw new Error("No collection name provided");
@@ -754,19 +755,6 @@ export class Pipeline<
       .collection(collection, collectionOptions)
       .aggregate(this.getPipeline(), args.aggregateOptions);
   }
-}
-
-/**
- * Shallow-merge execute-time options over inherited ones, so callers only
- * override the keys they provide. Preserves `undefined` when neither side
- * is set (rather than materializing an empty options object).
- */
-function mergeOptions<T extends object>(
-  inherited: T | undefined,
-  overrides: T | undefined
-): T | undefined {
-  if (inherited && overrides) return { ...inherited, ...overrides };
-  return overrides ?? inherited;
 }
 
 export type InferOutputType<P extends Pipeline<any, any, any, any>> =
