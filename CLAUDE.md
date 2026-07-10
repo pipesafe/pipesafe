@@ -23,10 +23,11 @@ pipesafe/
 │   │   ├── benchmarking/        # TypeScript performance benchmarks
 │   │   └── LICENSE              # Apache License 2.0
 │   │
-│   ├── manifold/                # DAG orchestration (ELv2 - commercial)
+│   ├── manifold/                # Transformations: batch + event-driven (ELv2 - commercial)
 │   │   ├── src/
 │   │   │   ├── model/           # Model - materializable pipelines
-│   │   │   └── project/         # Project - DAG orchestrator
+│   │   │   ├── project/         # Project - DAG orchestrator (batch)
+│   │   │   └── events/          # ChangeSubscription + dispatch strategies (scaffold)
 │   │   ├── examples/            # DAG usage examples
 │   │   └── LICENSE              # Elastic License 2.0
 │   │
@@ -43,7 +44,6 @@ pipesafe/
 │       │   ├── fetcher/         # Fetcher - REST enrichment/polling units
 │       │   ├── envelope/        # IntakeEnvelope - queue + idempotency ledger
 │       │   ├── verify/          # Signature verification schemes
-│       │   ├── dispatch/        # Change-stream dispatch strategies
 │       │   └── intake/          # Intake - orchestrator (dev/replay/deploy)
 │       ├── ARCHITECTURE.md      # Design doc + phased roadmap
 │       └── LICENSE              # Elastic License 2.0
@@ -54,7 +54,7 @@ pipesafe/
 ### Licensing Rationale
 
 - **@pipesafe/core (Apache 2.0)**: Core pipeline builder. Fully OSI-approved, can be used anywhere.
-- **@pipesafe/manifold (ELv2)**: DAG execution and materialization features. Commercial-friendly but not OSI-approved.
+- **@pipesafe/manifold (ELv2)**: Transformations - batch DAG execution/materialization today, event-driven (change-stream subscriptions + dispatch strategies, scaffold) next. Owns ALL change-stream reactivity: intake's fetcher triggers are one usecase; mid-DAG reactive transformations for non-intake users are the same primitive. Commercial-friendly but not OSI-approved.
 - **@pipesafe/infra (ELv2)**: Shared cloud infrastructure engine (Pulumi with MongoDB-backed state). A suite concern by design: intake consumes it today, manifold (scheduled materialization) later — nothing in it may reference domain concepts.
 - **@pipesafe/intake (ELv2)**: Cloud data ingestion (webhooks + REST fetchers into MongoDB). Scaffold phase — see `packages/intake/ARCHITECTURE.md` for the design and phased roadmap.
 
@@ -62,8 +62,9 @@ pipesafe/
 
 - `@pipesafe/manifold` has `@pipesafe/core` as a **peer dependency** pinned to core's
   current major (`>=2.0.0 <3.0.0`); widen it whenever core takes a major bump
-- `@pipesafe/infra` peers on `@pipesafe/core`; `@pipesafe/intake` peers on both
-  `@pipesafe/core` and `@pipesafe/infra`
+- `@pipesafe/infra` peers on `@pipesafe/core`; `@pipesafe/intake` peers on
+  `@pipesafe/core`, `@pipesafe/infra`, AND `@pipesafe/manifold` (it composes
+  manifold's event layer - intake never owns change-stream machinery)
 - During development, `workspace:*` links them locally
 - Users install the packages they need explicitly
 - infra and intake are versioned independently (not in the changesets `linked`
@@ -131,7 +132,9 @@ Note: The interactive `bun run changeset` command doesn't work in non-TTY enviro
 
 - **Source**: Located in `packages/core/src/source/Source.ts`. Unified interface that both `Collection` and `Model` implement, allowing them to be used interchangeably as pipeline sources.
 
-- **Webhook / Fetcher / Intake** (scaffold): Located in `packages/intake/src/`. Declarative ingestion units (verified webhook endpoints landing raw `IntakeEnvelope`s; REST enrichment/polling fetchers landing typed docs) plus the orchestrator that runs them locally and deploys them. Landing collections are core `Collection<T>`s, so ingested data feeds Pipelines and Models directly. Design + roadmap: `packages/intake/ARCHITECTURE.md`.
+- **Webhook / Fetcher / Intake** (scaffold): Located in `packages/intake/src/`. Declarative ingestion units (verified webhook endpoints landing raw `IntakeEnvelope`s; REST enrichment/polling fetchers landing typed docs) plus the orchestrator that runs them locally and deploys them. Intake's domain ENDS at landing documents - reacting to them is manifold's event layer (a fetcher's webhook trigger lowers to a `ChangeSubscription`). Landing collections are core `Collection<T>`s, so ingested data feeds Pipelines and Models directly. Design + roadmap: `packages/intake/ARCHITECTURE.md`.
+
+- **ChangeSubscription / DispatchConfig** (scaffold): Located in `packages/manifold/src/events/`. The event-driven half of manifold: react to change-stream events on any `Source` by invoking a consumer, delivered via pluggable strategies (`watcherBridge` container, in-process `changeStreamWatcher`, `ledgerPoller` leases). The full event-driven design (reactive Model refresh, subscriptions in the Project DAG, Atlas Triggers as a delivery mechanism) is deferred - see ARCHITECTURE.md "Deferred work".
 
 - **InfraProvider / PulumiBackend** (scaffold): Located in `packages/infra/src/`. The shared provisioning engine — a Pulumi program-factory seam over provider-neutral resource specs, with Pulumi state stored in MongoDB (optionally a separate ops cluster). Suite-shared by design; must stay free of domain concepts.
 

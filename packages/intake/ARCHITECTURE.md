@@ -5,18 +5,35 @@ fetchers in TypeScript, and intake provisions the serverless infrastructure to
 land that data in your MongoDB — where it surfaces as core `Collection<T>`
 instances, ready for Pipelines and manifold `Model`/`Project` DAGs.
 
-Two packages, both ELv2:
+The responsibility split across the suite:
 
-- **`@pipesafe/intake`** — the ingestion domain: `Webhook`, `Fetcher`, the
-  `IntakeEnvelope` ledger, verifiers, dispatch, and the `Intake` orchestrator.
-- **`@pipesafe/infra`** — the shared infrastructure engine: the Pulumi
-  program-factory seam, MongoDB-backed Pulumi state, deploy locking, and
-  `SecretRef`s. Infra is a **suite** concern: intake deploys ingestion
-  infrastructure today; manifold will deploy scheduled materialization jobs on
-  the same substrate later. The end state is one cohesive DAG from webhook
-  receipt through analytics transformations, deployed and operated with one
-  look and feel. Nothing in infra may reference ingestion (or any other
-  domain) concepts — that boundary is a review gate.
+- **`@pipesafe/intake`** (ELv2) — the ingestion domain, and ONLY that:
+  getting external data into the holding collections. `Webhook`, `Fetcher`,
+  the `IntakeEnvelope` ledger, verifiers, and the `Intake` orchestrator.
+  Intake's job ends when a document lands; it does not own reactions to
+  those documents.
+- **`@pipesafe/manifold`** (ELv2) — transformations, in both execution
+  modes: batch (`Project.run`, pull-based, today) and **event-driven**
+  (change-stream subscriptions — scaffold in `src/events/`). Watching an
+  envelope collection and running a fetcher is just one usecase of
+  manifold's `ChangeSubscription`; the same primitive serves event-driven
+  transformations mid-DAG for users who never touch intake (manifold and
+  core operate on ANY collection in the connected MongoDB — application
+  operational data, other ETL tools' landing collections, CDC replicas,
+  other services' databases, and manifold's own model outputs — intake is
+  merely one producer among many).
+- **`@pipesafe/infra`** (ELv2) — the shared infrastructure engine: the
+  Pulumi program-factory seam, MongoDB-backed Pulumi state, deploy locking,
+  and `SecretRef`s. Intake deploys ingestion infrastructure through it
+  today; manifold deploys scheduled/reactive transformation jobs through it
+  later. The end state is one cohesive DAG from webhook receipt through
+  analytics transformations, deployed and operated with one look and feel.
+  Nothing in infra may reference ingestion (or any other domain) concepts —
+  that boundary is a review gate.
+
+Dependency direction: intake peers on core, infra, AND manifold (it
+composes manifold's event layer); manifold peers on core only; infra peers
+on core only.
 
 Status: **Phase 0** — this document plus type-level scaffolds. No runtime yet.
 See the [roadmap](#roadmap) for the path to a working MVP.
@@ -110,8 +127,12 @@ any queue system:
 
 1. **Gateway** (function URL): verify signature → insert envelope
    (`status: "received"`). Duplicate `_id` ⇒ already received: ack 200, done.
-   Nothing else on the hot path.
-2. **Dispatch** — pluggable strategies over one consumer contract:
+   Nothing else on the hot path. **Intake's ingestion responsibility ends
+   here** — everything below is manifold's event layer, which intake
+   composes: each fetcher's `{ webhook }` trigger lowers to a manifold
+   `ChangeSubscription` on the envelope collection's inserts.
+2. **Dispatch** (manifold `src/events/`) — pluggable strategies over one
+   consumer contract:
    - **`watcherBridge`** (default for AWS deployments, Atlas and self-hosted
      alike): a minimal always-on container (ECS Fargate, ~0.25 vCPU,
      Spot-eligible) runs `collection.watch()` with resume tokens persisted in
@@ -262,15 +283,22 @@ generic flow per repo convention.
 Deliberately unscheduled — revisit once the desired dev experience is
 understood:
 
-- **Atlas Triggers as a suite-wide typed primitive.** A trigger's config is
-  essentially a `$match`/`$project` expression over change-event documents —
-  a typed-aggregation surface that belongs to the whole suite (usable beyond
-  ingestion, e.g. reactive manifold model refresh). Design that first; then
-  the `atlasTrigger` dispatcher (Atlas Database Trigger → EventBridge partner
-  bus, provisionable via Pulumi's `mongodbatlas.EventTrigger`) becomes a pure
-  dispatcher swap — `watcherBridge` already mirrors its event shape — and
-  lets Atlas users drop the bridge container. Context: Atlas App Services
-  reached EOL (Sept 2025) but database triggers were explicitly retained.
+- **Event-driven manifold, the full design.** The `ChangeSubscription` +
+  dispatch scaffold in `packages/manifold/src/events/` is deliberately
+  minimal. The real design pass covers: incremental/reactive Model refresh
+  (a Model re-materializing when its upstream Source changes), subscription
+  placement inside the Project DAG, typed change-event schemas, and how
+  batch and event-driven execution compose in one graph. Intake's fetcher
+  triggers are the first consumer and must not constrain that design.
+- **Atlas Triggers as a delivery mechanism within that design.** A trigger's
+  config is essentially a `$match`/`$project` expression over change-event
+  documents — a typed-aggregation surface that belongs to the whole suite.
+  Once designed, the `atlasTrigger` strategy (Atlas Database Trigger →
+  EventBridge partner bus, provisionable via Pulumi's
+  `mongodbatlas.EventTrigger`) becomes a pure dispatch-strategy swap —
+  `watcherBridge` already mirrors its event shape — and lets Atlas users
+  drop the bridge container. Context: Atlas App Services reached EOL
+  (Sept 2025) but database triggers were explicitly retained.
 - **Atlas Stream Processing** `$externalFunction` as an opt-in
   high-throughput dispatcher.
 - **Second cloud provider** (Cloudflare Workers program factory).

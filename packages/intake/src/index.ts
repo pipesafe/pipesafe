@@ -34,13 +34,6 @@ export type {
 } from "./fetcher/Fetcher";
 export type { Verifier, VerifyContext } from "./verify/Verifier";
 export type {
-  DispatchConfig,
-  DispatchStrategy,
-  WatcherBridgeDispatch,
-  ChangeStreamWatcherDispatch,
-  LedgerPollerDispatch,
-} from "./dispatch/Dispatcher";
-export type {
   IntakeConfig,
   DeployOptions,
   DeployPlan,

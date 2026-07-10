@@ -26,7 +26,11 @@ export interface IntakeLogger {
 
 export type FetcherTrigger<TEvent extends Document> =
   | {
-      /** Fire once per envelope landing on this webhook. */
+      /**
+       * Fire once per envelope landing on this webhook. Lowers to a
+       * manifold ChangeSubscription on the envelope collection's inserts -
+       * intake declares the reaction; manifold's event layer delivers it.
+       */
       webhook: Webhook<string, TEvent>;
       filter?: (envelope: IntakeEnvelope<TEvent>) => boolean;
     }

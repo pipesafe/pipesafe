@@ -16,10 +16,10 @@ import type {
   SecretRef,
   StateStoreOptions,
 } from "@pipesafe/infra";
+import type { DispatchConfig } from "@pipesafe/manifold";
 import type { EnvelopeStatus } from "../envelope/Envelope";
 import type { Fetcher } from "../fetcher/Fetcher";
 import type { Webhook } from "../webhook/Webhook";
-import type { DispatchConfig } from "../dispatch/Dispatcher";
 import { IntakeNotImplementedError } from "../errors";
 
 export interface IntakeConfig {
@@ -32,7 +32,12 @@ export interface IntakeConfig {
   /** What the deployed functions use to reach MongoDB. */
   mongoUri: SecretRef;
   database?: string;
-  /** Defaults to watcherBridge on deploy, changeStreamWatcher in dev. */
+  /**
+   * How envelope-collection change events reach fetcher consumers -
+   * manifold's event layer (intake's webhook triggers lower to
+   * ChangeSubscriptions on the envelope collections). Defaults to
+   * watcherBridge on deploy, changeStreamWatcher in dev.
+   */
   dispatch?: DispatchConfig;
 }
 
