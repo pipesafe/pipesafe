@@ -67,10 +67,20 @@ before touching any Query/operand union.
   keyless `object` — `{}` is NOT equivalent (it accepts primitive strings
   and breaks the replaceRoot `"$missing"` rejection pin).
 - `SYSTEM_VARIABLES`/`SystemVariable` (literals.ts) is the enumerated `$$`
-  vocabulary — never widen a consumer back to `` `$$${string}` ``. The
-  validation kernel brands unlisted names with `UnknownSystemVariableError`;
-  `$let`/`$map`/`$filter`-bound user variables never reach the walk (their
-  binding interiors are `unknown`-typed).
+  vocabulary — never widen a consumer back to `` `$$${string}` ``.
+  `SystemVariableSpec` carries each variable's ACCURATE type ($$NOW → Date,
+  $$ROOT → Schema, $$REMOVE → the load-bearing `never`), and
+  `InferVariableReference`/`ValidateVariableReference` resolve `"$$name"`/
+dotted`"$$name.path"` strings against it and the `Vars` environment the
+  `$let`/`$map`/`$filter`binding arms thread down (BindLetVars/BindVariable
+in expressions.ts — shared by inference and validation, so the two
+environments cannot diverge). Unlisted/unbound names brand with`UnknownSystemVariableError`.
+- ValidateArrayInputValue's non-`$`-string arm RELATES against the
+  registry's input operand; do NOT "improve" it into a ValidateNestedValue
+  re-entry — $filter is a member of ArrayProducingExpression (hence of
+  every ArrayOperand), and the walk re-entry from that position measurably
+  blows TS's instantiation-depth budget (TS2589 on unrelated `.set()` call
+  sites).
 
 ## Gotchas
 

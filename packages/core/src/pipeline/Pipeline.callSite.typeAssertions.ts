@@ -121,11 +121,22 @@ const _set_system_var_ok = new Pipeline<User>().set({
 
 // set — $concat operands are validated ELEMENT-WISE (ValidateConcatValue):
 // plain strings of any shape (separators NoDollarString can't cover),
-// valid string refs, and `$$`-system variables pass; typo'd `$`-refs brand
-// with the Field message; refs to non-string fields and non-string
-// literals brand with the operator's RequiresMsg.
+// valid string refs, and `$$`-variable references that RESOLVE to strings
+// ("$$ROOT.name") pass; typo'd `$`-refs brand with the Field message; refs
+// to non-string fields, non-string literals, AND non-string system
+// variables ("$$NOW" is a Date) brand with the operator's RequiresMsg.
 const _set_concat_ok = new Pipeline<User>().set({
-  greeting: { $concat: ["Hello ", "$name", " - ", "(", "", "$$NOW"] },
+  greeting: { $concat: ["Hello ", "$name", " - ", "(", "", "$$ROOT.name"] },
+});
+
+const _set_concat_nonstring_sysvar = new Pipeline<User>().set({
+  greeting: {
+    $concat: [
+      "Now: ",
+      // @ts-expect-error  '$$NOW' is a Date; $concat requires a string operand
+      "$$NOW",
+    ],
+  },
 });
 
 const _set_concat_bad_ref = new Pipeline<User>().set({
@@ -164,6 +175,69 @@ const _set_concat_bad_literal = new Pipeline<User>().set({
 const _set_trig_allowlisted_ok = new Pipeline<User>().set({
   angleRad: { $degreesToRadians: "$age" },
   angleDeg: { $radiansToDegrees: "$age" },
+});
+
+// set — system variables are accepted in TYPED operand positions by their
+// ACCURATE type (SystemVariablesThatInferTo): a Date-target operand takes
+// "$$NOW".
+const _set_sysvar_operand_ok = new Pipeline<User>().set({
+  expiry: { $dateAdd: { startDate: "$$NOW", unit: "day", amount: 30 } },
+});
+
+// set — $let interiors are validated WITH the block's bindings
+// (ValidateLetValue): bound `$$`-vars pass (including dotted paths into
+// document-typed ones), `vars` values are checked in the OUTER scope, and
+// unknown `$$`-names inside `in` still brand.
+const _set_let_ok = new Pipeline<User>().set({
+  agePlus: { $let: { vars: { t: "$age" }, in: { $add: ["$$t", 1] } } },
+  viaRoot: { $let: { vars: { r: "$$ROOT" }, in: "$$r.age" } },
+});
+
+const _set_let_bad_vars_ref = new Pipeline<User>().set({
+  x: {
+    $let: {
+      vars: {
+        // @ts-expect-error  '$naem' is not on the schema
+        t: "$naem",
+      },
+      in: "$$t",
+    },
+  },
+});
+
+const _set_let_unknown_var = new Pipeline<User>().set({
+  x: {
+    $let: {
+      vars: { t: "$age" },
+      // @ts-expect-error  '$$typo' is not a recognized system variable
+      in: "$$typo",
+    },
+  },
+});
+
+// set — $map/$filter bind the element under `as` (default "this"); the
+// bound variable resolves inside `in`/`cond` and an unbound `$$`-name
+// brands.
+const _set_map_ok = new Pipeline<User>().set({
+  hashTags: {
+    $map: { input: "$tags", as: "t", in: { $concat: ["#", "$$t"] } },
+  },
+});
+
+const _set_filter_ok = new Pipeline<User>().set({
+  activeTags: {
+    $filter: { input: "$tags", cond: { $ne: ["$$this", "inactive"] } },
+  },
+});
+
+const _set_filter_bad_cond_var = new Pipeline<User>().set({
+  t: {
+    $filter: {
+      input: "$tags",
+      // @ts-expect-error  '$$item' is not bound here (the element is $$this)
+      cond: { $eq: ["$$item", "x"] },
+    },
+  },
 });
 
 // group — accumulator operand brands fire at the chained call site via
@@ -218,12 +292,21 @@ const _group_min_underscore_ok = new Pipeline<User>().group({
 
 // group — `$$`-system variables are valid MongoDB in _id and in ANY
 // accumulator position (`$max: "$$NOW"`, `$push: "$$ROOT"`): they must not
-// hit the comparable/numeric operand brands.
+// hit the comparable/numeric operand brands. Dotted paths into
+// document-typed variables resolve ("$$ROOT.joinedAt"); a bad path brands
+// with the Field message.
 const _group_system_vars_ok = new Pipeline<User>().group({
   _id: "$$NOW",
   latest: { $max: "$$NOW" },
   total: { $sum: "$$NOW" },
   docs: { $push: "$$ROOT" },
+  newest: { $max: "$$ROOT.joinedAt" },
+});
+
+const _group_bad_sysvar_path = new Pipeline<User>().group({
+  _id: null,
+  // @ts-expect-error  'naem' is not on the schema
+  latest: { $max: "$$ROOT.naem" },
 });
 
 // group — an accumulator key mixed with plain keys is malformed (MongoDB:
@@ -360,8 +443,17 @@ export {
   _set_concat_bad_ref,
   _set_concat_nonstring_ref,
   _set_concat_bad_literal,
+  _set_concat_nonstring_sysvar,
   _set_trig_allowlisted_ok,
+  _set_sysvar_operand_ok,
+  _set_let_ok,
+  _set_let_bad_vars_ref,
+  _set_let_unknown_var,
+  _set_map_ok,
+  _set_filter_ok,
+  _set_filter_bad_cond_var,
   _group_system_vars_ok,
+  _group_bad_sysvar_path,
   _unset_bad,
   _group_bad_sum,
   _group_min_string_ok,

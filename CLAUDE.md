@@ -171,11 +171,18 @@ The type system is organized into modular building blocks located in `packages/c
   `ResolveToPrimitive`, whose literal-value arm carries Date/ObjectId as the
   keyless `object` so their methods never pollute object-literal key
   completions (`{}` is NOT equivalent — it also accepts primitive strings and
-  breaks the replaceRoot rejection pin). Also home of `SYSTEM_VARIABLES` /
-  `SystemVariable` — the enumerated `$$`-variable vocabulary (never widen a
-  consumer back to `` `$$${string}` ``); `$let`/`$map`/`$filter`-bound USER
-  variables live in `unknown`-typed operand interiors instead, and
-  aggregation-command-level `let` variables are not modeled yet
+  breaks the replaceRoot rejection pin). Also THE `$$`-variable authority:
+  `SYSTEM_VARIABLES` / `SystemVariable` — the enumerated vocabulary (never
+  widen a consumer back to `` `$$${string}` ``) — plus `SystemVariableSpec`
+  (each variable's ACCURATE type: `$$NOW` → Date, `$$ROOT`/`$$CURRENT` →
+  Schema, `$$REMOVE` → the load-bearing `never`; the array's `satisfies`
+  ties the two), `InferVariableReference` / `ValidateVariableReference`
+  (resolution of `"$$name"` / dotted `"$$name.path"` strings against the
+  spec AND the `Vars` environment `$let`/`$map`/`$filter` binding arms
+  thread down — forgiving for inference, branding for validation), and
+  `SystemVariablesThatInferTo` (the `$$` sibling of
+  FieldReferencesThatInferTo, for typed operand sets).
+  Aggregation-command-level `let` variables are not modeled yet
 
 #### Utility Types (`packages/core/src/utils/`)
 
@@ -404,7 +411,7 @@ When a `<const P>`-inferred literal is used as the brand's `Ctx` (or as part of 
 ### Known limitations
 
 - **`Pipeline.group`'s call-site brand surfacing** for `$sum: '$stringField'` etc. now fires via the key-filtered `ValidateGroupQuery` intersection (`$group: G & ValidateGroupQuery<Schema, G>`). Two hard-won constraints, both pinned in `Pipeline.callSite.typeAssertions.ts`: the intersection form is REQUIRED (a bare mapped wrapper at the parameter position breaks contextual typing of compound-`_id` patterns like `_id: { date: { $dateToString: ... } }` — both the bare and concrete-`_id` variants were tried and failed), and the wrapper must be key-FILTERED so a fully-valid query validates against `{}` (a full-map intersection cost 3× whole-project check time). Validation covers `$sum`/`$avg` (numeric) and `$min`/`$max` (BSON-comparable: number, date, string, boolean); extending it = adding the key to `CheckedAccumulatorOps` after registering the operand in `AccumulatorSpec`.
-- **Nested value validation** (`$set`/`$project` values and group `_id` at any literal depth) is handled by the shared kernel in `elements/validation.ts` (`ValidateNestedValue`): unknown refs, malformed expression objects (multi-operator, or operator keys mixed with plain keys), invalid operands of REGISTERED operators, AND operator/accumulator names outside registry + allow-list all brand at the chained call site. Valid-but-unmodeled MongoDB is enumerated BY NAME (`UnimplementedExpressionOps` in elements/expressions.ts, `UnimplementedAccumulators` in stages/group.ts — accepted with no operand validation; inference degrades them to `unknown`); never widen those lists to `` `$${string}` ``. `$$`-system variables are the enumerated `SYSTEM_VARIABLES` only (unlisted names brand with `UnknownSystemVariableError` in nested positions, or reject at the constraint at top level); widened (non-literal) value types stay accepted. Remaining structural-only interiors: expression OPERAND interiors reached through permissive operand arms (`$cond`/`$ifNull` conditional operands, `$filter.cond`, `$let.in`— all`unknown`-typed in the registry) and `replaceRoot`'s bare `Document` arm.
+- **Nested value validation** (`$set`/`$project` values and group `_id` at any literal depth) is handled by the shared kernel in `elements/validation.ts` (`ValidateNestedValue`): unknown refs, malformed expression objects (multi-operator, or operator keys mixed with plain keys), invalid operands of REGISTERED operators, AND operator/accumulator names outside registry + allow-list all brand at the chained call site. Valid-but-unmodeled MongoDB is enumerated BY NAME (`UnimplementedExpressionOps` in elements/expressions.ts, `UnimplementedAccumulators` in stages/group.ts — accepted with no operand validation; inference degrades them to `unknown`); never widen those lists to `` `$${string}` ``. `$$`-variable references resolve through `ValidateVariableReference` (elements/literals.ts): the enumerated `SYSTEM_VARIABLES` pass — including dotted paths into document-typed ones (`"$$ROOT.name"`; a bad path gets the Field brand) — as do variables bound in the `Vars` environment; unlisted names brand with `UnknownSystemVariableError` in nested positions, or reject at the constraint at top level. `$let`/`$map`/`$filter` interiors get dedicated Vars-aware walks (`ValidateLetValue`/`ValidateMapValue`/`ValidateFilterValue`): `vars` values and `input` are checked in the outer scope, `in`/`cond` with the block's bindings layered on (`BindLetVars`/`BindVariable` — shared with inference, so the environments cannot diverge). Inside those interiors the registry operand relation is SKIPPED (it is Vars-blind); names, refs, and `$$`-variables still brand, but operand TYPE mismatches there are left to runtime. Remaining structural-only interiors: `$cond`/`$ifNull` conditional operand interiors at top level (relation-checked only) and `replaceRoot`'s bare `Document` arm.
 
 ### Regression guard
 

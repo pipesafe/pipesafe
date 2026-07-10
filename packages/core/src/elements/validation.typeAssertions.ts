@@ -102,6 +102,129 @@ type _SystemVariableNested = Assert<
   Equal<ValidateNestedValue<User, { a: "$$ROOT" }>, never>
 >;
 
+// ---------------------------------------------------------------------------
+// `$$`-variable resolution: dotted paths into document-typed variables
+// resolve against the schema; unknown names and bad paths brand
+// (byte-for-byte) with the Variable/Field messages.
+// ---------------------------------------------------------------------------
+
+type _SystemVariablePathValid = Assert<
+  Equal<ValidateNestedValue<User, "$$ROOT.name">, never>
+>;
+type _SystemVariablePathInvalid = Assert<
+  Equal<
+    ValidateNestedValue<User, "$$ROOT.naem">,
+    PipeSafeError<"Field 'naem' is not on the schema.">
+  >
+>;
+type _SystemVariablePathIntoNonDocument = Assert<
+  Equal<
+    ValidateNestedValue<User, "$$NOW.naem">,
+    PipeSafeError<"Field 'naem' is not on the schema.">
+  >
+>;
+type _UnknownSystemVariable = Assert<
+  Equal<
+    ValidateNestedValue<User, "$$now">,
+    PipeSafeError<"Variable '$$now' is not a recognized system variable.">
+  >
+>;
+
+// ---------------------------------------------------------------------------
+// Binder interiors ($let/$map/$filter) are walked WITH their bindings:
+// bound `$$`-vars pass (dotted paths included), unknown ones brand, and
+// the replacement tree keeps valid members while swapping offenders.
+// ---------------------------------------------------------------------------
+
+type _LetValid = Assert<
+  Equal<
+    ValidateNestedValue<
+      User,
+      { $let: { vars: { t: "$age" }; in: { $add: ["$$t", 1] } } }
+    >,
+    never
+  >
+>;
+type _LetBadVarsRef = Assert<
+  Equal<
+    ValidateNestedValue<User, { $let: { vars: { t: "$naem" }; in: "$$t" } }>,
+    {
+      $let: {
+        vars: { t: PipeSafeError<"Field 'naem' is not on the schema."> };
+        in: "$$t";
+      };
+    }
+  >
+>;
+type _LetUnknownVarInBody = Assert<
+  Equal<
+    ValidateNestedValue<User, { $let: { vars: { t: "$age" }; in: "$$typo" } }>,
+    {
+      $let: {
+        vars: { t: "$age" };
+        in: PipeSafeError<"Variable '$$typo' is not a recognized system variable.">;
+      };
+    }
+  >
+>;
+
+// Local schema for the binder walks (User has no array field).
+type Tagged = { name: string; tags: string[] };
+
+type _MapValid = Assert<
+  Equal<
+    ValidateNestedValue<
+      Tagged,
+      { $map: { input: "$tags"; as: "t"; in: { $concat: ["#", "$$t"] } } }
+    >,
+    never
+  >
+>;
+type _FilterValidDefaultThis = Assert<
+  Equal<
+    ValidateNestedValue<
+      Tagged,
+      { $filter: { input: "$tags"; cond: { $eq: ["$$this", "x"] } } }
+    >,
+    never
+  >
+>;
+type _FilterUnboundVarBrands = Assert<
+  Equal<
+    ValidateNestedValue<
+      Tagged,
+      { $filter: { input: "$tags"; cond: { $eq: ["$$item", "x"] } } }
+    >,
+    {
+      $filter: {
+        input: "$tags";
+        cond: {
+          $eq: [
+            PipeSafeError<"Variable '$$item' is not a recognized system variable.">,
+            "x",
+          ];
+        };
+      };
+    }
+  >
+>;
+// A non-array input still gets the operator's array demand (the pre-walk
+// relation behavior, preserved by ValidateArrayInputValue's `$`-ref arm).
+type _FilterNonArrayInput = Assert<
+  Equal<
+    ValidateNestedValue<
+      Tagged,
+      { $filter: { input: "$name"; cond: { $eq: ["$$this", "x"] } } }
+    >,
+    {
+      $filter: {
+        input: PipeSafeError<"Operator '$filter' requires an array operand.">;
+        cond: { $eq: ["$$this", "x"] };
+      };
+    }
+  >
+>;
+
 // Arrays walk their elements: a bad ref inside an array literal brands at
 // the element position; valid arrays are never.
 type _BadRefInArray = Assert<
@@ -152,6 +275,17 @@ export type {
   _MixedKeys,
   _SystemVariable,
   _SystemVariableNested,
+  _SystemVariablePathValid,
+  _SystemVariablePathInvalid,
+  _SystemVariablePathIntoNonDocument,
+  _UnknownSystemVariable,
+  _LetValid,
+  _LetBadVarsRef,
+  _LetUnknownVarInBody,
+  _MapValid,
+  _FilterValidDefaultThis,
+  _FilterUnboundVarBrands,
+  _FilterNonArrayInput,
   _BadRefInArray,
   _BadOperand,
   _ReplacementTree,

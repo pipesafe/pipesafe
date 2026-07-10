@@ -804,8 +804,9 @@ type _Assert_MinValid = Assert<
 
 // ---------------------------------------------------------------------------
 // `$$`-system variables in _id/accumulator positions: accepted, and their
-// inference degrades to `unknown` ($push wraps it in an array) — never to a
-// dropped field or a brand.
+// inference is ACCURATE (SystemVariableSpec) — $$NOW is a Date, $$ROOT is
+// the input document ($push wraps it in an array) — never a dropped field
+// or a brand.
 // ---------------------------------------------------------------------------
 
 type _SystemVarGroupResult = ResolveGroupOutput<
@@ -815,7 +816,7 @@ type _SystemVarGroupResult = ResolveGroupOutput<
 type _Assert_SystemVarGroup = Assert<
   Equal<
     _SystemVarGroupResult,
-    { _id: unknown; latest: unknown; docs: unknown[] }
+    { _id: Date; latest: Date; docs: { a: string }[] }
   >
 >;
 

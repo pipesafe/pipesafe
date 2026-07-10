@@ -1,4 +1,4 @@
-import { Document } from "../utils/objects";
+import { Document, Prettify } from "../utils/objects";
 import {
   MultiOperatorError,
   PipeSafeError,
@@ -15,8 +15,14 @@ import {
   FieldReference,
   InferFieldReference,
   FieldReferencesThatInferTo,
+  InferNestedFieldReference,
 } from "./fieldReference";
-import { AnyLiteral } from "./literals";
+import {
+  AnyLiteral,
+  InferVariableReference,
+  SystemVariable,
+  SystemVariablesThatInferTo,
+} from "./literals";
 
 // ============================================================================
 // MongoDB Expression Operators — registry edition
@@ -45,6 +51,7 @@ import { AnyLiteral } from "./literals";
  */
 type ArrayOperand<Schema extends Document, Op extends string> =
   | FieldReferencesThatInferTo<Schema, unknown[]>
+  | SystemVariablesThatInferTo<Schema, readonly unknown[]>
   | readonly AnyLiteral<Schema>[]
   | ArrayProducingExpression<Schema>
   | MapExpression<Schema>
@@ -108,23 +115,29 @@ type ArithmeticPair<Schema extends Document, Op extends string> = readonly [
 ];
 
 /**
- * Generic expression operands - can be any literal, null, field reference, or expression
- * Used for conditional operators like $ifNull and $cond that accept flexible types
+ * Generic expression operands - can be any literal, null, field reference,
+ * system variable, or expression. Used for conditional operators like
+ * $ifNull and $cond that accept flexible types. SystemVariable is the full
+ * enumerated vocabulary: `$cond: [c, "$$REMOVE", "$x"]` (conditional field
+ * removal) and `$ifNull: ["$x", "$$NOW"]` are both idiomatic MongoDB.
  */
 type ConditionalOperand<Schema extends Document> =
   | null
   | AnyLiteral<Schema>
   | FieldReference<Schema>
+  | SystemVariable
   | Expression<Schema>;
 
 /**
- * Comparison operand - values that can be compared
+ * Comparison operand - values that can be compared. SystemVariable is the
+ * full enumerated vocabulary (`$gte: ["$expiresAt", "$$NOW"]` is idiomatic).
  * Note: Excludes ComparisonExpression to avoid circular reference
  */
 type ComparisonOperand<Schema extends Document> =
   | null
   | AnyLiteral<Schema>
   | FieldReference<Schema>
+  | SystemVariable
   | ArrayExpression<Schema>
   | DateExpression<Schema>
   | ArithmeticExpression<Schema>
@@ -161,10 +174,12 @@ export type ArrayProducingExpression<Schema extends Document> = ExpressionFor<
 >;
 
 /**
- * Valid inputs for array operations: field references, literals, or expressions
+ * Valid inputs for array operations: field references, array-typed system
+ * variables ("$$USER_ROLES"), literals, or expressions
  */
 export type ArrayInput<Schema extends Document> =
   | FieldReferencesThatInferTo<Schema, unknown[]>
+  | SystemVariablesThatInferTo<Schema, readonly unknown[]>
   | ArrayProducingExpression<Schema>
   | unknown[];
 
@@ -220,8 +235,10 @@ export interface ExpressionSpec<Schema extends Document> {
       number | FieldReferencesThatInferTo<Schema, number>,
     ];
   };
-  /** Filters an array by a condition (cond uses $$var references; `as`
-   *  defaults to `$$this` in MongoDB, so it is optional). */
+  /** Filters an array by a condition. `cond` sees the element bound as
+   *  `$$this` (or the `as` name) — it stays `unknown` at ACCEPTANCE (the
+   *  bound-variable environment is a literal-level fact) and is re-checked
+   *  by the validation kernel's Vars-aware walk. */
   $filter: {
     operand: {
       input: ArrayOperand<Schema, "$filter">;
@@ -231,12 +248,14 @@ export interface ExpressionSpec<Schema extends Document> {
     };
   };
   /**
-   * Transforms each element. `in` needs $$variable tracking we don't have,
-   * so the result stays unknown[] ($sum wrapping still infers number).
+   * Transforms each element. `in` sees the element bound as `$$this` (or
+   * the `as` name); the RESULT is the inferred `in` type, lifted to an
+   * array — literal-dependent, so no `returns` (the arm lives in
+   * InferDependentExpression). `as` is optional in MongoDB (defaults to
+   * `this`).
    */
   $map: {
-    operand: { input: ArrayInput<Schema>; as: string; in: unknown };
-    returns: unknown[];
+    operand: { input: ArrayInput<Schema>; as?: string; in: unknown };
   };
   /** Sums numeric values in an array ($group accumulation lives in group.ts). */
   $sum: {
@@ -351,10 +370,13 @@ export interface ExpressionSpec<Schema extends Document> {
   };
 
   // --- Variable binding ------------------------------------------------------
-  /** Binds $$vars for a sub-expression; result not tracked. */
+  /** Binds `$$`-variables for a sub-expression. `vars` values are ordinary
+   *  expressions evaluated in the OUTER scope; `in` sees them bound (the
+   *  environment is a literal-level fact, so acceptance stays structural
+   *  and the Vars-aware validation walk re-checks both). The RESULT is the
+   *  inferred `in` type — literal-dependent, so no `returns`. */
   $let: {
     operand: { vars: Record<string, unknown>; in: unknown };
-    returns: unknown;
   };
 
   // --- Literal ----------------------------------------------------------------
@@ -823,28 +845,42 @@ export type LiteralDependentOps = {
 type UnionArrayElements<
   Schema extends Document,
   Arrays extends readonly unknown[],
+  Vars extends Document = {},
 > =
   Arrays extends readonly [infer First, ...infer Rest] ?
-    GetArrayElement<Schema, First> | UnionArrayElements<Schema, Rest>
+    | GetArrayElement<Schema, First, Vars>
+    | UnionArrayElements<Schema, Rest, Vars>
   : never;
 
 /**
  * Helper to extract element type from a single array argument
- * Handles both field references and array literals
+ * Handles field references, `$$`-variable references, and array literals
  */
-type GetArrayElement<Schema extends Document, Item> =
+type GetArrayElement<
+  Schema extends Document,
+  Item,
+  Vars extends Document = {},
+> =
   Item extends readonly (infer E)[] ?
     E // Array literal - extract element type
   : Item extends FieldReference<Schema> ?
     InferFieldReference<Schema, Item> extends (infer T)[] ?
       T // Field reference to array - extract element type
     : never
+  : Item extends `$$${string}` ?
+    // Array-typed variable ("$$USER_ROLES", a bound "$$arr"): resolve and
+    // unwrap; non-arrays degrade to unknown (validation owns rejection).
+    InferVariableReference<Schema, Item, Vars> extends infer R ?
+      R extends readonly (infer T)[] ?
+        T
+      : unknown
+    : never
   : HasOperatorKey<Item> extends true ?
     // Array-producing expression item ($filter/$concatArrays/$map/...):
     // route through the single dispatch and unwrap. Without this arm the
     // item's elements silently vanished from the result — a WRONG type,
     // violating the degrade-to-widest contract.
-    InferExpression<Schema, Item> extends infer R ?
+    InferExpression<Schema, Item, Vars> extends infer R ?
       R extends (infer T)[] ?
         T
       : unknown
@@ -852,9 +888,16 @@ type GetArrayElement<Schema extends Document, Item> =
   : never;
 
 /**
- * Helper to extract element type from an array source (field ref or literal)
+ * Helper to extract element type from an array source (field ref,
+ * `$$`-variable reference, or literal). Exported for the validation
+ * kernel's $map/$filter walks — they bind the SAME element type inference
+ * uses, so the two computations are one alias-cache entry.
  */
-type InferArrayElementType<Schema extends Document, ArraySource> =
+export type InferArrayElementType<
+  Schema extends Document,
+  ArraySource,
+  Vars extends Document = {},
+> =
   // Array literal - extract element type
   ArraySource extends readonly (infer E)[] ? E
   : // Field reference to array - get element type
@@ -862,6 +905,13 @@ type InferArrayElementType<Schema extends Document, ArraySource> =
     InferFieldReference<Schema, ArraySource> extends (infer T)[] ?
       T
     : unknown
+  : // Array-typed variable ("$$USER_ROLES", a bound "$$arr")
+  ArraySource extends `$$${string}` ?
+    InferVariableReference<Schema, ArraySource, Vars> extends infer R ?
+      R extends readonly (infer T)[] ?
+        T
+      : unknown
+    : never
   : unknown;
 
 /**
@@ -877,6 +927,7 @@ type InferConditionalOperandValue<
   Schema extends Document,
   Operand,
   SwallowsNull extends boolean,
+  Vars extends Document = {},
 > =
   Operand extends null ?
     SwallowsNull extends true ?
@@ -886,9 +937,16 @@ type InferConditionalOperandValue<
     SwallowsNull extends true ?
       NonNullable<InferFieldReference<Schema, Operand>>
     : InferFieldReference<Schema, Operand> // $cond keeps the field's null
+  : Operand extends `$$${string}` ?
+    // `$$`-variable branch ($$NOW, "$$REMOVE" for conditional removal, a
+    // bound "$$var"): resolve through the same authority as the rest of
+    // inference. $$REMOVE's `never` union-absorbs, which IS its semantics.
+    SwallowsNull extends true ?
+      NonNullable<InferVariableReference<Schema, Operand, Vars>>
+    : InferVariableReference<Schema, Operand, Vars>
   : Operand extends readonly (infer T)[] ?
     T // Array literal
-  : InferExpression<Schema, Operand> extends infer R ?
+  : InferExpression<Schema, Operand, Vars> extends infer R ?
     [R] extends [NotAnExpression] ?
       Operand // Not an expression, treat as literal
     : R // Is an expression — single dispatch, no second inference path
@@ -897,12 +955,14 @@ type InferConditionalOperandValue<
 type InferIfNullOperand<
   Schema extends Document,
   Operand,
-> = InferConditionalOperandValue<Schema, Operand, true>;
+  Vars extends Document = {},
+> = InferConditionalOperandValue<Schema, Operand, true, Vars>;
 
 type InferCondOperand<
   Schema extends Document,
   Operand,
-> = InferConditionalOperandValue<Schema, Operand, false>;
+  Vars extends Document = {},
+> = InferConditionalOperandValue<Schema, Operand, false, Vars>;
 
 /**
  * Helper to infer the union of all operand types in $ifNull
@@ -911,10 +971,54 @@ type InferCondOperand<
 type UnionIfNullOperandTypes<
   Schema extends Document,
   Operands extends readonly unknown[],
+  Vars extends Document = {},
 > =
   Operands extends readonly [infer First, ...infer Rest] ?
-    InferIfNullOperand<Schema, First> | UnionIfNullOperandTypes<Schema, Rest>
+    | InferIfNullOperand<Schema, First, Vars>
+    | UnionIfNullOperandTypes<Schema, Rest, Vars>
   : never;
+
+/**
+ * The `as` name a $map/$filter binds its element under (MongoDB defaults to
+ * "this" when `as` is omitted). A non-literal `as` (a widened string) binds
+ * nothing — lookups of the real name then miss the environment and degrade
+ * to `unknown`, never to a wrong type.
+ */
+export type BoundAsName<Operand> =
+  Operand extends { as: infer As extends string } ?
+    string extends As ?
+      never
+    : As
+  : "this";
+
+/** Bind one variable name (shadowing any outer binding of the same name). */
+export type BindVariable<
+  Vars extends Document,
+  Name extends string,
+  T,
+> = Prettify<Omit<Vars, Name> & { [K in Name]: T }>;
+
+/**
+ * Evaluate a $let `vars` block in the OUTER environment and bind the
+ * results (MongoDB: a `vars` value cannot reference siblings defined in the
+ * same block; inner bindings shadow outer ones). Shared by inference
+ * ($let's InferDependentExpression arm) and the validation kernel's
+ * Vars-aware walk — same type arguments, so the second computation is an
+ * alias-cache hit, not a recomputation.
+ */
+export type BindLetVars<
+  Schema extends Document,
+  LetVars,
+  Vars extends Document,
+> = Prettify<
+  Omit<Vars, keyof LetVars & string> & {
+    [K in keyof LetVars & string]: InferNestedFieldReference<
+      Schema,
+      LetVars[K],
+      Vars
+    >;
+  }
+>;
 
 /**
  * Hand-written inference arms for the literal-dependent operators — the only
@@ -925,22 +1029,45 @@ type UnionIfNullOperandTypes<
  * a readonly pattern matches both mutabilities while a mutable pattern
  * matches neither (a mutable-pattern arm silently falls through and the
  * resolver DROPS the field).
+ *
+ * `Vars` is the `$let`/`$map`/`$filter` variable environment; the binder
+ * arms EXTEND it (BindVariable/BindLetVars) before recursing into their
+ * bound sub-expressions.
  */
-type InferDependentExpression<Schema extends Document, Expr> =
+type InferDependentExpression<
+  Schema extends Document,
+  Expr,
+  Vars extends Document = {},
+> =
   Expr extends { $concatArrays: infer Arrays } ?
     Arrays extends readonly unknown[] ?
-      UnionArrayElements<Schema, Arrays>[]
+      UnionArrayElements<Schema, Arrays, Vars>[]
     : never
   : Expr extends { $arrayElemAt: readonly [infer ArraySource, unknown] } ?
-    InferArrayElementType<Schema, ArraySource>
+    InferArrayElementType<Schema, ArraySource, Vars>
   : Expr extends { $filter: { input: infer ArraySource } } ?
-    InferArrayElementType<Schema, ArraySource>[]
+    InferArrayElementType<Schema, ArraySource, Vars>[]
+  : Expr extends { $map: infer MapOperand } ?
+    MapOperand extends { input: infer Input; in: infer In } ?
+      InferNestedFieldReference<
+        Schema,
+        In,
+        BindVariable<
+          Vars,
+          BoundAsName<MapOperand>,
+          InferArrayElementType<Schema, Input, Vars>
+        >
+      >[]
+    : unknown[] // malformed operand — keep the operator's array result kind
+  : Expr extends { $let: { vars: infer LetVars; in: infer In } } ?
+    InferNestedFieldReference<Schema, In, BindLetVars<Schema, LetVars, Vars>>
   : Expr extends { $ifNull: infer Operands } ?
     Operands extends readonly unknown[] ?
-      UnionIfNullOperandTypes<Schema, Operands>
+      UnionIfNullOperandTypes<Schema, Operands, Vars>
     : never
   : Expr extends { $cond: readonly [unknown, infer TrueVal, infer FalseVal] } ?
-    InferCondOperand<Schema, TrueVal> | InferCondOperand<Schema, FalseVal>
+    | InferCondOperand<Schema, TrueVal, Vars>
+    | InferCondOperand<Schema, FalseVal, Vars>
   : Expr extends { $literal: infer Value } ? Value
   : // No matching arm (out-of-lockstep operator, or a malformed operand
     // shape the patterns don't match): degrade to `unknown`, mirroring the
@@ -960,11 +1087,15 @@ type InferDependentExpression<Schema extends Document, Expr> =
  *  - unregistered `$` operator (allow-listed or typo) → `unknown`;
  *    validation, not inference, rejects the typos.
  */
-export type InferExpression<Schema extends Document, Expr> =
+export type InferExpression<
+  Schema extends Document,
+  Expr,
+  Vars extends Document = {},
+> =
   [OperatorKeyOf<Expr>] extends [never] ? NotAnExpression
   : HasSingleOperatorKey<Expr> extends false ? MultiOperatorError
   : [OperatorKeyOf<Expr>] extends [LiteralDependentOps] ?
-    InferDependentExpression<Schema, Expr>
+    InferDependentExpression<Schema, Expr, Vars>
   : [OperatorKeyOf<Expr>] extends [keyof ExpressionSpec<Schema>] ?
     // Declared `returns` of a registered operator; a dependent entry the
     // arm dispatch missed degrades to `unknown` (never a dropped field).

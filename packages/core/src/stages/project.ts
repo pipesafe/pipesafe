@@ -22,7 +22,7 @@ import {
   GetFieldTypeOrError,
 } from "../elements/fieldSelector";
 import { ValidateNestedValue } from "../elements/validation";
-import { SystemVariable } from "../elements/literals";
+import { InferVariableReference, SystemVariable } from "../elements/literals";
 
 /**
  * $project stage query type
@@ -209,6 +209,13 @@ type ResolveFieldValue<Schema extends Document, Value, Key extends string> =
     // unknown paths - a bare GetFieldType here silently produced a `never`
     // leaf for unknown DOTTED keys, contradicting this comment.
     GetFieldTypeOrError<Schema, Key>
+  : Value extends `$$${string}` ?
+    // `$$`-variable reference ($$NOW, $$ROOT, "$$ROOT.name", ...) — must
+    // dispatch BEFORE the single-`$` ref arm below, which would misread
+    // "$$NOW" as a field path "$NOW" and brand it. $$REMOVE's `never`
+    // drops the field, which IS its semantics; unresolvable names degrade
+    // to `unknown` (validation owns rejection).
+    InferVariableReference<Schema, Value & string>
   : Value extends `$${string}` ?
     // Field reference — a `$`-string check is far cheaper than FieldReference
     // union membership; unknown paths brand via GetFieldTypeWithoutArrays.

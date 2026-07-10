@@ -9,6 +9,7 @@ import {
   ExpressionShaped,
   LiteralOrFieldReferenceInferringTo,
   SystemVariable,
+  ValidateVariableReference,
 } from "../elements/literals";
 import {
   Expression,
@@ -28,7 +29,6 @@ import {
   PipeSafeError,
   RequiresMsg,
   UnknownAccumulatorError,
-  UnknownSystemVariableError,
 } from "../utils/errors";
 import { ExpressionOperand } from "../elements/operands";
 
@@ -307,18 +307,21 @@ type ValidateAccumulatorValue<Schema extends Document, A> =
   ) ?
     OperatorKeyOf<A> extends infer Op extends CheckedAccumulatorOps ?
       // The enumerated `$$`-system variables are valid MongoDB in any
-      // accumulator position (mirrors the kernel's tier-1 arm in
-      // ValidateNestedValue) — schema-free, and checked before the operand
-      // relation so they never reach the comparable/numeric brand. An
-      // UNLISTED `$$var` brands as an unknown system variable instead of a
-      // misleading operand/field message.
-      A[Op & keyof A] extends SystemVariable ? never
-      : A[Op & keyof A] extends `$$${string}` ?
-        {
-          [K in Op & string]: UnknownSystemVariableError<
-            A[Op & keyof A] & string
-          >;
-        }
+      // accumulator position (mirrors the kernel's `$$` arm in
+      // ValidateNestedValue) — checked before the operand relation so they
+      // never reach the comparable/numeric brand. Resolution goes through
+      // ValidateVariableReference: exact names and valid dotted paths
+      // ("$$ROOT.age") pass; an UNLISTED `$$var` brands as an unknown
+      // system variable and a bad path gets the Field brand — instead of a
+      // misleading operand message.
+      A[Op & keyof A] extends `$$${string}` ?
+        ValidateVariableReference<Schema, A[Op & keyof A] & string> extends (
+          infer Err
+        ) ?
+          [Err] extends [never] ?
+            never
+          : { [K in Op & string]: Err }
+        : never
       : string extends keyof Schema ?
         never // operand checks are meaningless on a wide/index-signature schema
       : // $min/$max: ANY non-`$` string literal is a comparable. The union
