@@ -24,7 +24,7 @@ import {
 import { ValidateNestedValue } from "../elements/validation";
 import {
   InferVariableReference,
-  SystemVariables,
+  SystemVariableReferences,
   VariableReferences,
 } from "../elements/literals";
 
@@ -39,10 +39,7 @@ import {
  */
 // The value union for a $project assignment. `Vars` is the stage's
 // variable environment (Pipeline threads lookup-let bindings through it).
-type ProjectValue<
-  Schema extends Document,
-  Vars extends Document = SystemVariables<Schema>,
-> =
+type ProjectValue<Schema extends Document, Vars extends Document = {}> =
   // Inclusion/exclusion flags (1/0/true/false). `number | boolean` IS the
   // literal set: TS normalizes `1 | 0 | number` to `number` and
   // `true | false` to `boolean` at union creation, so spelling the
@@ -63,6 +60,7 @@ type ProjectValue<
   // `` & {} `` spelling leaks String.prototype. A typo'd ref or unlisted
   // `$$var` now rejects at the constraint with a "Did you mean" hint.
   | FieldReference<Schema>
+  | SystemVariableReferences<Schema>
   | VariableReferences<Vars>
   // Plain string values are valid MongoDB literal assignments in $project
   // (only numeric/boolean literals require $literal).
@@ -85,7 +83,7 @@ type ProjectValue<
  */
 export type ProjectQuery<
   Schema extends Document,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > = {
   [key: string]: ProjectValue<Schema, Vars>;
 } & FieldSelectorKeys<Schema, unknown>;
@@ -143,7 +141,7 @@ type ValidateProjectKey<
   Schema extends Document,
   P,
   K extends keyof P,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   [P[K]] extends [number | boolean] ?
     string extends keyof Schema ?
@@ -155,7 +153,7 @@ type ValidateProjectKey<
 type ValidateProjectQueryKeys<
   Schema extends Document,
   P,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > = OmitNeverValues<{
   [K in keyof P]: ValidateProjectKey<Schema, P, K, Vars>;
 }>;
@@ -182,7 +180,7 @@ type ValidateProjectQueryKeys<
 export type ValidateProjectQuery<
   Schema extends Document,
   P,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
   Inc extends boolean = HasInclusionsNonId<P>,
   Exc extends boolean = HasExclusionsNonId<P>,
 > =
@@ -214,7 +212,7 @@ export type ValidateProjectQuery<
 type ResolveNestedProjection<
   Schema extends Document,
   Obj extends Document,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > = {
   [K in keyof Obj]: InferNestedFieldReference<Schema, Obj[K], Vars>;
 };
@@ -224,7 +222,7 @@ type ResolveFieldValue<
   Schema extends Document,
   Value,
   Key extends string,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   Value extends 0 | false ?
     // Exclusion - return never (field is excluded). Intentional: `never`
@@ -322,7 +320,7 @@ type DeepMergeProjection<T> =
 type ResolveInclusionMode<
   Schema extends Document,
   Query,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > = Prettify<
   DeepMergeProjection<
     MergeNested<
@@ -356,7 +354,7 @@ type ResolveInclusionMode<
 type ResolveExclusionMode<
   Schema extends Document,
   Query,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > = Prettify<
   {
     // Always include _id unless explicitly excluded (only if _id exists in schema)
@@ -406,7 +404,7 @@ type ResolveExclusionMode<
 export type ResolveProjectOutput<
   Schema extends Document,
   Query,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
   Inc extends boolean = HasInclusionsNonId<Query>,
   Exc extends boolean = HasExclusionsNonId<Query>,
 > = PassThrough<

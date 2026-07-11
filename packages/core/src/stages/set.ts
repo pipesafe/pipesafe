@@ -1,7 +1,6 @@
 import { InferNestedFieldReference } from "../elements/fieldReference";
 import { FieldSelectorKeys } from "../elements/fieldSelector";
 import { ExpressionValue } from "../elements/expressions";
-import { SystemVariables } from "../elements/literals";
 import { ValidateNestedValue } from "../elements/validation";
 import { PassThrough } from "../utils/errors";
 import { Document, OmitNeverValues, Prettify } from "../utils/objects";
@@ -20,7 +19,7 @@ import { ApplySetUpdates } from "../utils/updates";
  */
 type SetValue<
   Schema extends Document,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > = ExpressionValue<Schema, Vars>;
 
 /**
@@ -37,12 +36,9 @@ type SetValue<
  * so acceptance and value completions are unchanged.
  *
  * `Vars` is the stage's variable environment (Pipeline threads lookup-let
- * bindings through it; defaults to the system seed).
+ * bindings through it; system variables resolve statically beside it).
  */
-export type SetQuery<
-  Schema extends Document,
-  Vars extends Document = SystemVariables<Schema>,
-> = {
+export type SetQuery<Schema extends Document, Vars extends Document = {}> = {
   [k: string]: SetValue<Schema, Vars>;
 } & FieldSelectorKeys<Schema, unknown>;
 
@@ -62,7 +58,7 @@ export type SetQuery<
 export type ValidateSetQuery<
   Schema extends Document,
   Q,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   // Wide-QUERY guard: on constraint failure TS re-instantiates this wrapper
   // with Q = SetQuery<Schema> itself — skip entirely. Schema-DEPENDENT
@@ -78,7 +74,7 @@ export type ResolveSetQueryValueType<
   Schema extends Document,
   Query,
   Key extends keyof Query,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   Query[Key] extends "$$REMOVE" ? never
   : // InferNestedFieldReference key-dispatches expressions internally; a
@@ -97,7 +93,7 @@ export type ResolveSetQueryValueType<
 export type ResolveSetInlineSchema<
   Schema extends Document,
   Query,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > = {
   [Key in keyof Query]: ResolveSetQueryValueType<Schema, Query, Key, Vars>;
 };
@@ -117,7 +113,7 @@ type ResolveSetOutputInner<Schema extends Document, Inline extends Document> =
 export type ResolveSetOutput<
   Schema extends Document,
   Query,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > = PassThrough<
   Schema,
   ResolveSetOutputInner<Schema, ResolveSetInlineSchema<Schema, Query, Vars>>

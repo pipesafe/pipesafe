@@ -21,7 +21,7 @@ import {
   AnyLiteral,
   ExpressionShaped,
   InferVariableReference,
-  SystemVariables,
+  SystemVariableReferences,
   SystemVariablesThatInferTo,
   VariableReferences,
 } from "./literals";
@@ -127,7 +127,7 @@ type ConditionalOperand<Schema extends Document> =
   | null
   | AnyLiteral<Schema>
   | FieldReference<Schema>
-  | VariableReferences<SystemVariables<Schema>>
+  | SystemVariableReferences<Schema>
   | Expression<Schema>;
 
 /**
@@ -139,7 +139,7 @@ type ComparisonOperand<Schema extends Document> =
   | null
   | AnyLiteral<Schema>
   | FieldReference<Schema>
-  | VariableReferences<SystemVariables<Schema>>
+  | SystemVariableReferences<Schema>
   | ArrayExpression<Schema>
   | DateExpression<Schema>
   | ArithmeticExpression<Schema>
@@ -840,11 +840,12 @@ export type Expression<Schema extends Document> = ExpressionFor<
  */
 export type ExpressionValue<
   Schema extends Document,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   | AnyLiteral<Schema>
   | Expression<Schema>
   | FieldReference<Schema>
+  | SystemVariableReferences<Schema>
   | VariableReferences<Vars>
   | ExpressionShaped;
 
@@ -877,7 +878,7 @@ export type LiteralDependentOps = {
 type UnionArrayElements<
   Schema extends Document,
   Arrays extends readonly unknown[],
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   Arrays extends readonly [infer First, ...infer Rest] ?
     | GetArrayElement<Schema, First, Vars>
@@ -891,7 +892,7 @@ type UnionArrayElements<
 type GetArrayElement<
   Schema extends Document,
   Item,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   Item extends readonly (infer E)[] ?
     E // Array literal - extract element type
@@ -928,7 +929,7 @@ type GetArrayElement<
 export type InferArrayElementType<
   Schema extends Document,
   ArraySource,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   // Array literal - extract element type
   ArraySource extends readonly (infer E)[] ? E
@@ -959,7 +960,7 @@ type InferConditionalOperandValue<
   Schema extends Document,
   Operand,
   SwallowsNull extends boolean,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   Operand extends null ?
     SwallowsNull extends true ?
@@ -987,13 +988,13 @@ type InferConditionalOperandValue<
 type InferIfNullOperand<
   Schema extends Document,
   Operand,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > = InferConditionalOperandValue<Schema, Operand, true, Vars>;
 
 type InferCondOperand<
   Schema extends Document,
   Operand,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > = InferConditionalOperandValue<Schema, Operand, false, Vars>;
 
 /**
@@ -1003,7 +1004,7 @@ type InferCondOperand<
 type UnionIfNullOperandTypes<
   Schema extends Document,
   Operands extends readonly unknown[],
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   Operands extends readonly [infer First, ...infer Rest] ?
     | InferIfNullOperand<Schema, First, Vars>
@@ -1068,7 +1069,7 @@ export type BindLetVars<
 type InferDependentExpression<
   Schema extends Document,
   Expr,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   Expr extends { $concatArrays: infer Arrays } ?
     Arrays extends readonly unknown[] ?
@@ -1121,7 +1122,7 @@ type InferDependentExpression<
 export type InferExpression<
   Schema extends Document,
   Expr,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   [OperatorKeyOf<Expr>] extends [never] ? NotAnExpression
   : HasSingleOperatorKey<Expr> extends false ? MultiOperatorError

@@ -66,22 +66,25 @@ before touching any Query/operand union.
 - `ResolveToPrimitive`'s literal-value arm carries Date/ObjectId as the
   keyless `object` — `{}` is NOT equivalent (it accepts primitive strings
   and breaks the replaceRoot `"$missing"` rejection pin).
-- There is ONE variable-threading mechanism: `SystemVariables<Schema>`
-  (literals.ts — derived from `SystemVariableSpec`, which carries each
-  variable's ACCURATE type: $$NOW → Date, $$ROOT → Schema, $$REMOVE → the
-  load-bearing `never`) is the DEFAULT of every `Vars` parameter;
-  `$let`/`$map`/`$filter` binding arms extend it (BindLetVars/BindVariable
-  in expressions.ts — shared by inference and validation, so the two
-  environments cannot diverge), and `$lookup.let` reseeds it over the
-  foreign schema via Pipeline's `Env` generic (PipelineVars).
-  `InferVariableReference`/`ValidateVariableReference` resolve `"$$name"`/
-dotted`"$$name.path"`by a single env lookup; unlisted/unbound names
-brand with`UnknownSystemVariableError`. `VariableReferences<Vars>` is
-  the env's finite acceptance vocabulary. The env-merge types
-  (PipelineVars/ResolveLookupLetEnv/BindLetVars/BindVariable) are ONE
-  mapped type each with lazy values — Omit/Prettify spellings stack
-  instantiation layers at the deepest point of lookup-lambda checking and
-  tripped TS2589.
+- `Vars` threads the USER environment only (binder and lookup-let
+  bindings, names without the `$$` prefix; default `{}`); system variables
+  resolve through the resolvers' STATIC second tier (SystemVariableSpec,
+  which carries each variable's ACCURATE type: $$NOW → Date, $$ROOT →
+  Schema, $$REMOVE → the load-bearing `never`). Do NOT re-unify by seeding
+  the spec into the `Vars` defaults — the seeded-env design was measured
+  at ~270k extra whole-project instantiations for zero behavior change.
+  MongoDB user variables must begin lowercase, so the tiers cannot
+  collide. `$let`/`$map`/`$filter` binding arms extend the user env
+  (BindLetVars/BindVariable in expressions.ts — shared by inference and
+  validation, so the two environments cannot diverge); `$lookup.let`
+  enters it via Pipeline's `Env` generic.
+  `InferVariableReference`/`ValidateVariableReference` resolve `"$$name"`and dotted`"$$name.path"`; unlisted/unbound names brand with
+`UnknownSystemVariableError`. `SystemVariableReferences<Schema>`(static)
+and`VariableReferences<Vars>` (user) are the finite acceptance
+  vocabularies. The env-merge types
+  (ResolveLookupLetEnv/BindLetVars/BindVariable) are ONE mapped type each
+  with lazy values — Omit/Prettify spellings stack instantiation layers at
+  the deepest point of lookup-lambda checking and tripped TS2589.
 - The validation kernel's binder-interior (forgiving) branches run the
   Vars-blind registry relation as FAST-ACCEPT ONLY, then walk. The
   fast-accept doubles as the cycle breaker: without it, exploration with

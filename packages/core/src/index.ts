@@ -77,10 +77,9 @@ export { SYSTEM_VARIABLES } from "./elements/literals";
 export type {
   SystemVariable,
   SystemVariableSpec,
-  SystemVariables,
+  SystemVariableReferences,
   SystemVariablesThatInferTo,
   VariableReferences,
-  PipelineVars,
   InferVariableReference,
 } from "./elements/literals";
 

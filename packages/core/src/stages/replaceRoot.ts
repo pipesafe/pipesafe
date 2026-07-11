@@ -5,7 +5,7 @@ import {
 import { Expression } from "../elements/expressions";
 import {
   AnyLiteral,
-  SystemVariables,
+  SystemVariableReferences,
   VariableReferences,
 } from "../elements/literals";
 import { Document, Prettify } from "../utils/objects";
@@ -24,14 +24,15 @@ import { PassThrough } from "../utils/errors";
  * - A literal value
  *
  * `Vars` is the stage's variable environment (Pipeline threads lookup-let
- * bindings through it; defaults to the system seed).
+ * bindings through it; system variables resolve statically beside it).
  */
 export type ReplaceRootQuery<
   Schema extends Document,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > = {
   newRoot:
     | FieldReference<Schema>
+    | SystemVariableReferences<Schema>
     | VariableReferences<Vars>
     | Expression<Schema>
     | AnyLiteral<Schema>
@@ -49,7 +50,7 @@ export type ReplaceRootQuery<
 export type ResolveReplaceRootOutput<
   Schema extends Document,
   Query,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > = PassThrough<
   Schema,
   Query extends { newRoot: infer NewRoot } ?

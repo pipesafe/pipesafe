@@ -9,7 +9,7 @@ import {
   ExpressionShaped,
   HasUserBindings,
   LiteralOrFieldReferenceInferringTo,
-  SystemVariables,
+  SystemVariableReferences,
   ValidateVariableReference,
   VariableReferences,
 } from "../elements/literals";
@@ -183,7 +183,7 @@ export type AccumulatorFunction<Schema extends Document> = AccumulatorFor<
 export type ResolveAccumulatorFunction<
   Schema extends Document,
   Accumulator,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   Accumulator extends { $sum: any } ? AccumulatorSpec<Schema>["$sum"]["returns"]
   : Accumulator extends { $avg: any } ?
@@ -209,10 +209,7 @@ export type ResolveAccumulatorFunction<
   HasOperatorKey<Accumulator> extends true ? unknown
   : never;
 
-export type GroupQuery<
-  Schema extends Document,
-  Vars extends Document = SystemVariables<Schema>,
-> = {
+export type GroupQuery<Schema extends Document, Vars extends Document = {}> = {
   // The environment's `$$`-variable references ($$NOW, "$$ROOT.name",
   // lookup-let bindings, ...) are valid _id expressions; AnyLiteral's
   // string arm is NoDollarString, so they need their own arm — finite, so
@@ -229,6 +226,7 @@ export type GroupQuery<
     | AnyLiteral<Schema>
     | Expression<Schema>
     | FieldReference<Schema>
+    | SystemVariableReferences<Schema>
     | VariableReferences<Vars>
     | null;
 } & {
@@ -245,6 +243,7 @@ export type GroupQuery<
     | AccumulatorFunction<Schema>
     | ExpressionShaped
     | FieldReference<Schema>
+    | SystemVariableReferences<Schema>
     | VariableReferences<Vars>
     | null;
 };
@@ -301,7 +300,7 @@ type BrandedAccumulatorFor<
 type ValidateAccumulatorValue<
   Schema extends Document,
   A,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   // Schema-FREE fast-accept: an operand valid against the EMPTY schema is
   // valid against any schema (the ref arms collapse to `never` under `{}`).
@@ -394,7 +393,7 @@ type ValidateGroupValue<
   Schema extends Document,
   K,
   V,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   V extends unknown ?
     K extends "_id" ? ValidateNestedValue<Schema, V, Vars>
@@ -431,7 +430,7 @@ type ValidateGroupValue<
 export type ValidateGroupQuery<
   Schema extends Document,
   Q,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   // Wide-QUERY guard: on constraint failure TS re-instantiates this wrapper
   // with Q = GroupQuery<Schema> itself — skip entirely. Schema-DEPENDENT
@@ -446,7 +445,7 @@ export type ValidateGroupQuery<
 export type ResolveGroupOutput<
   Schema extends Document,
   G extends GroupQuery<Schema, Vars>,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > = PassThrough<
   Schema,
   Prettify<

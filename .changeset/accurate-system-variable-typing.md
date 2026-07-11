@@ -28,12 +28,16 @@ Accurate types for `$$`-system variables and `$let`/`$map`/`$filter` bound varia
   and `$cond`/`$ifNull`/comparison operands accept the enumerated system
   variables (`$gte: ["$expiresAt", "$$NOW"]`).
 - `$map.as` is now optional (MongoDB defaults the binding to `$$this`).
-- ONE variable environment: `SystemVariables<Schema>` seeds every `Vars`
-  parameter, binders extend it, and resolution is a single lookup —
-  system and user variables are not separate code paths.
-  `VariableReferences<Vars>` derives the finite `$$` acceptance
-  vocabulary, so dotted variable paths are first-class at top-level value
-  positions and in completions: `$set: { n: "$$ROOT.name" }`,
+- ONE pair of variable resolvers with two-tier lookup: the threaded `Vars`
+  USER environment (binder and lookup-let bindings) first, then the static
+  `SystemVariableSpec` — dotted-path resolution, forgiveness, and branding
+  are shared code either way. (Seeding the system variables into every
+  `Vars` default was measured at ~270k extra whole-project type
+  instantiations for zero behavior change, so the spec stays a static
+  tier.) `SystemVariableReferences<Schema>` and `VariableReferences<Vars>`
+  derive the finite `$$` acceptance vocabularies, so dotted variable paths
+  are first-class at top-level value positions and in completions:
+  `$set: { n: "$$ROOT.name" }`,
   `$group: { latest: { $max: "$$ROOT.joinedAt" } }`, and typed operands
   accept `"$$ROOT.price"`-style dotted rewrites.
 - `$lookup` supports `let`: binding values are validated and inferred

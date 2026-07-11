@@ -48,7 +48,6 @@ import { OutQuery } from "../stages/out";
 import { MergeQuery } from "../stages/merge";
 import { AggregationCursor, MongoClient } from "mongodb";
 import { type Source, type InferSourceType } from "../source/Source";
-import { PipelineVars } from "../elements/literals";
 
 // ============================================================================
 // Lookup Mode - Controls what sources can be used in lookup/unionWith
@@ -146,8 +145,8 @@ export class Pipeline<
   /**
    * USER variable bindings in scope — an enclosing `$lookup.let`'s
    * inferred bindings, threaded into every stage's acceptance, validation,
-   * and inference over the system seed (PipelineVars). `{}` for ordinary
-   * pipelines.
+   * and inference (system variables resolve statically alongside it).
+   * `{}` for ordinary pipelines.
    */
   Env extends Document = {},
 > {
@@ -231,37 +230,18 @@ export class Pipeline<
     ]);
   }
 
-  set<
-    const S extends SetQuery<
-      PreviousStageDocs,
-      PipelineVars<PreviousStageDocs, Env>
-    >,
-  >(
-    $set: S &
-      ValidateSetQuery<
-        PreviousStageDocs,
-        S,
-        PipelineVars<PreviousStageDocs, Env>
-      >
+  set<const S extends SetQuery<PreviousStageDocs, Env>>(
+    $set: S & ValidateSetQuery<PreviousStageDocs, S, Env>
   ): Pipeline<
     StartingDocs,
-    ResolveSetOutput<
-      PreviousStageDocs,
-      S,
-      PipelineVars<PreviousStageDocs, Env>
-    >,
+    ResolveSetOutput<PreviousStageDocs, S, Env>,
     Mode,
     UsedStages | "$set",
     Env
   > {
-    return this._chain<
-      ResolveSetOutput<
-        PreviousStageDocs,
-        S,
-        PipelineVars<PreviousStageDocs, Env>
-      >,
-      "$set"
-    >([{ $set }]);
+    return this._chain<ResolveSetOutput<PreviousStageDocs, S, Env>, "$set">([
+      { $set },
+    ]);
   }
 
   unset<const U extends UnsetQuery<PreviousStageDocs>>(
@@ -297,10 +277,7 @@ export class Pipeline<
     // environment; their inferred types (ResolveLookupLetEnv) become the
     // sub-pipeline builder's Env, so `$$order_qty` resolves — accurately
     // typed — inside every sub-pipeline stage.
-    const Let extends LookupLetQuery<
-      PreviousStageDocs,
-      PipelineVars<PreviousStageDocs, Env>
-    > = {},
+    const Let extends LookupLetQuery<PreviousStageDocs, Env> = {},
     // Defaulted so it RESOLVES at call instantiation: the sub-builder's
     // Pipeline then carries a concrete env object type instead of an
     // unevaluated alias chain — re-evaluating that chain inside the
@@ -310,7 +287,7 @@ export class Pipeline<
       PreviousStageDocs,
       Let,
       Env,
-      PipelineVars<PreviousStageDocs, Env>
+      Env
     >,
     Foreign extends Document = InferSourceType<C>,
   >(
@@ -320,12 +297,7 @@ export class Pipeline<
           localField: LocalField;
           foreignField: ForeignField;
           as: NewKey;
-          let?: Let &
-            ValidateLookupLet<
-              PreviousStageDocs,
-              Let,
-              PipelineVars<PreviousStageDocs, Env>
-            >;
+          let?: Let & ValidateLookupLet<PreviousStageDocs, Let, Env>;
           pipeline?: PipelineBuilder<
             InferSourceType<C>,
             Foreign,
@@ -337,12 +309,7 @@ export class Pipeline<
       | {
           from: C;
           as: NewKey;
-          let?: Let &
-            ValidateLookupLet<
-              PreviousStageDocs,
-              Let,
-              PipelineVars<PreviousStageDocs, Env>
-            >;
+          let?: Let & ValidateLookupLet<PreviousStageDocs, Let, Env>;
           pipeline: PipelineBuilder<
             InferSourceType<C>,
             Foreign,
@@ -479,37 +446,18 @@ export class Pipeline<
   // position (compound `_id` expressions break under a bare mapped wrapper)
   // while ValidateGroupQuery re-checks accumulator operands — key-filtered,
   // so a fully-valid query validates against `{}` (see stages/group.ts).
-  group<
-    const G extends GroupQuery<
-      PreviousStageDocs,
-      PipelineVars<PreviousStageDocs, Env>
-    >,
-  >(
-    $group: G &
-      ValidateGroupQuery<
-        PreviousStageDocs,
-        G,
-        PipelineVars<PreviousStageDocs, Env>
-      >
+  group<const G extends GroupQuery<PreviousStageDocs, Env>>(
+    $group: G & ValidateGroupQuery<PreviousStageDocs, G, Env>
   ): Pipeline<
     StartingDocs,
-    ResolveGroupOutput<
-      PreviousStageDocs,
-      G,
-      PipelineVars<PreviousStageDocs, Env>
-    >,
+    ResolveGroupOutput<PreviousStageDocs, G, Env>,
     Mode,
     UsedStages | "$group",
     Env
   > {
-    return this._chain<
-      ResolveGroupOutput<
-        PreviousStageDocs,
-        G,
-        PipelineVars<PreviousStageDocs, Env>
-      >,
-      "$group"
-    >([{ $group }]);
+    return this._chain<ResolveGroupOutput<PreviousStageDocs, G, Env>, "$group">(
+      [{ $group }]
+    );
   }
 
   // The validate and resolve positions each compute the projection modes
@@ -520,63 +468,32 @@ export class Pipeline<
   // expression literals once its value arms are conditionals (same failure
   // class as group's compound-_id) — while ValidateProjectQuery re-checks
   // keys, projection mode, and values.
-  project<
-    const P extends ProjectQuery<
-      PreviousStageDocs,
-      PipelineVars<PreviousStageDocs, Env>
-    >,
-  >(
-    $project: P &
-      ValidateProjectQuery<
-        PreviousStageDocs,
-        P,
-        PipelineVars<PreviousStageDocs, Env>
-      >
+  project<const P extends ProjectQuery<PreviousStageDocs, Env>>(
+    $project: P & ValidateProjectQuery<PreviousStageDocs, P, Env>
   ): Pipeline<
     StartingDocs,
-    ResolveProjectOutput<
-      PreviousStageDocs,
-      P,
-      PipelineVars<PreviousStageDocs, Env>
-    >,
+    ResolveProjectOutput<PreviousStageDocs, P, Env>,
     Mode,
     UsedStages | "$project",
     Env
   > {
     return this._chain<
-      ResolveProjectOutput<
-        PreviousStageDocs,
-        P,
-        PipelineVars<PreviousStageDocs, Env>
-      >,
+      ResolveProjectOutput<PreviousStageDocs, P, Env>,
       "$project"
     >([{ $project }]);
   }
 
-  replaceRoot<
-    const R extends ReplaceRootQuery<
-      PreviousStageDocs,
-      PipelineVars<PreviousStageDocs, Env>
-    >,
-  >(
+  replaceRoot<const R extends ReplaceRootQuery<PreviousStageDocs, Env>>(
     $replaceRoot: R
   ): Pipeline<
     StartingDocs,
-    ResolveReplaceRootOutput<
-      PreviousStageDocs,
-      R,
-      PipelineVars<PreviousStageDocs, Env>
-    >,
+    ResolveReplaceRootOutput<PreviousStageDocs, R, Env>,
     Mode,
     UsedStages | "$replaceRoot",
     Env
   > {
     return this._chain<
-      ResolveReplaceRootOutput<
-        PreviousStageDocs,
-        R,
-        PipelineVars<PreviousStageDocs, Env>
-      >,
+      ResolveReplaceRootOutput<PreviousStageDocs, R, Env>,
       "$replaceRoot"
     >([{ $replaceRoot }]);
   }

@@ -61,7 +61,6 @@ import { GetFieldTypeWithoutArrays } from "./fieldReference";
 import {
   HasUserBindings,
   InferVariableReference,
-  SystemVariables,
   ValidateVariableReference,
 } from "./literals";
 import { WithoutDollar } from "../utils/strings";
@@ -83,7 +82,7 @@ import { WithoutDollar } from "../utils/strings";
 export type ValidateExpressionValue<
   Schema extends Document,
   V,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   [Exclude<keyof V & string, `$${string}`>] extends [never] ?
     HasSingleOperatorKey<V> extends false ? MultiOperatorError
@@ -164,7 +163,7 @@ export type ValidateExpressionValue<
 type ValidateConcatValue<
   Schema extends Document,
   V,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   V extends { readonly $concat: infer Arr } ?
     Arr extends readonly unknown[] ?
@@ -193,7 +192,7 @@ type ValidateConcatValue<
 type ValidateConcatElement<
   Schema extends Document,
   E,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   E extends `$$${string}` ?
     ValidateVariableReference<Schema, E, Vars> extends infer Err ?
@@ -226,11 +225,7 @@ type ValidateConcatElement<
  * computations share one alias-cache entry). Malformed shapes get the
  * registry's expected operand shape.
  */
-type ValidateLetValue<
-  Schema extends Document,
-  V,
-  Vars extends Document = SystemVariables<Schema>,
-> =
+type ValidateLetValue<Schema extends Document, V, Vars extends Document = {}> =
   V extends { $let: { vars: infer LetVars; in: infer In } } ?
     ValidateNestedValue<Schema, LetVars, Vars> extends infer VarsErr ?
       ValidateNestedValue<
@@ -277,7 +272,7 @@ type ValidateArrayInputValue<
   Schema extends Document,
   Input,
   Op extends "$map" | "$filter",
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   Input extends `$$${string}` ?
     ValidateVariableReference<Schema, Input, Vars> extends infer Err ?
@@ -315,11 +310,7 @@ type ValidateArrayInputValue<
  * inference's $map arm computes. The replacement keeps sibling operand
  * keys (`as`) as-is so the TS2322 lands on the offending member only.
  */
-type ValidateMapValue<
-  Schema extends Document,
-  V,
-  Vars extends Document = SystemVariables<Schema>,
-> =
+type ValidateMapValue<Schema extends Document, V, Vars extends Document = {}> =
   V extends { $map: infer MapOperand } ?
     MapOperand extends { input: infer Input; in: infer In } ?
       ValidateArrayInputValue<Schema, Input, "$map", Vars> extends (
@@ -362,7 +353,7 @@ type ValidateMapValue<
 type ValidateFilterValue<
   Schema extends Document,
   V,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   V extends { $filter: infer FilterOperand } ?
     FilterOperand extends { input: infer Input; cond: infer Cond } ?
@@ -414,7 +405,7 @@ type ValidateFilterValue<
 export type ValidateNestedValue<
   Schema extends Document,
   V,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   V extends `$$${string}` ? ValidateVariableReference<Schema, V, Vars>
   : V extends `$${string}` ?
@@ -445,7 +436,7 @@ export type ValidateNestedValue<
 type ValidateObjectValue<
   Schema extends Document,
   V,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   true extends (
     {
@@ -473,7 +464,7 @@ type ValidateObjectValue<
 type ValidateArrayValue<
   Schema extends Document,
   V extends readonly unknown[],
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   true extends (
     {

@@ -5,7 +5,6 @@ import {
   InferNestedFieldReference,
 } from "../elements/fieldReference";
 import { ExpressionValue } from "../elements/expressions";
-import { SystemVariables } from "../elements/literals";
 import { ValidateNestedValue } from "../elements/validation";
 import { FlattenDotSet, IsDottedKey } from "../utils/paths";
 import { ApplySetUpdates } from "../utils/updates";
@@ -19,7 +18,7 @@ import { ApplySetUpdates } from "../utils/updates";
  */
 export type LookupLetQuery<
   Schema extends Document,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > = {
   [name: string]: ExpressionValue<Schema, Vars>;
 };
@@ -35,7 +34,7 @@ export type LookupLetQuery<
 export type ValidateLookupLet<
   Schema extends Document,
   Let,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   string extends keyof Let ? {}
   : OmitNeverValues<{
@@ -47,8 +46,8 @@ export type ValidateLookupLet<
  * `Env` (lookups nest — outer bindings stay visible) with this lookup's
  * `let` bindings layered on, each inferred against the OUTER schema in the
  * OUTER environment — the same authority the values were validated with.
- * Pipeline seeds the sub-pipeline's system variables over the FOREIGN
- * schema separately (PipelineVars), which is exactly MongoDB's scoping:
+ * The sub-pipeline's system variables resolve against the FOREIGN schema
+ * (the resolvers' static tier), which is exactly MongoDB's scoping:
  * `$$ROOT` inside the sub-pipeline is the foreign document; the outer
  * document's fields come in through `let`.
  */
@@ -56,10 +55,12 @@ export type ResolveLookupLetEnv<
   Schema extends Document,
   Let,
   Env extends Document,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > = {
-  // ONE mapped type with lazy values (see PipelineVars) — binding types
-  // are only computed when a `$$name` is actually looked up.
+  // ONE mapped type with lazy values — binding types are only computed
+  // when a `$$name` is actually looked up (an Omit/Prettify spelling
+  // stacks instantiation layers at the deepest point of lookup-lambda
+  // checking).
   [K in (keyof Let & string) | keyof Env]: K extends keyof Let ?
     InferNestedFieldReference<Schema, Let[K], Vars>
   : K extends keyof Env ? Env[K]

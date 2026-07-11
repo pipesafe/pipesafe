@@ -10,7 +10,7 @@
 
 import { ValidateExpressionValue, ValidateNestedValue } from "./validation";
 import { ExpressionFor } from "./expressions";
-import { PipelineVars, VariableReferences } from "./literals";
+import { VariableReferences } from "./literals";
 import { PipeSafeError } from "../utils/errors";
 import { Assert, Equal } from "../utils/tests";
 
@@ -132,7 +132,7 @@ type _UnknownSystemVariable = Assert<
 >;
 
 // ---------------------------------------------------------------------------
-// The environment vocabulary (VariableReferences over PipelineVars): a
+// The USER-environment vocabulary (VariableReferences): a
 // lookup-let binding is accepted by exact name (and dotted paths into
 // document-typed bindings); an out-of-scope `$$`-name is NOT in the finite
 // union, so call sites reject it at the constraint. Pinned type-level: a
@@ -140,7 +140,7 @@ type _UnknownSystemVariable = Assert<
 // the full value unions and can trip TS's depth limiter (pre-existing).
 // ---------------------------------------------------------------------------
 
-type _LetEnv = PipelineVars<User, { u: string; order: { qty: number } }>;
+type _LetEnv = { u: string; order: { qty: number } };
 type _EnvVocabularyAcceptsBinding = Assert<
   Equal<"$$u" extends VariableReferences<_LetEnv> ? true : false, true>
 >;

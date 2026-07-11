@@ -3,7 +3,7 @@ import { Join, DollarPrefixed, WithoutDollar } from "../utils/strings";
 import { PipeSafeError, UnknownFieldError } from "../utils/errors";
 import { HasOperatorKey } from "../utils/dispatch";
 import { InferExpression } from "./expressions";
-import { InferVariableReference, SystemVariables } from "./literals";
+import { InferVariableReference } from "./literals";
 
 // Types related to field referencees
 // These are used as part of values within expressions
@@ -135,16 +135,17 @@ export type FieldReferencesThatInferTo<Schema extends Document, DesiredType> =
  * InferNestedFieldReference<{ timestamp: Date }, { date: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } } }>
  * // { date: string }
  *
- * `Vars` is THE variable environment (names WITHOUT the `$$` prefix →
+ * `Vars` is the USER variable environment (names WITHOUT the `$$` prefix →
  * their types), threaded through every recursive arm so `"$$total"` deep
- * inside a binder's `in` expression still resolves. It defaults to the
- * system seed (SystemVariables<Schema>); binding arms extend it, and
- * Pipeline threads lookup-let bindings through it.
+ * inside a binder's `in` expression still resolves. Binding arms extend
+ * it, Pipeline threads lookup-let bindings through it, and system
+ * variables resolve statically beside it (InferVariableReference's
+ * second tier).
  */
 export type InferNestedFieldReference<
   Schema extends Document,
   Obj,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   Obj extends FieldReference<Schema> ? InferFieldReference<Schema, Obj>
   : // `$$`-variable references resolve through the SystemVariableSpec map
@@ -177,7 +178,7 @@ export type InferNestedFieldReference<
 type InferNestedFieldReferenceArray<
   Schema extends Document,
   Arr,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > =
   Arr extends [] ? []
   : Arr extends [infer First, ...infer Rest] ?
@@ -195,7 +196,7 @@ type InferNestedFieldReferenceArray<
 type InferNestedFieldReferenceObject<
   Schema extends Document,
   Obj,
-  Vars extends Document = SystemVariables<Schema>,
+  Vars extends Document = {},
 > = Prettify<{
   [K in keyof Obj]: InferNestedFieldReference<Schema, Obj[K], Vars>;
 }>;
