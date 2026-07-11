@@ -8,14 +8,10 @@ import { FlattenDotSet, HasDottedKeys } from "../utils/paths";
 import { ApplySetUpdates } from "../utils/updates";
 
 /**
- * The value union for a `$set` assignment — THE shared computed-value union
- * (`ExpressionValue`, elements/expressions.ts): `$`-keyed OBJECTS are
- * accepted STRUCTURALLY (`ExpressionShaped`) and re-checked by
- * `ValidateSetQuery`; `$`-STRING values resolve to finite unions
- * (`FieldReference` + the environment's `VariableReferences` — dotted
- * `"$$ROOT.name"` and lookup-let bindings included) so they both
- * autocomplete AND reject typos at the constraint. See ExpressionValue for
- * the completion-safety reasoning.
+ * The value union for a `$set` assignment — the shared computed-value
+ * union (see ExpressionValue, elements/expressions.ts): `$`-keyed objects
+ * accepted structurally and re-checked by ValidateSetQuery; `$`-strings
+ * are finite unions that autocomplete and reject typos at the constraint.
  */
 type SetValue<
   Schema extends Document,

@@ -26,13 +26,12 @@
  * multi-operator objects, operator keys mixed with plain keys, and
  * registered operators with invalid operands.
  *
- * `Vars` is the `$let`/`$map`/`$filter` variable environment (bound names
- * WITHOUT the `$$` prefix → their inferred types), threaded through every
- * helper by the binder walks below. Inside a binder interior (non-empty
- * Vars) the registry operand relation is SKIPPED — it is Vars-blind, so a
- * bound `$$var` in a typed operand position would falsely fail it — and
- * the operand tree is walked for ref/variable/operator-name errors
- * instead; operand TYPE errors there are runtime MongoDB's to report.
+ * `Vars` is the USER variable environment (bound names WITHOUT the `$$`
+ * prefix → their inferred types), threaded through every helper by the
+ * binder walks below. Inside a binder interior the Vars-blind registry
+ * operand relation demotes to a fast-accept and the operand tree is walked
+ * for ref/variable/operator-name errors; operand TYPE errors there are
+ * runtime MongoDB's to report.
  */
 
 import { Document, NonExpandableTypes } from "../utils/objects";
@@ -86,16 +85,13 @@ export type ValidateExpressionValue<
 > =
   [Exclude<keyof V & string, `$${string}`>] extends [never] ?
     HasSingleOperatorKey<V> extends false ? MultiOperatorError
-    : // Special-cased operators, folded behind ONE guard so the common path
-    // pays a single comparison. $concat gets an element-wise walk (the
-    // union relation can't express "any non-`$` string" — NoDollarString
-    // is alphanumeric-leading only, so " - " or "(" would falsely brand —
-    // and the whole-operand relation can't resolve refs element-wise);
-    // the variable-binding operators get dedicated interior walks, which
-    // MUST run before the schema-free fast-accept below: their interiors
-    // are `unknown`-typed in the registry, so the whole-operand relation
-    // passes vacuously and would skip exactly the positions that need the
-    // Vars environment.
+    : // Special-cased operators, folded behind ONE guard so the common
+    // path pays a single comparison. $concat needs an element-wise walk
+    // (the union relation can't express "any non-`$` string" and can't
+    // resolve refs element-wise); the binder walks MUST run before the
+    // fast-accept below — their `unknown`-typed interiors pass the
+    // whole-operand relation vacuously, skipping exactly the positions
+    // that need the Vars environment.
     [OperatorKeyOf<V>] extends ["$concat" | "$let" | "$map" | "$filter"] ?
       [OperatorKeyOf<V>] extends ["$concat"] ?
         ValidateConcatValue<Schema, V, Vars>
@@ -119,18 +115,13 @@ export type ValidateExpressionValue<
         // `as const` operands both relate directly.
         [V] extends [ExpressionFor<Schema, OperatorKeyOf<V>>] ? never
         : ExpressionFor<Schema, OperatorKeyOf<V>>
-      : // FORGIVING re-check inside a binder interior (non-empty Vars): the
-      // Vars-blind registry relation runs as a FAST-ACCEPT only (anything
-      // it accepts is valid; it must not REJECT here — a bound `$$var` in
-      // a typed operand position fails it), and the leftovers get the
-      // operand TREE walk so bad refs, unknown `$$`-variables, and typo'd
-      // nested operators still brand. The fast-accepts are ALSO the cycle
-      // breaker: exploration with the registry's own WIDE shapes (V =
-      // ExpressionFor<Schema, Op> itself, reached through operand unions
-      // during inference) self-accepts here — without it the walk recurses
-      // registry→operand-union→registry forever and only TS's instantiation
-      // depth limiter stops it (TS2589 at every lookup-let sub-pipeline
-      // stage). $literal interiors are verbatim values, never walked.
+      : // Binder interior: the Vars-blind relation demotes to FAST-ACCEPT
+      // (it must not REJECT — bound `$$vars` fail it) and leftovers get
+      // the operand-tree walk, so bad refs/variables/operator names still
+      // brand. The fast-accepts are ALSO the wide-shape cycle breaker —
+      // removing them recurses registry→operand-union→registry to TS's
+      // depth limit (see elements/CLAUDE.md). $literal interiors are
+      // verbatim values, never walked.
       [V] extends [ExpressionFor<{}, OperatorKeyOf<V>>] ? never
       : [V] extends [ExpressionFor<Schema, OperatorKeyOf<V>>] ? never
       : [OperatorKeyOf<V>] extends ["$literal"] ? never
@@ -151,14 +142,11 @@ export type ValidateExpressionValue<
   : MultiOperatorError; // operator key alongside plain keys
 
 /**
- * `$concat` operand re-check, element-wise. Every element must be a string:
- * single-`$` refs must resolve to a string-typed field, `$$`-variable
- * references must RESOLVE to a string type (unknown names brand as unknown
- * system variables; known-but-non-string ones — "$$NOW" is a Date — get
- * the operator's RequiresMsg brand; unresolvable/opaque ones are skipped),
- * any non-`$` string literal passes (including the "", " - ", "("
- * separators NoDollarString can't cover), and everything else brands. Same
- * never-or-replacement contract as the rest of the kernel.
+ * `$concat` re-check, element-wise; every element must be a string.
+ * `$`-refs and `$$`-variables must RESOLVE to string ("$$NOW" is a Date →
+ * RequiresMsg brand; unknown names → Variable brand; unresolvable types
+ * are skipped); any non-`$` string literal passes (separators like " - "
+ * that NoDollarString can't cover included). Kernel contract throughout.
  */
 type ValidateConcatValue<
   Schema extends Document,
@@ -219,11 +207,9 @@ type ValidateConcatElement<
   : PipeSafeError<RequiresMsg<"Operator", "$concat", "a string operand">>;
 
 /**
- * `$let` interior walk: `vars` values are ordinary expressions in the
- * OUTER environment; `in` is walked with the block's bindings layered on
- * top (BindLetVars — the same environment inference binds, so the two
- * computations share one alias-cache entry). Malformed shapes get the
- * registry's expected operand shape.
+ * `$let` interior walk: `vars` values check in the OUTER environment; `in`
+ * with the block's bindings layered on (BindLetVars — the same environment
+ * inference binds). Malformed shapes get the registry's expected shape.
  */
 type ValidateLetValue<Schema extends Document, V, Vars extends Document = {}> =
   V extends { $let: { vars: infer LetVars; in: infer In } } ?
@@ -253,20 +239,13 @@ type RegistryArrayInputOperand<
   ExpressionSpec<Schema>[Op]["operand"] extends { input: infer I } ? I : never;
 
 /**
- * Shared `input` re-check for the $map/$filter walks: `$$`-variable inputs
- * resolve through the variable authorities (unknown names/bad paths brand;
- * resolvable non-arrays get the operator's array RequiresMsg), single-`$`
- * refs resolve through the field authority with the same array demand, and
- * everything else (literals, nested expressions) RELATES against the
- * registry's own input operand — the pre-walk whole-operand behavior. Do
- * NOT "improve" that last arm into a `ValidateNestedValue` re-entry: input
- * is a position other operands' relations traverse ($filter is a member of
- * ArrayProducingExpression, hence of every ArrayOperand), and the walk
- * re-entry from here measurably blows TS's instantiation-depth budget —
- * TS2589 on unrelated `.set()` call sites. Inside a binder interior
- * (non-empty Vars) the Schema relation is skipped instead: it is
- * Vars-blind, so a bound "$$arr" deep inside a nested input would falsely
- * fail it.
+ * Shared `input` re-check for the $map/$filter walks: `$$`-variables and
+ * `$`-refs resolve through their authorities with an array demand;
+ * everything else RELATES against the registry's own input operand. Do NOT
+ * "improve" that last arm into a `ValidateNestedValue` re-entry — it blows
+ * TS's instantiation depth (see elements/CLAUDE.md). Inside a binder
+ * interior the Vars-blind Schema relation is skipped (a bound "$$arr"
+ * nested in the input would falsely fail it).
  */
 type ValidateArrayInputValue<
   Schema extends Document,
@@ -306,9 +285,8 @@ type ValidateArrayInputValue<
 
 /**
  * `$map` interior walk: `input` in the outer environment, `in` with the
- * element bound under the `as` name (default "this") — the same binding
- * inference's $map arm computes. The replacement keeps sibling operand
- * keys (`as`) as-is so the TS2322 lands on the offending member only.
+ * element bound under the `as` name (default "this"). The replacement
+ * keeps sibling operand keys so TS2322 lands on the offending member.
  */
 type ValidateMapValue<Schema extends Document, V, Vars extends Document = {}> =
   V extends { $map: infer MapOperand } ?
@@ -347,8 +325,7 @@ type ValidateMapValue<Schema extends Document, V, Vars extends Document = {}> =
 
 /**
  * `$filter` interior walk: `input` in the outer environment, `cond` with
- * the element bound under the `as` name (default "this"). Sibling operand
- * keys (`as`, `limit`) are kept as-is in the replacement.
+ * the element bound under the `as` name (default "this").
  */
 type ValidateFilterValue<
   Schema extends Document,
@@ -390,17 +367,13 @@ type ValidateFilterValue<
   : ExpressionFor<Schema, "$filter">;
 
 /**
- * Recursive walk over a literal value tree. `$$`-prefixed strings are
- * MongoDB variable references, not field references: they resolve through
- * `ValidateVariableReference` — the enumerated SYSTEM_VARIABLES (with
- * dotted paths into document-typed ones, e.g. "$$ROOT.name") and the
- * `Vars`-bound `$let`/`$map`/`$filter` user variables pass; any other
- * `$$`-name brands as an unknown system variable
- * (aggregation-command-level `let` variables are not modeled yet).
- * Single-`$` strings are field references and resolve through the same
- * authority inference uses. Arrays walk their elements (a bad ref inside
- * an array literal is as wrong as one outside it); non-expandable objects
- * (Date, ObjectId, RegExp, ...) are always valid.
+ * Recursive walk over a literal value tree. `$$`-strings resolve through
+ * ValidateVariableReference (system variables incl. dotted paths, plus the
+ * Vars-bound user variables; anything else brands —
+ * aggregation-command-level `let` is not modeled yet); single-`$` strings
+ * resolve through the same field authority inference uses. Arrays walk
+ * their elements; non-expandable objects (Date, ObjectId, ...) are always
+ * valid.
  */
 export type ValidateNestedValue<
   Schema extends Document,

@@ -135,12 +135,10 @@ export type FieldReferencesThatInferTo<Schema extends Document, DesiredType> =
  * InferNestedFieldReference<{ timestamp: Date }, { date: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } } }>
  * // { date: string }
  *
- * `Vars` is the USER variable environment (names WITHOUT the `$$` prefix →
- * their types), threaded through every recursive arm so `"$$total"` deep
- * inside a binder's `in` expression still resolves. Binding arms extend
- * it, Pipeline threads lookup-let bindings through it, and system
- * variables resolve statically beside it (InferVariableReference's
- * second tier).
+ * `Vars` is the USER variable environment (binder/lookup-let bindings),
+ * threaded through every recursive arm so `"$$total"` deep inside a
+ * binder's `in` still resolves; system variables resolve statically beside
+ * it (InferVariableReference's second tier).
  */
 export type InferNestedFieldReference<
   Schema extends Document,
@@ -148,11 +146,9 @@ export type InferNestedFieldReference<
   Vars extends Document = {},
 > =
   Obj extends FieldReference<Schema> ? InferFieldReference<Schema, Obj>
-  : // `$$`-variable references resolve through the SystemVariableSpec map
-  // and the Vars environment. `$$REMOVE`'s `never` is load-bearing —
-  // RemoveNeverFields (utils/updates.ts) strips the key from the output;
-  // everything unresolvable degrades to `unknown`, never to a dropped
-  // field (validation owns rejection).
+  : // `$$REMOVE`'s `never` is load-bearing — RemoveNeverFields
+  // (utils/updates.ts) strips the key; everything unresolvable degrades to
+  // `unknown`, never to a dropped field (validation owns rejection).
   Obj extends `$$${string}` ? InferVariableReference<Schema, Obj, Vars>
   : // Unknown single-`$` refs: validation brands them at the call site, so
   // inference must not invent a type for them.

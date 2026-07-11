@@ -117,11 +117,10 @@ type ArithmeticPair<Schema extends Document, Op extends string> = readonly [
 ];
 
 /**
- * Generic expression operands - can be any literal, null, field reference,
- * system variable, or expression. Used for conditional operators like
- * $ifNull and $cond that accept flexible types. SystemVariable is the full
- * enumerated vocabulary: `$cond: [c, "$$REMOVE", "$x"]` (conditional field
- * removal) and `$ifNull: ["$x", "$$NOW"]` are both idiomatic MongoDB.
+ * Operands for the flexible conditional operators ($ifNull/$cond) — any
+ * literal, null, field or variable reference, or expression
+ * (`$cond: [c, "$$REMOVE", "$x"]` and `$ifNull: ["$x", "$$NOW"]` are both
+ * idiomatic MongoDB).
  */
 type ConditionalOperand<Schema extends Document> =
   | null
@@ -131,9 +130,9 @@ type ConditionalOperand<Schema extends Document> =
   | Expression<Schema>;
 
 /**
- * Comparison operand - values that can be compared. SystemVariable is the
- * full enumerated vocabulary (`$gte: ["$expiresAt", "$$NOW"]` is idiomatic).
- * Note: Excludes ComparisonExpression to avoid circular reference
+ * Comparison operand — values that can be compared, variable references
+ * included (`$gte: ["$expiresAt", "$$NOW"]` is idiomatic). Excludes
+ * ComparisonExpression to avoid circular reference.
  */
 type ComparisonOperand<Schema extends Document> =
   | null
@@ -238,9 +237,8 @@ export interface ExpressionSpec<Schema extends Document> {
     ];
   };
   /** Filters an array by a condition. `cond` sees the element bound as
-   *  `$$this` (or the `as` name) — it stays `unknown` at ACCEPTANCE (the
-   *  bound-variable environment is a literal-level fact) and is re-checked
-   *  by the validation kernel's Vars-aware walk. */
+   *  `$$this` (or the `as` name); it stays `unknown` at acceptance and is
+   *  re-checked by the Vars-aware validation walk. */
   $filter: {
     operand: {
       input: ArrayOperand<Schema, "$filter">;
@@ -249,13 +247,9 @@ export interface ExpressionSpec<Schema extends Document> {
       limit?: number;
     };
   };
-  /**
-   * Transforms each element. `in` sees the element bound as `$$this` (or
-   * the `as` name); the RESULT is the inferred `in` type, lifted to an
-   * array — literal-dependent, so no `returns` (the arm lives in
-   * InferDependentExpression). `as` is optional in MongoDB (defaults to
-   * `this`).
-   */
+  /** Transforms each element. `in` sees the element bound as `$$this`
+   *  (or the `as` name, optional in MongoDB); the result is the inferred
+   *  `in` type lifted to an array — literal-dependent, so no `returns`. */
   $map: {
     operand: { input: ArrayInput<Schema>; as?: string; in: unknown };
   };
@@ -372,11 +366,10 @@ export interface ExpressionSpec<Schema extends Document> {
   };
 
   // --- Variable binding ------------------------------------------------------
-  /** Binds `$$`-variables for a sub-expression. `vars` values are ordinary
-   *  expressions evaluated in the OUTER scope; `in` sees them bound (the
-   *  environment is a literal-level fact, so acceptance stays structural
-   *  and the Vars-aware validation walk re-checks both). The RESULT is the
-   *  inferred `in` type — literal-dependent, so no `returns`. */
+  /** Binds `$$`-variables. `vars` values evaluate in the OUTER scope; `in`
+   *  sees them bound (acceptance stays structural; the Vars-aware walk
+   *  re-checks both). The result is the inferred `in` type —
+   *  literal-dependent, so no `returns`. */
   $let: {
     operand: { vars: Record<string, unknown>; in: unknown };
   };
@@ -819,24 +812,14 @@ export type Expression<Schema extends Document> = ExpressionFor<
 >;
 
 /**
- * THE general computed-value union — what an expression-valued position
- * accepts ($set/$project values, `$lookup.let` values). Spelled once here so
- * stages don't re-spell it (stages must not import each other).
- *
- * Every string arm is FINITE — `FieldReference<Schema>` (schema-derived)
- * and `VariableReferences<Vars>` (the environment's `$$` vocabulary: exact
- * names plus dotted paths, lookup-let bindings included). No wide
- * `` `$${string}` `` template exists here: a template wide enough to accept
- * arbitrary `$`-strings necessarily ABSORBS the finite ref literals out of
- * autocomplete (same predicate decides both), and the `` & {} ``
- * non-absorption spelling leaks String.prototype into sibling object-literal
- * completions. Finite literals have neither problem — and a typo'd ref
- * errors with TS's native TS2820 "Did you mean '$name'?" at the value.
- *
- * `Expression<Schema>` is an AUTOCOMPLETE-ONLY member: for checking it is
- * subsumed by `ExpressionShaped` (every valid expression is
- * expression-shaped), so it cannot decide acceptance — do not "fix"
- * acceptance bugs by editing it.
+ * THE computed-value union — what an expression-valued position accepts
+ * ($set/$project values, `$lookup.let` values). Spelled once here (stages
+ * must not import each other). Every string arm is FINITE per the
+ * completion-safety invariants (root CLAUDE.md), so refs/variables
+ * autocomplete and a typo'd ref gets TS's native TS2820 "Did you mean"
+ * at the value. `Expression<Schema>` is an AUTOCOMPLETE-ONLY member —
+ * `ExpressionShaped` subsumes it for checking, so it cannot decide
+ * acceptance; do not "fix" acceptance bugs by editing it.
  */
 export type ExpressionValue<
   Schema extends Document,
@@ -921,10 +904,9 @@ type GetArrayElement<
   : never;
 
 /**
- * Helper to extract element type from an array source (field ref,
- * `$$`-variable reference, or literal). Exported for the validation
- * kernel's $map/$filter walks — they bind the SAME element type inference
- * uses, so the two computations are one alias-cache entry.
+ * Element type of an array source (field ref, `$$`-variable reference, or
+ * literal). Exported: the validation kernel's $map/$filter walks bind the
+ * SAME element type inference uses.
  */
 export type InferArrayElementType<
   Schema extends Document,
@@ -1025,8 +1007,8 @@ export type BoundAsName<Operand> =
   : "this";
 
 /** Bind one variable name (shadowing any outer binding of the same name).
- *  ONE mapped type with lazy values — Omit/Prettify spellings stack extra
- *  instantiation layers at the deepest points of binder-interior checking. */
+ *  Single lazy mapped type — no Omit/Prettify (see elements/CLAUDE.md on
+ *  env-merge depth). */
 export type BindVariable<Vars extends Document, Name extends string, T> = {
   [K in keyof Vars | Name]: K extends Name ? T
   : K extends keyof Vars ? Vars[K]
@@ -1035,11 +1017,9 @@ export type BindVariable<Vars extends Document, Name extends string, T> = {
 
 /**
  * Evaluate a $let `vars` block in the OUTER environment and bind the
- * results (MongoDB: a `vars` value cannot reference siblings defined in the
- * same block; inner bindings shadow outer ones). Shared by inference
- * ($let's InferDependentExpression arm) and the validation kernel's
- * Vars-aware walk — same type arguments, so the second computation is an
- * alias-cache hit, not a recomputation.
+ * results (MongoDB: `vars` values cannot reference same-block siblings;
+ * inner bindings shadow outer ones). Shared by inference and the
+ * validation walk, so the two environments cannot diverge.
  */
 export type BindLetVars<
   Schema extends Document,
@@ -1060,11 +1040,9 @@ export type BindLetVars<
  * positions became readonly, `<const>` call sites infer readonly tuples, and
  * a readonly pattern matches both mutabilities while a mutable pattern
  * matches neither (a mutable-pattern arm silently falls through and the
- * resolver DROPS the field).
- *
- * `Vars` is the `$let`/`$map`/`$filter` variable environment; the binder
- * arms EXTEND it (BindVariable/BindLetVars) before recursing into their
- * bound sub-expressions.
+ * resolver DROPS the field). The binder arms EXTEND `Vars`
+ * (BindVariable/BindLetVars) before recursing into their bound
+ * sub-expressions.
  */
 type InferDependentExpression<
   Schema extends Document,

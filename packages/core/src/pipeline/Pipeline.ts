@@ -273,22 +273,9 @@ export class Pipeline<
       LocalField
     >,
     NewKey extends string,
-    // `let` bindings: expressions over the OUTER schema in the OUTER
-    // environment; their inferred types (ResolveLookupLetEnv) become the
-    // sub-pipeline builder's Env, so `$$order_qty` resolves — accurately
-    // typed — inside every sub-pipeline stage.
+    // `let` bindings: expressions over the OUTER schema/environment whose
+    // inferred types become the sub-pipeline builder's Env.
     const Let extends LookupLetQuery<PreviousStageDocs, Env> = {},
-    // Defaulted so it RESOLVES at call instantiation: the sub-builder's
-    // Pipeline then carries a concrete env object type instead of an
-    // unevaluated alias chain — re-evaluating that chain inside the
-    // (already deep) lambda-checking stack measurably overflows TS's
-    // instantiation depth (TS2589 on the sub-pipeline's first stage call).
-    SubEnv extends Document = ResolveLookupLetEnv<
-      PreviousStageDocs,
-      Let,
-      Env,
-      Env
-    >,
     Foreign extends Document = InferSourceType<C>,
   >(
     $lookup:
@@ -303,7 +290,7 @@ export class Pipeline<
             Foreign,
             Mode,
             LookupAllowedStages,
-            SubEnv
+            ResolveLookupLetEnv<PreviousStageDocs, Let, Env, Env>
           >;
         }
       | {
@@ -315,7 +302,7 @@ export class Pipeline<
             Foreign,
             Mode,
             LookupAllowedStages,
-            SubEnv
+            ResolveLookupLetEnv<PreviousStageDocs, Let, Env, Env>
           >;
         }
   ): Pipeline<

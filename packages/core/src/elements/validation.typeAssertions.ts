@@ -132,12 +132,10 @@ type _UnknownSystemVariable = Assert<
 >;
 
 // ---------------------------------------------------------------------------
-// The USER-environment vocabulary (VariableReferences): a
-// lookup-let binding is accepted by exact name (and dotted paths into
-// document-typed bindings); an out-of-scope `$$`-name is NOT in the finite
-// union, so call sites reject it at the constraint. Pinned type-level: a
-// failing value's constraint elaboration at a call site force-evaluates
-// the full value unions and can trip TS's depth limiter (pre-existing).
+// The USER-environment vocabulary (VariableReferences): bindings accepted
+// by exact name and dotted path; out-of-scope `$$`-names are not in the
+// finite union. Pinned type-level — call-site failure elaboration can trip
+// TS's depth limiter (pre-existing; see CLAUDE.md).
 // ---------------------------------------------------------------------------
 
 type _LetEnv = { u: string; order: { qty: number } };

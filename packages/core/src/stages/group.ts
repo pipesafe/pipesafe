@@ -321,14 +321,12 @@ type ValidateAccumulatorValue<
     [keyof AccumulatorSpec<Schema> | UnimplementedAccumulators]
   ) ?
     OperatorKeyOf<A> extends infer Op extends CheckedAccumulatorOps ?
-      // The enumerated `$$`-system variables are valid MongoDB in any
-      // accumulator position (mirrors the kernel's `$$` arm in
-      // ValidateNestedValue) — checked before the operand relation so they
-      // never reach the comparable/numeric brand. Resolution goes through
-      // ValidateVariableReference: exact names and valid dotted paths
-      // ("$$ROOT.age") pass; an UNLISTED `$$var` brands as an unknown
-      // system variable and a bad path gets the Field brand — instead of a
-      // misleading operand message.
+      // `$$`-variables are valid MongoDB in any accumulator position —
+      // checked before the operand relation so they never reach the
+      // comparable/numeric brand. ValidateVariableReference passes exact
+      // names and valid dotted paths ("$$ROOT.age"); unknown names/bad
+      // paths get the Variable/Field brand instead of a misleading operand
+      // message.
       A[Op & keyof A] extends `$$${string}` ?
         ValidateVariableReference<
           Schema,
@@ -340,14 +338,9 @@ type ValidateAccumulatorValue<
           : { [K in Op & string]: Err }
         : never
       : HasUserBindings<Vars> extends true ?
-        // FORGIVING inside a binder/lookup-let interior (mirrors
-        // ValidateExpressionValue): the Vars-blind registry relation runs
-        // as a FAST-ACCEPT only (it must not REJECT — a bound `$$var`
-        // nested in the operand would falsely fail it); leftovers get the
-        // operand-tree walk for ref/variable/name errors. The fast-accept
-        // doubles as the wide-shape cycle breaker (see the expression
-        // kernel's forgiving branch); operand TYPE mismatches are left to
-        // runtime.
+        // Binder/lookup-let interior: mirrors ValidateExpressionValue's
+        // forgiving branch — Vars-blind relation as fast-accept (and
+        // wide-shape cycle breaker), operand-tree walk for the leftovers.
         [A] extends [AccumulatorFor<{}, Op>] ? never
         : [A] extends [AccumulatorFor<Schema, Op>] ? never
         : ValidateNestedValue<Schema, A[Op & keyof A], Vars> extends infer R ?

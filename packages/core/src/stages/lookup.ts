@@ -10,11 +10,9 @@ import { FlattenDotSet, IsDottedKey } from "../utils/paths";
 import { ApplySetUpdates } from "../utils/updates";
 
 /**
- * The `$lookup.let` block: variable name → an expression evaluated against
- * the OUTER (joining) schema in the OUTER environment. The values are the
- * shared computed-value union, so field refs, `$$`-variables (including an
- * enclosing lookup's own bindings — lookups nest), literals, and expression
- * objects are all accepted; ValidateLookupLet re-checks the literal.
+ * The `$lookup.let` block: variable name → an expression over the OUTER
+ * schema/environment (the shared computed-value union; ValidateLookupLet
+ * re-checks the literal).
  */
 export type LookupLetQuery<
   Schema extends Document,
@@ -25,11 +23,9 @@ export type LookupLetQuery<
 
 /**
  * Key-filtered validation wrapper for the `let` block (mirrors
- * ValidateSetQuery): values walk the shared nested-validation kernel
- * against the OUTER schema/environment, offending keys map to the kernel's
- * replacement, and a fully-valid block validates against `{}`. The
- * wide-QUERY guard skips the walk when the constraint-failure fallback
- * instantiates this with the wide LookupLetQuery itself.
+ * ValidateSetQuery): values walk the kernel against the OUTER
+ * schema/environment; a fully-valid block validates against `{}`; the
+ * wide-QUERY guard covers the constraint-failure fallback.
  */
 export type ValidateLookupLet<
   Schema extends Document,
@@ -42,14 +38,12 @@ export type ValidateLookupLet<
     }>;
 
 /**
- * The sub-pipeline's user-binding environment: the enclosing pipeline's
- * `Env` (lookups nest — outer bindings stay visible) with this lookup's
- * `let` bindings layered on, each inferred against the OUTER schema in the
- * OUTER environment — the same authority the values were validated with.
- * The sub-pipeline's system variables resolve against the FOREIGN schema
- * (the resolvers' static tier), which is exactly MongoDB's scoping:
- * `$$ROOT` inside the sub-pipeline is the foreign document; the outer
- * document's fields come in through `let`.
+ * The sub-pipeline's user-binding environment: the enclosing `Env` (outer
+ * bindings stay visible in nested lookups) with this lookup's `let`
+ * bindings layered on, inferred against the OUTER schema/environment.
+ * System variables resolve against the FOREIGN schema instead — MongoDB's
+ * scoping: `$$ROOT` inside the sub-pipeline is the foreign document; the
+ * outer document comes in through `let`.
  */
 export type ResolveLookupLetEnv<
   Schema extends Document,
@@ -57,10 +51,8 @@ export type ResolveLookupLetEnv<
   Env extends Document,
   Vars extends Document = {},
 > = {
-  // ONE mapped type with lazy values — binding types are only computed
-  // when a `$$name` is actually looked up (an Omit/Prettify spelling
-  // stacks instantiation layers at the deepest point of lookup-lambda
-  // checking).
+  // Single lazy mapped type — no Omit/Prettify (see elements/CLAUDE.md on
+  // env-merge depth).
   [K in (keyof Let & string) | keyof Env]: K extends keyof Let ?
     InferNestedFieldReference<Schema, Let[K], Vars>
   : K extends keyof Env ? Env[K]

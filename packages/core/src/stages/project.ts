@@ -238,11 +238,8 @@ type ResolveFieldValue<
     // leaf for unknown DOTTED keys, contradicting this comment.
     GetFieldTypeOrError<Schema, Key>
   : Value extends `$$${string}` ?
-    // `$$`-variable reference ($$NOW, $$ROOT, "$$ROOT.name", ...) — must
-    // dispatch BEFORE the single-`$` ref arm below, which would misread
-    // "$$NOW" as a field path "$NOW" and brand it. $$REMOVE's `never`
-    // drops the field, which IS its semantics; unresolvable names degrade
-    // to `unknown` (validation owns rejection).
+    // `$$`-variable reference — must dispatch BEFORE the single-`$` arm,
+    // which would misread "$$NOW" as field path "$NOW" and brand it.
     InferVariableReference<Schema, Value & string, Vars>
   : Value extends `$${string}` ?
     // Field reference — a `$`-string check is far cheaper than FieldReference

@@ -106,10 +106,9 @@ const _setThenLookup = _p.set({ lookupKey: "$_id" }).lookup({
 });
 
 // =============================================================================
-// Test: .lookup() with `let` — bindings are inferred against the OUTER
-// schema and resolve, accurately typed, inside every sub-pipeline stage
-// (the Env generic threads them over each stage's system seed). `$$ROOT`
-// inside the sub-pipeline is the FOREIGN document (per-stage reseed).
+// Test: .lookup() with `let` — bindings infer against the OUTER schema and
+// resolve, accurately typed, inside every sub-pipeline stage; `$$ROOT`
+// there is the FOREIGN document.
 // =============================================================================
 const _lookupWithLet = _p.lookup({
   from: _otherCollection,

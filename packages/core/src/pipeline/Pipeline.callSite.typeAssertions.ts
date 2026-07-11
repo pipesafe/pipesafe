@@ -114,10 +114,8 @@ const _set_bad_typo_op_nested = new Pipeline<User>().set({
 const _set_generic_helper_ok = <D extends Document>(p: Pipeline<D, D>): void =>
   void p.set({ x: { $toUpper: "$y" }, y: { $add: [1, 2] } });
 
-// set — `$$`-system variables are not field references; they are accepted,
-// including DOTTED paths into the document-typed ones (VariableReferences);
-// a bad dotted path rejects at the constraint (finite union → TS2820-style
-// spelling suggestion, no validation walk needed).
+// set — `$$`-variable references are accepted, dotted paths included; a
+// bad dotted path rejects at the constraint (finite union).
 const _set_system_var_ok = new Pipeline<User>().set({
   a: { b: "$$REMOVE" },
   now: "$$NOW",
@@ -130,12 +128,10 @@ const _set_bad_sysvar_path_top = new Pipeline<User>().set({
   x: "$$ROOT.naem",
 });
 
-// set — $concat operands are validated ELEMENT-WISE (ValidateConcatValue):
-// plain strings of any shape (separators NoDollarString can't cover),
-// valid string refs, and `$$`-variable references that RESOLVE to strings
-// ("$$ROOT.name") pass; typo'd `$`-refs brand with the Field message; refs
-// to non-string fields, non-string literals, AND non-string system
-// variables ("$$NOW" is a Date) brand with the operator's RequiresMsg.
+// set — $concat operands validate ELEMENT-WISE: plain strings, valid
+// string refs, and string-RESOLVING `$$`-references ("$$ROOT.name") pass;
+// typo'd refs get the Field brand; non-string refs/literals/variables
+// ("$$NOW" is a Date) get the operator's RequiresMsg.
 const _set_concat_ok = new Pipeline<User>().set({
   greeting: { $concat: ["Hello ", "$name", " - ", "(", "", "$$ROOT.name"] },
 });
@@ -195,9 +191,8 @@ const _set_sysvar_operand_ok = new Pipeline<User>().set({
   expiry: { $dateAdd: { startDate: "$$NOW", unit: "day", amount: 30 } },
 });
 
-// set — $let interiors are validated WITH the block's bindings
-// (ValidateLetValue): bound `$$`-vars pass (including dotted paths into
-// document-typed ones), `vars` values are checked in the OUTER scope, and
+// set — $let interiors validate WITH the block's bindings: bound `$$`-vars
+// pass (dotted paths included), `vars` values check in the OUTER scope,
 // unknown `$$`-names inside `in` still brand.
 const _set_let_ok = new Pipeline<User>().set({
   agePlus: { $let: { vars: { t: "$age" }, in: { $add: ["$$t", 1] } } },
@@ -301,11 +296,9 @@ const _group_min_underscore_ok = new Pipeline<User>().group({
   m: { $min: "_pending" },
 });
 
-// group — `$$`-system variables are valid MongoDB in _id and in ANY
-// accumulator position (`$max: "$$NOW"`, `$push: "$$ROOT"`): they must not
-// hit the comparable/numeric operand brands. Dotted paths into
-// document-typed variables resolve ("$$ROOT.joinedAt"); a bad path brands
-// with the Field message.
+// group — `$$`-variables are valid in _id and ANY accumulator position
+// (they must not hit the comparable/numeric operand brands); dotted paths
+// resolve, bad paths get the Field brand.
 const _group_system_vars_ok = new Pipeline<User>().group({
   _id: "$$NOW",
   latest: { $max: "$$NOW" },
@@ -436,10 +429,8 @@ const _facet_bad = new Pipeline<User>().facet({
 });
 
 // ---------------------------------------------------------------------------
-// lookup `let` — bindings are validated against the OUTER schema/environment
-// and enter the sub-pipeline's environment (Pipeline's Env generic), where
-// they are accepted at string-value positions, resolve inside expressions,
-// and out-of-scope `$$`-names still reject.
+// lookup `let` — bindings validate against the OUTER schema/environment and
+// enter the sub-pipeline's environment (Pipeline's Env generic).
 // ---------------------------------------------------------------------------
 
 type Order = { _id: string; sku: string; qty: number };
@@ -468,13 +459,10 @@ const _lookup_let_bad_outer_ref = new Pipeline<User>().lookup({
 });
 
 // An Env'd Pipeline accepts its bindings at string-value positions. The
-// out-of-scope REJECTION ("$$typo") is pinned type-level in
-// validation.typeAssertions.ts instead of via a call: a failing value's
-// constraint elaboration force-evaluates the full value unions, and doing
-// that first-time at a call site surfaces a spurious TS2589 — a
-// PRE-EXISTING depth limitation (it reproduces on main for a plain
-// no-`let` lookup whose fresh foreign schema first evaluates the unions
-// inside the lambda's checking stack), not an Env regression.
+// out-of-scope rejection ("$$typo") is pinned type-level in
+// validation.typeAssertions.ts instead of via a call: first-time failure
+// elaboration at a call site can trip TS's depth limiter with a spurious
+// TS2589 (pre-existing — see the Known limitations note in CLAUDE.md).
 declare const _envPipeline: Pipeline<
   Order,
   Order,

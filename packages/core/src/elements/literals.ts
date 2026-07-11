@@ -10,16 +10,12 @@ import { PipeSafeError, UnknownSystemVariableError } from "../utils/errors";
 
 /**
  * MongoDB's documented `$$`-system variables, enumerated BY NAME — the
- * AUTHORITATIVE list (never widen a consumer to `` `$$${string}` `` where a
- * finite vocabulary is wanted). Finite literals are primitive-flagged, so
- * they autocomplete at string-value positions without absorbing sibling
- * literals and contribute nothing to object-literal key completions. An
- * unlisted `$$var` at a position typed with this union is rejected at the
- * constraint (undefined variables are runtime errors in MongoDB anyway);
- * `$let`/`$map`/`$filter`-bound USER variables resolve through the `Vars`
- * environment their binding arms thread down (see InferVariableReference).
- * The `satisfies` ties the list to SystemVariableSpec: adding a variable
- * here without its accurate type fails at this declaration.
+ * AUTHORITATIVE list (never widen a consumer to `` `$$${string}` ``; see
+ * the completion-safety invariants in the root CLAUDE.md). Bound USER
+ * variables resolve through the `Vars` environment instead
+ * (InferVariableReference). The `satisfies` ties the list to
+ * SystemVariableSpec: a variable added here without its accurate type
+ * fails at this declaration.
  */
 export const SYSTEM_VARIABLES = [
   "$$NOW",
@@ -36,16 +32,14 @@ export const SYSTEM_VARIABLES = [
 export type SystemVariable = (typeof SYSTEM_VARIABLES)[number];
 
 /**
- * Accurate result type of each system variable — the object-shaped
- * companion of SYSTEM_VARIABLES (the array stays AUTHORITATIVE via its
- * `satisfies`). `$$ROOT`/`$$CURRENT` are the current document (`$$CURRENT`
- * rebinding is not modeled); `$$REMOVE`'s `never` is load-bearing — the
- * resolvers strip never-typed fields, which IS the $$REMOVE semantics;
- * `$$DESCEND`/`$$PRUNE`/`$$KEEP` are opaque `$redact` action markers
- * (`unknown`); `$$SEARCH_META`'s shape depends on the search query, so it
- * stays a wide unknown-VALUED document — NOT `Document` (= `Record<string,
- * any>`): an `any`-valued index signature is structurally assignable to
- * Date & friends and would corrupt SystemVariablesThatInferTo.
+ * Accurate result type of each system variable. `$$ROOT`/`$$CURRENT` are
+ * the current document (`$$CURRENT` rebinding is not modeled); `$$REMOVE`'s
+ * `never` is load-bearing — resolvers strip never-typed fields, which IS
+ * its semantics; `$$DESCEND`/`$$PRUNE`/`$$KEEP` are opaque `$redact`
+ * markers. `$$SEARCH_META` must stay unknown-VALUED (not `Document` =
+ * `Record<string, any>`: an `any`-valued index signature is structurally
+ * assignable to Date & friends and would corrupt
+ * SystemVariablesThatInferTo).
  */
 export interface SystemVariableSpec<Schema extends Document> {
   $$NOW: Date;
@@ -61,26 +55,21 @@ export interface SystemVariableSpec<Schema extends Document> {
 }
 
 /**
- * `true` when the environment carries USER bindings — i.e. we are inside a
- * `$let`/`$map`/`$filter` interior or a `$lookup.let` sub-pipeline. The
- * validation kernel forks on this: registry operand relations are
- * Vars-blind, so they run as fast-accepts only, with the name/ref walk
- * catching the leftovers wherever a bound `$$var` could appear inside an
- * operand.
+ * `true` inside a `$let`/`$map`/`$filter` interior or `$lookup.let`
+ * sub-pipeline. The validation kernel forks on this: registry operand
+ * relations are Vars-blind, so they demote to fast-accepts with the
+ * name/ref walk catching the leftovers.
  */
 export type HasUserBindings<Vars extends Document> =
   [keyof Vars] extends [never] ? false : true;
 
 /**
- * The finite `$$`-reference VOCABULARY of the USER environment (an
- * enclosing `$lookup.let`'s bindings) — the acceptance companion of the
- * resolvers below, unioned with SystemVariableReferences at top-level
- * value positions so every in-scope variable autocompletes and an
- * out-of-scope one rejects at the constraint with TS's native spelling
- * suggestion. Each entry contributes its exact name plus dotted paths into
- * its type ("$$order.qty"). Wide-keyed entries contribute no dotted arm —
- * `string extends FieldPath<...>` would create a banned wide template —
- * and scalar/unknown-typed ones (FieldPath = never) none either.
+ * The finite `$$` acceptance vocabulary of the USER environment (lookup-let
+ * bindings): each entry's exact name plus dotted paths into its type
+ * ("$$order.qty"). Unioned with SystemVariableReferences at top-level value
+ * positions, so in-scope variables autocomplete and out-of-scope ones
+ * reject at the constraint. Wide-keyed entries contribute no dotted arm
+ * (a `${string}` template there is completion-banned).
  */
 export type VariableReferences<Vars extends Document> = {
   [K in keyof Vars & string]:
@@ -90,13 +79,11 @@ export type VariableReferences<Vars extends Document> = {
 }[keyof Vars & string];
 
 /**
- * The STATIC system-variable vocabulary: exact names plus dotted paths
- * into the document-typed ones ("$$ROOT.name", "$$USER_ROLES.role").
- * System variables are deliberately NOT threaded through the generic
- * tree as environment entries — seeding every `Vars` default with them
- * was measured at ~270k extra whole-project instantiations for zero
- * behavior change (see benchmarking/instantiation-budget.json history);
- * instead the resolvers fall back to SystemVariableSpec by name.
+ * The STATIC system-variable vocabulary: exact names plus dotted paths into
+ * the document-typed ones ("$$ROOT.name", "$$USER_ROLES.role"). System
+ * variables are deliberately NOT threaded as `Vars` entries — the resolvers
+ * fall back to SystemVariableSpec by name instead (measured trade-off; see
+ * elements/CLAUDE.md).
  */
 export type SystemVariableReferences<Schema extends Document> = {
   [K in SystemVariable]:
@@ -113,17 +100,13 @@ type DegradeErrorToUnknown<T> =
 type KeepBrand<T> = [T] extends [PipeSafeError<string>] ? T : never;
 
 /**
- * INFERENCE-side resolution of a `$$`-variable reference string, optionally
- * carrying a dotted path ("$$ROOT.name", "$$item.qty"). TWO-TIER: the
- * `Vars` USER environment (binder/lookup-let bindings, names WITHOUT the
- * `$$` prefix) is checked first, then the static SystemVariableSpec —
- * MongoDB user variables must begin lowercase, so the tiers cannot
- * collide. FORGIVING, mirroring InferExpression: anything unresolvable
- * (unknown variable name, bad path, opaque variable type) degrades to
- * `unknown` — never to a wrong type, and never to `never`, which would
- * silently DROP the field from resolvers (rejection is validation's job).
- * The one deliberate `never` is `$$REMOVE` (the spec's), whose
- * field-dropping IS the MongoDB semantics.
+ * INFERENCE-side resolution of a `$$`-reference, dotted paths included.
+ * TWO-TIER: the `Vars` USER environment (names WITHOUT the `$$` prefix)
+ * first, then the static SystemVariableSpec — MongoDB user variables must
+ * begin lowercase, so the tiers cannot collide. FORGIVING: anything
+ * unresolvable degrades to `unknown`, never to `never` (which would DROP
+ * the field from resolvers; rejection is validation's job). The one
+ * deliberate `never` is `$$REMOVE`, whose field-dropping IS its semantics.
  */
 export type InferVariableReference<
   Schema extends Document,
@@ -146,13 +129,10 @@ export type InferVariableReference<
 
 /**
  * VALIDATION-side sibling of InferVariableReference — same two-tier
- * resolution, opposite temperament. Contract (matching the validation
- * kernel): `never` = valid, anything else is the branded replacement.
- * Unknown names brand with UnknownSystemVariableError; a dotted path into a
- * known variable resolves through GetFieldTypeWithoutArrays — the same
- * authority inference uses — so a bad path gets the Field brand. Paths into
- * variables whose type is not statically known (opaque system variables,
- * bound variables that themselves degraded to `unknown`) are skipped.
+ * resolution, kernel contract (`never` = valid, else the branded
+ * replacement). Unknown names brand as unknown system variables; dotted
+ * paths resolve through the same authority inference uses, so a bad path
+ * gets the Field brand; statically-unknown variable types are skipped.
  */
 export type ValidateVariableReference<
   Schema extends Document,
@@ -182,16 +162,14 @@ export type ValidateVariableReference<
   : never;
 
 /**
- * The `$$`-sibling of FieldReferencesThatInferTo: variable references whose
- * accurate type is assignable to `T`, for typed operand sets ($dateAdd's
- * `startDate` accepts "$$NOW", array operands accept "$$USER_ROLES", a
- * numeric operand accepts "$$ROOT.price"). The dotted arms REUSE the
- * schema's cached ref→type map (FieldReferencesThatInferTo) via prefix
- * rewrite instead of building a second map. All arms are finite, so operand
- * unions stay completion-safe. `$$REMOVE`'s `never` is excluded explicitly
- * (`never` is assignable to every target). Operand sets are registry-level
- * (Vars-blind) by design: inside binder/lookup-let interiors the operand
- * relation is skipped entirely, so bound names never reach these sets.
+ * The `$$`-sibling of FieldReferencesThatInferTo, for typed operand sets
+ * ($dateAdd's `startDate` accepts "$$NOW"; a numeric operand accepts
+ * "$$ROOT.price"). The dotted arms REUSE the schema's cached ref→type map
+ * via prefix rewrite rather than building a second map; all arms are
+ * finite. `$$REMOVE`'s `never` is excluded explicitly (`never` is
+ * assignable to every target). Deliberately Vars-blind: binder/lookup-let
+ * interiors skip the operand relation, so bound names never reach these
+ * sets.
  */
 export type SystemVariablesThatInferTo<Schema extends Document, T> =
   | {
