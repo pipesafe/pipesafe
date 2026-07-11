@@ -22,7 +22,11 @@ import {
   GetFieldTypeOrError,
 } from "../elements/fieldSelector";
 import { ValidateNestedValue } from "../elements/validation";
-import { SystemVariable } from "../elements/literals";
+import {
+  InferVariableReference,
+  SystemVariableReferences,
+  VariableReferences,
+} from "../elements/literals";
 
 /**
  * $project stage query type
@@ -33,8 +37,9 @@ import { SystemVariable } from "../elements/literals";
  * - Expression operators: { newField: { $size: "$arrayField" } }
  * - Nested reshaping: { nested: { a: "$field1", b: "$field2" } }
  */
-// The value union for a $project assignment.
-type ProjectValue<Schema extends Document> =
+// The value union for a $project assignment. `Vars` is the stage's
+// variable environment (Pipeline threads lookup-let bindings through it).
+type ProjectValue<Schema extends Document, Vars extends Document = {}> =
   // Inclusion/exclusion flags (1/0/true/false). `number | boolean` IS the
   // literal set: TS normalizes `1 | 0 | number` to `number` and
   // `true | false` to `boolean` at union creation, so spelling the
@@ -55,7 +60,8 @@ type ProjectValue<Schema extends Document> =
   // `` & {} `` spelling leaks String.prototype. A typo'd ref or unlisted
   // `$$var` now rejects at the constraint with a "Did you mean" hint.
   | FieldReference<Schema>
-  | SystemVariable
+  | SystemVariableReferences<Schema>
+  | VariableReferences<Vars>
   // Plain string values are valid MongoDB literal assignments in $project
   // (only numeric/boolean literals require $literal).
   | NoDollarString
@@ -75,8 +81,11 @@ type ProjectValue<Schema extends Document> =
  * `ProjectValue<Schema>` union once per field-selector key blows the
  * whole-project typecheck from seconds to a multi-minute hang.
  */
-export type ProjectQuery<Schema extends Document> = {
-  [key: string]: ProjectValue<Schema>;
+export type ProjectQuery<
+  Schema extends Document,
+  Vars extends Document = {},
+> = {
+  [key: string]: ProjectValue<Schema, Vars>;
 } & FieldSelectorKeys<Schema, unknown>;
 
 // ---------------------------------------------------------------------------
@@ -128,16 +137,25 @@ type MixedProjectionError =
  * projection value); unknown keys carrying a flag brand; every other value
  * goes through the shared nested-validation kernel.
  */
-type ValidateProjectKey<Schema extends Document, P, K extends keyof P> =
+type ValidateProjectKey<
+  Schema extends Document,
+  P,
+  K extends keyof P,
+  Vars extends Document = {},
+> =
   [P[K]] extends [number | boolean] ?
     string extends keyof Schema ?
       never // unknown-key detection is meaningless on a wide schema
     : K extends FieldSelector<Schema> ? never
     : UnknownFieldError<K & string>
-  : ValidateNestedValue<Schema, P[K]>;
+  : ValidateNestedValue<Schema, P[K], Vars>;
 
-type ValidateProjectQueryKeys<Schema extends Document, P> = OmitNeverValues<{
-  [K in keyof P]: ValidateProjectKey<Schema, P, K>;
+type ValidateProjectQueryKeys<
+  Schema extends Document,
+  P,
+  Vars extends Document = {},
+> = OmitNeverValues<{
+  [K in keyof P]: ValidateProjectKey<Schema, P, K, Vars>;
 }>;
 
 /**
@@ -162,6 +180,7 @@ type ValidateProjectQueryKeys<Schema extends Document, P> = OmitNeverValues<{
 export type ValidateProjectQuery<
   Schema extends Document,
   P,
+  Vars extends Document = {},
   Inc extends boolean = HasInclusionsNonId<P>,
   Exc extends boolean = HasExclusionsNonId<P>,
 > =
@@ -184,18 +203,27 @@ export type ValidateProjectQuery<
         : P[K] extends 0 | false ? MixedProjectionError
         : never;
       }>
-    : ValidateProjectQueryKeys<Schema, P>
-  : ValidateProjectQueryKeys<Schema, P>;
+    : ValidateProjectQueryKeys<Schema, P, Vars>
+  : ValidateProjectQueryKeys<Schema, P, Vars>;
 
 // Helper: Resolve nested objects with field references and expressions.
 // InferNestedFieldReference key-dispatches expressions internally, so no
 // separate expression structural check is needed.
-type ResolveNestedProjection<Schema extends Document, Obj extends Document> = {
-  [K in keyof Obj]: InferNestedFieldReference<Schema, Obj[K]>;
+type ResolveNestedProjection<
+  Schema extends Document,
+  Obj extends Document,
+  Vars extends Document = {},
+> = {
+  [K in keyof Obj]: InferNestedFieldReference<Schema, Obj[K], Vars>;
 };
 
 // Helper: Resolve a single field value (handles both regular and dotted keys)
-type ResolveFieldValue<Schema extends Document, Value, Key extends string> =
+type ResolveFieldValue<
+  Schema extends Document,
+  Value,
+  Key extends string,
+  Vars extends Document = {},
+> =
   Value extends 0 | false ?
     // Exclusion - return never (field is excluded). Intentional: `never`
     // here means "the field is dropped from the output", which is correct.
@@ -209,16 +237,20 @@ type ResolveFieldValue<Schema extends Document, Value, Key extends string> =
     // unknown paths - a bare GetFieldType here silently produced a `never`
     // leaf for unknown DOTTED keys, contradicting this comment.
     GetFieldTypeOrError<Schema, Key>
+  : Value extends `$$${string}` ?
+    // `$$`-variable reference — must dispatch BEFORE the single-`$` arm,
+    // which would misread "$$NOW" as field path "$NOW" and brand it.
+    InferVariableReference<Schema, Value & string, Vars>
   : Value extends `$${string}` ?
     // Field reference — a `$`-string check is far cheaper than FieldReference
     // union membership; unknown paths brand via GetFieldTypeWithoutArrays.
     GetFieldTypeWithoutArrays<Schema, WithoutDollar<Value & string>>
   : HasOperatorKey<Value> extends true ?
     // $-keyed object = expression
-    InferExpression<Schema, Value>
+    InferExpression<Schema, Value, Vars>
   : Value extends Document ?
     // Nested object - recursively resolve field references and expressions within it
-    ResolveNestedProjection<Schema, Value>
+    ResolveNestedProjection<Schema, Value, Vars>
   : [Value] extends [string] ?
     Value // plain-string literal assignment (valid MongoDB; $-refs handled above)
   : PipeSafeError<`Stage '$project' requires a valid projection value for field '${Key}'.`>;
@@ -282,7 +314,11 @@ type DeepMergeProjection<T> =
 
 // Helper: Resolve inclusion mode projection
 // Use MergeNested to deeply merge nested intersections (e.g., { user: { name } } & { user: { email } })
-type ResolveInclusionMode<Schema extends Document, Query> = Prettify<
+type ResolveInclusionMode<
+  Schema extends Document,
+  Query,
+  Vars extends Document = {},
+> = Prettify<
   DeepMergeProjection<
     MergeNested<
       {},
@@ -305,14 +341,18 @@ type ResolveInclusionMode<Schema extends Document, Query> = Prettify<
         // branded at dispatch.
         [K in keyof NonDottedKeys<Query> as K extends "_id" ? never
         : Query[K] extends 0 | false ? never
-        : K]: ResolveFieldValue<Schema, Query[K], K & string>;
+        : K]: ResolveFieldValue<Schema, Query[K], K & string, Vars>;
       } & ExpandDottedProjection<Schema, Query>
     >
   >
 >;
 
 // Helper: Resolve exclusion mode projection
-type ResolveExclusionMode<Schema extends Document, Query> = Prettify<
+type ResolveExclusionMode<
+  Schema extends Document,
+  Query,
+  Vars extends Document = {},
+> = Prettify<
   {
     // Always include _id unless explicitly excluded (only if _id exists in schema)
     [K in "_id" as K extends keyof Schema ?
@@ -341,7 +381,7 @@ type ResolveExclusionMode<Schema extends Document, Query> = Prettify<
     [K in keyof Query as K extends "_id" ? never
     : Query[K] extends `$${string}` ? K
     : Query[K] extends Document ? K
-    : never]: ResolveFieldValue<Schema, Query[K], K & string>;
+    : never]: ResolveFieldValue<Schema, Query[K], K & string, Vars>;
   }
 >;
 
@@ -361,6 +401,7 @@ type ResolveExclusionMode<Schema extends Document, Query> = Prettify<
 export type ResolveProjectOutput<
   Schema extends Document,
   Query,
+  Vars extends Document = {},
   Inc extends boolean = HasInclusionsNonId<Query>,
   Exc extends boolean = HasExclusionsNonId<Query>,
 > = PassThrough<
@@ -369,10 +410,10 @@ export type ResolveProjectOutput<
     Exc extends true ?
       MixedProjectionError
     : // Inclusion mode
-      ResolveInclusionMode<Schema, Query>
+      ResolveInclusionMode<Schema, Query, Vars>
   : Exc extends true ?
     // Exclusion mode
-    ResolveExclusionMode<Schema, Query>
+    ResolveExclusionMode<Schema, Query, Vars>
   : // Default: inclusion mode (when only field references or nested objects)
-    ResolveInclusionMode<Schema, Query>
+    ResolveInclusionMode<Schema, Query, Vars>
 >;

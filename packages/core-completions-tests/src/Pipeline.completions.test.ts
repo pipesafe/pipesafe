@@ -115,6 +115,34 @@ const FIELD_REFS = [
 const NUMERIC_FIELD_REFS = ["$price", "$quantity"];
 
 /**
+ * The environment's full `$$`-reference vocabulary (VariableReferences):
+ * every system variable by name, plus dotted paths into the document-typed
+ * ones — $$ROOT/$$CURRENT expose the fixture's field paths, $$USER_ROLES
+ * its role-document element paths. $$SEARCH_META (wide-keyed) and the
+ * scalar/opaque variables contribute no dotted arm.
+ */
+const VARIABLE_REFS = [
+  ...SYSTEM_VARIABLES,
+  ...FIELD_PATHS.map((path) => `$$ROOT.${path}`),
+  ...FIELD_PATHS.map((path) => `$$CURRENT.${path}`),
+  "$$USER_ROLES._id",
+  "$$USER_ROLES.role",
+  "$$USER_ROLES.db",
+];
+
+/**
+ * Typed operand sets (SystemVariablesThatInferTo) include dotted
+ * $$ROOT/$$CURRENT rewrites of the type-matching field refs.
+ */
+const NUMERIC_OPERAND_REFS = [
+  ...NUMERIC_FIELD_REFS,
+  "$$ROOT.price",
+  "$$ROOT.quantity",
+  "$$CURRENT.price",
+  "$$CURRENT.quantity",
+];
+
+/**
  * The operator vocabularies (FIELD_MATCH_OPERATORS,
  * TOP_LEVEL_MATCH_OPERATORS, EXPRESSION_OPERATORS, ACCUMULATOR_OPERATORS)
  * are imported from @pipesafe/core — the same exported arrays core's
@@ -232,9 +260,9 @@ describe("set", () => {
   // to absorb the literals (a template wide enough to accept arbitrary
   // $-strings provably erases the refs from completions, and its `& {}`
   // spelling leaks String.prototype into sibling object positions).
-  it("suggests exactly the field references and system variables for a string value", () => {
+  it("suggests exactly the field references and variable references for a string value", () => {
     const probe = at(`orders.set({ total: "‸" });`);
-    expectExactly(probe, [...FIELD_REFS, ...SYSTEM_VARIABLES]);
+    expectExactly(probe, [...FIELD_REFS, ...VARIABLE_REFS]);
   });
 
   // Guards ResolveToPrimitive's literal-value arm: Date/ObjectId are
@@ -248,8 +276,9 @@ describe("set", () => {
 
   it("suggests exactly the type-matching field references inside a typed operand", () => {
     const probe = at(`orders.set({ total: { $add: ["‸"] } });`);
-    // ArithmeticOperand wants numbers: only the numeric refs qualify.
-    expectExactly(probe, NUMERIC_FIELD_REFS);
+    // ArithmeticOperand wants numbers: the numeric refs plus their dotted
+    // $$ROOT/$$CURRENT variable-reference rewrites qualify.
+    expectExactly(probe, NUMERIC_OPERAND_REFS);
   });
 });
 
@@ -264,9 +293,9 @@ describe("project", () => {
   // Guards ProjectValue's all-finite string arms (mirrors set): the
   // schema-derived FieldReference union plus the enumerated system
   // variables — no wide template to absorb them.
-  it("suggests exactly the field references and system variables for a string value", () => {
+  it("suggests exactly the field references and variable references for a string value", () => {
     const probe = at(`orders.project({ display: "‸" });`);
-    expectExactly(probe, [...FIELD_REFS, ...SYSTEM_VARIABLES]);
+    expectExactly(probe, [...FIELD_REFS, ...VARIABLE_REFS]);
   });
 
   it("suggests exactly the expression operators for a $-keyed value object", () => {
@@ -285,9 +314,9 @@ describe("group", () => {
   // and the index-signature arm): grouping by ANY field is valid MongoDB,
   // so array/document refs ($tags, $shipping, $items, …) must be offered
   // and accepted alongside the primitive-inferring ones.
-  it("suggests exactly the field references and system variables for _id", () => {
+  it("suggests exactly the field references and variable references for _id", () => {
     const probe = at(`orders.group({ _id: "‸" });`);
-    expectExactly(probe, [...FIELD_REFS, ...SYSTEM_VARIABLES]);
+    expectExactly(probe, [...FIELD_REFS, ...VARIABLE_REFS]);
   });
 
   // Guards the same ResolveToPrimitive fix as the set expression-object
@@ -299,7 +328,7 @@ describe("group", () => {
 
   it("suggests exactly the numeric field references for $sum", () => {
     const probe = at(`orders.group({ _id: null, total: { $sum: "‸" } });`);
-    expectExactly(probe, NUMERIC_FIELD_REFS);
+    expectExactly(probe, NUMERIC_OPERAND_REFS);
   });
 });
 
@@ -319,9 +348,9 @@ describe("path-string stages", () => {
     expectExactly(probe, ["newRoot"], { memberCompletion: true });
   });
 
-  it("replaceRoot newRoot suggests exactly the field references and system variables", () => {
+  it("replaceRoot newRoot suggests exactly the field references and variable references", () => {
     const probe = at(`orders.replaceRoot({ newRoot: "‸" });`);
-    expectExactly(probe, [...FIELD_REFS, ...SYSTEM_VARIABLES]);
+    expectExactly(probe, [...FIELD_REFS, ...VARIABLE_REFS]);
   });
 });
 
@@ -330,7 +359,7 @@ describe("structured stages", () => {
     const probe = at(`orders.lookup({ ‸ });`);
     expectExactly(
       probe,
-      ["from", "localField", "foreignField", "as", "pipeline"],
+      ["from", "localField", "foreignField", "as", "let", "pipeline"],
       {
         memberCompletion: true,
       }

@@ -66,11 +66,37 @@ before touching any Query/operand union.
 - `ResolveToPrimitive`'s literal-value arm carries Date/ObjectId as the
   keyless `object` — `{}` is NOT equivalent (it accepts primitive strings
   and breaks the replaceRoot `"$missing"` rejection pin).
-- `SYSTEM_VARIABLES`/`SystemVariable` (literals.ts) is the enumerated `$$`
-  vocabulary — never widen a consumer back to `` `$$${string}` ``. The
-  validation kernel brands unlisted names with `UnknownSystemVariableError`;
-  `$let`/`$map`/`$filter`-bound user variables never reach the walk (their
-  binding interiors are `unknown`-typed).
+- `Vars` threads the USER environment only (binder and lookup-let
+  bindings, names without the `$$` prefix; default `{}`); system variables
+  resolve through the resolvers' STATIC second tier (SystemVariableSpec,
+  which carries each variable's ACCURATE type: $$NOW → Date, $$ROOT →
+  Schema, $$REMOVE → the load-bearing `never`). Do NOT re-unify by seeding
+  the spec into the `Vars` defaults — the seeded-env design was measured
+  at ~270k extra whole-project instantiations for zero behavior change.
+  MongoDB user variables must begin lowercase, so the tiers cannot
+  collide. `$let`/`$map`/`$filter` binding arms extend the user env
+  (BindLetVars/BindVariable in expressions.ts — shared by inference and
+  validation, so the two environments cannot diverge); `$lookup.let`
+  enters it via Pipeline's `Env` generic.
+  `InferVariableReference`/`ValidateVariableReference` resolve `"$$name"`and dotted`"$$name.path"`; unlisted/unbound names brand with
+`UnknownSystemVariableError`. `SystemVariableReferences<Schema>`(static)
+and`VariableReferences<Vars>` (user) are the finite acceptance
+  vocabularies. The env-merge types
+  (ResolveLookupLetEnv/BindLetVars/BindVariable) are ONE mapped type each
+  with lazy values — Omit/Prettify spellings stack instantiation layers at
+  the deepest point of lookup-lambda checking and tripped TS2589.
+- The validation kernel's binder-interior (forgiving) branches run the
+  Vars-blind registry relation as FAST-ACCEPT ONLY, then walk. The
+  fast-accept doubles as the cycle breaker: without it, exploration with
+  the registry's own wide shapes recurses registry→operand-union→registry
+  until TS's depth limiter (TS2589 at every lookup-let sub-pipeline
+  stage).
+- ValidateArrayInputValue's non-`$`-string arm RELATES against the
+  registry's input operand; do NOT "improve" it into a ValidateNestedValue
+  re-entry — $filter is a member of ArrayProducingExpression (hence of
+  every ArrayOperand), and the walk re-entry from that position measurably
+  blows TS's instantiation-depth budget (TS2589 on unrelated `.set()` call
+  sites).
 
 ## Gotchas
 

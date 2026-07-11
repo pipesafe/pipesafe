@@ -16,6 +16,9 @@ import { Collection } from "../collection/Collection";
 import {
   ResolveLookupOutput,
   LookupForeignFieldOrError,
+  LookupLetQuery,
+  ResolveLookupLetEnv,
+  ValidateLookupLet,
 } from "../stages/lookup";
 import { ResolveGraphLookupOutput } from "../stages/graphLookup";
 import { FacetQuery, ResolveFacetOutput } from "../stages/facet";
@@ -129,13 +132,23 @@ export type PipelineBuilder<
   O extends Document,
   Mode extends LookupMode = "runtime",
   AllowedStages extends string = string,
-> = (p: Pipeline<D, D, Mode, never>) => Pipeline<D, O, Mode, AllowedStages>;
+  Env extends Document = {},
+> = (
+  p: Pipeline<D, D, Mode, never, Env>
+) => Pipeline<D, O, Mode, AllowedStages, Env>;
 
 export class Pipeline<
   StartingDocs extends Document = never,
   PreviousStageDocs extends Document = StartingDocs,
   Mode extends LookupMode = "runtime",
   UsedStages extends string = never,
+  /**
+   * USER variable bindings in scope — an enclosing `$lookup.let`'s
+   * inferred bindings, threaded into every stage's acceptance, validation,
+   * and inference (system variables resolve statically alongside it).
+   * `{}` for ordinary pipelines.
+   */
+  Env extends Document = {},
 > {
   /** @internal Phantom brand for stage tracking enforcement */
   declare readonly _usedStages: UsedStages;
@@ -177,12 +190,13 @@ export class Pipeline<
   private _chain<NewOutput extends Document, NewStage extends string = never>(
     newStages: Document[],
     additionalAncestors: Source<any>[] = []
-  ): Pipeline<StartingDocs, NewOutput, Mode, UsedStages | NewStage> {
+  ): Pipeline<StartingDocs, NewOutput, Mode, UsedStages | NewStage, Env> {
     const next = new Pipeline<
       StartingDocs,
       NewOutput,
       Mode,
-      UsedStages | NewStage
+      UsedStages | NewStage,
+      Env
     >({
       pipeline: [...this.pipeline, ...newStages],
       client: this.client,
@@ -208,22 +222,24 @@ export class Pipeline<
     StartingDocs,
     ResolveMatchOutput<PreviousStageDocs, M>,
     Mode,
-    UsedStages | "$match"
+    UsedStages | "$match",
+    Env
   > {
     return this._chain<ResolveMatchOutput<PreviousStageDocs, M>, "$match">([
       { $match },
     ]);
   }
 
-  set<const S extends SetQuery<PreviousStageDocs>>(
-    $set: S & ValidateSetQuery<PreviousStageDocs, S>
+  set<const S extends SetQuery<PreviousStageDocs, Env>>(
+    $set: S & ValidateSetQuery<PreviousStageDocs, S, Env>
   ): Pipeline<
     StartingDocs,
-    ResolveSetOutput<PreviousStageDocs, S>,
+    ResolveSetOutput<PreviousStageDocs, S, Env>,
     Mode,
-    UsedStages | "$set"
+    UsedStages | "$set",
+    Env
   > {
-    return this._chain<ResolveSetOutput<PreviousStageDocs, S>, "$set">([
+    return this._chain<ResolveSetOutput<PreviousStageDocs, S, Env>, "$set">([
       { $set },
     ]);
   }
@@ -234,7 +250,8 @@ export class Pipeline<
     StartingDocs,
     ResolveUnsetOutput<PreviousStageDocs, U>,
     Mode,
-    UsedStages | "$unset"
+    UsedStages | "$unset",
+    Env
   > {
     return this._chain<ResolveUnsetOutput<PreviousStageDocs, U>, "$unset">([
       { $unset },
@@ -256,6 +273,9 @@ export class Pipeline<
       LocalField
     >,
     NewKey extends string,
+    // `let` bindings: expressions over the OUTER schema/environment whose
+    // inferred types become the sub-pipeline builder's Env.
+    const Let extends LookupLetQuery<PreviousStageDocs, Env> = {},
     Foreign extends Document = InferSourceType<C>,
   >(
     $lookup:
@@ -264,28 +284,33 @@ export class Pipeline<
           localField: LocalField;
           foreignField: ForeignField;
           as: NewKey;
+          let?: Let & ValidateLookupLet<PreviousStageDocs, Let, Env>;
           pipeline?: PipelineBuilder<
             InferSourceType<C>,
             Foreign,
             Mode,
-            LookupAllowedStages
+            LookupAllowedStages,
+            ResolveLookupLetEnv<PreviousStageDocs, Let, Env, Env>
           >;
         }
       | {
           from: C;
           as: NewKey;
+          let?: Let & ValidateLookupLet<PreviousStageDocs, Let, Env>;
           pipeline: PipelineBuilder<
             InferSourceType<C>,
             Foreign,
             Mode,
-            LookupAllowedStages
+            LookupAllowedStages,
+            ResolveLookupLetEnv<PreviousStageDocs, Let, Env, Env>
           >;
         }
   ): Pipeline<
     StartingDocs,
     ResolveLookupOutput<PreviousStageDocs, NewKey, Foreign>,
     Mode,
-    UsedStages | "$lookup"
+    UsedStages | "$lookup",
+    Env
   > {
     const { from, pipeline, ...$lookupRest } = $lookup;
 
@@ -294,7 +319,7 @@ export class Pipeline<
 
     const resolvedPipeline =
       pipeline ?
-        (pipeline as PipelineBuilder<any, any, any, any>)(
+        (pipeline as PipelineBuilder<any, any, any, any, any>)(
           new Pipeline<InferSourceType<C>, InferSourceType<C>, Mode, never>({
             collectionName,
           })
@@ -375,7 +400,8 @@ export class Pipeline<
       RestrictMatch
     >,
     Mode,
-    UsedStages | "$graphLookup"
+    UsedStages | "$graphLookup",
+    Env
   > {
     const { from, ...rest } = $graphLookup;
 
@@ -407,17 +433,18 @@ export class Pipeline<
   // position (compound `_id` expressions break under a bare mapped wrapper)
   // while ValidateGroupQuery re-checks accumulator operands — key-filtered,
   // so a fully-valid query validates against `{}` (see stages/group.ts).
-  group<const G extends GroupQuery<PreviousStageDocs>>(
-    $group: G & ValidateGroupQuery<PreviousStageDocs, G>
+  group<const G extends GroupQuery<PreviousStageDocs, Env>>(
+    $group: G & ValidateGroupQuery<PreviousStageDocs, G, Env>
   ): Pipeline<
     StartingDocs,
-    ResolveGroupOutput<PreviousStageDocs, G>,
+    ResolveGroupOutput<PreviousStageDocs, G, Env>,
     Mode,
-    UsedStages | "$group"
+    UsedStages | "$group",
+    Env
   > {
-    return this._chain<ResolveGroupOutput<PreviousStageDocs, G>, "$group">([
-      { $group },
-    ]);
+    return this._chain<ResolveGroupOutput<PreviousStageDocs, G, Env>, "$group">(
+      [{ $group }]
+    );
   }
 
   // The validate and resolve positions each compute the projection modes
@@ -428,29 +455,32 @@ export class Pipeline<
   // expression literals once its value arms are conditionals (same failure
   // class as group's compound-_id) — while ValidateProjectQuery re-checks
   // keys, projection mode, and values.
-  project<const P extends ProjectQuery<PreviousStageDocs>>(
-    $project: P & ValidateProjectQuery<PreviousStageDocs, P>
+  project<const P extends ProjectQuery<PreviousStageDocs, Env>>(
+    $project: P & ValidateProjectQuery<PreviousStageDocs, P, Env>
   ): Pipeline<
     StartingDocs,
-    ResolveProjectOutput<PreviousStageDocs, P>,
+    ResolveProjectOutput<PreviousStageDocs, P, Env>,
     Mode,
-    UsedStages | "$project"
+    UsedStages | "$project",
+    Env
   > {
-    return this._chain<ResolveProjectOutput<PreviousStageDocs, P>, "$project">([
-      { $project },
-    ]);
+    return this._chain<
+      ResolveProjectOutput<PreviousStageDocs, P, Env>,
+      "$project"
+    >([{ $project }]);
   }
 
-  replaceRoot<const R extends ReplaceRootQuery<PreviousStageDocs>>(
+  replaceRoot<const R extends ReplaceRootQuery<PreviousStageDocs, Env>>(
     $replaceRoot: R
   ): Pipeline<
     StartingDocs,
-    ResolveReplaceRootOutput<PreviousStageDocs, R>,
+    ResolveReplaceRootOutput<PreviousStageDocs, R, Env>,
     Mode,
-    UsedStages | "$replaceRoot"
+    UsedStages | "$replaceRoot",
+    Env
   > {
     return this._chain<
-      ResolveReplaceRootOutput<PreviousStageDocs, R>,
+      ResolveReplaceRootOutput<PreviousStageDocs, R, Env>,
       "$replaceRoot"
     >([{ $replaceRoot }]);
   }
@@ -465,7 +495,8 @@ export class Pipeline<
     StartingDocs,
     ResolveSortOutput<PreviousStageDocs>,
     Mode,
-    UsedStages | "$sort"
+    UsedStages | "$sort",
+    Env
   > {
     return this._chain<ResolveSortOutput<PreviousStageDocs>, "$sort">([
       { $sort },
@@ -482,7 +513,8 @@ export class Pipeline<
     StartingDocs,
     ResolveLimitOutput<PreviousStageDocs>,
     Mode,
-    UsedStages | "$limit"
+    UsedStages | "$limit",
+    Env
   > {
     return this._chain<ResolveLimitOutput<PreviousStageDocs>, "$limit">([
       { $limit: n },
@@ -499,7 +531,8 @@ export class Pipeline<
     StartingDocs,
     ResolveSkipOutput<PreviousStageDocs>,
     Mode,
-    UsedStages | "$skip"
+    UsedStages | "$skip",
+    Env
   > {
     return this._chain<ResolveSkipOutput<PreviousStageDocs>, "$skip">([
       { $skip: n },
@@ -516,7 +549,8 @@ export class Pipeline<
     StartingDocs,
     ResolveSampleOutput<PreviousStageDocs>,
     Mode,
-    UsedStages | "$sample"
+    UsedStages | "$sample",
+    Env
   > {
     return this._chain<ResolveSampleOutput<PreviousStageDocs>, "$sample">([
       { $sample },
@@ -534,7 +568,8 @@ export class Pipeline<
     StartingDocs,
     ResolveCountOutput<PreviousStageDocs, F>,
     Mode,
-    UsedStages | "$count"
+    UsedStages | "$count",
+    Env
   > {
     return this._chain<ResolveCountOutput<PreviousStageDocs, F>, "$count">([
       { $count: fieldName },
@@ -560,7 +595,8 @@ export class Pipeline<
       IndexField
     >,
     Mode,
-    UsedStages | "$unwind"
+    UsedStages | "$unwind",
+    Env
   > {
     return this._chain<
       ResolveUnwindOutput<
@@ -579,11 +615,14 @@ export class Pipeline<
     $unionWith:
       | {
           coll: C;
+          // Env propagates: an enclosing lookup-let's bindings stay in
+          // scope inside nested sub-pipelines.
           pipeline?: PipelineBuilder<
             InferSourceType<C>,
             Foreign,
             Mode,
-            UnionWithAllowedStages
+            UnionWithAllowedStages,
+            Env
           >;
         }
       | {
@@ -592,14 +631,16 @@ export class Pipeline<
             InferSourceType<C>,
             Foreign,
             Mode,
-            UnionWithAllowedStages
+            UnionWithAllowedStages,
+            Env
           >;
         }
   ): Pipeline<
     StartingDocs,
     ResolveUnionWithOutput<PreviousStageDocs, Foreign>,
     Mode,
-    UsedStages | "$unionWith"
+    UsedStages | "$unionWith",
+    Env
   > {
     const { coll, pipeline } = $unionWith;
 
@@ -608,7 +649,7 @@ export class Pipeline<
 
     const resolvedPipeline =
       pipeline ?
-        (pipeline as PipelineBuilder<any, any, any, any>)(
+        (pipeline as PipelineBuilder<any, any, any, any, any>)(
           new Pipeline<InferSourceType<C>, InferSourceType<C>, Mode, never>()
         )
       : undefined;
@@ -647,20 +688,21 @@ export class Pipeline<
    *   topItems: (p) => p.sort({ price: -1 }).limit(5),
    * })
    */
-  facet<const F extends FacetQuery<PreviousStageDocs, Mode>>(
+  facet<const F extends FacetQuery<PreviousStageDocs, Mode, Env>>(
     $facet: F
   ): Pipeline<
     StartingDocs,
     ResolveFacetOutput<PreviousStageDocs, F>,
     Mode,
-    UsedStages | "$facet"
+    UsedStages | "$facet",
+    Env
   > {
     const facetStage: Record<string, Document[]> = {};
     const ancestors: Source<any>[] = [];
 
     for (const [key, builder] of Object.entries($facet)) {
-      const subPipeline = (builder as PipelineBuilder<any, any, any, any>)(
-        new Pipeline<PreviousStageDocs, PreviousStageDocs, Mode, never>()
+      const subPipeline = (builder as PipelineBuilder<any, any, any, any, any>)(
+        new Pipeline<PreviousStageDocs, PreviousStageDocs, Mode, never, Env>()
       );
       facetStage[key] = subPipeline.getPipeline();
       ancestors.push(...subPipeline.getAncestorsFromStages());
@@ -692,7 +734,7 @@ export class Pipeline<
    */
   merge(
     $merge: MergeQuery<PreviousStageDocs>
-  ): Pipeline<StartingDocs, never, Mode, UsedStages | "$merge"> {
+  ): Pipeline<StartingDocs, never, Mode, UsedStages | "$merge", Env> {
     return this._chain<never, "$merge">([{ $merge }]);
   }
 
