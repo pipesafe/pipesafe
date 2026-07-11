@@ -257,7 +257,7 @@ TODO: Document the rest of the stages
 ### Workflow for Type Assertions
 
 1. **Use IDE/LSP for fast iteration** - The TypeScript LSP provides instant feedback without running builds
-2. **The real type gate is per-package**: `bun run typecheck:packages` (from the root; runs `tsc --noEmit` in core then manifold — manifold needs a fresh core `bun run build` first). The root `bun run typecheck` resolves project references to built `dist/` declarations and does NOT re-check `packages/*/src` — including the `*.typeAssertions.ts` files
+2. **The real type gate is per-package**: `bun run typecheck:packages` (from the root; runs `tsc --noEmit --project tsconfig.typecheck.json` in core then manifold — manifold needs a fresh core `bun run build` first). Each package's `tsconfig.typecheck.json` re-includes `*.test.ts` (the build `tsconfig.json` excludes tests so they stay out of `dist` — do not point typecheck back at it). The root `bun run typecheck` resolves project references to built `dist/` declarations and does NOT re-check `packages/*/src` — including the `*.typeAssertions.ts` files
 3. **When types don't match**, use `inspect-types.ts` to see the actual inferred type:
    ```bash
    bun run tsx .claude/inspect-types.ts <variableName> [fileName]

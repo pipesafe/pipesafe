@@ -6,6 +6,8 @@ import {
   RenameOptions,
   DbStatsOptions,
   RunCommandOptions,
+  DbOptions,
+  CollectionOptions,
 } from "mongodb";
 import { Document } from "../utils/objects";
 import { Collection } from "../collection/Collection";
@@ -15,12 +17,16 @@ import { tagClient } from "../singleton/tagClient";
 export class Database {
   private client: MongoClient | undefined;
   private databaseName: string;
+  private dbOptions: DbOptions | undefined;
   constructor(args: {
     client?: MongoClient | undefined;
     databaseName: string;
+    /** Driver `DbOptions` (read/write concern, read preference, etc.) */
+    options?: DbOptions | undefined;
   }) {
     this.client = args.client;
     this.databaseName = args.databaseName;
+    this.dbOptions = args.options;
     tagClient(this.client);
   }
 
@@ -29,12 +35,15 @@ export class Database {
   }
 
   collection<Schema extends Document>(
-    collectionName: string
+    collectionName: string,
+    options?: CollectionOptions
   ): Collection<Schema> {
     return new Collection<Schema>({
       client: this.client,
       databaseName: this.databaseName,
       collectionName,
+      dbOptions: this.dbOptions,
+      collectionOptions: options,
     });
   }
 
@@ -52,7 +61,7 @@ export class Database {
 
   private getDatabase() {
     const client = this.getClient();
-    return client.db(this.databaseName);
+    return client.db(this.databaseName, this.dbOptions);
   }
 
   // Collection Management

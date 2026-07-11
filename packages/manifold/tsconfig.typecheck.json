@@ -1,0 +1,20 @@
+// Type-gate config: the build tsconfig excludes *.test.ts so tests never
+// land in dist, but the typecheck script must still cover them (manifold
+// tests were previously type-checked by nothing at all).
+// rootDir widens to the repo root because tests import core's
+// useMemoryMongo fixture across the package boundary; emit is off, so
+// this only affects path validation.
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/**/*.ts"],
+  "exclude": ["dist", "node_modules"],
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    // declaration stays ON so tsc computes .d.ts-portability diagnostics
+    // (TS2742/TS4023) under --noEmit — tsdown's dts emit does not run them
+    "declaration": true,
+    "declarationMap": false,
+    "rootDir": "../.."
+  }
+}
