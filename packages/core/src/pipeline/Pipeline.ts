@@ -715,9 +715,15 @@ export class Pipeline<
   /**
    * Run the aggregation and return the driver cursor.
    *
-   * `aggregateOptions` are the driver's `AggregateOptions` and cover both
-   * per-query tuning (`maxTimeMS`, `allowDiskUse`, `hint`, `comment`, ...)
-   * and transaction support via `session`.
+   * `aggregateOptions` are the driver's `AggregateOptions` — the options
+   * that belong to this execution itself: per-query tuning (`maxTimeMS`,
+   * `allowDiskUse`, `hint`, `comment`, ...) and transaction support via
+   * `session`.
+   *
+   * Db/collection-level options are configured where those layers are
+   * created (`pipesafe.db()`, `Database.collection()`, or the
+   * `Collection`/`Pipeline` constructors) and flow down — execute()
+   * cannot override a parent layer's configuration.
    *
    * @example
    * .execute({ aggregateOptions: { session, maxTimeMS: 5000 } })
@@ -727,10 +733,6 @@ export class Pipeline<
       client?: MongoClient;
       databaseName?: string;
       collectionName?: string;
-      /** Driver `DbOptions`, merged per key over any inherited from the source */
-      dbOptions?: DbOptions;
-      /** Driver `CollectionOptions`, merged per key over any inherited from the source */
-      collectionOptions?: CollectionOptions;
       /** Driver `AggregateOptions` (e.g. `session`, `maxTimeMS`, `allowDiskUse`) */
       aggregateOptions?: AggregateOptions;
     } = {}
@@ -740,19 +742,13 @@ export class Pipeline<
     tagClient(client);
 
     const db = args.databaseName ?? this.databaseName;
-    // Per-key merge: execute-time options override inherited ones key by key
-    const dbOptions = { ...this.dbOptions, ...args.dbOptions };
-    const collectionOptions = {
-      ...this.collectionOptions,
-      ...args.collectionOptions,
-    };
 
     const collection = args.collectionName ?? this.collectionName;
     if (!collection) throw new Error("No collection name provided");
 
     return client
-      .db(db, dbOptions)
-      .collection(collection, collectionOptions)
+      .db(db, this.dbOptions)
+      .collection(collection, this.collectionOptions)
       .aggregate(this.getPipeline(), args.aggregateOptions);
   }
 }

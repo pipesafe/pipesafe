@@ -32,37 +32,30 @@ describe("Connection and query options", async () => {
     expect(mongoCollection.readPreference?.mode).toBe("secondaryPreferred");
   });
 
-  it("merges execute-level options per key over inherited options", () => {
-    const majority = new ReadConcern("majority");
+  it("passes each layer's configured options to the driver at execute", () => {
+    const dbOptions = { readConcern: new ReadConcern("majority") };
+    const collectionOptions = { readPreference: "secondaryPreferred" } as const;
     const collection = new Collection<TestDoc>({
       client,
       databaseName: DBName,
-      collectionName: "merge_docs",
-      dbOptions: { readConcern: majority },
-      collectionOptions: {
-        readConcern: { level: "majority" },
-        readPreference: "primary",
-      },
+      collectionName: "inherit_docs",
+      dbOptions,
+      collectionOptions,
     });
 
     const dbSpy = vi.spyOn(MongoClient.prototype, "db");
     const collectionSpy = vi.spyOn(Db.prototype, "collection");
     try {
-      // Cursor is lazy, so no server round-trip happens here
-      collection.aggregate().execute({
-        dbOptions: { retryWrites: false },
-        collectionOptions: { readPreference: "secondaryPreferred" },
-      });
+      // Cursor is lazy, so no server round-trip happens here. Each layer's
+      // options are set where the layer is created and flow down —
+      // execute() takes only the aggregation's own AggregateOptions.
+      collection.aggregate().execute();
 
-      // Provided keys override; the rest of the inherited options survive
-      expect(dbSpy).toHaveBeenLastCalledWith(DBName, {
-        readConcern: majority,
-        retryWrites: false,
-      });
-      expect(collectionSpy).toHaveBeenLastCalledWith("merge_docs", {
-        readConcern: { level: "majority" },
-        readPreference: "secondaryPreferred",
-      });
+      expect(dbSpy).toHaveBeenLastCalledWith(DBName, dbOptions);
+      expect(collectionSpy).toHaveBeenLastCalledWith(
+        "inherit_docs",
+        collectionOptions
+      );
     } finally {
       dbSpy.mockRestore();
       collectionSpy.mockRestore();
