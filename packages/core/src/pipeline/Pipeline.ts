@@ -725,8 +725,18 @@ export class Pipeline<
    * `Collection`/`Pipeline` constructors) and flow down — execute()
    * cannot override a parent layer's configuration.
    *
+   * `client`/`databaseName`/`collectionName` are ADDRESSING, not
+   * configuration, and are deliberately execute-time: a standalone
+   * pipeline built without a target is reusable across databases and
+   * collections, re-targeted per execution.
+   *
    * @example
    * .execute({ aggregateOptions: { session, maxTimeMS: 5000 } })
+   *
+   * @example // Reuse one pipeline across targets
+   * const active = new Pipeline<User>().match({ active: true });
+   * active.execute({ client, databaseName: "eu", collectionName: "users" });
+   * active.execute({ client, databaseName: "us", collectionName: "users" });
    */
   execute(
     args: {
