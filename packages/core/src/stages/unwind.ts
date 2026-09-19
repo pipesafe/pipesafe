@@ -60,32 +60,31 @@ export type ResolveUnwindOutput<
   IndexField extends string = never,
 > = PassThrough<
   Schema,
-  Schema extends unknown ?
-    Prettify<
-      {
-        [K in keyof Schema]: K extends Path ? UnwoundField<Schema[K]>
-        : Schema[K];
-      } & ([IndexField] extends [never] ? {} : { [K in IndexField]: number })
-    >
-  : never
+  Schema extends unknown
+    ? Prettify<
+        {
+          [K in keyof Schema]: K extends Path
+            ? UnwoundField<Schema[K]>
+            : Schema[K];
+        } & ([IndexField] extends [never] ? {} : { [K in IndexField]: number })
+      >
+    : never
 >;
 
 /**
  * Helper to extract path from unwind query (string or options object)
  */
-export type ExtractUnwindPath<Query> =
-  Query extends string ? WithoutDollar<Query>
-  : Query extends { path: infer P extends string } ? WithoutDollar<P>
-  : never;
+export type ExtractUnwindPath<Query> = Query extends string
+  ? WithoutDollar<Query>
+  : Query extends { path: infer P extends string }
+    ? WithoutDollar<P>
+    : never;
 
 /**
  * Helper to extract index field from unwind options
  */
-export type ExtractIndexField<Query> =
-  Query extends (
-    {
-      includeArrayIndex: infer I extends string;
-    }
-  ) ?
-    I
+export type ExtractIndexField<Query> = Query extends {
+  includeArrayIndex: infer I extends string;
+}
+  ? I
   : never;

@@ -644,8 +644,9 @@ type _Compat_String = LookupForeignFieldOrError<
 // Should be "_id" | "tag" — assert it's not a PipeSafeError.
 type _Assert_Compat_NotBrand = Assert<
   Equal<
-    _Compat_String extends { readonly "~pipesafe.error": string } ? true
-    : false,
+    _Compat_String extends { readonly "~pipesafe.error": string }
+      ? true
+      : false,
     false
   >
 >;
