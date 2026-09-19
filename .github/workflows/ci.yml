@@ -23,6 +23,14 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # Type-aware linting needs the workspace built for the same reason
+      # typecheck:packages does: manifold and the completions tests import
+      # @pipesafe/core, which resolves to core's dist. Without this, every
+      # cross-package type is `error` and the no-unsafe-* rules report
+      # hundreds of phantom findings.
+      - name: Build packages
+        run: bun run build
+
       - name: Lint
         run: bun run lint
 
