@@ -66,6 +66,15 @@ type DateOperand<
 >;
 
 /**
+ * Operand of the date-part operators ($hour, $dayOfWeek, $month, ...), which
+ * MongoDB accepts either as a bare date expression or as the
+ * `{ date, timezone }` object form.
+ */
+type DatePartOperand<Schema extends Document, Op extends string> =
+  | DateOperand<Schema, Op>
+  | { date: DateOperand<Schema, Op>; timezone?: string };
+
+/**
  * Arithmetic expression operands — numbers, field references to numbers, or
  * nested expressions. The branded `PipeSafeError` arm surfaces in IDE hovers
  * when a user passes a non-numeric field reference (e.g. `'$stringField'`)
@@ -302,6 +311,42 @@ export interface ExpressionSpec<Schema extends Document> {
     operand: ArithmeticOperand<Schema, "$toDate">;
     returns: Date;
   };
+  /**
+   * The date-part family. Thirteen operators with one operand shape and one
+   * result type between them, so they are registered as a block rather than
+   * as thirteen paragraphs that would each say the same thing.
+   */
+  $year: { operand: DatePartOperand<Schema, "$year">; returns: number };
+  $month: { operand: DatePartOperand<Schema, "$month">; returns: number };
+  $dayOfMonth: {
+    operand: DatePartOperand<Schema, "$dayOfMonth">;
+    returns: number;
+  };
+  $dayOfWeek: {
+    operand: DatePartOperand<Schema, "$dayOfWeek">;
+    returns: number;
+  };
+  $dayOfYear: {
+    operand: DatePartOperand<Schema, "$dayOfYear">;
+    returns: number;
+  };
+  $hour: { operand: DatePartOperand<Schema, "$hour">; returns: number };
+  $minute: { operand: DatePartOperand<Schema, "$minute">; returns: number };
+  $second: { operand: DatePartOperand<Schema, "$second">; returns: number };
+  $millisecond: {
+    operand: DatePartOperand<Schema, "$millisecond">;
+    returns: number;
+  };
+  $week: { operand: DatePartOperand<Schema, "$week">; returns: number };
+  $isoDayOfWeek: {
+    operand: DatePartOperand<Schema, "$isoDayOfWeek">;
+    returns: number;
+  };
+  $isoWeek: { operand: DatePartOperand<Schema, "$isoWeek">; returns: number };
+  $isoWeekYear: {
+    operand: DatePartOperand<Schema, "$isoWeekYear">;
+    returns: number;
+  };
 
   // --- Arithmetic operators (all return number) -----------------------------
   $add: {
@@ -469,19 +514,6 @@ export type UnimplementedExpressionOps =
   | "$dateFromParts"
   | "$dateFromString"
   | "$dateToParts"
-  | "$dayOfMonth"
-  | "$dayOfWeek"
-  | "$dayOfYear"
-  | "$hour"
-  | "$isoDayOfWeek"
-  | "$isoWeek"
-  | "$isoWeekYear"
-  | "$millisecond"
-  | "$minute"
-  | "$month"
-  | "$second"
-  | "$week"
-  | "$year"
   // Miscellaneous
   | "$getField"
   | "$rand"
@@ -617,6 +649,19 @@ export const DATE_EXPRESSION_OPERATORS = [
   "$dateAdd",
   "$dateSubtract",
   "$toDate",
+  "$year",
+  "$month",
+  "$dayOfMonth",
+  "$dayOfWeek",
+  "$dayOfYear",
+  "$hour",
+  "$minute",
+  "$second",
+  "$millisecond",
+  "$week",
+  "$isoDayOfWeek",
+  "$isoWeek",
+  "$isoWeekYear",
 ] as const;
 type DateOps = (typeof DATE_EXPRESSION_OPERATORS)[number];
 

@@ -612,6 +612,34 @@ type NestedExpressionIdTest = Assert<
   Equal<NestedExpressionIdResult, NestedExpressionIdExpected>
 >;
 
+// Test 19d: date-part operators in _id field, in both operand forms
+type DatePartIdSchema = {
+  ts: Date;
+  playerId: string;
+};
+
+type DatePartIdGroup = {
+  _id: {
+    playerId: "$playerId";
+    bucket: { $hour: { date: "$ts"; timezone: "Europe/London" } };
+    weekday: { $dayOfWeek: "$ts" };
+  };
+  n: { $sum: 1 };
+};
+
+type DatePartIdResult = ResolveGroupOutput<DatePartIdSchema, DatePartIdGroup>;
+
+type DatePartIdExpected = {
+  _id: {
+    playerId: string;
+    bucket: number;
+    weekday: number;
+  };
+  n: number;
+};
+
+type DatePartIdTest = Assert<Equal<DatePartIdResult, DatePartIdExpected>>;
+
 // ============================================================================
 // Test 20: $first and $last aggregators
 // ============================================================================
@@ -675,6 +703,7 @@ export type {
   DateToStringIdTest,
   ArithmeticIdTest,
   NestedExpressionIdTest,
+  DatePartIdTest,
   FirstLastTest,
 };
 
