@@ -34,9 +34,8 @@ describe("Connections", async () => {
       pipesafe.connect(memoryMongoUri);
     });
 
-    // The singleton is module state, and with `test.isolate` off the module
-    // registry outlives this file: a connection left open here would make the
-    // next `connect` throw "Already connected".
+    // The singleton holds its own MongoClient, which is not the one
+    // `useMemoryMongo` closes. Left open it outlives the file.
     afterAll(async () => {
       await pipesafe.close();
     });

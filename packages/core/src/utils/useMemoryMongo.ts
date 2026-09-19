@@ -25,8 +25,21 @@ declare module "vitest" {
  * around it, and they did.
  *
  * One server, one database per file. Suites still cannot see each other's
- * data, and because the boundary is now the database rather than the process,
- * `test.isolate` is off (see vitest.config.ts).
+ * data; the boundary moved from the process to the database.
+ *
+ * Two things follow from the server outliving the file, and they bite in that
+ * order:
+ *
+ * - Databases no longer disappear when a suite ends, so anything a test
+ *   creates has to be cleaned up on purpose. That is what the `afterEach`
+ *   and `afterAll` below are for, and a suite that makes databases of its own
+ *   has to drop them itself or they pile up in the shared instance.
+ * - Suite isolation (`test.isolate`) is a SEPARATE decision, not something a
+ *   shared server unlocks. Measured on a suite of this shape it was slower
+ *   with isolation off, and module state leaked between files — a
+ *   `vi.mock("node:fs")` and a prototype spy escaped their suites and failed
+ *   fifteen tests that passed alone. Leave it on unless a project has
+ *   measured otherwise for itself.
  */
 export const useMemoryMongo = async () => {
   const databaseName = uniqueDatabaseName();
