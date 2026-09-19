@@ -5,3 +5,6 @@ dist
 benchmarks/
 .claude/
 
+# Written by `oxlint --suppress-all` / `--prune-suppressions`; oxlint owns its
+# formatting (it emits no trailing newline) and rewrites it wholesale.
+oxlint-suppressions.json

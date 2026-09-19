@@ -244,10 +244,15 @@ TODO: Document the rest of the stages
 - Suppressing formatter/lint findings is unacceptable — no `// prettier-ignore`
   or `// oxlint-disable*` (nor the `eslint-disable*` spelling oxlint still
   honours) anywhere; restructure the code until the tools pass. The one
-  exception is `oxlint-suppressions.json`, the bulk-suppression file that
-  carries the pre-existing findings for rules enabled by `strictTypeChecked`;
-  it only ever shrinks — never run `oxlint --suppress-all` to add a new entry,
-  fix the finding instead.
+  exception is `oxlint-suppressions.json`, which carries the findings that
+  already existed when `strict-type-checked` was switched on. It only ever
+  shrinks: fix findings and run `oxlint --prune-suppressions`. NEVER run
+  `oxlint --suppress-all` to make new code pass — the counts are per file
+  and per rule, so one extra violation in an already-listed file still fails.
+  `bun run lint:fix` is NOT part of the pre-commit hook and is not safe to
+  run blind: `oxlint --fix` fixes suppressed violations too, and its
+  `no-unnecessary-type-assertion` fix strips the `as T` that assertion files
+  exist to pin. Run it deliberately and read the diff.
   In assertion files, put `@ts-expect-error` on the exact line the error
   reports (a directive binds to the next line only; a multi-line statement may
   need one per reporting line) — never collapse a statement onto one line to

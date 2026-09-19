@@ -1,5 +1,11 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
+  // typescript-eslint's `strict-type-checked` set, named once rather than
+  // re-listed rule by rule. Oxlint has no built-in preset names, so the set
+  // is vendored (generated, not curated) at the path below — see the header
+  // of that file. This is what the old eslint.config.js meant to extend and
+  // did not (#114).
+  "extends": [".oxlint/strict-type-checked.json"],
   // Oxlint's default plugin set, spelled out because listing `plugins` at all
   // replaces it.
   "plugins": ["typescript", "oxc", "unicorn"],
@@ -9,70 +15,20 @@
     "correctness": "error"
   },
   // Type-aware rules run through tsgolint (`oxlint-tsgolint`), which builds
-  // the TypeScript programs with typescript-go. Without this, every rule
-  // below that needs type information is silently inert — which is exactly
-  // what #114 was about. `bun run lint` passes `--type-aware` too, so the
-  // flag is there whichever way oxlint is invoked.
+  // the TypeScript programs with typescript-go. Without this, every rule in
+  // the preset above that needs type information is silently inert — which is
+  // exactly what #114 was about. `bun run lint` passes `--type-aware` too, so
+  // the flag is there whichever way oxlint is invoked.
   "options": {
     "typeAware": true
   },
   "ignorePatterns": [".claude/**", "**/dist/**", "**/benchmarks/**"],
+  // Local overrides on top of the preset. Rules the tree does not pass yet
+  // are NOT switched off here — their findings are carried in
+  // `oxlint-suppressions.json` so the rules stay on and cannot regress.
   "rules": {
-    // ---------------------------------------------------------------------
-    // typescript-eslint's `strictTypeChecked` set, which is what the old
-    // eslint.config.js meant to extend. 47 of its 68 rules are enabled here;
-    // the remaining 21 are listed off at the bottom with their current
-    // finding counts, so the gap is in the config rather than in nobody's
-    // head. Four of the 68 are extension rules, which oxlint spells without
-    // the `typescript/` prefix: no-array-constructor, no-unused-expressions,
-    // no-unused-vars, no-useless-constructor.
-    // ---------------------------------------------------------------------
-    "typescript/ban-ts-comment": "error",
-    "typescript/no-array-delete": "error",
-    "typescript/no-base-to-string": "error",
-    "typescript/no-duplicate-enum-values": "error",
-    "typescript/no-dynamic-delete": "error",
-    "typescript/no-extra-non-null-assertion": "error",
-    "typescript/no-extraneous-class": "error",
-    "typescript/no-floating-promises": "error",
-    "typescript/no-for-in-array": "error",
-    "typescript/no-implied-eval": "error",
-    "typescript/no-invalid-void-type": "error",
-    "typescript/no-meaningless-void-operator": "error",
-    "typescript/no-misused-new": "error",
-    "typescript/no-misused-promises": "error",
-    "typescript/no-misused-spread": "error",
-    "typescript/no-mixed-enums": "error",
-    "typescript/no-namespace": "error",
-    "typescript/no-non-null-asserted-nullish-coalescing": "error",
-    "typescript/no-non-null-asserted-optional-chain": "error",
-    "typescript/no-require-imports": "error",
-    "typescript/no-this-alias": "error",
-    "typescript/no-unnecessary-boolean-literal-compare": "error",
-    "typescript/no-unnecessary-template-expression": "error",
-    "typescript/no-unnecessary-type-conversion": "error",
-    "typescript/no-unsafe-declaration-merging": "error",
-    "typescript/no-unsafe-enum-comparison": "error",
-    "typescript/no-unsafe-unary-minus": "error",
-    "typescript/no-useless-default-assignment": "error",
-    "typescript/no-wrapper-object-types": "error",
-    "typescript/only-throw-error": "error",
-    "typescript/prefer-as-const": "error",
-    "typescript/prefer-literal-enum-member": "error",
-    "typescript/prefer-namespace-keyword": "error",
-    "typescript/prefer-promise-reject-errors": "error",
-    "typescript/prefer-reduce-type-parameter": "error",
-    "typescript/prefer-return-this-type": "error",
-    "typescript/related-getter-setter-pairs": "error",
-    "typescript/restrict-plus-operands": "error",
-    "typescript/restrict-template-expressions": "error",
-    "typescript/return-await": "error",
-    "typescript/triple-slash-reference": "error",
-    "typescript/unified-signatures": "error",
-    "typescript/use-unknown-in-catch-callback-variable": "error",
-    "no-array-constructor": "error",
-    "no-unused-expressions": "error",
-    "no-useless-constructor": "error",
+    // `strict-type-checked` enables this with default options; the repo's
+    // leading-underscore convention predates it.
     "no-unused-vars": [
       "error",
       {
@@ -95,34 +51,6 @@
           }
         ]
       }
-    ],
-
-    // ---------------------------------------------------------------------
-    // The rest of `strictTypeChecked`. These are off because the tree does
-    // not pass them today, not because they are wrong; the number after each
-    // is what `oxlint --type-aware` reports with it switched on. Turning them
-    // on is a separate change per rule, not part of swapping the linter.
-    // ---------------------------------------------------------------------
-    "typescript/no-explicit-any": "off", // 95
-    "typescript/no-empty-object-type": "off", // 24
-    "typescript/no-unnecessary-type-arguments": "off", // 22
-    "typescript/no-unnecessary-type-assertion": "off", // 21
-    "typescript/no-unsafe-assignment": "off", // 14
-    "typescript/no-unsafe-member-access": "off", // 14
-    "typescript/no-confusing-void-expression": "off", // 13
-    "typescript/no-unnecessary-type-parameters": "off", // 8
-    "typescript/no-unsafe-argument": "off", // 7
-    "typescript/no-redundant-type-constituents": "off", // 6
-    "typescript/await-thenable": "off", // 6
-    "typescript/require-await": "off", // 6
-    "typescript/no-non-null-assertion": "off", // 4
-    "typescript/no-deprecated": "off", // 4
-    "typescript/no-unsafe-call": "off", // 4
-    "typescript/no-unnecessary-type-constraint": "off", // 3
-    "typescript/no-unnecessary-condition": "off", // 3
-    "typescript/unbound-method": "off", // 3
-    "typescript/no-unsafe-function-type": "off", // 2
-    "typescript/no-unsafe-return": "off", // 2
-    "typescript/no-duplicate-type-constituents": "off" // 1
+    ]
   }
 }

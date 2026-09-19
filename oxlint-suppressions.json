@@ -1,0 +1,339 @@
+{
+  "packages/core/benchmarking/benchmark.ts": {
+    "typescript/no-explicit-any": {
+      "count": 1
+    },
+    "typescript/no-unnecessary-condition": {
+      "count": 1
+    },
+    "typescript/no-unsafe-argument": {
+      "count": 1
+    },
+    "typescript/no-unsafe-assignment": {
+      "count": 3
+    },
+    "typescript/no-unsafe-call": {
+      "count": 4
+    },
+    "typescript/no-unsafe-member-access": {
+      "count": 5
+    },
+    "typescript/restrict-template-expressions": {
+      "count": 10
+    }
+  },
+  "packages/core/benchmarking/project.ts": {
+    "typescript/no-unnecessary-condition": {
+      "count": 1
+    },
+    "typescript/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "typescript/restrict-template-expressions": {
+      "count": 1
+    }
+  },
+  "packages/core/benchmarking/without-dotted-keys.ts": {
+    "typescript/restrict-template-expressions": {
+      "count": 13
+    }
+  },
+  "packages/core/src/collection/Collection.ts": {
+    "typescript/no-explicit-any": {
+      "count": 1
+    },
+    "typescript/no-unnecessary-type-parameters": {
+      "count": 1
+    }
+  },
+  "packages/core/src/elements/fieldReference.typeAssertions.ts": {
+    "typescript/no-empty-object-type": {
+      "count": 2
+    },
+    "typescript/no-unnecessary-type-assertion": {
+      "count": 8
+    }
+  },
+  "packages/core/src/elements/fieldSelector.typeAssertions.ts": {
+    "typescript/no-empty-object-type": {
+      "count": 2
+    },
+    "typescript/no-unnecessary-type-assertion": {
+      "count": 6
+    }
+  },
+  "packages/core/src/elements/literals.ts": {
+    "typescript/no-redundant-type-constituents": {
+      "count": 1
+    }
+  },
+  "packages/core/src/elements/validation.ts": {
+    "typescript/no-empty-object-type": {
+      "count": 1
+    }
+  },
+  "packages/core/src/index.ts": {
+    "typescript/no-deprecated": {
+      "count": 1
+    }
+  },
+  "packages/core/src/pipeline/Pipeline.ts": {
+    "typescript/no-explicit-any": {
+      "count": 34
+    },
+    "typescript/no-redundant-type-constituents": {
+      "count": 1
+    },
+    "typescript/no-unnecessary-type-arguments": {
+      "count": 4
+    },
+    "typescript/no-unnecessary-type-parameters": {
+      "count": 2
+    }
+  },
+  "packages/core/src/pipeline/Pipeline.typeAssertions.ts": {
+    "typescript/no-empty-object-type": {
+      "count": 1
+    },
+    "typescript/no-unnecessary-type-arguments": {
+      "count": 1
+    }
+  },
+  "packages/core/src/singleton/pipesafe.test.ts": {
+    "typescript/await-thenable": {
+      "count": 6
+    },
+    "typescript/require-await": {
+      "count": 6
+    }
+  },
+  "packages/core/src/singleton/pipesafe.ts": {
+    "typescript/no-deprecated": {
+      "count": 1
+    },
+    "typescript/no-duplicate-type-constituents": {
+      "count": 1
+    }
+  },
+  "packages/core/src/singleton/tagClient.test.ts": {
+    "typescript/no-confusing-void-expression": {
+      "count": 2
+    },
+    "typescript/unbound-method": {
+      "count": 3
+    }
+  },
+  "packages/core/src/stages/facet.ts": {
+    "typescript/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "packages/core/src/stages/facet.typeAssertions.ts": {
+    "typescript/no-unnecessary-type-arguments": {
+      "count": 3
+    }
+  },
+  "packages/core/src/stages/graphLookup.typeAssertions.ts": {
+    "typescript/no-unnecessary-type-arguments": {
+      "count": 2
+    }
+  },
+  "packages/core/src/stages/group.ts": {
+    "typescript/no-empty-object-type": {
+      "count": 3
+    },
+    "typescript/no-explicit-any": {
+      "count": 4
+    },
+    "typescript/no-redundant-type-constituents": {
+      "count": 1
+    }
+  },
+  "packages/core/src/stages/group.typeAssertions.ts": {
+    "typescript/no-empty-object-type": {
+      "count": 4
+    },
+    "typescript/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "packages/core/src/stages/lookup.typeAssertions.ts": {
+    "typescript/no-explicit-any": {
+      "count": 1
+    },
+    "typescript/no-unnecessary-type-arguments": {
+      "count": 2
+    }
+  },
+  "packages/core/src/stages/match.ts": {
+    "typescript/no-unnecessary-type-constraint": {
+      "count": 3
+    }
+  },
+  "packages/core/src/stages/merge.typeAssertions.ts": {
+    "typescript/no-unnecessary-type-arguments": {
+      "count": 1
+    }
+  },
+  "packages/core/src/stages/out.ts": {
+    "typescript/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "packages/core/src/stages/project.ts": {
+    "typescript/no-empty-object-type": {
+      "count": 4
+    },
+    "typescript/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "packages/core/src/stages/project.typeAssertions.ts": {
+    "typescript/no-deprecated": {
+      "count": 2
+    }
+  },
+  "packages/core/src/stages/set.ts": {
+    "typescript/no-empty-object-type": {
+      "count": 1
+    }
+  },
+  "packages/core/src/stages/set.typeAssertions.ts": {
+    "typescript/no-redundant-type-constituents": {
+      "count": 2
+    }
+  },
+  "packages/core/src/stages/stages.contract.typeAssertions.ts": {
+    "typescript/no-redundant-type-constituents": {
+      "count": 1
+    }
+  },
+  "packages/core/src/stages/unwind.ts": {
+    "typescript/no-empty-object-type": {
+      "count": 1
+    }
+  },
+  "packages/core/src/stages/unwind.typeAssertions.ts": {
+    "typescript/no-unnecessary-type-arguments": {
+      "count": 6
+    }
+  },
+  "packages/core/src/utils/objects.ts": {
+    "typescript/no-explicit-any": {
+      "count": 3
+    },
+    "typescript/no-unsafe-function-type": {
+      "count": 2
+    }
+  },
+  "packages/core/src/utils/paths.ts": {
+    "typescript/no-empty-object-type": {
+      "count": 2
+    },
+    "typescript/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "packages/core/src/utils/strings.ts": {
+    "typescript/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "packages/core/src/utils/tests.ts": {
+    "typescript/no-unnecessary-type-parameters": {
+      "count": 5
+    }
+  },
+  "packages/core/src/utils/updates.ts": {
+    "typescript/no-empty-object-type": {
+      "count": 3
+    },
+    "typescript/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "packages/manifold/src/model/Model.ts": {
+    "typescript/no-explicit-any": {
+      "count": 8
+    },
+    "typescript/no-unnecessary-condition": {
+      "count": 1
+    },
+    "typescript/no-unnecessary-type-arguments": {
+      "count": 3
+    },
+    "typescript/no-unnecessary-type-assertion": {
+      "count": 3
+    }
+  },
+  "packages/manifold/src/project/Project.run.test.ts": {
+    "typescript/no-non-null-assertion": {
+      "count": 2
+    },
+    "typescript/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "typescript/no-unsafe-assignment": {
+      "count": 3
+    },
+    "typescript/no-unsafe-member-access": {
+      "count": 1
+    }
+  },
+  "packages/manifold/src/project/Project.ts": {
+    "typescript/no-explicit-any": {
+      "count": 26
+    },
+    "typescript/no-non-null-assertion": {
+      "count": 1
+    },
+    "typescript/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "typescript/no-unsafe-argument": {
+      "count": 6
+    },
+    "typescript/no-unsafe-assignment": {
+      "count": 8
+    },
+    "typescript/no-unsafe-member-access": {
+      "count": 8
+    },
+    "typescript/no-unsafe-return": {
+      "count": 2
+    },
+    "typescript/restrict-template-expressions": {
+      "count": 4
+    }
+  },
+  "website/src/App.tsx": {
+    "typescript/restrict-template-expressions": {
+      "count": 2
+    }
+  },
+  "website/src/components/TypeTooltip/TypeTooltip.tsx": {
+    "typescript/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "website/src/hooks/useCompileAnimation.ts": {
+    "typescript/no-confusing-void-expression": {
+      "count": 1
+    }
+  },
+  "website/src/hooks/useCopyToClipboard.ts": {
+    "typescript/no-confusing-void-expression": {
+      "count": 1
+    }
+  },
+  "website/src/hooks/useFixAnimation.ts": {
+    "typescript/no-confusing-void-expression": {
+      "count": 2
+    }
+  },
+  "website/src/hooks/useTerminalAnimation.ts": {
+    "typescript/no-confusing-void-expression": {
+      "count": 7
+    }
+  }
+}
