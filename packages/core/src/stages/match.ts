@@ -112,8 +112,8 @@ type SizeOperand<T> = FieldOperand<
   number
 >;
 
-type ArrayValueOperand<T, Op extends string> = [T] extends [(infer U)[]]
-  ? U[]
+type ArrayValueOperand<T, Op extends string> =
+  [T] extends [(infer U)[]] ? U[]
   : PipeSafeError<RequiresMsg<"Operator", Op, "an array field">>;
 
 // `$elemMatch`'s operand is a match query against the array's ELEMENT type,
@@ -123,17 +123,18 @@ type ArrayValueOperand<T, Op extends string> = [T] extends [(infer U)[]]
 // `U extends Document` (not just `IsPlainObject`) is what satisfies
 // MatchFieldMap's constraint in the true branch.
 type ElemMatchFields<U> =
-  IsPlainObject<U> extends true
-    ? U extends Document
-      ? MatchFieldMap<U>
-      : never
-    : never;
+  IsPlainObject<U> extends true ?
+    U extends Document ?
+      MatchFieldMap<U>
+    : never
+  : never;
 
 // The `$elemMatch` operand: field-map (document elements) plus the
 // element-level comparators (`{ $gte: 80 }`, `{ $not: … }`). A non-array
 // field brands.
-type ElemMatchQuery<T, Op extends string> = [T] extends [(infer U)[]]
-  ? ElemMatchFields<U> | ComparatorMatchers<U> | Notted<ComparatorMatchers<U>>
+type ElemMatchQuery<T, Op extends string> =
+  [T] extends [(infer U)[]] ?
+    ElemMatchFields<U> | ComparatorMatchers<U> | Notted<ComparatorMatchers<U>>
   : PipeSafeError<RequiresMsg<"Operator", Op, "an array field">>;
 
 type RegexOperand<T> = FieldOperand<
@@ -184,8 +185,9 @@ export type ScalarMatchers<T> = Omit<
 // non-distributive form keeps a union-typed field intact when computing
 // the brand's `Ctx`, so a typo against `status: 'pending' | 'shipped' |
 // 'delivered'` hovers with the full union rather than just one branch.
-export type RawMatchersForType<T extends unknown> = [T] extends [(infer U)[]]
-  ? ComparatorMatchers<T> | ScalarMatchers<U> // Element matcher (passthrough)
+export type RawMatchersForType<T extends unknown> =
+  [T] extends [(infer U)[]] ?
+    ComparatorMatchers<T> | ScalarMatchers<U> // Element matcher (passthrough)
   : ComparatorMatchers<T>;
 
 export type Notted<T> =
@@ -208,13 +210,12 @@ type RegExpShorthand = Pick<RegExp, typeof Symbol.match>;
 // list. Objects with no symbol keys fall back to `object` intersected with the
 // comparators (still an object, still no leaked keys). Scalars keep bare `T`.
 type ExactValue<T> =
-  IsPlainObject<T> extends true
-    ? T
-    : [T] extends [object]
-      ? [Extract<keyof T, symbol>] extends [never]
-        ? object & ComparatorMatchers<T>
-        : Pick<T, Extract<keyof T, symbol>>
-      : T;
+  IsPlainObject<T> extends true ? T
+  : [T] extends [object] ?
+    [Extract<keyof T, symbol>] extends [never] ?
+      object & ComparatorMatchers<T>
+    : Pick<T, Extract<keyof T, symbol>>
+  : T;
 
 export type MatchersForType<T extends unknown> =
   | ExactValue<T>
@@ -245,56 +246,49 @@ export type MatchQuery<Schema extends Document> =
 // Extract literal values from match operators. GetFieldType is spelled
 // per arm deliberately: conditional branches are lazy and repeats are
 // alias-cached, so a hoisted cache parameter would buy nothing.
-export type ExpectedValue<
-  Schema,
-  QueryKey extends string,
-  QueryValue,
-> = QueryValue extends {
-  $eq: infer E;
-}
-  ? E
-  : QueryValue extends { $exists: true }
-    ? GetFieldType<Schema, QueryKey>
-    : QueryValue extends { $exists: false }
-      ? unknown
-      : QueryValue extends { [matcher in ContinuousMatchers]: unknown }
-        ? GetFieldType<Schema, QueryKey>
-        : QueryValue extends { $in: (infer I)[] }
-          ? I
-          : QueryValue extends { $all: (infer A)[] }
-            ? A // For $all, return the array element type
-            : QueryValue extends { $nin: (infer E)[] }
-              ? Exclude<GetFieldType<Schema, QueryKey>, E>
-              : QueryValue extends {
-                    [matcher in DollarPrefixed<string>]: unknown;
-                  }
-                ? GetFieldType<Schema, QueryKey> // Do not narrow unknown selectors
-                : QueryValue; // Direct literal value
+export type ExpectedValue<Schema, QueryKey extends string, QueryValue> =
+  QueryValue extends (
+    {
+      $eq: infer E;
+    }
+  ) ?
+    E
+  : QueryValue extends { $exists: true } ? GetFieldType<Schema, QueryKey>
+  : QueryValue extends { $exists: false } ? unknown
+  : QueryValue extends { [matcher in ContinuousMatchers]: unknown } ?
+    GetFieldType<Schema, QueryKey>
+  : QueryValue extends { $in: (infer I)[] } ? I
+  : QueryValue extends { $all: (infer A)[] } ?
+    A // For $all, return the array element type
+  : QueryValue extends { $nin: (infer E)[] } ?
+    Exclude<GetFieldType<Schema, QueryKey>, E>
+  : QueryValue extends {
+    [matcher in DollarPrefixed<string>]: unknown;
+  } ?
+    GetFieldType<Schema, QueryKey> // Do not narrow unknown selectors
+  : QueryValue; // Direct literal value
 
 // Simplified union member matching - checks if all query fields match the document
 // We check each key in the query and ensure it matches in the document
 
 export type FieldMatchingInterim<Doc extends Document, Query> = {
-  [K in keyof Query]: K extends FieldSelector<Doc>
-    ? ExpectedValue<Doc, K, Query[K]> extends GetFieldType<Doc, K>
-      ? true
-      : false
-    : K extends `$${string}`
-      ? true
-      : Query[K] extends { $exists: false }
-        ? true
-        : false; // If key doesn't exist in Doc, skip it (not a field selector)
+  [K in keyof Query]: K extends FieldSelector<Doc> ?
+    ExpectedValue<Doc, K, Query[K]> extends GetFieldType<Doc, K> ?
+      true
+    : false
+  : K extends `$${string}` ? true
+  : Query[K] extends { $exists: false } ? true
+  : false; // If key doesn't exist in Doc, skip it (not a field selector)
 };
 
-export type DocumentMatchesQuery<
-  Doc extends Document,
-  Query,
-> = FieldMatchingInterim<Doc, Query>[keyof Query] extends true ? true : false;
+export type DocumentMatchesQuery<Doc extends Document, Query> =
+  FieldMatchingInterim<Doc, Query>[keyof Query] extends true ? true : false;
 
 // Filter union types to keep only members that match the query
-export type FilterUnion<Union extends Document, Query> = Union extends Document
-  ? DocumentMatchesQuery<Union, Query> extends true
-    ? Union
+export type FilterUnion<Union extends Document, Query> =
+  Union extends Document ?
+    DocumentMatchesQuery<Union, Query> extends true ?
+      Union
     : never
   : never;
 
@@ -307,7 +301,7 @@ export type FilterUnion<Union extends Document, Query> = Union extends Document
 // constraint already validated Query at the parameter position.
 export type ResolveMatchOutput<Schema extends Document, Query> = PassThrough<
   Schema,
-  [keyof Query & LogicalMatchOperators] extends [never]
-    ? Prettify<FilterUnion<Schema, Query>>
-    : /* Logical operators - keep original schema */ Schema
+  [keyof Query & LogicalMatchOperators] extends [never] ?
+    Prettify<FilterUnion<Schema, Query>>
+  : /* Logical operators - keep original schema */ Schema
 >;

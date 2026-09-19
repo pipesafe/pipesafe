@@ -275,9 +275,8 @@ export class Model<
       const mode = this.materialize.mode;
       const outputCollection = this.getOutputCollectionName();
       const outputDb = this.getOutputDatabase();
-      const target = outputDb
-        ? { db: outputDb, coll: outputCollection }
-        : outputCollection;
+      const target =
+        outputDb ? { db: outputDb, coll: outputCollection } : outputCollection;
 
       if ("$out" in mode) {
         return userPipeline.out(target).getPipeline();

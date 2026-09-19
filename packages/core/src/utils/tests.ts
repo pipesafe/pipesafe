@@ -4,9 +4,8 @@ import { Prettify } from "./objects";
 // Generic type equality assertion - compile-time only
 // Uses exact type equality check (works correctly with unions)
 export type Equal<T, U> =
-  (<G>() => G extends T ? 1 : 2) extends <G>() => G extends U ? 1 : 2
-    ? true
-    : false;
+  (<G>() => G extends T ? 1 : 2) extends <G>() => G extends U ? 1 : 2 ? true
+  : false;
 
 // Helper to create a compile-time type assertion that errors on the second param
 export type Assert<T extends true> = T;
@@ -58,11 +57,11 @@ export type NotImplemented<T extends false> = true & {
  * `Assert<...>` produces a compile error pointing to the mismatched message.
  */
 export type AssertPipeSafeError<Actual, ExpectedMsg extends string> =
-  Actual extends PipeSafeError<infer Msg>
-    ? Equal<Msg, ExpectedMsg> extends true
-      ? true
-      : false
-    : false;
+  Actual extends PipeSafeError<infer Msg> ?
+    Equal<Msg, ExpectedMsg> extends true ?
+      true
+    : false
+  : false;
 
 // Function-based type assertion that causes actual compiler errors
 export function expectType<T>(_value: T): void {}

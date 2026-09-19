@@ -4,13 +4,11 @@
  */
 
 export type DollarPrefixed<T extends string> = `$${T}`;
-export type WithoutDollar<T extends string> = T extends `$${infer U}`
-  ? U
-  : never;
+export type WithoutDollar<T extends string> =
+  T extends `$${infer U}` ? U : never;
 
-export type Join<K extends string, P extends string> = P extends ""
-  ? K
-  : `${K}.${P}`;
+export type Join<K extends string, P extends string> =
+  P extends "" ? K : `${K}.${P}`;
 
 type IsTuple<A extends unknown[]> = number extends A["length"] ? false : true;
 type TupleIndex<A extends unknown[]> = Exclude<keyof A, keyof any[]>;

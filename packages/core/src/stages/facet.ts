@@ -31,8 +31,7 @@ export type ResolveFacetOutput<
 > = PassThrough<
   Schema,
   Prettify<{
-    [K in keyof F]: F[K] extends PipelineBuilder<any, infer O, any, any>
-      ? O[]
-      : never;
+    [K in keyof F]: F[K] extends PipelineBuilder<any, infer O, any, any> ? O[]
+    : never;
   }>
 >;

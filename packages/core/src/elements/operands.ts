@@ -29,11 +29,8 @@ import { FieldReferencesThatInferTo } from "./fieldReference";
  * on success the operand type is `Result` (defaults to `T` — pass e.g.
  * `number` for `$size` where the operand is an index regardless of `T`).
  */
-export type FieldOperand<T, Allowed, Msg extends string, Result = T> = [
-  T,
-] extends [Allowed]
-  ? Result
-  : PipeSafeError<Msg>;
+export type FieldOperand<T, Allowed, Msg extends string, Result = T> =
+  [T] extends [Allowed] ? Result : PipeSafeError<Msg>;
 
 /**
  * Expression-position set: acceptable literals/refs for a target type, with

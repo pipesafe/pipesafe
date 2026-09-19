@@ -269,18 +269,18 @@ export function measureBaseline(benchmarkFile: string): {
 
   const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
   const avgInstantiations =
-    instantiationsValues.length > 0
-      ? instantiationsValues.reduce((a, b) => a + b, 0) /
-        instantiationsValues.length
-      : undefined;
+    instantiationsValues.length > 0 ?
+      instantiationsValues.reduce((a, b) => a + b, 0) /
+      instantiationsValues.length
+    : undefined;
   // Round filesChecked to integer (should be consistent across runs)
   const avgFilesChecked =
-    filesCheckedValues.length > 0
-      ? Math.round(
-          filesCheckedValues.reduce((a, b) => a + b, 0) /
-            filesCheckedValues.length
-        )
-      : undefined;
+    filesCheckedValues.length > 0 ?
+      Math.round(
+        filesCheckedValues.reduce((a, b) => a + b, 0) /
+          filesCheckedValues.length
+      )
+    : undefined;
 
   const result: {
     time: number;
@@ -456,9 +456,9 @@ export function runBenchmarkIteration(
   // Calculate differences
   const timeDiff = benchmark.time - baseline.time;
   const instantiationsDiff =
-    benchmark.typeInstantiations && baseline.typeInstantiations
-      ? benchmark.typeInstantiations - baseline.typeInstantiations
-      : undefined;
+    benchmark.typeInstantiations && baseline.typeInstantiations ?
+      benchmark.typeInstantiations - baseline.typeInstantiations
+    : undefined;
 
   // Don't cleanup files - keep them for inspection
 
@@ -583,60 +583,68 @@ export function runBenchmarkMultipleTimes(
     (r) => r.delta.typeInstantiations !== undefined
   );
   const avgTypeInstantiations =
-    deltaInstantiationsResults.length > 0
-      ? deltaInstantiationsResults.reduce(
-          (sum, r) => sum + (r.delta.typeInstantiations || 0),
-          0
-        ) / deltaInstantiationsResults.length
-      : undefined;
+    deltaInstantiationsResults.length > 0 ?
+      deltaInstantiationsResults.reduce(
+        (sum, r) => sum + (r.delta.typeInstantiations || 0),
+        0
+      ) / deltaInstantiationsResults.length
+    : undefined;
 
   const avgBaselineInstantiations =
-    iterationResults.filter((r) => r.baseline.typeInstantiations !== undefined)
-      .length > 0
-      ? iterationResults
-          .filter((r) => r.baseline.typeInstantiations !== undefined)
-          .reduce((sum, r) => sum + (r.baseline.typeInstantiations || 0), 0) /
-        iterationResults.filter(
-          (r) => r.baseline.typeInstantiations !== undefined
-        ).length
-      : undefined;
+    (
+      iterationResults.filter(
+        (r) => r.baseline.typeInstantiations !== undefined
+      ).length > 0
+    ) ?
+      iterationResults
+        .filter((r) => r.baseline.typeInstantiations !== undefined)
+        .reduce((sum, r) => sum + (r.baseline.typeInstantiations || 0), 0) /
+      iterationResults.filter(
+        (r) => r.baseline.typeInstantiations !== undefined
+      ).length
+    : undefined;
 
   const avgBenchmarkInstantiations =
-    iterationResults.filter((r) => r.benchmark.typeInstantiations !== undefined)
-      .length > 0
-      ? iterationResults
-          .filter((r) => r.benchmark.typeInstantiations !== undefined)
-          .reduce((sum, r) => sum + (r.benchmark.typeInstantiations || 0), 0) /
-        iterationResults.filter(
-          (r) => r.benchmark.typeInstantiations !== undefined
-        ).length
-      : undefined;
+    (
+      iterationResults.filter(
+        (r) => r.benchmark.typeInstantiations !== undefined
+      ).length > 0
+    ) ?
+      iterationResults
+        .filter((r) => r.benchmark.typeInstantiations !== undefined)
+        .reduce((sum, r) => sum + (r.benchmark.typeInstantiations || 0), 0) /
+      iterationResults.filter(
+        (r) => r.benchmark.typeInstantiations !== undefined
+      ).length
+    : undefined;
 
   const avgBaselineFilesChecked =
-    iterationResults.filter((r) => r.baseline.filesChecked !== undefined)
-      .length > 0
-      ? Math.round(
-          iterationResults
-            .filter((r) => r.baseline.filesChecked !== undefined)
-            .reduce((sum, r) => sum + (r.baseline.filesChecked || 0), 0) /
-            iterationResults.filter(
-              (r) => r.baseline.filesChecked !== undefined
-            ).length
-        )
-      : undefined;
+    (
+      iterationResults.filter((r) => r.baseline.filesChecked !== undefined)
+        .length > 0
+    ) ?
+      Math.round(
+        iterationResults
+          .filter((r) => r.baseline.filesChecked !== undefined)
+          .reduce((sum, r) => sum + (r.baseline.filesChecked || 0), 0) /
+          iterationResults.filter((r) => r.baseline.filesChecked !== undefined)
+            .length
+      )
+    : undefined;
 
   const avgBenchmarkFilesChecked =
-    iterationResults.filter((r) => r.benchmark.filesChecked !== undefined)
-      .length > 0
-      ? Math.round(
-          iterationResults
-            .filter((r) => r.benchmark.filesChecked !== undefined)
-            .reduce((sum, r) => sum + (r.benchmark.filesChecked || 0), 0) /
-            iterationResults.filter(
-              (r) => r.benchmark.filesChecked !== undefined
-            ).length
-        )
-      : undefined;
+    (
+      iterationResults.filter((r) => r.benchmark.filesChecked !== undefined)
+        .length > 0
+    ) ?
+      Math.round(
+        iterationResults
+          .filter((r) => r.benchmark.filesChecked !== undefined)
+          .reduce((sum, r) => sum + (r.benchmark.filesChecked || 0), 0) /
+          iterationResults.filter((r) => r.benchmark.filesChecked !== undefined)
+            .length
+      )
+    : undefined;
 
   // Calculate standard deviation
   const timeValues = iterationResults.map((r) => r.delta.compilationTime);
@@ -736,14 +744,14 @@ export function runBenchmarkSuite(
 
   for (const operationCount of config.operationCounts) {
     const result =
-      iterations > 1
-        ? runBenchmarkMultipleTimes(
-            config,
-            benchmarkName,
-            operationCount,
-            iterations
-          )
-        : runBenchmarkIteration(config, benchmarkName, operationCount);
+      iterations > 1 ?
+        runBenchmarkMultipleTimes(
+          config,
+          benchmarkName,
+          operationCount,
+          iterations
+        )
+      : runBenchmarkIteration(config, benchmarkName, operationCount);
     results.push(result);
 
     // Check if we hit depth limit - if so, stop here

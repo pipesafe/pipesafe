@@ -16,18 +16,16 @@ import { UnionToIntersection } from "./objects";
  * of keys — guard consumers with tuple checks (`[Op] extends [...]`) so the
  * union does not distribute.
  */
-export type OperatorKeyOf<Expr> = Expr extends object
-  ? keyof Expr & `$${string}`
-  : never;
+export type OperatorKeyOf<Expr> =
+  Expr extends object ? keyof Expr & `$${string}` : never;
 
 /**
  * `true` when the value carries at least one `$`-prefixed key (tier-2 check
  * in the dispatch ladder): it is expression-shaped and should be routed to
  * expression inference rather than treated as a nested object literal.
  */
-export type HasOperatorKey<Expr> = [OperatorKeyOf<Expr>] extends [never]
-  ? false
-  : true;
+export type HasOperatorKey<Expr> =
+  [OperatorKeyOf<Expr>] extends [never] ? false : true;
 
 /**
  * `true` when the value has exactly one `$`-prefixed key. Multi-operator
@@ -39,11 +37,11 @@ export type HasOperatorKey<Expr> = [OperatorKeyOf<Expr>] extends [never]
  * because distribution only happens over naked type parameters — inlining
  * the conditional over `OperatorKeyOf<Expr>` would not distribute.
  */
-export type HasSingleOperatorKey<Expr> = [OperatorKeyOf<Expr>] extends [never]
-  ? false
-  : [OperatorKeyOf<Expr>] extends [UnionToIntersection<OperatorKeyOf<Expr>>]
-    ? true
-    : false;
+export type HasSingleOperatorKey<Expr> =
+  [OperatorKeyOf<Expr>] extends [never] ? false
+  : [OperatorKeyOf<Expr>] extends [UnionToIntersection<OperatorKeyOf<Expr>>] ?
+    true
+  : false;
 
 /**
  * Sentinel returned by expression inference for values that are not

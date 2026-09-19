@@ -23,11 +23,11 @@ export type ResolveLookupOutput<
 > = PassThrough<
   Schema,
   // distribute over union schemas
-  Schema extends unknown
-    ? IsDottedKey<NewKey> extends true
-      ? ApplySetUpdates<Schema, FlattenDotSet<{ [K in NewKey]: Foreign[] }>>
-      : Prettify<Omit<Schema, NewKey> & { [K in NewKey]: Foreign[] }>
-    : never
+  Schema extends unknown ?
+    IsDottedKey<NewKey> extends true ?
+      ApplySetUpdates<Schema, FlattenDotSet<{ [K in NewKey]: Foreign[] }>>
+    : Prettify<Omit<Schema, NewKey> & { [K in NewKey]: Foreign[] }>
+  : never
 >;
 
 /**
@@ -47,9 +47,9 @@ export type LookupCompatibleFieldPaths<
       LocalFieldType extends string ? string : LocalFieldType
     >
   | FieldPathsThatInferToForLookup<Foreign, LocalFieldType>
-  | (LocalFieldType extends (infer Element)[]
-      ? FieldPathsThatInferToForLookup<Foreign, Element>
-      : never)
+  | (LocalFieldType extends (infer Element)[] ?
+      FieldPathsThatInferToForLookup<Foreign, Element>
+    : never)
   | FieldPathsThatInferToForLookup<Foreign, LocalFieldType[]>;
 
 /**
@@ -69,10 +69,8 @@ export type LookupForeignFieldOrError<
   LocalFieldType,
   LocalField extends string,
 > =
-  Foreign extends PipeSafeError<string>
-    ? Foreign
-    : LocalFieldType extends PipeSafeError<string>
-      ? LocalFieldType
-      : [LookupCompatibleFieldPaths<Foreign, LocalFieldType>] extends [never]
-        ? PipeSafeError<`Foreign collection has no field with a type compatible with localField '${LocalField}'.`>
-        : LookupCompatibleFieldPaths<Foreign, LocalFieldType>;
+  Foreign extends PipeSafeError<string> ? Foreign
+  : LocalFieldType extends PipeSafeError<string> ? LocalFieldType
+  : [LookupCompatibleFieldPaths<Foreign, LocalFieldType>] extends [never] ?
+    PipeSafeError<`Foreign collection has no field with a type compatible with localField '${LocalField}'.`>
+  : LookupCompatibleFieldPaths<Foreign, LocalFieldType>;

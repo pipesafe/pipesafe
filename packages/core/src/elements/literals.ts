@@ -46,11 +46,10 @@ type Primitive = boolean | number | Date | NoDollarString | ObjectId;
 type PrimitiveLiteralValue = boolean | number | NoDollarString | object;
 
 export type ResolveToPrimitive<Schema extends Document> =
-  Schema extends Document
-    ?
-        | PrimitiveLiteralValue
-        | FieldReferencesThatInferTo<Schema, Primitive | string>
-    : never;
+  Schema extends Document ?
+    | PrimitiveLiteralValue
+    | FieldReferencesThatInferTo<Schema, Primitive | string>
+  : never;
 
 export type ArrayLiterals<Schema extends Document> =
   | LiteralOrFieldReferenceInferringTo<Schema, boolean>[]

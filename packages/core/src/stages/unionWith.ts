@@ -11,9 +11,9 @@ export type ResolveUnionWithOutput<
   Foreign extends Document,
 > = PassThrough<
   Schema,
-  [Schema] extends [Foreign]
-    ? [Foreign] extends [Schema]
-      ? Prettify<Schema> // Schemas are identical - collapse to single type
-      : Prettify<Schema | Foreign> // Different schemas - union
+  [Schema] extends [Foreign] ?
+    [Foreign] extends [Schema] ?
+      Prettify<Schema> // Schemas are identical - collapse to single type
     : Prettify<Schema | Foreign> // Different schemas - union
+  : Prettify<Schema | Foreign> // Different schemas - union
 >;

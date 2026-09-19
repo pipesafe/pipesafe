@@ -40,7 +40,7 @@ export type ResolveReplaceRootOutput<
   Query,
 > = PassThrough<
   Schema,
-  Query extends { newRoot: infer NewRoot }
-    ? Prettify<InferNestedFieldReference<Schema, NewRoot>>
-    : never
+  Query extends { newRoot: infer NewRoot } ?
+    Prettify<InferNestedFieldReference<Schema, NewRoot>>
+  : never
 >;

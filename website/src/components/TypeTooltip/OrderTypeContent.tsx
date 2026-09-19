@@ -36,19 +36,18 @@ export default function OrderTypeContent({
 
   return (
     <>
-      {declaration ? (
+      {declaration ?
         <>
           <span className={styles.typeKeyword}>const</span>{" "}
           <span className={styles.property}>{declaration}</span>
           <span className={styles.punctuation}>:</span>{" "}
         </>
-      ) : (
-        <>
+      : <>
           <span className={styles.typeKeyword}>type</span>{" "}
           <span className={styles.typeName}>{typeName}</span>{" "}
           <span className={styles.punctuation}>=</span>{" "}
         </>
-      )}
+      }
       <span className={styles.punctuation}>{"{"}</span>
       {props.map((prop) => (
         <span key={prop.name}>
@@ -56,7 +55,7 @@ export default function OrderTypeContent({
           {"  "}
           <span className={styles.property}>{prop.name}</span>
           <span className={styles.punctuation}>:</span>{" "}
-          {Array.isArray(prop.type) ? (
+          {Array.isArray(prop.type) ?
             <>
               <span className={styles.punctuation}>{"{"}</span>
               {prop.type.map((nested) => (
@@ -75,9 +74,7 @@ export default function OrderTypeContent({
               {"  "}
               <span className={styles.punctuation}>{"}"}[]</span>
             </>
-          ) : (
-            <span className={styles.propertyType}>{prop.type}</span>
-          )}
+          : <span className={styles.propertyType}>{prop.type}</span>}
           <span className={styles.punctuation}>;</span>
         </span>
       ))}

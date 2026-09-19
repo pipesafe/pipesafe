@@ -123,7 +123,7 @@ export default function CompileTerminal() {
         <MongoKeyword>const</MongoKeyword>{" "}
         <TypeTooltip
           content={
-            allFixed ? (
+            allFixed ?
               <OrderTypeContent
                 declaration="largeOrderData"
                 properties={[
@@ -131,9 +131,7 @@ export default function CompileTerminal() {
                   { name: "fullName", type: "string" },
                 ]}
               />
-            ) : (
-              "const largeOrderData: never"
-            )
+            : "const largeOrderData: never"
           }
         >
           <MongoField>largeOrderData</MongoField>

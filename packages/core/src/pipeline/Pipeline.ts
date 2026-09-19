@@ -116,10 +116,8 @@ export type FacetAllowedStages = AllPipelineStagesExcept<
   | "$vectorSearch"
 >;
 
-type AllowedSource<
-  Mode extends LookupMode,
-  T extends Document,
-> = Mode extends "model" ? Source<T> : Collection<T>;
+type AllowedSource<Mode extends LookupMode, T extends Document> =
+  Mode extends "model" ? Source<T> : Collection<T>;
 
 /**
  * Helper to create pipeline functions with proper typing.
@@ -144,9 +142,8 @@ export class Pipeline<
 
   private pipeline: Document[] = [];
   getPipeline(): PreviousStageDocs extends never ? never : Document[] {
-    return this.pipeline as PreviousStageDocs extends never
-      ? never
-      : Document[];
+    return this.pipeline as PreviousStageDocs extends never ? never
+    : Document[];
   }
 
   /** Tracks ancestor sources from lookup/unionWith stages */
@@ -295,8 +292,9 @@ export class Pipeline<
     // Get collection name from source
     const collectionName = (from as Source<any>).getOutputCollectionName();
 
-    const resolvedPipeline = pipeline
-      ? (pipeline as PipelineBuilder<any, any, any, any>)(
+    const resolvedPipeline =
+      pipeline ?
+        (pipeline as PipelineBuilder<any, any, any, any>)(
           new Pipeline<InferSourceType<C>, InferSourceType<C>, Mode, never>({
             collectionName,
           })
@@ -350,12 +348,11 @@ export class Pipeline<
       | FieldReferencesThatInferTo<PreviousStageDocs, ConnectToFieldType[]>
       | ConnectToFieldType
       | (Expression<PreviousStageDocs> &
-          (InferExpression<
-            PreviousStageDocs,
-            StartWith
-          > extends ConnectToFieldType
-            ? unknown
-            : never)),
+          (InferExpression<PreviousStageDocs, StartWith> extends (
+            ConnectToFieldType
+          ) ?
+            unknown
+          : never)),
     NewKey extends string,
     DepthField extends string = never,
     const RestrictMatch extends MatchQuery<InferSourceType<C>> = never,
@@ -609,8 +606,9 @@ export class Pipeline<
     // Get collection name from source
     const collectionName = (coll as Source<any>).getOutputCollectionName();
 
-    const resolvedPipeline = pipeline
-      ? (pipeline as PipelineBuilder<any, any, any, any>)(
+    const resolvedPipeline =
+      pipeline ?
+        (pipeline as PipelineBuilder<any, any, any, any>)(
           new Pipeline<InferSourceType<C>, InferSourceType<C>, Mode, never>()
         )
       : undefined;
