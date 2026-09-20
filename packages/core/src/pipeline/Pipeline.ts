@@ -43,7 +43,13 @@ import { ResolveSampleOutput, SampleQuery } from "../stages/sample";
 import { CountQuery, ResolveCountOutput } from "../stages/count";
 import { OutQuery } from "../stages/out";
 import { MergeQuery } from "../stages/merge";
-import { AggregationCursor, MongoClient } from "mongodb";
+import {
+  AggregateOptions,
+  AggregationCursor,
+  CollectionOptions,
+  DbOptions,
+  MongoClient,
+} from "mongodb";
 import { type Source, type InferSourceType } from "../source/Source";
 
 // ============================================================================
@@ -157,6 +163,8 @@ export class Pipeline<
   private client: MongoClient | undefined;
   private databaseName: string | undefined;
   private collectionName: string | undefined;
+  private dbOptions: DbOptions | undefined;
+  private collectionOptions: CollectionOptions | undefined;
 
   constructor(
     args: {
@@ -164,12 +172,18 @@ export class Pipeline<
       client?: MongoClient | undefined;
       collectionName?: string | undefined;
       databaseName?: string | undefined;
+      /** Driver `DbOptions` applied when resolving the database */
+      dbOptions?: DbOptions | undefined;
+      /** Driver `CollectionOptions` applied when resolving the collection */
+      collectionOptions?: CollectionOptions | undefined;
     } = {}
   ) {
     this.pipeline = args.pipeline ?? [];
     this.client = args.client;
     this.collectionName = args.collectionName;
     this.databaseName = args.databaseName;
+    this.dbOptions = args.dbOptions;
+    this.collectionOptions = args.collectionOptions;
     tagClient(this.client);
   }
 
@@ -188,6 +202,8 @@ export class Pipeline<
       client: this.client,
       collectionName: this.collectionName,
       databaseName: this.databaseName,
+      dbOptions: this.dbOptions,
+      collectionOptions: this.collectionOptions,
     });
     next._ancestorsFromStages.push(
       ...this._ancestorsFromStages,
@@ -696,11 +712,39 @@ export class Pipeline<
     return this._chain<never, "$merge">([{ $merge }]);
   }
 
+  /**
+   * Run the aggregation and return the driver cursor.
+   *
+   * `aggregateOptions` are the driver's `AggregateOptions` — the options
+   * that belong to this execution itself: per-query tuning (`maxTimeMS`,
+   * `allowDiskUse`, `hint`, `comment`, ...) and transaction support via
+   * `session`.
+   *
+   * Db/collection-level options are configured where those layers are
+   * created (`pipesafe.db()`, `Database.collection()`, or the
+   * `Collection`/`Pipeline` constructors) and flow down — execute()
+   * cannot override a parent layer's configuration.
+   *
+   * `client`/`databaseName`/`collectionName` are ADDRESSING, not
+   * configuration, and are deliberately execute-time: a standalone
+   * pipeline built without a target is reusable across databases and
+   * collections, re-targeted per execution.
+   *
+   * @example
+   * .execute({ aggregateOptions: { session, maxTimeMS: 5000 } })
+   *
+   * @example // Reuse one pipeline across targets
+   * const active = new Pipeline<User>().match({ active: true });
+   * active.execute({ client, databaseName: "eu", collectionName: "users" });
+   * active.execute({ client, databaseName: "us", collectionName: "users" });
+   */
   execute(
     args: {
       client?: MongoClient;
       databaseName?: string;
       collectionName?: string;
+      /** Driver `AggregateOptions` (e.g. `session`, `maxTimeMS`, `allowDiskUse`) */
+      aggregateOptions?: AggregateOptions;
     } = {}
   ): AggregationCursor<PreviousStageDocs> {
     const client = args.client ?? this.client ?? pipesafe.client;
@@ -712,7 +756,10 @@ export class Pipeline<
     const collection = args.collectionName ?? this.collectionName;
     if (!collection) throw new Error("No collection name provided");
 
-    return client.db(db).collection(collection).aggregate(this.getPipeline());
+    return client
+      .db(db, this.dbOptions)
+      .collection(collection, this.collectionOptions)
+      .aggregate(this.getPipeline(), args.aggregateOptions);
   }
 }
 

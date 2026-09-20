@@ -36,7 +36,7 @@
   "scripts": {
     "build": "tsdown",
     "build:watch": "tsdown --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit --project tsconfig.typecheck.json"
   },
   "peerDependencies": {
     "@pipesafe/core": ">=2.0.0 <3.0.0",

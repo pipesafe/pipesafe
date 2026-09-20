@@ -1,0 +1,16 @@
+// Type-gate config: the build tsconfig excludes *.test.ts so tests never
+// land in dist, but the typecheck script must still cover them (CI's
+// budget:check catching test-only type errors was an accident, not a gate).
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/**/*.ts"],
+  "exclude": ["dist", "node_modules"],
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    // declaration stays ON so tsc computes .d.ts-portability diagnostics
+    // (TS2742/TS4023) under --noEmit — tsdown's dts emit does not run them
+    "declaration": true,
+    "declarationMap": false
+  }
+}
