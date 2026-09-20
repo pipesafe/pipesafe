@@ -3,7 +3,10 @@ import type { PipeSafeError } from "../utils/errors";
 import type { Assert, AssertPipeSafeError, Equal } from "../utils/tests";
 import type {
   ExpressionSpec,
+  ExpressionsReturning,
+  InferExpression,
   LiteralDependentOps,
+  OpsInCategory,
   UnimplementedExpressionOps,
   AddExpression,
   SubtractExpression,
@@ -206,6 +209,201 @@ type _Assert_DateToStringAcceptsDateRef = Assert<
 >;
 
 // ----------------------------------------------------------------------------
+// The date-part family — $year/$month/.../$isoWeekYear
+// ----------------------------------------------------------------------------
+// Thirteen operators registered as a block, each with the operator name
+// respelled inside its own entry. Everything below sweeps the WHOLE family
+// via one mapped type per property, so a single copy-pasted entry (the real
+// failure mode of a block registration) fails at the offending key rather
+// than hiding behind whichever sibling happened to get a test.
+
+/** The family these assertions cover. */
+type DatePartOp =
+  | "$year"
+  | "$month"
+  | "$dayOfMonth"
+  | "$dayOfWeek"
+  | "$dayOfYear"
+  | "$hour"
+  | "$minute"
+  | "$second"
+  | "$millisecond"
+  | "$week"
+  | "$isoDayOfWeek"
+  | "$isoWeek"
+  | "$isoWeekYear";
+
+type DatePartSchema = {
+  ts: Date;
+  name: string;
+};
+
+// Coverage is not self-certifying: the list above is hand-written, so tie it
+// to a DERIVED set — the date-category operators whose declared result is
+// `number`, which is exactly what "date part" means in the registry. Drift
+// fails in both directions: a fourteenth date-part operator registered
+// without extending this file lands in the derived set and fails here, and a
+// removed one fails here too. (Same shape as _DerivedLiteralDependentOps —
+// a derived-set pin, not a type/const sync pin.)
+type _DerivedDatePartOps = {
+  [K in OpsInCategory<"date">]: ExpressionSpec<Document>[K] extends {
+    returns: number;
+  }
+    ? K
+    : never;
+}[OpsInCategory<"date">];
+
+type _Assert_DatePartFamilyIsCovered = Assert<
+  Equal<_DerivedDatePartOps, DatePartOp>
+>;
+
+// --- Result inference: every operator resolves to `number` ------------------
+// This is the bug the family was registered to fix (#116). Before
+// registration the operators were allow-listed, so InferExpression fell
+// through to the unregistered tail and every one of these was `unknown`.
+
+/** `{ $op: "$ts" }` — the bare operand form. */
+type DatePartBareForm = {
+  [K in DatePartOp]: InferExpression<DatePartSchema, { [P in K]: "$ts" }>;
+};
+type _Assert_DatePartBareFormInfersNumber = Assert<
+  Equal<DatePartBareForm, Record<DatePartOp, number>>
+>;
+
+/** `{ $op: { date, timezone } }` — the object operand form. */
+type DatePartObjectForm = {
+  [K in DatePartOp]: InferExpression<
+    DatePartSchema,
+    { [P in K]: { date: "$ts"; timezone: "Europe/London" } }
+  >;
+};
+type _Assert_DatePartObjectFormInfersNumber = Assert<
+  Equal<DatePartObjectForm, Record<DatePartOp, number>>
+>;
+
+/** A `Date` literal operand resolves the same way a reference does. */
+type DatePartLiteralForm = {
+  [K in DatePartOp]: InferExpression<DatePartSchema, { [P in K]: Date }>;
+};
+type _Assert_DatePartLiteralFormInfersNumber = Assert<
+  Equal<DatePartLiteralForm, Record<DatePartOp, number>>
+>;
+
+// Inference is FORGIVING by contract (elements/CLAUDE.md): a malformed
+// operand keeps the operator's declared result kind and reports at the input
+// position. Pin that for the family — a string reference must not turn the
+// result into `unknown` or `never`.
+type DatePartWrongOperand = {
+  [K in DatePartOp]: InferExpression<DatePartSchema, { [P in K]: "$name" }>;
+};
+type _Assert_DatePartWrongOperandStillInfersNumber = Assert<
+  Equal<DatePartWrongOperand, Record<DatePartOp, number>>
+>;
+
+// --- Operand acceptance: both MongoDB forms, for every operator -------------
+
+type DatePartOperandOf<K extends DatePartOp> =
+  ExpressionSpec<DatePartSchema>[K]["operand"];
+
+type _Assert_DatePartAcceptsDateRef = Assert<
+  Equal<
+    { [K in DatePartOp]: "$ts" extends DatePartOperandOf<K> ? true : false },
+    Record<DatePartOp, true>
+  >
+>;
+
+type _Assert_DatePartAcceptsObjectForm = Assert<
+  Equal<
+    {
+      [K in DatePartOp]: {
+        date: "$ts";
+        timezone: "Europe/London";
+      } extends DatePartOperandOf<K>
+        ? true
+        : false;
+    },
+    Record<DatePartOp, true>
+  >
+>;
+
+// `timezone` is optional — the object form must accept a bare `{ date }`.
+type _Assert_DatePartObjectFormTimezoneOptional = Assert<
+  Equal<
+    {
+      [K in DatePartOp]: { date: "$ts" } extends DatePartOperandOf<K>
+        ? true
+        : false;
+    },
+    Record<DatePartOp, true>
+  >
+>;
+
+// A string field reference is NOT in the operand set — it only relates to the
+// branded arm, which is what puts the message in the hover.
+type _Assert_DatePartRejectsStringRef = Assert<
+  Equal<
+    { [K in DatePartOp]: "$name" extends DatePartOperandOf<K> ? true : false },
+    Record<DatePartOp, false>
+  >
+>;
+
+// --- Brand messages: every entry names ITSELF -------------------------------
+// The one thing thirteen near-identical registry entries can get wrong
+// silently. `DatePartOperand<Schema, "$hour">` pasted into `$minute` compiles,
+// infers `number`, accepts the same operands — and hovers with the wrong
+// operator name. Only a per-key message check catches it.
+
+type DatePartBrandMsg<K extends DatePartOp> =
+  Extract<DatePartOperandOf<K>, PipeSafeError<string>> extends PipeSafeError<
+    infer Msg
+  >
+    ? Msg
+    : never;
+
+type _Assert_DatePartBrandsNameTheirOwnOperator = Assert<
+  Equal<
+    { [K in DatePartOp]: DatePartBrandMsg<K> },
+    { [K in DatePartOp]: `Operator '${K}' requires a Date operand.` }
+  >
+>;
+
+// The object form's inner `date` carries the same brand, so a wrong-typed
+// `{ date: "$name" }` hovers with the operator name too.
+type DatePartObjectDateBrand<K extends DatePartOp> =
+  Extract<
+    Extract<DatePartOperandOf<K>, { date: unknown }>["date"],
+    PipeSafeError<string>
+  > extends PipeSafeError<infer Msg>
+    ? Msg
+    : never;
+
+type _Assert_DatePartObjectDateBrandsNameTheirOwnOperator = Assert<
+  Equal<
+    { [K in DatePartOp]: DatePartObjectDateBrand<K> },
+    { [K in DatePartOp]: `Operator '${K}' requires a Date operand.` }
+  >
+>;
+
+// --- Registration consequences ----------------------------------------------
+// Registering with `returns: number` is what puts the family into the derived
+// "expressions producing a number" set — which is how a date part becomes a
+// legal operand of the numeric accumulators and of arithmetic.
+
+type _Assert_DatePartJoinsNumericExpressions = Assert<
+  Equal<
+    {
+      [K in DatePartOp]: { [P in K]: "$ts" } extends ExpressionsReturning<
+        DatePartSchema,
+        number
+      >
+        ? true
+        : false;
+    },
+    Record<DatePartOp, true>
+  >
+>;
+
+// ----------------------------------------------------------------------------
 // Phase C4 — Array operand on $size, $concatArrays, $arrayElemAt, $filter
 // ----------------------------------------------------------------------------
 
@@ -313,6 +511,18 @@ export type {
   _Assert_DateAddBrand,
   _Assert_DateSubtractBrand,
   _Assert_DateToStringAcceptsDateRef,
+  _Assert_DatePartFamilyIsCovered,
+  _Assert_DatePartBareFormInfersNumber,
+  _Assert_DatePartObjectFormInfersNumber,
+  _Assert_DatePartLiteralFormInfersNumber,
+  _Assert_DatePartWrongOperandStillInfersNumber,
+  _Assert_DatePartAcceptsDateRef,
+  _Assert_DatePartAcceptsObjectForm,
+  _Assert_DatePartObjectFormTimezoneOptional,
+  _Assert_DatePartRejectsStringRef,
+  _Assert_DatePartBrandsNameTheirOwnOperator,
+  _Assert_DatePartObjectDateBrandsNameTheirOwnOperator,
+  _Assert_DatePartJoinsNumericExpressions,
   _Assert_SizeBrand,
   _Assert_ConcatArraysBrand,
   _Assert_ArrayElemAtBrand,

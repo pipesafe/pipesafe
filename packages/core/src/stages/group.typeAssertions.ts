@@ -612,6 +612,116 @@ type NestedExpressionIdTest = Assert<
   Equal<NestedExpressionIdResult, NestedExpressionIdExpected>
 >;
 
+// Test 19d: date-part operators in _id field, in both operand forms
+type DatePartIdSchema = {
+  ts: Date;
+  playerId: string;
+};
+
+type DatePartIdGroup = {
+  _id: {
+    playerId: "$playerId";
+    bucket: { $hour: { date: "$ts"; timezone: "Europe/London" } };
+    weekday: { $dayOfWeek: "$ts" };
+  };
+  n: { $sum: 1 };
+};
+
+type DatePartIdResult = ResolveGroupOutput<DatePartIdSchema, DatePartIdGroup>;
+
+type DatePartIdExpected = {
+  _id: {
+    playerId: string;
+    bucket: number;
+    weekday: number;
+  };
+  n: number;
+};
+
+type DatePartIdTest = Assert<Equal<DatePartIdResult, DatePartIdExpected>>;
+
+// Test 19e: EVERY date-part operator as an _id key. 19d proves the two forms
+// on two operators; this is the whole family in the position #116 reported,
+// so an unregistered or mis-declared entry cannot hide behind a sibling that
+// happened to get the test. Resolving to `number` here is the whole point —
+// before registration each key kept its operand's object shape and the rows
+// could not be asserted to a row type.
+type EveryDatePartIdGroup = {
+  _id: {
+    year: { $year: "$ts" };
+    month: { $month: "$ts" };
+    dayOfMonth: { $dayOfMonth: "$ts" };
+    dayOfWeek: { $dayOfWeek: "$ts" };
+    dayOfYear: { $dayOfYear: "$ts" };
+    hour: { $hour: "$ts" };
+    minute: { $minute: "$ts" };
+    second: { $second: "$ts" };
+    millisecond: { $millisecond: "$ts" };
+    week: { $week: "$ts" };
+    isoDayOfWeek: { $isoDayOfWeek: "$ts" };
+    isoWeek: { $isoWeek: "$ts" };
+    isoWeekYear: { $isoWeekYear: "$ts" };
+  };
+  n: { $sum: 1 };
+};
+
+type EveryDatePartIdResult = ResolveGroupOutput<
+  DatePartIdSchema,
+  EveryDatePartIdGroup
+>;
+
+type EveryDatePartIdExpected = {
+  _id: {
+    year: number;
+    month: number;
+    dayOfMonth: number;
+    dayOfWeek: number;
+    dayOfYear: number;
+    hour: number;
+    minute: number;
+    second: number;
+    millisecond: number;
+    week: number;
+    isoDayOfWeek: number;
+    isoWeek: number;
+    isoWeekYear: number;
+  };
+  n: number;
+};
+
+type EveryDatePartIdTest = Assert<
+  Equal<EveryDatePartIdResult, EveryDatePartIdExpected>
+>;
+
+// Test 19f: a date part as an ACCUMULATOR operand. `returns: number` is what
+// admits the family to the numeric-accumulator operand set, so this is the
+// registration's second-order consequence: $sum/$avg/$min/$max are
+// call-site-validated against CheckedAccumulatorOps, and a date part that
+// did not declare a numeric result would be rejected there rather than
+// resolving.
+type DatePartAccumulatorGroup = {
+  _id: "$playerId";
+  latestHour: { $max: { $hour: "$ts" } };
+  minuteTotal: { $sum: { $minute: "$ts" } };
+  meanWeekday: { $avg: { $isoDayOfWeek: "$ts" } };
+};
+
+type DatePartAccumulatorResult = ResolveGroupOutput<
+  DatePartIdSchema,
+  DatePartAccumulatorGroup
+>;
+
+type DatePartAccumulatorExpected = {
+  _id: string;
+  latestHour: number;
+  minuteTotal: number;
+  meanWeekday: number;
+};
+
+type DatePartAccumulatorTest = Assert<
+  Equal<DatePartAccumulatorResult, DatePartAccumulatorExpected>
+>;
+
 // ============================================================================
 // Test 20: $first and $last aggregators
 // ============================================================================
@@ -675,6 +785,9 @@ export type {
   DateToStringIdTest,
   ArithmeticIdTest,
   NestedExpressionIdTest,
+  DatePartIdTest,
+  EveryDatePartIdTest,
+  DatePartAccumulatorTest,
   FirstLastTest,
 };
 

@@ -388,7 +388,7 @@
       "count": 6
     },
     "typescript/await-thenable": {
-      "count": 6
+      "count": 5
     },
     "typescript/require-await": {
       "count": 6
@@ -692,6 +692,12 @@
   "packages/core/src/utils/useMemoryMongo.ts": {
     "no-await-in-loop": {
       "count": 1
+    },
+    "require-unicode-regexp": {
+      "count": 1
+    },
+    "unicorn/prefer-string-replace-all": {
+      "count": 1
     }
   },
   "packages/manifold/examples/model-dag-example.ts": {
@@ -836,6 +842,11 @@
     },
     "typescript/prefer-readonly-parameter-types": {
       "count": 21
+    }
+  },
+  "vitest.globalSetup.ts": {
+    "typescript/prefer-readonly-parameter-types": {
+      "count": 1
     }
   },
   "website/src/App.tsx": {
