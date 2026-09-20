@@ -30,7 +30,7 @@
         "typescript": "^5.9.3",
       },
       "peerDependencies": {
-        "mongodb": "^6.17.0",
+        "mongodb": ">=6.0.0",
       },
     },
     "packages/core-completions-tests": {
@@ -51,7 +51,7 @@
       },
       "peerDependencies": {
         "@pipesafe/core": ">=2.0.0 <3.0.0",
-        "mongodb": "^6.17.0",
+        "mongodb": ">=6.0.0",
       },
     },
     "website": {
