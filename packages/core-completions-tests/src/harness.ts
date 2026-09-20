@@ -60,9 +60,9 @@ function createHost(
         return ts.ScriptSnapshot.fromString(getVirtual());
       }
       const text = ts.sys.readFile(fileName);
-      return text === undefined ? undefined : (
-          ts.ScriptSnapshot.fromString(text)
-        );
+      return text === undefined
+        ? undefined
+        : ts.ScriptSnapshot.fromString(text);
     },
     getCurrentDirectory: () => packageRoot,
     getCompilationSettings: () => parsed.options,

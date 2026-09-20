@@ -14,14 +14,19 @@ import {
  * Tail-recursive path splitter: the accumulator makes the recursion eligible
  * for TS's tail-recursion elimination (~1000-depth budget instead of ~50).
  */
-export type SplitPath<S extends string, Acc extends string[] = []> =
-  S extends `${infer Head}.${infer Tail}` ? SplitPath<Tail, [...Acc, Head]>
+export type SplitPath<
+  S extends string,
+  Acc extends string[] = [],
+> = S extends `${infer Head}.${infer Tail}`
+  ? SplitPath<Tail, [...Acc, Head]>
   : [...Acc, S];
 
 /** Fold segments into nested single-key objects, innermost-out (tail-recursive). */
-type BuildNestedFromSegments<Segs extends readonly string[], Value> =
-  Segs extends [...infer Rest extends string[], infer Last extends string] ?
-    BuildNestedFromSegments<Rest, { [K in Last]: Value }>
+type BuildNestedFromSegments<
+  Segs extends readonly string[],
+  Value,
+> = Segs extends [...infer Rest extends string[], infer Last extends string]
+  ? BuildNestedFromSegments<Rest, { [K in Last]: Value }>
   : Value;
 
 export type ExpandDottedKey<
@@ -33,25 +38,26 @@ export type ExpandDottedKey<
 export type IsDottedKey<Key> = Key extends `${string}.${string}` ? true : false;
 
 // Check if a type has any dotted keys (keys containing a dot)
-export type HasDottedKeys<T> =
-  {
-    [K in keyof T]: K extends string ?
-      IsDottedKey<K> extends true ?
-        true
+export type HasDottedKeys<T> = {
+  [K in keyof T]: K extends string
+    ? IsDottedKey<K> extends true
+      ? true
       : never
     : never;
-  }[keyof T] extends never ?
-    false
+}[keyof T] extends never
+  ? false
   : true;
 
 // Given a type T, removes keys that are string-literal "dot syntax" keys (e.g. "a.b").
 // Only keeps the non-dotted (plain) keys.
 export type RemoveDottedKeys<T> = {
-  [K in keyof T as K extends string ?
-    IsDottedKey<K> extends true ?
-      never
-    : K
-  : K]: T[K];
+  [
+    K in keyof T as K extends string
+      ? IsDottedKey<K> extends true
+        ? never
+        : K
+      : K
+  ]: T[K];
 };
 
 // Merge expanded objects. Uses UnionToIntersection internally for
@@ -59,26 +65,25 @@ export type RemoveDottedKeys<T> = {
 // optional fields and nested structures, whereas UnionToIntersection merges
 // all expanded objects simultaneously (commutative).
 type MergeExpandedObjectsIterative<T> =
-  T extends Record<string, any> ?
-    {
-      [K in keyof T]: T[K];
-    } extends infer ExpandedMap ?
-      ExpandedMap extends Record<string, any> ?
-        // Extract all expanded objects as a union and merge simultaneously
-        UnionToIntersection<ExcludeUndefined<ExpandedMap[keyof ExpandedMap]>>
+  T extends Record<string, any>
+    ? {
+        [K in keyof T]: T[K];
+      } extends infer ExpandedMap
+      ? ExpandedMap extends Record<string, any>
+        ? // Extract all expanded objects as a union and merge simultaneously
+          UnionToIntersection<ExcludeUndefined<ExpandedMap[keyof ExpandedMap]>>
+        : never
       : never
-    : never
-  : {};
+    : {};
 
 // Expands all dotted keys into nested objects and merges them together.
 // Excludes undefined to handle optional properties correctly (TS adds
 // `| undefined` to indexed access of optional properties).
-type ExpandAllDottedIterative<T> =
-  {
-    [K in keyof T]: K extends string ? ExpandDottedKey<K, T[K]> : never;
-  } extends infer Expanded ?
-    Expanded extends Record<string, any> ?
-      MergeExpandedObjectsIterative<Expanded>
+type ExpandAllDottedIterative<T> = {
+  [K in keyof T]: K extends string ? ExpandDottedKey<K, T[K]> : never;
+} extends infer Expanded
+  ? Expanded extends Record<string, any>
+    ? MergeExpandedObjectsIterative<Expanded>
     : never
   : never;
 
@@ -99,11 +104,11 @@ type SeparateKeys<T> = {
 };
 
 export type FlattenDotSet<T> =
-  SeparateKeys<T> extends infer Separated ?
-    Separated extends { dotted: infer D; nonDotted: infer N } ?
-      Prettify<
-        N & // Non-dotted keys pass through
-          RemoveDottedKeys<MergeNested<{}, ExpandAllDottedIterative<D>>>
-      >
-    : never
-  : never;
+  SeparateKeys<T> extends infer Separated
+    ? Separated extends { dotted: infer D; nonDotted: infer N }
+      ? Prettify<
+          N & // Non-dotted keys pass through
+            RemoveDottedKeys<MergeNested<{}, ExpandAllDottedIterative<D>>>
+        >
+      : never
+    : never;
