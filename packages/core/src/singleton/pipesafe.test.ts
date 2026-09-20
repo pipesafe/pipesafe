@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { useMemoryMongo } from "../utils/useMemoryMongo";
 import { Collection } from "../collection/Collection";
 import { Pipeline } from "../pipeline/Pipeline";
@@ -15,8 +15,11 @@ const exampleDocs = [
 ];
 
 describe("Connections", async () => {
-  const { memoryReplSetUri, client } = await useMemoryMongo();
-  const DBName = await client.db().databaseName;
+  const {
+    memoryMongoUri,
+    client,
+    databaseName: DBName,
+  } = await useMemoryMongo();
   const CollectionName = "my_collection";
 
   beforeEach(async () => {
@@ -28,7 +31,13 @@ describe("Connections", async () => {
 
   describe("Singleton", async () => {
     beforeAll(() => {
-      pipesafe.connect(memoryReplSetUri);
+      pipesafe.connect(memoryMongoUri);
+    });
+
+    // The singleton holds its own MongoClient, which is not the one
+    // `useMemoryMongo` closes. Left open it outlives the file.
+    afterAll(async () => {
+      await pipesafe.close();
     });
 
     it("should create a client when connected", async () => {
