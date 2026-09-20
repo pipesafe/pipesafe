@@ -42,6 +42,19 @@
         "vitest": "^4.0.15",
       },
     },
+    "packages/intake": {
+      "name": "@pipesafe/intake",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@pipesafe/core": "workspace:*",
+        "@pipesafe/manifold": "workspace:*",
+        "typescript": "^5.9.3",
+      },
+      "peerDependencies": {
+        "@pipesafe/core": ">=1.1.0 <3.0.0",
+        "mongodb": "^6.17.0",
+      },
+    },
     "packages/manifold": {
       "name": "@pipesafe/manifold",
       "version": "1.0.0",
@@ -50,7 +63,7 @@
         "typescript": "^5.9.3",
       },
       "peerDependencies": {
-        "@pipesafe/core": ">=2.0.0 <3.0.0",
+        "@pipesafe/core": ">=1.1.0 <3.0.0",
         "mongodb": "^6.17.0",
       },
     },
@@ -267,6 +280,8 @@
     "@pipesafe/core": ["@pipesafe/core@workspace:packages/core"],
 
     "@pipesafe/core-completions-tests": ["@pipesafe/core-completions-tests@workspace:packages/core-completions-tests"],
+
+    "@pipesafe/intake": ["@pipesafe/intake@workspace:packages/intake"],
 
     "@pipesafe/manifold": ["@pipesafe/manifold@workspace:packages/manifold"],
 
