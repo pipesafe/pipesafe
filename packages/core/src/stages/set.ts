@@ -80,17 +80,18 @@ export type ValidateSetQuery<Schema extends Document, Q> =
   // checks guard themselves inside the kernel (ref/operand arms), so the
   // schema-free shape checks (multi-operator, mixed keys) still run on
   // index-signature schemas.
-  string extends keyof Q ? {}
-  : OmitNeverValues<{
-      [K in keyof Q]: ValidateNestedValue<Schema, Q[K]>;
-    }>;
+  string extends keyof Q
+    ? {}
+    : OmitNeverValues<{
+        [K in keyof Q]: ValidateNestedValue<Schema, Q[K]>;
+      }>;
 
 export type ResolveSetQueryValueType<
   Schema extends Document,
   Query,
   Key extends keyof Query,
-> =
-  Query[Key] extends "$$REMOVE" ? never
+> = Query[Key] extends "$$REMOVE"
+  ? never
   : // InferNestedFieldReference key-dispatches expressions internally; a
     // structural `extends Expression<Schema>` pre-check here would
     // instantiate the full expression union per value.
@@ -111,11 +112,11 @@ export type ResolveSetInlineSchema<Schema extends Document, Query> = {
 // Inner resolver with the inline schema hoisted to a parameter. Sits INSIDE
 // the PassThrough happy path so an upstream error never pays for it.
 type ResolveSetOutputInner<Schema extends Document, Inline extends Document> =
-  HasDottedKeys<Inline> extends true ?
-    // Has dotted keys - flatten them into nested structure first
-    Prettify<ApplySetUpdates<Schema, FlattenDotSet<Inline>>>
-  : // No dotted keys - skip FlattenDotSet entirely (Early Exit optimization)
-    Prettify<ApplySetUpdates<Schema, Inline>>;
+  HasDottedKeys<Inline> extends true
+    ? // Has dotted keys - flatten them into nested structure first
+      Prettify<ApplySetUpdates<Schema, FlattenDotSet<Inline>>>
+    : // No dotted keys - skip FlattenDotSet entirely (Early Exit optimization)
+      Prettify<ApplySetUpdates<Schema, Inline>>;
 
 // No `Query extends SetQuery<Schema>` re-check: Pipeline.set's generic
 // constraint already validated the query, and re-proving it would

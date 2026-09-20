@@ -4,9 +4,14 @@ pre-commit:
     build:
       run: bun run build
       stage_fixed: true
+    # Checks, does not fix. `oxlint --fix` applies fixes to violations that
+    # `oxlint-suppressions.json` suppresses, so running it here would rewrite
+    # the code the suppressions exist to defer — including collapsing the
+    # `x as T` in the *.typeAssertions.ts files, which is the whole point of
+    # those files. Run `bun run lint:fix` by hand, deliberately, and read the
+    # diff.
     lint:
-      run: bun run lint:fix
-      stage_fixed: true
+      run: bun run lint
     format:
       run: bun run format:fix
       stage_fixed: true

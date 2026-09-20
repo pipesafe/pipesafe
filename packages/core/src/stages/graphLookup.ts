@@ -7,8 +7,10 @@ import { ResolveMatchOutput } from "./match";
  * When DepthField is `never` (default), returns the document unchanged.
  * When DepthField is a string literal, adds `{ [depthField]: number }` to the document.
  */
-type GraphLookupElement<Doc extends Document, DepthField extends string> =
-  [DepthField] extends [never] ? Doc
+type GraphLookupElement<Doc extends Document, DepthField extends string> = [
+  DepthField,
+] extends [never]
+  ? Doc
   : Prettify<Doc & { [K in DepthField]: number }>;
 
 /**
@@ -20,8 +22,10 @@ type GraphLookupElement<Doc extends Document, DepthField extends string> =
  * MatchQuery union per call and silently fell back to the UNFILTERED
  * Foreign on mismatch instead of branding).
  */
-type NarrowForeignDoc<Foreign extends Document, RestrictMatch> =
-  [RestrictMatch] extends [never] ? Foreign
+type NarrowForeignDoc<Foreign extends Document, RestrictMatch> = [
+  RestrictMatch,
+] extends [never]
+  ? Foreign
   : ResolveMatchOutput<Foreign, RestrictMatch>;
 
 /**

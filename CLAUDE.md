@@ -53,8 +53,8 @@ pipesafe/
 - **Build**: `bun run build` - Builds both packages via TypeScript project references
 - **Build Watch**: `bun run build:watch` - Watch mode for both packages
 - **Clean**: `bun run clean` - Remove dist directories
-- **Lint**: `bun run lint` - Run ESLint
-- **Format**: `bun run format` - Run Prettier
+- **Lint**: `bun run lint` - Run oxlint, type-aware (via `oxlint-tsgolint`)
+- **Format**: `bun run format` - Run oxfmt
 - **Tests**: `bun run test:ci` - Run all tests
 
 Pre-commit hooks via lefthook automatically run format, lint, build, and tests before each commit. Hooks are installed automatically via the `prepare` script when running `bun install`.
@@ -241,8 +241,19 @@ TODO: Document the rest of the stages
   entry). NEVER use assertion pins to keep a type and a runtime constant in
   sync — a forgotten update must fail at the declaration site, not in a
   remote assertion file
-- Suppressing prettier/lint findings is unacceptable — no `// prettier-ignore`
-  or `// eslint-disable*` anywhere; restructure the code until the tools pass.
+- Suppressing formatter/lint findings is unacceptable — no `// oxfmt-ignore`
+  or `// oxlint-disable*` (nor the `prettier-ignore` / `eslint-disable*`
+  spellings oxlint still honours) anywhere; restructure the code until the
+  tools pass. The one exception is `oxlint-suppressions.json`, which carries
+  the findings that already existed when `strict-type-checked` and the
+  `suspicious` / `pedantic` / `perf` categories were switched on. It only ever
+  shrinks: fix findings and run `oxlint --prune-suppressions`. NEVER run
+  `oxlint --suppress-all` to make new code pass — the counts are per file and
+  per rule, so one extra violation in an already-listed file still fails.
+  `bun run lint:fix` is NOT part of the pre-commit hook and is not safe to
+  run blind: `oxlint --fix` fixes suppressed violations too, and its
+  `no-unnecessary-type-assertion` fix strips the `as T` that assertion files
+  exist to pin. Run it deliberately and read the diff.
   In assertion files, put `@ts-expect-error` on the exact line the error
   reports (a directive binds to the next line only; a multi-line statement may
   need one per reporting line) — never collapse a statement onto one line to

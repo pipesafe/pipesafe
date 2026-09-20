@@ -246,11 +246,11 @@ type DatePartSchema = {
 // removed one fails here too. (Same shape as _DerivedLiteralDependentOps —
 // a derived-set pin, not a type/const sync pin.)
 type _DerivedDatePartOps = {
-  [K in OpsInCategory<"date">]: ExpressionSpec<Document>[K] extends (
-    { returns: number }
-  ) ?
-    K
-  : never;
+  [K in OpsInCategory<"date">]: ExpressionSpec<Document>[K] extends {
+    returns: number;
+  }
+    ? K
+    : never;
 }[OpsInCategory<"date">];
 
 type _Assert_DatePartFamilyIsCovered = Assert<
@@ -315,11 +315,12 @@ type _Assert_DatePartAcceptsDateRef = Assert<
 type _Assert_DatePartAcceptsObjectForm = Assert<
   Equal<
     {
-      [K in DatePartOp]: { date: "$ts"; timezone: "Europe/London" } extends (
-        DatePartOperandOf<K>
-      ) ?
-        true
-      : false;
+      [K in DatePartOp]: {
+        date: "$ts";
+        timezone: "Europe/London";
+      } extends DatePartOperandOf<K>
+        ? true
+        : false;
     },
     Record<DatePartOp, true>
   >
@@ -329,8 +330,9 @@ type _Assert_DatePartAcceptsObjectForm = Assert<
 type _Assert_DatePartObjectFormTimezoneOptional = Assert<
   Equal<
     {
-      [K in DatePartOp]: { date: "$ts" } extends DatePartOperandOf<K> ? true
-      : false;
+      [K in DatePartOp]: { date: "$ts" } extends DatePartOperandOf<K>
+        ? true
+        : false;
     },
     Record<DatePartOp, true>
   >
@@ -352,11 +354,11 @@ type _Assert_DatePartRejectsStringRef = Assert<
 // operator name. Only a per-key message check catches it.
 
 type DatePartBrandMsg<K extends DatePartOp> =
-  Extract<DatePartOperandOf<K>, PipeSafeError<string>> extends (
-    PipeSafeError<infer Msg>
-  ) ?
-    Msg
-  : never;
+  Extract<DatePartOperandOf<K>, PipeSafeError<string>> extends PipeSafeError<
+    infer Msg
+  >
+    ? Msg
+    : never;
 
 type _Assert_DatePartBrandsNameTheirOwnOperator = Assert<
   Equal<
@@ -371,9 +373,9 @@ type DatePartObjectDateBrand<K extends DatePartOp> =
   Extract<
     Extract<DatePartOperandOf<K>, { date: unknown }>["date"],
     PipeSafeError<string>
-  > extends PipeSafeError<infer Msg> ?
-    Msg
-  : never;
+  > extends PipeSafeError<infer Msg>
+    ? Msg
+    : never;
 
 type _Assert_DatePartObjectDateBrandsNameTheirOwnOperator = Assert<
   Equal<
@@ -390,11 +392,12 @@ type _Assert_DatePartObjectDateBrandsNameTheirOwnOperator = Assert<
 type _Assert_DatePartJoinsNumericExpressions = Assert<
   Equal<
     {
-      [K in DatePartOp]: { [P in K]: "$ts" } extends (
-        ExpressionsReturning<DatePartSchema, number>
-      ) ?
-        true
-      : false;
+      [K in DatePartOp]: { [P in K]: "$ts" } extends ExpressionsReturning<
+        DatePartSchema,
+        number
+      >
+        ? true
+        : false;
     },
     Record<DatePartOp, true>
   >

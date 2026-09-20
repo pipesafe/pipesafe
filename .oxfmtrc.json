@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "semi": true,
+  "trailingComma": "es5",
+  "singleQuote": false,
+  "printWidth": 80,
+  "tabWidth": 2,
+  "useTabs": false,
+  "sortPackageJson": false,
+  "ignorePatterns": [
+    "node_modules",
+    "dist",
+    "*.lock",
+    "*.log",
+    "benchmarks/",
+    ".claude/",
+    // Written by `oxlint --suppress-all` / `--prune-suppressions`; oxlint owns
+    // its formatting (it emits no trailing newline) and rewrites it wholesale,
+    // so the two tools would otherwise take turns editing it.
+    "oxlint-suppressions.json"
+  ]
+}

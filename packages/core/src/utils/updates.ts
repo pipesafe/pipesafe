@@ -23,18 +23,17 @@ import {
 
 // Check if a type contains any non-never values (recursively)
 // Used to determine if $$REMOVE operations are setting any actual values
-type HasNonNeverValue<T> =
-  T extends object ?
-    { [K in keyof T]: HasNonNeverValue<T[K]> }[keyof T] extends false ?
-      false
+type HasNonNeverValue<T> = T extends object
+  ? { [K in keyof T]: HasNonNeverValue<T[K]> }[keyof T] extends false
+    ? false
     : true
-  : T extends never ? false
-  : true;
+  : T extends never
+    ? false
+    : true;
 
-type PlainObjectOrNever<T> =
-  T extends object ?
-    IsPlainObject<T> extends true ?
-      T
+type PlainObjectOrNever<T> = T extends object
+  ? IsPlainObject<T> extends true
+    ? T
     : never
   : never;
 
@@ -49,20 +48,21 @@ type MakeOptional<T> = {
 
 // Helper to compute preserved base fields (fields not being updated)
 // Extracted to reduce nesting depth in MergeSetPlainObjects
-type PreservedBaseFields<Base, Updates extends Document> =
-  [Base] extends [never] ?
-    {} // Base is never (new field), just return an empty object
-  : PlainObjectOrNever<ExcludeUndefined<Base>> extends infer BaseObject ?
-    BaseObject extends Document ?
-      // If Base is optional and we're setting actual values (not just $$REMOVE),
-      // make preserved fields optional since we're doing a partial update
-      undefined extends Base ?
-        HasNonNeverValue<Updates> extends true ?
-          MakeOptional<Omit<BaseObject, keyof Updates>>
+type PreservedBaseFields<Base, Updates extends Document> = [Base] extends [
+  never,
+]
+  ? {} // Base is never (new field), just return an empty object
+  : PlainObjectOrNever<ExcludeUndefined<Base>> extends infer BaseObject
+    ? BaseObject extends Document
+      ? // If Base is optional and we're setting actual values (not just $$REMOVE),
+        // make preserved fields optional since we're doing a partial update
+        undefined extends Base
+        ? HasNonNeverValue<Updates> extends true
+          ? MakeOptional<Omit<BaseObject, keyof Updates>>
+          : Omit<BaseObject, keyof Updates>
         : Omit<BaseObject, keyof Updates>
-      : Omit<BaseObject, keyof Updates>
-    : {}
-  : {};
+      : {}
+    : {};
 
 // BaseObj caches the undefined-stripped base used throughout the body.
 type MergeSetPlainObjects<
@@ -73,25 +73,29 @@ type MergeSetPlainObjects<
   RemoveNeverFields<
     PreservedBaseFields<Base, Updates> & {
       // Required update keys: new fields or fields that were required, or optional fields being set to actual values
-      [K in keyof Updates as K extends keyof BaseObj ?
-        undefined extends BaseObj[K] ?
-          HasNonNeverValue<Updates[K]> extends false ?
-            never
+      [
+        K in keyof Updates as K extends keyof BaseObj
+          ? undefined extends BaseObj[K]
+            ? HasNonNeverValue<Updates[K]> extends false
+              ? never
+              : K
+            : K
           : K
-        : K
-      : K]-?: MergedUpdateValue<
+      ]-?: MergedUpdateValue<
         K extends keyof BaseObj ? BaseObj[K] : never,
         Updates[K]
       >;
     } & {
       // Optional update keys: originally optional fields being set to only removals
-      [K in keyof Updates as K extends keyof BaseObj ?
-        undefined extends BaseObj[K] ?
-          HasNonNeverValue<Updates[K]> extends false ?
-            K
+      [
+        K in keyof Updates as K extends keyof BaseObj
+          ? undefined extends BaseObj[K]
+            ? HasNonNeverValue<Updates[K]> extends false
+              ? K
+              : never
+            : never
           : never
-        : never
-      : never]?: MergedUpdateValue<
+      ]?: MergedUpdateValue<
         K extends keyof BaseObj ? BaseObj[K] : never,
         Updates[K]
       >;
@@ -108,36 +112,41 @@ type MergedUpdateValue<BaseValue, UpdateValue> = MaybeAddUndefined<
 
 type MergeSetValue<BaseValue, UpdateValue> =
   // If BaseValue is never (new field), preserve UpdateValue as-is including optionality
-  [BaseValue] extends [never] ? UpdateValue
-  : PlainObjectOrNever<ExcludeUndefined<UpdateValue>> extends (
-    infer UpdateObject
-  ) ?
-    [UpdateObject] extends [never] ? UpdateValue
-    : UpdateObject extends Document ?
-      MergeSetPlainObjects<BaseValue, UpdateObject> // Pass BaseValue with undefined
-    : UpdateValue
-  : UpdateValue;
+  [BaseValue] extends [never]
+    ? UpdateValue
+    : PlainObjectOrNever<
+          ExcludeUndefined<UpdateValue>
+        > extends infer UpdateObject
+      ? [UpdateObject] extends [never]
+        ? UpdateValue
+        : UpdateObject extends Document
+          ? MergeSetPlainObjects<BaseValue, UpdateObject> // Pass BaseValue with undefined
+          : UpdateValue
+      : UpdateValue;
 
 // Helper to filter out keys with never values from a type
 // Handles both required never fields and optional never fields (never | undefined)
 // Recursively removes never fields from nested objects, with early exits for
 // arrays and non-object types.
-type RemoveNeverFields<T> =
-  T extends object ?
-    T extends any[] ?
-      T // Early exit: arrays are preserved as-is
+type RemoveNeverFields<T> = T extends object
+  ? T extends any[]
+    ? T // Early exit: arrays are preserved as-is
     : {
-        [K in keyof T as [T[K]] extends [never] ? never
-        : [Exclude<T[K], undefined>] extends [never] ? never
-        : K]: T[K] extends object ?
-          T[K] extends infer U ?
-            U extends any[] ?
-              T[K] // Preserve arrays
-            : IsPlainObject<U> extends true ?
-              RemoveNeverFields<U> // Recursively remove never fields from nested objects
+        [
+          K in keyof T as [T[K]] extends [never]
+            ? never
+            : [Exclude<T[K], undefined>] extends [never]
+              ? never
+              : K
+        ]: T[K] extends object
+          ? T[K] extends infer U
+            ? U extends any[]
+              ? T[K] // Preserve arrays
+              : IsPlainObject<U> extends true
+                ? RemoveNeverFields<U> // Recursively remove never fields from nested objects
+                : T[K]
             : T[K]
-          : T[K]
-        : T[K];
+          : T[K];
       }
   : T; // Early exit: non-object types pass through unchanged
 
@@ -152,13 +161,13 @@ type RemoveNeverFields<T> =
 // NOTE: When Schema is a union type, accessing non-existent properties via
 // Schema[K] returns `any` — K extends keyof Schema distinguishes new fields.
 type ClassifyUpdateKeys<Schema extends Document, Updates extends Document> = {
-  [K in keyof Updates]: K extends keyof Schema ?
-    undefined extends Schema[K] ?
-      HasNonNeverValue<Updates[K]> extends false ?
-        "optional" // Originally optional and only removals
-      : "required" // Originally optional but setting values
-    : "required" // Originally required
-  : "required"; // New field (doesn't exist in Schema)
+  [K in keyof Updates]: K extends keyof Schema
+    ? undefined extends Schema[K]
+      ? HasNonNeverValue<Updates[K]> extends false
+        ? "optional" // Originally optional and only removals
+        : "required" // Originally optional but setting values
+      : "required" // Originally required
+    : "required"; // New field (doesn't exist in Schema)
 };
 
 type RequiredUpdateKeys<
@@ -192,9 +201,9 @@ type ReorderKeysToMatchSchema<
   Schema extends Document,
   Output extends Document,
 > =
-  HaveSameKeys<Output, Schema> extends true ?
-    Output // Keys match exactly - no reordering needed
-  : ReorderedKeys<Schema, Output>;
+  HaveSameKeys<Output, Schema> extends true
+    ? Output // Keys match exactly - no reordering needed
+    : ReorderedKeys<Schema, Output>;
 
 // The module contract (header) guarantees `Updates` is already dot-EXPANDED
 // — callers run FlattenDotSet first — so there is exactly one merge path.

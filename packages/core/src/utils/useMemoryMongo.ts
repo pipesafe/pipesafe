@@ -75,11 +75,11 @@ export const useMemoryMongo = async () => {
 const uniqueDatabaseName = (): string => {
   const testPath = expect.getState().testPath;
   const stem =
-    testPath === undefined ? "suite" : (
-      basename(testPath)
-        .replace(/[^A-Za-z0-9]+/g, "_")
-        .slice(0, 32)
-    );
+    testPath === undefined
+      ? "suite"
+      : basename(testPath)
+          .replace(/[^A-Za-z0-9]+/g, "_")
+          .slice(0, 32);
   return `pipesafe_${stem}_${randomUUID().slice(0, 8)}`;
 };
 

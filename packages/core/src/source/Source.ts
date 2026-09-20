@@ -35,5 +35,6 @@ export interface Source<T = unknown> {
  * Infer document type from a Source.
  * Uses the __outputType phantom property on Collection and Model.
  */
-export type InferSourceType<S> =
-  S extends { __outputType: infer T } ? T : never;
+export type InferSourceType<S> = S extends { __outputType: infer T }
+  ? T
+  : never;

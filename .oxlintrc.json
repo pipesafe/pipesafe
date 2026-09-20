@@ -1,0 +1,73 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  // typescript-eslint's `strict-type-checked` set, named once rather than
+  // re-listed rule by rule. Oxlint has no built-in preset names, so the set
+  // is vendored (generated, not curated) at the path below — see the header
+  // of that file. This is what the old eslint.config.js meant to extend and
+  // did not (#114).
+  "extends": [".oxlint/strict-type-checked.json"],
+  // Oxlint's default plugin set, spelled out because listing `plugins` at all
+  // replaces it.
+  "plugins": ["typescript", "oxc", "unicorn"],
+  // Oxlint's own categories, taken wholesale as the baseline for the rules
+  // that would otherwise be off. `correctness` ("outright wrong or useless")
+  // is the nearest thing to the `js/recommended` set this repo used to
+  // extend; the other three are what an opinionated repo wants on top of it.
+  // Everything they turn up today is carried in `oxlint-suppressions.json`,
+  // so nothing is switched off and nothing can regress.
+  //
+  // `style` and `restriction` are deliberately NOT in the baseline:
+  //   - `style` contains `no-ternary` and `no-nested-ternary`, which the
+  //     formatter's ternary layout exists to make readable, plus `sort-keys`,
+  //     `no-magic-numbers` and `id-length` — ~3,000 findings that are not
+  //     "wrong", just a different house style from this one.
+  //   - `restriction` is oxlint's own opt-in-per-rule bucket ("lints which
+  //     prevent the use of language and library features"); wholesale it bans
+  //     `async`/`await`, optional chaining and `undefined`.
+  // Both are a rule-by-rule conversation, not a baseline.
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "pedantic": "error",
+    "perf": "error"
+  },
+  // Type-aware rules run through tsgolint (`oxlint-tsgolint`), which builds
+  // the TypeScript programs with typescript-go. Without this, every rule in
+  // the preset above that needs type information is silently inert — which is
+  // exactly what #114 was about. `bun run lint` passes `--type-aware` too, so
+  // the flag is there whichever way oxlint is invoked.
+  "options": {
+    "typeAware": true
+  },
+  "ignorePatterns": [".claude/**", "**/dist/**", "**/benchmarks/**"],
+  // Local overrides on top of the preset and the categories. Rules the tree
+  // does not pass yet are NOT switched off here — their findings are carried
+  // in `oxlint-suppressions.json` so the rules stay on and cannot regress.
+  "rules": {
+    // `strict-type-checked` enables this with default options; the repo's
+    // leading-underscore convention predates it.
+    "no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "destructuredArrayIgnorePattern": "^_",
+        "args": "after-used"
+      }
+    ],
+
+    // Use package imports ("@pipesafe/core") rather than relative paths
+    // across package boundaries.
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["**/packages/**"],
+            "message": "Use package imports (e.g. \"@pipesafe/core\") instead of relative cross-package imports"
+          }
+        ]
+      }
+    ]
+  }
+}
