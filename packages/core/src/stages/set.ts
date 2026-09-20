@@ -1,14 +1,6 @@
-import {
-  FieldReference,
-  InferNestedFieldReference,
-} from "../elements/fieldReference";
+import { InferNestedFieldReference } from "../elements/fieldReference";
 import { FieldSelectorKeys } from "../elements/fieldSelector";
-import { Expression } from "../elements/expressions";
-import {
-  AnyLiteral,
-  ExpressionShaped,
-  SystemVariable,
-} from "../elements/literals";
+import { ExpressionValue } from "../elements/expressions";
 import { ValidateNestedValue } from "../elements/validation";
 import { PassThrough } from "../utils/errors";
 import { Document, OmitNeverValues, Prettify } from "../utils/objects";
@@ -16,33 +8,15 @@ import { FlattenDotSet, HasDottedKeys } from "../utils/paths";
 import { ApplySetUpdates } from "../utils/updates";
 
 /**
- * The value union for a `$set` assignment. `$`-keyed OBJECTS are accepted
- * STRUCTURALLY (`ExpressionShaped`) and re-checked by `ValidateSetQuery`;
- * `$`-STRING values resolve to finite unions so they both autocomplete AND
- * reject typos at the constraint (a typo'd ref errors with a single TS2820
- * "Did you mean '$name'?" at the value — no validation walk needed for the
- * string case).
- *
- * Every string arm is FINITE — `FieldReference<Schema>` (schema-derived)
- * and `SystemVariable` (the enumerated `$$` vocabulary, "$$REMOVE"
- * included). No wide `` `$${string}` `` template exists here: a template
- * wide enough to accept arbitrary `$`-strings necessarily ABSORBS the
- * finite ref literals out of autocomplete (same predicate decides both),
- * and the `` & {} `` non-absorption spelling leaks String.prototype into
- * sibling object-literal completions. Finite literals have neither
- * problem.
- *
- * `Expression<Schema>` is an AUTOCOMPLETE-ONLY member: for checking it is
- * subsumed by `ExpressionShaped` (every valid expression is
- * expression-shaped), so it cannot decide acceptance — do not "fix"
- * acceptance bugs by editing it.
+ * The value union for a `$set` assignment — the shared computed-value
+ * union (see ExpressionValue, elements/expressions.ts): `$`-keyed objects
+ * accepted structurally and re-checked by ValidateSetQuery; `$`-strings
+ * are finite unions that autocomplete and reject typos at the constraint.
  */
-type SetValue<Schema extends Document> =
-  | AnyLiteral<Schema>
-  | Expression<Schema>
-  | FieldReference<Schema>
-  | SystemVariable
-  | ExpressionShaped;
+type SetValue<
+  Schema extends Document,
+  Vars extends Document = {},
+> = ExpressionValue<Schema, Vars>;
 
 /**
  * `$set` query. The `[k: string]` index signature keeps arbitrary new keys
@@ -56,9 +30,12 @@ type SetValue<Schema extends Document> =
  * multi-minute hang. `unknown & SetValue<Schema>` (the effective type at a
  * known-selector key, via the index signature) is still `SetValue<Schema>`,
  * so acceptance and value completions are unchanged.
+ *
+ * `Vars` is the stage's variable environment (Pipeline threads lookup-let
+ * bindings through it; system variables resolve statically beside it).
  */
-export type SetQuery<Schema extends Document> = {
-  [k: string]: SetValue<Schema>;
+export type SetQuery<Schema extends Document, Vars extends Document = {}> = {
+  [k: string]: SetValue<Schema, Vars>;
 } & FieldSelectorKeys<Schema, unknown>;
 
 /**
@@ -74,7 +51,11 @@ export type SetQuery<Schema extends Document> = {
  * error). `"$$REMOVE"` needs no special case: the kernel accepts the
  * `$$`-system-variable namespace.
  */
-export type ValidateSetQuery<Schema extends Document, Q> =
+export type ValidateSetQuery<
+  Schema extends Document,
+  Q,
+  Vars extends Document = {},
+> =
   // Wide-QUERY guard: on constraint failure TS re-instantiates this wrapper
   // with Q = SetQuery<Schema> itself — skip entirely. Schema-DEPENDENT
   // checks guard themselves inside the kernel (ref/operand arms), so the
@@ -82,19 +63,20 @@ export type ValidateSetQuery<Schema extends Document, Q> =
   // index-signature schemas.
   string extends keyof Q ? {}
   : OmitNeverValues<{
-      [K in keyof Q]: ValidateNestedValue<Schema, Q[K]>;
+      [K in keyof Q]: ValidateNestedValue<Schema, Q[K], Vars>;
     }>;
 
 export type ResolveSetQueryValueType<
   Schema extends Document,
   Query,
   Key extends keyof Query,
+  Vars extends Document = {},
 > =
   Query[Key] extends "$$REMOVE" ? never
   : // InferNestedFieldReference key-dispatches expressions internally; a
     // structural `extends Expression<Schema>` pre-check here would
     // instantiate the full expression union per value.
-    InferNestedFieldReference<Schema, Query[Key]>;
+    InferNestedFieldReference<Schema, Query[Key], Vars>;
 
 // COLLECTION SCHEMA // SET STAGE ==> OUTPUT SCHEMA
 // { a?: string | undefined } // { $set: { a: 'hello' }} ==> { a: string }
@@ -104,8 +86,12 @@ export type ResolveSetQueryValueType<
 // Never-valued entries ($$REMOVE) are stripped INSIDE ApplySetUpdates
 // (RemoveNeverFields) — don't pre-strip them here or nested removals lose
 // their optionality reclassification.
-export type ResolveSetInlineSchema<Schema extends Document, Query> = {
-  [Key in keyof Query]: ResolveSetQueryValueType<Schema, Query, Key>;
+export type ResolveSetInlineSchema<
+  Schema extends Document,
+  Query,
+  Vars extends Document = {},
+> = {
+  [Key in keyof Query]: ResolveSetQueryValueType<Schema, Query, Key, Vars>;
 };
 
 // Inner resolver with the inline schema hoisted to a parameter. Sits INSIDE
@@ -120,7 +106,11 @@ type ResolveSetOutputInner<Schema extends Document, Inline extends Document> =
 // No `Query extends SetQuery<Schema>` re-check: Pipeline.set's generic
 // constraint already validated the query, and re-proving it would
 // instantiate the full SetQuery mapped type per call.
-export type ResolveSetOutput<Schema extends Document, Query> = PassThrough<
+export type ResolveSetOutput<
+  Schema extends Document,
+  Query,
+  Vars extends Document = {},
+> = PassThrough<
   Schema,
-  ResolveSetOutputInner<Schema, ResolveSetInlineSchema<Schema, Query>>
+  ResolveSetOutputInner<Schema, ResolveSetInlineSchema<Schema, Query, Vars>>
 >;

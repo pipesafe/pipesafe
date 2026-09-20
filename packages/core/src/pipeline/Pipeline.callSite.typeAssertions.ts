@@ -12,6 +12,7 @@
  */
 
 import { Pipeline } from "./Pipeline";
+import { Collection } from "../collection/Collection";
 import { Document } from "../utils/objects";
 
 type User = {
@@ -113,19 +114,36 @@ const _set_bad_typo_op_nested = new Pipeline<User>().set({
 const _set_generic_helper_ok = <D extends Document>(p: Pipeline<D, D>): void =>
   void p.set({ x: { $toUpper: "$y" }, y: { $add: [1, 2] } });
 
-// set — `$$`-system variables are not field references; they are accepted.
+// set — `$$`-variable references are accepted, dotted paths included; a
+// bad dotted path rejects at the constraint (finite union).
 const _set_system_var_ok = new Pipeline<User>().set({
   a: { b: "$$REMOVE" },
   now: "$$NOW",
+  rootName: "$$ROOT.name",
+  currentAge: "$$CURRENT.age",
 });
 
-// set — $concat operands are validated ELEMENT-WISE (ValidateConcatValue):
-// plain strings of any shape (separators NoDollarString can't cover),
-// valid string refs, and `$$`-system variables pass; typo'd `$`-refs brand
-// with the Field message; refs to non-string fields and non-string
-// literals brand with the operator's RequiresMsg.
+const _set_bad_sysvar_path_top = new Pipeline<User>().set({
+  // @ts-expect-error  '$$ROOT.naem' is not in the environment's vocabulary
+  x: "$$ROOT.naem",
+});
+
+// set — $concat operands validate ELEMENT-WISE: plain strings, valid
+// string refs, and string-RESOLVING `$$`-references ("$$ROOT.name") pass;
+// typo'd refs get the Field brand; non-string refs/literals/variables
+// ("$$NOW" is a Date) get the operator's RequiresMsg.
 const _set_concat_ok = new Pipeline<User>().set({
-  greeting: { $concat: ["Hello ", "$name", " - ", "(", "", "$$NOW"] },
+  greeting: { $concat: ["Hello ", "$name", " - ", "(", "", "$$ROOT.name"] },
+});
+
+const _set_concat_nonstring_sysvar = new Pipeline<User>().set({
+  greeting: {
+    $concat: [
+      "Now: ",
+      // @ts-expect-error  '$$NOW' is a Date; $concat requires a string operand
+      "$$NOW",
+    ],
+  },
 });
 
 const _set_concat_bad_ref = new Pipeline<User>().set({
@@ -164,6 +182,68 @@ const _set_concat_bad_literal = new Pipeline<User>().set({
 const _set_trig_allowlisted_ok = new Pipeline<User>().set({
   angleRad: { $degreesToRadians: "$age" },
   angleDeg: { $radiansToDegrees: "$age" },
+});
+
+// set — system variables are accepted in TYPED operand positions by their
+// ACCURATE type (SystemVariablesThatInferTo): a Date-target operand takes
+// "$$NOW".
+const _set_sysvar_operand_ok = new Pipeline<User>().set({
+  expiry: { $dateAdd: { startDate: "$$NOW", unit: "day", amount: 30 } },
+});
+
+// set — $let interiors validate WITH the block's bindings: bound `$$`-vars
+// pass (dotted paths included), `vars` values check in the OUTER scope,
+// unknown `$$`-names inside `in` still brand.
+const _set_let_ok = new Pipeline<User>().set({
+  agePlus: { $let: { vars: { t: "$age" }, in: { $add: ["$$t", 1] } } },
+  viaRoot: { $let: { vars: { r: "$$ROOT" }, in: "$$r.age" } },
+});
+
+const _set_let_bad_vars_ref = new Pipeline<User>().set({
+  x: {
+    $let: {
+      vars: {
+        // @ts-expect-error  '$naem' is not on the schema
+        t: "$naem",
+      },
+      in: "$$t",
+    },
+  },
+});
+
+const _set_let_unknown_var = new Pipeline<User>().set({
+  x: {
+    $let: {
+      vars: { t: "$age" },
+      // @ts-expect-error  '$$typo' is not a recognized system variable
+      in: "$$typo",
+    },
+  },
+});
+
+// set — $map/$filter bind the element under `as` (default "this"); the
+// bound variable resolves inside `in`/`cond` and an unbound `$$`-name
+// brands.
+const _set_map_ok = new Pipeline<User>().set({
+  hashTags: {
+    $map: { input: "$tags", as: "t", in: { $concat: ["#", "$$t"] } },
+  },
+});
+
+const _set_filter_ok = new Pipeline<User>().set({
+  activeTags: {
+    $filter: { input: "$tags", cond: { $ne: ["$$this", "inactive"] } },
+  },
+});
+
+const _set_filter_bad_cond_var = new Pipeline<User>().set({
+  t: {
+    $filter: {
+      input: "$tags",
+      // @ts-expect-error  '$$item' is not bound here (the element is $$this)
+      cond: { $eq: ["$$item", "x"] },
+    },
+  },
 });
 
 // group — accumulator operand brands fire at the chained call site via
@@ -216,14 +296,21 @@ const _group_min_underscore_ok = new Pipeline<User>().group({
   m: { $min: "_pending" },
 });
 
-// group — `$$`-system variables are valid MongoDB in _id and in ANY
-// accumulator position (`$max: "$$NOW"`, `$push: "$$ROOT"`): they must not
-// hit the comparable/numeric operand brands.
+// group — `$$`-variables are valid in _id and ANY accumulator position
+// (they must not hit the comparable/numeric operand brands); dotted paths
+// resolve, bad paths get the Field brand.
 const _group_system_vars_ok = new Pipeline<User>().group({
   _id: "$$NOW",
   latest: { $max: "$$NOW" },
   total: { $sum: "$$NOW" },
   docs: { $push: "$$ROOT" },
+  newest: { $max: "$$ROOT.joinedAt" },
+});
+
+const _group_bad_sysvar_path = new Pipeline<User>().group({
+  _id: null,
+  // @ts-expect-error  'naem' is not on the schema
+  latest: { $max: "$$ROOT.naem" },
 });
 
 // group — an accumulator key mixed with plain keys is malformed (MongoDB:
@@ -341,6 +428,50 @@ const _facet_bad = new Pipeline<User>().facet({
   bad: (p) => p.sort({ naem: 1 }),
 });
 
+// ---------------------------------------------------------------------------
+// lookup `let` — bindings validate against the OUTER schema/environment and
+// enter the sub-pipeline's environment (Pipeline's Env generic).
+// ---------------------------------------------------------------------------
+
+type Order = { _id: string; sku: string; qty: number };
+declare const _ordersColl: Collection<Order>;
+
+const _lookup_let_ok = new Pipeline<User>().lookup({
+  from: _ordersColl,
+  as: "orders",
+  let: { userName: "$name", minQty: 2, rootAge: "$$ROOT.age" },
+  pipeline: (p) =>
+    p.match({ $expr: { $eq: ["$sku", "$$userName"] } }).set({
+      forUser: "$$userName",
+      boosted: { $add: ["$$minQty", "$qty"] },
+      viaForeignRoot: "$$ROOT.qty",
+    }),
+});
+
+const _lookup_let_bad_outer_ref = new Pipeline<User>().lookup({
+  from: _ordersColl,
+  as: "orders",
+  let: {
+    // @ts-expect-error  '$naem' is not on the OUTER schema
+    u: "$naem",
+  },
+  pipeline: (p) => p.limit(1),
+});
+
+// An Env'd Pipeline accepts its bindings at string-value positions. The
+// out-of-scope rejection ("$$typo") is pinned type-level in
+// validation.typeAssertions.ts instead of via a call: first-time failure
+// elaboration at a call site can trip TS's depth limiter with a spurious
+// TS2589 (pre-existing — see the Known limitations note in CLAUDE.md).
+declare const _envPipeline: Pipeline<
+  Order,
+  Order,
+  "runtime",
+  never,
+  { u: string }
+>;
+const _lookup_let_env_binding_ok = _envPipeline.set({ ok: "$$u" });
+
 export {
   _match_bad,
   _sort_bad,
@@ -360,8 +491,17 @@ export {
   _set_concat_bad_ref,
   _set_concat_nonstring_ref,
   _set_concat_bad_literal,
+  _set_concat_nonstring_sysvar,
   _set_trig_allowlisted_ok,
+  _set_sysvar_operand_ok,
+  _set_let_ok,
+  _set_let_bad_vars_ref,
+  _set_let_unknown_var,
+  _set_map_ok,
+  _set_filter_ok,
+  _set_filter_bad_cond_var,
   _group_system_vars_ok,
+  _group_bad_sysvar_path,
   _unset_bad,
   _group_bad_sum,
   _group_min_string_ok,
@@ -385,4 +525,8 @@ export {
   _replaceRoot_bad,
   _unwind_bad,
   _facet_bad,
+  _set_bad_sysvar_path_top,
+  _lookup_let_ok,
+  _lookup_let_bad_outer_ref,
+  _lookup_let_env_binding_ok,
 };

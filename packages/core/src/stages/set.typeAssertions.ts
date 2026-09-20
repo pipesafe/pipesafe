@@ -1157,26 +1157,72 @@ type PrettifySetExpected = {
 type PrettifySetTest = Assert<Equal<PrettifySetResult, PrettifySetExpected>>;
 
 // ============================================================================
-// $$-system variables infer as `unknown` — never a dropped field
+// $$-system variables infer their ACCURATE types (SystemVariableSpec)
 // ============================================================================
-// Validation ACCEPTS `$$`-vars ($$NOW, $$ROOT, ...), so inference mapping
-// them to `never` silently erased the key from the output schema (and a
-// later read of it falsely branded Field-not-on-schema). Only $$REMOVE
+// $$NOW is a Date, $$ROOT/$$CURRENT are the current document, dotted paths
+// into document-typed variables resolve ("$$ROOT.a"), $$USER_ROLES is the
+// role-document array — and anything unresolvable degrades to `unknown`,
+// never to a dropped field (validation owns rejection). Only $$REMOVE
 // keeps the load-bearing `never` (see the $$REMOVE tests above).
 
 type SystemVarSetSchema = {
   a: string;
 };
-type SystemVarSetQuery = { snapshotAt: "$$NOW"; root: "$$ROOT" };
+type SystemVarSetQuery = {
+  snapshotAt: "$$NOW";
+  root: "$$ROOT";
+  rootField: "$$ROOT.a";
+  roles: "$$USER_ROLES";
+};
 type SystemVarSetResult = ResolveSetOutput<
   SystemVarSetSchema,
   SystemVarSetQuery
 >;
 type SystemVarSetExpected = {
   a: string;
-  snapshotAt: unknown;
-  root: unknown;
+  snapshotAt: Date;
+  root: { a: string };
+  rootField: string;
+  roles: { _id: string; role: string; db: string }[];
 };
 type SystemVarSetTest = Assert<Equal<SystemVarSetResult, SystemVarSetExpected>>;
 
-export type { PrettifySetTest, SystemVarSetTest };
+// ============================================================================
+// $let / $map bound variables infer accurately through the Vars environment
+// ============================================================================
+// $let's result is its `in` expression with the vars bound ($$t below);
+// $map lifts its `in` result to an array with the element bound as $$this
+// (or the `as` name), including dotted paths into a document element.
+
+type LetSetSchema = { age: number; items: { qty: number; sku: string }[] };
+type LetSetResult = ResolveSetOutput<
+  LetSetSchema,
+  {
+    doubled: { $let: { vars: { t: "$age" }; in: { $add: ["$$t", 1] } } };
+    viaRoot: { $let: { vars: { r: "$$ROOT" }; in: "$$r.age" } };
+  }
+>;
+type LetSetExpected = {
+  age: number;
+  items: { qty: number; sku: string }[];
+  doubled: number;
+  viaRoot: number;
+};
+type LetSetTest = Assert<Equal<LetSetResult, LetSetExpected>>;
+
+type MapSetResult = ResolveSetOutput<
+  LetSetSchema,
+  {
+    qtys: { $map: { input: "$items"; as: "item"; in: "$$item.qty" } };
+    defaulted: { $map: { input: "$items"; in: "$$this.sku" } };
+  }
+>;
+type MapSetExpected = {
+  age: number;
+  items: { qty: number; sku: string }[];
+  qtys: number[];
+  defaulted: string[];
+};
+type MapSetTest = Assert<Equal<MapSetResult, MapSetExpected>>;
+
+export type { PrettifySetTest, SystemVarSetTest, LetSetTest, MapSetTest };

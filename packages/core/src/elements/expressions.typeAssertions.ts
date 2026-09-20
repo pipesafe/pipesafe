@@ -275,6 +275,8 @@ type _DerivedLiteralDependentOps = Assert<
     | "$concatArrays"
     | "$arrayElemAt"
     | "$filter"
+    | "$map"
+    | "$let"
     | "$ifNull"
     | "$cond"
     | "$literal"

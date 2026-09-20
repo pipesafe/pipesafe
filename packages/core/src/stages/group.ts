@@ -7,8 +7,11 @@ import { ValidateNestedValue } from "../elements/validation";
 import {
   AnyLiteral,
   ExpressionShaped,
+  HasUserBindings,
   LiteralOrFieldReferenceInferringTo,
-  SystemVariable,
+  SystemVariableReferences,
+  ValidateVariableReference,
+  VariableReferences,
 } from "../elements/literals";
 import {
   Expression,
@@ -28,7 +31,6 @@ import {
   PipeSafeError,
   RequiresMsg,
   UnknownAccumulatorError,
-  UnknownSystemVariableError,
 } from "../utils/errors";
 import { ExpressionOperand } from "../elements/operands";
 
@@ -178,22 +180,28 @@ export type AccumulatorFunction<Schema extends Document> = AccumulatorFor<
  * read the registry; operand-dependent ones ($min/$max/$first/$last yield
  * the operand's type, $push/$addToSet an array of it) keep explicit arms.
  */
-export type ResolveAccumulatorFunction<Schema extends Document, Accumulator> =
+export type ResolveAccumulatorFunction<
+  Schema extends Document,
+  Accumulator,
+  Vars extends Document = {},
+> =
   Accumulator extends { $sum: any } ? AccumulatorSpec<Schema>["$sum"]["returns"]
   : Accumulator extends { $avg: any } ?
     AccumulatorSpec<Schema>["$avg"]["returns"]
   : Accumulator extends { $count: any } ?
     AccumulatorSpec<Schema>["$count"]["returns"]
-  : Accumulator extends { $min: infer A } ? InferNestedFieldReference<Schema, A>
-  : Accumulator extends { $max: infer A } ? InferNestedFieldReference<Schema, A>
+  : Accumulator extends { $min: infer A } ?
+    InferNestedFieldReference<Schema, A, Vars>
+  : Accumulator extends { $max: infer A } ?
+    InferNestedFieldReference<Schema, A, Vars>
   : Accumulator extends { $push: infer A } ?
-    InferNestedFieldReference<Schema, A>[]
+    InferNestedFieldReference<Schema, A, Vars>[]
   : Accumulator extends { $addToSet: infer A } ?
-    InferNestedFieldReference<Schema, A>[]
+    InferNestedFieldReference<Schema, A, Vars>[]
   : Accumulator extends { $first: infer A } ?
-    InferNestedFieldReference<Schema, A>
+    InferNestedFieldReference<Schema, A, Vars>
   : Accumulator extends { $last: infer A } ?
-    InferNestedFieldReference<Schema, A>
+    InferNestedFieldReference<Schema, A, Vars>
   : // Allow-listed unimplemented accumulators (UnimplementedAccumulators)
   // have no inference — their result degrades to `unknown`, never to a
   // `never`-poisoned field. (Typo'd keys also land here, but validation
@@ -201,11 +209,12 @@ export type ResolveAccumulatorFunction<Schema extends Document, Accumulator> =
   HasOperatorKey<Accumulator> extends true ? unknown
   : never;
 
-export type GroupQuery<Schema extends Document> = {
-  // The enumerated `$$`-system variables ($$NOW, $$ROOT, ...) are valid _id
-  // expressions; AnyLiteral's string arm is NoDollarString, so they need
-  // their own arm — finite, so they autocomplete and an unlisted `$$var`
-  // rejects at the constraint.
+export type GroupQuery<Schema extends Document, Vars extends Document = {}> = {
+  // The environment's `$$`-variable references ($$NOW, "$$ROOT.name",
+  // lookup-let bindings, ...) are valid _id expressions; AnyLiteral's
+  // string arm is NoDollarString, so they need their own arm — finite, so
+  // they autocomplete and an out-of-scope `$$var` rejects at the
+  // constraint.
   // `FieldReference<Schema>` is likewise its own arm: grouping by any field —
   // including array/document refs like `$tags`/`$shipping`/`$items` — is valid
   // MongoDB, but AnyLiteral only offers references that infer to PRIMITIVES.
@@ -217,7 +226,8 @@ export type GroupQuery<Schema extends Document> = {
     | AnyLiteral<Schema>
     | Expression<Schema>
     | FieldReference<Schema>
-    | SystemVariable
+    | SystemVariableReferences<Schema>
+    | VariableReferences<Vars>
     | null;
 } & {
   // The index signature covers _id too, so it must also carry the `$$` and
@@ -233,7 +243,8 @@ export type GroupQuery<Schema extends Document> = {
     | AccumulatorFunction<Schema>
     | ExpressionShaped
     | FieldReference<Schema>
-    | SystemVariable
+    | SystemVariableReferences<Schema>
+    | VariableReferences<Vars>
     | null;
 };
 
@@ -286,7 +297,11 @@ type BrandedAccumulatorFor<
   >;
 };
 
-type ValidateAccumulatorValue<Schema extends Document, A> =
+type ValidateAccumulatorValue<
+  Schema extends Document,
+  A,
+  Vars extends Document = {},
+> =
   // Schema-FREE fast-accept: an operand valid against the EMPTY schema is
   // valid against any schema (the ref arms collapse to `never` under `{}`).
   // DERIVED from the registry (`AccumulatorFor<{}, Op>`) so an operand
@@ -306,19 +321,33 @@ type ValidateAccumulatorValue<Schema extends Document, A> =
     [keyof AccumulatorSpec<Schema> | UnimplementedAccumulators]
   ) ?
     OperatorKeyOf<A> extends infer Op extends CheckedAccumulatorOps ?
-      // The enumerated `$$`-system variables are valid MongoDB in any
-      // accumulator position (mirrors the kernel's tier-1 arm in
-      // ValidateNestedValue) — schema-free, and checked before the operand
-      // relation so they never reach the comparable/numeric brand. An
-      // UNLISTED `$$var` brands as an unknown system variable instead of a
-      // misleading operand/field message.
-      A[Op & keyof A] extends SystemVariable ? never
-      : A[Op & keyof A] extends `$$${string}` ?
-        {
-          [K in Op & string]: UnknownSystemVariableError<
-            A[Op & keyof A] & string
-          >;
-        }
+      // `$$`-variables are valid MongoDB in any accumulator position —
+      // checked before the operand relation so they never reach the
+      // comparable/numeric brand. ValidateVariableReference passes exact
+      // names and valid dotted paths ("$$ROOT.age"); unknown names/bad
+      // paths get the Variable/Field brand instead of a misleading operand
+      // message.
+      A[Op & keyof A] extends `$$${string}` ?
+        ValidateVariableReference<
+          Schema,
+          A[Op & keyof A] & string,
+          Vars
+        > extends infer Err ?
+          [Err] extends [never] ?
+            never
+          : { [K in Op & string]: Err }
+        : never
+      : HasUserBindings<Vars> extends true ?
+        // Binder/lookup-let interior: mirrors ValidateExpressionValue's
+        // forgiving branch — Vars-blind relation as fast-accept (and
+        // wide-shape cycle breaker), operand-tree walk for the leftovers.
+        [A] extends [AccumulatorFor<{}, Op>] ? never
+        : [A] extends [AccumulatorFor<Schema, Op>] ? never
+        : ValidateNestedValue<Schema, A[Op & keyof A], Vars> extends infer R ?
+          [R] extends [never] ?
+            never
+          : { [K in Op & string]: R }
+        : never
       : string extends keyof Schema ?
         never // operand checks are meaningless on a wide/index-signature schema
       : // $min/$max: ANY non-`$` string literal is a comparable. The union
@@ -353,13 +382,18 @@ type ValidateAccumulatorValue<Schema extends Document, A> =
  * yet. Distributes over union-typed values so a union of valid
  * accumulators stays valid.
  */
-type ValidateGroupValue<Schema extends Document, K, V> =
+type ValidateGroupValue<
+  Schema extends Document,
+  K,
+  V,
+  Vars extends Document = {},
+> =
   V extends unknown ?
-    K extends "_id" ? ValidateNestedValue<Schema, V>
-    : [OperatorKeyOf<V>] extends [never] ? ValidateNestedValue<Schema, V>
+    K extends "_id" ? ValidateNestedValue<Schema, V, Vars>
+    : [OperatorKeyOf<V>] extends [never] ? ValidateNestedValue<Schema, V, Vars>
     : HasSingleOperatorKey<V> extends false ? MultiOperatorError
     : [Exclude<keyof V & string, `$${string}`>] extends [never] ?
-      ValidateAccumulatorValue<Schema, V>
+      ValidateAccumulatorValue<Schema, V, Vars>
     : // Accumulator key mixed with plain keys — MongoDB: "The field must
       // specify one accumulator" (mirrors ValidateExpressionValue's guard).
       MultiOperatorError
@@ -386,7 +420,11 @@ type ValidateGroupValue<Schema extends Document, K, V> =
  * keys and overflowing the instantiation depth on top of the real
  * constraint error.
  */
-export type ValidateGroupQuery<Schema extends Document, Q> =
+export type ValidateGroupQuery<
+  Schema extends Document,
+  Q,
+  Vars extends Document = {},
+> =
   // Wide-QUERY guard: on constraint failure TS re-instantiates this wrapper
   // with Q = GroupQuery<Schema> itself — skip entirely. Schema-DEPENDENT
   // checks guard themselves (ValidateAccumulatorValue / the kernel's
@@ -394,17 +432,18 @@ export type ValidateGroupQuery<Schema extends Document, Q> =
   // schemas.
   string extends keyof Q ? {}
   : OmitNeverValues<{
-      [K in keyof Q]: ValidateGroupValue<Schema, K, Q[K]>;
+      [K in keyof Q]: ValidateGroupValue<Schema, K, Q[K], Vars>;
     }>;
 
 export type ResolveGroupOutput<
   Schema extends Document,
-  G extends GroupQuery<Schema>,
+  G extends GroupQuery<Schema, Vars>,
+  Vars extends Document = {},
 > = PassThrough<
   Schema,
   Prettify<
     {
-      _id: InferNestedFieldReference<Schema, G["_id"]> extends infer Id ?
+      _id: InferNestedFieldReference<Schema, G["_id"], Vars> extends infer Id ?
         Id extends object ?
           Id extends Date | unknown[] ?
             Id // Don't flatten Date/array _id (e.g. tuples from $dateToParts)
@@ -414,7 +453,8 @@ export type ResolveGroupOutput<
     } & {
       [key in Exclude<keyof G, "_id">]: ResolveAccumulatorFunction<
         Schema,
-        G[key]
+        G[key],
+        Vars
       >;
     }
   >

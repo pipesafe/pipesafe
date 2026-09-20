@@ -7,7 +7,7 @@
  * Pattern: .set() a new field, then use that field in the next stage
  */
 
-import { Pipeline } from "./Pipeline";
+import { InferOutputType, Pipeline } from "./Pipeline";
 import { Collection } from "../collection/Collection";
 import { Assert, Equal } from "../utils/tests";
 import { PipeSafeError } from "../utils/errors";
@@ -106,6 +106,36 @@ const _setThenLookup = _p.set({ lookupKey: "$_id" }).lookup({
 });
 
 // =============================================================================
+// Test: .lookup() with `let` — bindings infer against the OUTER schema and
+// resolve, accurately typed, inside every sub-pipeline stage; `$$ROOT`
+// there is the FOREIGN document.
+// =============================================================================
+const _lookupWithLet = _p.lookup({
+  from: _otherCollection,
+  as: "picked",
+  let: { outerName: "$name", bonus: "$value" },
+  pipeline: (p) =>
+    p.set({
+      fromOuter: "$$outerName",
+      boosted: { $add: ["$$bonus", 1] },
+      foreignId: "$$ROOT._id",
+    }),
+});
+type _LookupLetSubOutput = Assert<
+  Equal<
+    InferOutputType<typeof _lookupWithLet>["picked"],
+    {
+      _id: string;
+      refId: string;
+      data: string;
+      fromOuter: string;
+      boosted: number;
+      foreignId: string;
+    }[]
+  >
+>;
+
+// =============================================================================
 // Test: .group() then .set() - reference aggregated fields
 // =============================================================================
 const _groupThenSet = _p
@@ -136,6 +166,7 @@ const _projectThenMatch = _p
   .match({ computedName: { $exists: true } }); // Can match on computed field from project
 
 export {
+  _lookupWithLet,
   _setThenSet,
   _setThenMatch,
   _setThenUnset,
@@ -202,6 +233,7 @@ type _ValidNoLeak = ResolveMatchOutput<{ x: number; y: string }, { x: 1 }>;
 type _ValidNoLeakAssert = Assert<Equal<_ValidNoLeak, { x: number; y: string }>>;
 
 export type {
+  _LookupLetSubOutput,
   _MatchPassthrough,
   _SetPassthrough,
   _ProjectPassthrough,
