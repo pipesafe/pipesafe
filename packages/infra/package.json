@@ -1,22 +1,21 @@
 {
-  "name": "@pipesafe/manifold",
-  "version": "1.0.0",
-  "description": "PipeSafe Manifold - transformation layer for @pipesafe/core: batch DAG execution/materialization plus event-driven change-stream foundations",
+  "name": "@pipesafe/infra",
+  "version": "0.1.0",
+  "description": "PipeSafe Infra - shared cloud infrastructure engine (Pulumi with MongoDB-backed state) for the PipeSafe suite",
   "author": "Ryan Peggs & Tim Vyas",
   "license": "Elastic-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/pipesafe/pipesafe.git",
-    "directory": "packages/manifold"
+    "directory": "packages/infra"
   },
   "keywords": [
     "mongodb",
-    "dag",
-    "orchestration",
-    "data-pipeline",
-    "etl",
-    "pipesafe",
-    "materialization"
+    "pulumi",
+    "infrastructure",
+    "iac",
+    "serverless",
+    "pipesafe"
   ],
   "type": "module",
   "main": "./dist/index.cjs",

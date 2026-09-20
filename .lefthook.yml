@@ -14,11 +14,12 @@ pre-commit:
       run: bun run test:ci
       stage_fixed: true
 
-# The assertion regression net (two full tsc passes) runs before anything
-# leaves the machine rather than on every commit — CI enforces it too.
-# The build is part of the hook: manifold type-checks against core's dist,
-# and pushes from fresh clones / after rebase / after --no-verify commits
-# cannot rely on a pre-commit build having run (stale dist = false result).
+# The assertion regression net (a full tsc pass per package) runs before
+# anything leaves the machine rather than on every commit — CI enforces it
+# too. The build is part of the hook: manifold/infra/intake type-check
+# against their siblings' dist, and pushes from fresh clones / after rebase
+# / after --no-verify commits cannot rely on a pre-commit build having run
+# (stale dist = false result).
 pre-push:
   commands:
     typecheck-packages:
