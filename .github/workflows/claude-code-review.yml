@@ -27,6 +27,14 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
       - name: Run Claude code review
         uses: anthropics/claude-code-action@v1
         with:
@@ -34,7 +42,7 @@ jobs:
           prompt: "/pr-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment"
           claude_args: |
             --model opus
-            --allowedTools "Agent,Task,mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh pr list:*),Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh search:*),Bash(gh api:*)"
+            --allowedTools "Agent,Task,mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh pr list:*),Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh search:*),Bash(gh api:*),Write(./packages/core/examples/pr-review-scratch-*.ts),Edit(./packages/core/examples/pr-review-scratch-*.ts),Bash(bun run tsx .claude/inspect-types.ts *),Bash(bun run tsx packages/core/examples/pr-review-scratch-*.ts)"
 
   reply:
     # @claude mentions go to claude.yml; bot authors are skipped so Claude never answers itself.

@@ -3,7 +3,7 @@ name: pr-review
 description: Review a GitHub pull request for high-signal bugs and CLAUDE.md violations, re-review incrementally on later pushes, and answer replies on its threads. Use when CI or a user asks to review a PR.
 argument-hint: "<owner/repo/pull/N> [--comment] [--reply <comment-id>]"
 disable-model-invocation: true
-allowed-tools: Agent, Task, Bash(gh pr view:*), Bash(gh pr diff:*), Bash(gh pr comment:*), Bash(gh pr list:*), Bash(gh issue view:*), Bash(gh issue list:*), Bash(gh search:*), Bash(gh api:*), mcp__github_inline_comment__create_inline_comment
+allowed-tools: Agent, Task, Bash(gh pr view:*), Bash(gh pr diff:*), Bash(gh pr comment:*), Bash(gh pr list:*), Bash(gh issue view:*), Bash(gh issue list:*), Bash(gh search:*), Bash(gh api:*), Write(./packages/core/examples/pr-review-scratch-*.ts), Edit(./packages/core/examples/pr-review-scratch-*.ts), Bash(bun run tsx .claude/inspect-types.ts *), Bash(bun run tsx packages/core/examples/pr-review-scratch-*.ts), mcp__github_inline_comment__create_inline_comment
 ---
 
 <!-- Derived from anthropics/claude-code plugins/code-review. -->
@@ -65,6 +65,11 @@ Do not flag (false positives):
 ## 3. Validate
 
 For each issue, launch a subagent in parallel (opus for bugs, sonnet for CLAUDE.md issues) with the PR title, description and the issue. It confirms the issue is real by reading the code: for a bug, that the code path produces the wrong result; for a CLAUDE.md issue, that the rule exists, applies to that file, and is broken. Drop every issue that is not confirmed.
+
+Two kinds of claim need proof, not reading. Give each validator its own `<n>` and scratch file `packages/core/examples/pr-review-scratch-<n>.ts`, importing pipesafe from `../src` so it sees the PR's source:
+
+- **What a type resolves to.** Declare it as a type alias in the scratch file and run `bun run tsx .claude/inspect-types.ts <alias> packages/core/examples/pr-review-scratch-<n>.ts`.
+- **What MongoDB does at runtime.** Import `setupLocalMongo` from `../../../.claude/local-mongodb`, run the pipeline with `testPipeline` (call `seedTestData` first, or insert your own documents through `collection`), call `cleanup`, and run the file with `bun run tsx packages/core/examples/pr-review-scratch-<n>.ts`.
 
 ## 4. Report
 
