@@ -104,10 +104,11 @@ jobs:
       # reintroduced full-union dispatch keeps every assertion green while
       # regressing instantiations (+8% measured in the PR #102 review) —
       # the budget is the only automatic enforcement of plan §3.4's rule.
-      # Counts differ across compiler versions, so it runs on the repo's.
+      # TypeScript 7 counts grow with the checker count, so 7.x lanes run one.
       - name: Instantiation budget (perf gate)
-        if: matrix.typescript == '5.9.3'
         run: bun run budget:check
+        env:
+          TSC: npx -y -p typescript@${{ matrix.typescript }} tsc ${{ startsWith(matrix.typescript, '7.') && '--checkers 1' || '' }}
 
   changeset:
     runs-on: ubuntu-latest
