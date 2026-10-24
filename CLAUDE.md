@@ -247,7 +247,7 @@ TODO: Document the rest of the stages
   the findings that already existed when the type-checked rules and the
   `suspicious` / `pedantic` / `perf` categories were switched on. It only ever
   shrinks: fix findings and, in the same commit, run
-  `oxlint --type-aware --prune-suppressions` (lint fails on a count that is
+  `oxlint --prune-suppressions` (lint fails on a count that is
   now too high, with "There are suppressions that do not occur anymore").
   NEVER run
   `oxlint --suppress-all` to make new code pass — the counts are per file and
