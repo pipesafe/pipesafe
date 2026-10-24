@@ -11,11 +11,8 @@ import {
   FieldReferencesThatInferTo,
   GetFieldTypeWithoutArrays,
 } from "../elements/fieldReference";
-import {
-  BindLetVars,
-  Expression,
-  InferExpression,
-} from "../elements/expressions";
+import { Expression, InferExpression } from "../elements/expressions";
+import { BindLetVars } from "../elements/variables";
 import { Collection } from "../collection/Collection";
 import {
   ResolveLookupOutput,

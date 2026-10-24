@@ -1,13 +1,7 @@
-import {
-  FieldReference,
-  InferNestedFieldReference,
-} from "../elements/fieldReference";
+import { InferNestedFieldReference } from "../elements/fieldReference";
 import { Expression } from "../elements/expressions";
-import {
-  AnyLiteral,
-  SystemVariableReferences,
-  VariableReferences,
-} from "../elements/literals";
+import { AnyLiteral } from "../elements/literals";
+import { ReferenceValue } from "../elements/variables";
 import { Document, Prettify } from "../utils/objects";
 import { PassThrough } from "../utils/errors";
 
@@ -31,9 +25,7 @@ export type ReplaceRootQuery<
   Vars extends Document = {},
 > = {
   newRoot:
-    | FieldReference<Schema>
-    | SystemVariableReferences<Schema>
-    | VariableReferences<Vars>
+    | ReferenceValue<Schema, Vars>
     | Expression<Schema>
     | AnyLiteral<Schema>
     | Document; // For nested objects with field references and expressions

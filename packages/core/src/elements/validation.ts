@@ -15,7 +15,7 @@
  * through `GetFieldTypeWithoutArrays` (the same authority inference uses,
  * so acceptance and inference cannot disagree and the Field brand is
  * spelled once); `$$`-variable references resolve through
- * `ValidateVariableReference` (literals.ts — same authority as
+ * `ValidateVariableReference` (variables.ts — same authority as
  * `InferVariableReference`); expression operands check against the
  * registry's `ExpressionFor<Schema, Op>`.
  *
@@ -52,16 +52,19 @@ import {
   OperatorKeyOf,
 } from "../utils/dispatch";
 import {
-  BindLetVars,
-  BindVariable,
-  BoundAsName,
   ExpressionFor,
   ExpressionSpec,
   InferArrayElementType,
   UnimplementedExpressionOps,
 } from "./expressions";
 import { GetFieldTypeWithoutArrays } from "./fieldReference";
-import { InferVariableReference, ValidateVariableReference } from "./literals";
+import {
+  BindLetVars,
+  BindVariable,
+  BoundAsName,
+  InferVariableReference,
+  ValidateVariableReference,
+} from "./variables";
 import { WithoutDollar } from "../utils/strings";
 
 /**

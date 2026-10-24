@@ -23,7 +23,7 @@
 import { PipeSafeError } from "../utils/errors";
 import { Document } from "../utils/objects";
 import { FieldReferencesThatInferTo } from "./fieldReference";
-import { SystemVariablesThatInferTo } from "./literals";
+import { SystemVariablesThatInferTo } from "./variables";
 
 /**
  * Field-position check: the field's resolved type `T` must satisfy `Allowed`;

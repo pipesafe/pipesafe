@@ -1,7 +1,8 @@
 # elements/ — type-system building blocks
 
 Schema-parameterized primitives consumed by every stage: field selectors/
-references, literals, the operand kernel, the expression registry, and the
+references, literals, the `$$`-variable authority (`variables.ts`), the
+operand kernel, the expression registry, and the
 nested-validation kernel (`validation.ts` — THE rejection surface for
 structurally-accepted `$`-shapes; `never` = valid, anything else is the
 branded replacement; unimplemented-but-valid operators are allow-listed BY
@@ -75,7 +76,7 @@ before touching any Query/operand union.
   at ~270k extra whole-project instantiations for zero behavior change.
   MongoDB user variables must begin lowercase, so the tiers cannot
   collide. `$let`/`$map`/`$filter` binding arms extend the user env
-  (BindLetVars/BindVariable in expressions.ts — shared by inference and
+  (BindLetVars/BindVariable in variables.ts — shared by inference and
   validation, so the two environments cannot diverge); `$lookup.let`
   enters it via Pipeline's `Env` generic.
   `InferVariableReference`/`ValidateVariableReference` resolve `"$$name"`

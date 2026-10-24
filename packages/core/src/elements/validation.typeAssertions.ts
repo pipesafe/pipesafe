@@ -10,7 +10,7 @@
 
 import { ValidateExpressionValue, ValidateNestedValue } from "./validation";
 import { ExpressionFor } from "./expressions";
-import { VariableReferences } from "./literals";
+import { VariableReferences } from "./variables";
 import { PipeSafeError } from "../utils/errors";
 import { Assert, Equal } from "../utils/tests";
 

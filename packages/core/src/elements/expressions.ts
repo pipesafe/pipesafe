@@ -17,14 +17,16 @@ import {
   FieldReferencesThatInferTo,
   InferNestedFieldReference,
 } from "./fieldReference";
+import { AnyLiteral, ExpressionShaped } from "./literals";
 import {
-  AnyLiteral,
-  ExpressionShaped,
+  BindLetVars,
+  BindVariable,
+  BoundAsName,
   InferVariableReference,
+  ReferenceValue,
   SystemVariableReferences,
   SystemVariablesThatInferTo,
-  VariableReferences,
-} from "./literals";
+} from "./variables";
 
 // ============================================================================
 // MongoDB Expression Operators — registry edition
@@ -872,9 +874,7 @@ export type ExpressionValue<
 > =
   | AnyLiteral<Schema>
   | Expression<Schema>
-  | FieldReference<Schema>
-  | SystemVariableReferences<Schema>
-  | VariableReferences<Vars>
+  | ReferenceValue<Schema, Vars>
   | ExpressionShaped;
 
 // ----------------------------------------------------------------------------
@@ -909,44 +909,12 @@ type UnionArrayElements<
   Vars extends Document = {},
 > =
   Arrays extends readonly [infer First, ...infer Rest] ?
-    | GetArrayElement<Schema, First, Vars>
+    | InferInputElement<Schema, First, Vars>
     | UnionArrayElements<Schema, Rest, Vars>
   : never;
 
-/**
- * Helper to extract element type from a single array argument
- * Handles field references, `$$`-variable references, and array literals
- */
-type GetArrayElement<
-  Schema extends Document,
-  Item,
-  Vars extends Document = {},
-> =
-  Item extends readonly (infer E)[] ?
-    E // Array literal - extract element type
-  : Item extends FieldReference<Schema> ?
-    InferFieldReference<Schema, Item> extends (infer T)[] ?
-      T // Field reference to array - extract element type
-    : never
-  : Item extends `$$${string}` ?
-    // Array-typed variable ("$$USER_ROLES", a bound "$$arr"): resolve and
-    // unwrap; non-arrays degrade to unknown (validation owns rejection).
-    InferVariableReference<Schema, Item, Vars> extends infer R ?
-      R extends readonly (infer T)[] ?
-        T
-      : unknown
-    : never
-  : HasOperatorKey<Item> extends true ?
-    // Array-producing expression item ($filter/$concatArrays/$map/...):
-    // route through the single dispatch and unwrap. Without this arm the
-    // item's elements silently vanished from the result — a WRONG type,
-    // violating the degrade-to-widest contract.
-    InferExpression<Schema, Item, Vars> extends infer R ?
-      R extends (infer T)[] ?
-        T
-      : unknown
-    : never
-  : never;
+/** Element type of a resolved array type; non-arrays degrade to `unknown`. */
+type ElementOf<R> = R extends readonly (infer T)[] ? T : unknown;
 
 /**
  * Element type of an array source (field ref, `$$`-variable reference, or
@@ -958,35 +926,22 @@ export type InferArrayElementType<
   ArraySource,
   Vars extends Document = {},
 > =
-  // Array literal - extract element type
   ArraySource extends readonly (infer E)[] ? E
-  : // Field reference to array - get element type
-  ArraySource extends FieldReference<Schema> ?
-    InferFieldReference<Schema, ArraySource> extends (infer T)[] ?
-      T
-    : unknown
-  : // Array-typed variable ("$$USER_ROLES", a bound "$$arr")
-  ArraySource extends `$$${string}` ?
-    InferVariableReference<Schema, ArraySource, Vars> extends infer R ?
-      R extends readonly (infer T)[] ?
-        T
-      : unknown
-    : never
+  : ArraySource extends FieldReference<Schema> ?
+    ElementOf<InferFieldReference<Schema, ArraySource>>
+  : ArraySource extends `$$${string}` ?
+    ElementOf<InferVariableReference<Schema, ArraySource, Vars>>
   : unknown;
 
 /**
- * $map/$filter element type, extended to expression inputs
- * (`input: { $filter }`).
- * Inference-only: the validation walk's shared InferArrayElementType must
- * not recurse into InferExpression (TS2589 across the project).
+ * Element type extended to expression inputs (`input: { $filter }`,
+ * `$concatArrays` items). Inference-only: the validation walk's shared
+ * InferArrayElementType must not recurse into InferExpression (TS2589
+ * across the project).
  */
 type InferInputElement<Schema extends Document, Input, Vars extends Document> =
   HasOperatorKey<Input> extends true ?
-    InferExpression<Schema, Input, Vars> extends infer R ?
-      R extends readonly (infer T)[] ?
-        T
-      : unknown
-    : never
+    ElementOf<InferExpression<Schema, Input, Vars>>
   : InferArrayElementType<Schema, Input, Vars>;
 
 /**
@@ -1052,45 +1007,6 @@ type UnionIfNullOperandTypes<
     | InferIfNullOperand<Schema, First, Vars>
     | UnionIfNullOperandTypes<Schema, Rest, Vars>
   : never;
-
-/**
- * The `as` name a $map/$filter binds its element under (MongoDB defaults to
- * "this" when `as` is omitted). A non-literal `as` (a widened string) binds
- * nothing — inference of the real name then degrades to `unknown` (never a
- * wrong type), while validation brands it as an unknown variable.
- */
-export type BoundAsName<Operand> =
-  Operand extends { as: infer As extends string } ?
-    string extends As ?
-      never
-    : As
-  : "this";
-
-/** Bind one variable name (shadowing any outer binding of the same name).
- *  Single lazy mapped type — no Omit/Prettify (see elements/CLAUDE.md on
- *  env-merge depth). */
-export type BindVariable<Vars extends Document, Name extends string, T> = {
-  [K in keyof Vars | Name]: K extends Name ? T
-  : K extends keyof Vars ? Vars[K]
-  : never;
-};
-
-/**
- * Evaluate a $let `vars` block in the OUTER environment and bind the
- * results (MongoDB: `vars` values cannot reference same-block siblings;
- * inner bindings shadow outer ones). Shared by inference and the
- * validation walk, so the two environments cannot diverge.
- */
-export type BindLetVars<
-  Schema extends Document,
-  LetVars,
-  Vars extends Document,
-> = {
-  [K in (keyof LetVars & string) | keyof Vars]: K extends keyof LetVars ?
-    InferNestedFieldReference<Schema, LetVars[K], Vars>
-  : K extends keyof Vars ? Vars[K]
-  : never;
-};
 
 /**
  * Hand-written inference arms for the literal-dependent operators — the only

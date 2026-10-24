@@ -1,5 +1,4 @@
 import {
-  FieldReference,
   FieldReferencesThatInferTo,
   InferNestedFieldReference,
 } from "../elements/fieldReference";
@@ -12,10 +11,11 @@ import {
   AnyLiteral,
   ExpressionShaped,
   LiteralOrFieldReferenceInferringTo,
-  SystemVariableReferences,
-  ValidateVariableReference,
-  VariableReferences,
 } from "../elements/literals";
+import {
+  ReferenceValue,
+  ValidateVariableReference,
+} from "../elements/variables";
 import {
   Expression,
   ConditionalExpression,
@@ -228,9 +228,7 @@ export type GroupQuery<Schema extends Document, Vars extends Document = {}> = {
   _id:
     | AnyLiteral<Schema>
     | Expression<Schema>
-    | FieldReference<Schema>
-    | SystemVariableReferences<Schema>
-    | VariableReferences<Vars>
+    | ReferenceValue<Schema, Vars>
     | null;
 } & {
   // The index signature covers _id too, so it must also carry the `$$` and
@@ -245,9 +243,7 @@ export type GroupQuery<Schema extends Document, Vars extends Document = {}> = {
     | AnyLiteral<Schema>
     | AccumulatorFunction<Schema>
     | ExpressionShaped
-    | FieldReference<Schema>
-    | SystemVariableReferences<Schema>
-    | VariableReferences<Vars>
+    | ReferenceValue<Schema, Vars>
     | null;
 };
 

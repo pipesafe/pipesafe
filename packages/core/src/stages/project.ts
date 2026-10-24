@@ -11,7 +11,6 @@ import { HasOperatorKey } from "../utils/dispatch";
 import { ExpandDottedKey, IsDottedKey } from "../utils/paths";
 import { NoDollarString, WithoutDollar } from "../utils/strings";
 import {
-  FieldReference,
   GetFieldTypeWithoutArrays,
   InferNestedFieldReference,
 } from "../elements/fieldReference";
@@ -22,11 +21,7 @@ import {
   GetFieldTypeOrError,
 } from "../elements/fieldSelector";
 import { ValidateNestedValue } from "../elements/validation";
-import {
-  InferVariableReference,
-  SystemVariableReferences,
-  VariableReferences,
-} from "../elements/literals";
+import { InferVariableReference, ReferenceValue } from "../elements/variables";
 
 /**
  * $project stage query type
@@ -59,9 +54,7 @@ type ProjectValue<Schema extends Document, Vars extends Document = {}> =
   // unusable: it erases the ref literals from completions, and its
   // `` & {} `` spelling leaks String.prototype. A typo'd ref or unlisted
   // `$$var` now rejects at the constraint with a "Did you mean" hint.
-  | FieldReference<Schema>
-  | SystemVariableReferences<Schema>
-  | VariableReferences<Vars>
+  | ReferenceValue<Schema, Vars>
   // Plain string values are valid MongoDB literal assignments in $project
   // (only numeric/boolean literals require $literal).
   | NoDollarString

@@ -3,7 +3,7 @@ import { Join, DollarPrefixed, WithoutDollar } from "../utils/strings";
 import { PipeSafeError, UnknownFieldError } from "../utils/errors";
 import { HasOperatorKey } from "../utils/dispatch";
 import { InferExpression } from "./expressions";
-import { InferVariableReference } from "./literals";
+import { InferVariableReference } from "./variables";
 
 // Types related to field referencees
 // These are used as part of values within expressions

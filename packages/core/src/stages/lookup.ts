@@ -20,7 +20,7 @@ export type LookupLetQuery<
 
 /**
  * `let` values validate against the OUTER schema/environment. The
- * sub-pipeline's environment is BindLetVars (elements/expressions.ts) over
+ * sub-pipeline's environment is BindLetVars (elements/variables.ts) over
  * the enclosing `Env`; `$$ROOT` inside it is the FOREIGN document.
  */
 export type ValidateLookupLet<

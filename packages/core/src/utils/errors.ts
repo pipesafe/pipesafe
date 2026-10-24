@@ -94,9 +94,9 @@ export type UnknownFieldError<Path extends string> =
 
 /**
  * An unlisted `$$`-variable — not one of the enumerated SYSTEM_VARIABLES
- * (elements/literals.ts) and not bound in the `Vars` environment the
+ * (elements/variables.ts) and not bound in the `Vars` environment the
  * enclosing `$let`/`$map`/`$filter` walks thread down
- * (ValidateVariableReference, elements/literals.ts).
+ * (ValidateVariableReference, elements/variables.ts).
  * Aggregation-command-level `let` variables are not modeled yet.
  */
 export type UnknownSystemVariableError<Name extends string> =
