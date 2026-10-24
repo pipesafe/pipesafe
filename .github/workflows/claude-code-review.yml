@@ -1,7 +1,8 @@
 name: Claude Code Review
 
 # Runs .claude/skills/pr-review: a full review first, incremental re-reviews on
-# each push, and answers to replies on its threads that don't mention @claude.
+# each push, and answers to replies on its threads that don't mention @claude
+# (those go to claude.yml). Tool permissions come from the skill's frontmatter.
 
 on:
   pull_request:
@@ -11,10 +12,15 @@ on:
 
 jobs:
   review:
-    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    if: >-
+      (github.event_name == 'pull_request' && !github.event.pull_request.draft) ||
+      (github.event_name == 'pull_request_review_comment' &&
+      github.event.comment.in_reply_to_id &&
+      github.event.comment.user.type != 'Bot' &&
+      !contains(github.event.comment.body, '@claude'))
     concurrency:
-      group: claude-code-review-${{ github.event.pull_request.number }}
-      cancel-in-progress: true
+      group: claude-code-review-${{ github.event.pull_request.number }}-${{ github.event.comment.in_reply_to_id }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -22,63 +28,39 @@ jobs:
       issues: read
       id-token: write
     steps:
-      - name: Checkout repository
+      - name: Check the replied-to thread was opened by the review
+        id: thread
+        if: github.event_name == 'pull_request_review_comment'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          author=$(gh api repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.in_reply_to_id }} --jq .user.login)
+          [ "$author" = "claude[bot]" ] || echo "skip=true" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout PR head
+        if: steps.thread.outputs.skip != 'true'
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 1
 
       - name: Setup Bun
+        if: steps.thread.outputs.skip != 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
 
       - name: Install dependencies
+        if: steps.thread.outputs.skip != 'true'
         run: bun install --frozen-lockfile --ignore-scripts
 
-      - name: Run Claude code review
+      - name: Run Claude
+        if: steps.thread.outputs.skip != 'true'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt: "/pr-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment"
+          prompt: "/pr-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment${{ github.event.comment.id && format(' --reply {0}', github.event.comment.id) || '' }}"
+          # The action only starts the inline-comment server when its tool is listed here.
           claude_args: |
             --model opus
-            --allowedTools "Agent,Task,mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh pr list:*),Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh search:*),Bash(gh api:*),Write(./packages/core/examples/pr-review-scratch-*.ts),Edit(./packages/core/examples/pr-review-scratch-*.ts),Bash(bun run tsx .claude/inspect-types.ts *),Bash(bun run tsx packages/core/examples/pr-review-scratch-*.ts)"
-
-  reply:
-    # @claude mentions go to claude.yml; bot authors are skipped so Claude never answers itself.
-    if: >-
-      github.event_name == 'pull_request_review_comment' &&
-      github.event.comment.in_reply_to_id &&
-      github.event.comment.user.type != 'Bot' &&
-      !contains(github.event.comment.body, '@claude')
-    concurrency:
-      group: claude-code-review-reply-${{ github.event.comment.in_reply_to_id }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-      id-token: write
-    steps:
-      - name: Check the thread was opened by the review
-        id: thread
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          author=$(gh api repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.in_reply_to_id }} --jq .user.login)
-          echo "ours=$([ "$author" = "claude[bot]" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-
-      - name: Checkout repository
-        if: steps.thread.outputs.ours == 'true'
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: Run Claude reply
-        if: steps.thread.outputs.ours == 'true'
-        uses: anthropics/claude-code-action@v1
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt: "/pr-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment --reply ${{ github.event.comment.id }}"
-          claude_args: |
-            --model opus
-            --allowedTools "Bash(gh pr view:*),Bash(gh api:*)"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment"

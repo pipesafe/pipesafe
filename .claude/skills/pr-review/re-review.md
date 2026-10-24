@@ -2,11 +2,9 @@
 
 The PR was reviewed at `reviewed-sha` and has new commits. The goal is to keep the existing review accurate, not to review again from scratch. A re-review that adds nothing posts nothing apart from the summary update.
 
-Without `--comment`, follow the same steps but post, reply, resolve and edit nothing; print what each step would have done.
-
 ## Gather
 
-1. The push's changes: `gh api repos/<owner>/<repo>/compare/<reviewed-sha>...<headRefOid>`. Keep only changes that are also in `gh pr diff <N>`, so commits merged in from the base branch are ignored. If the compare fails (the old SHA was force-pushed away), use the full PR diff and apply only the "critical" bar below to new findings.
+1. The push's changes: `gh api repos/<owner>/<repo>/compare/<reviewed-sha>...<headRefOid>`. Keep only changes that are also in `gh pr diff <N>`, so commits merged in from the base branch are ignored. If the compare fails or its `status` is not `ahead` (a rebase or force-push), use the full PR diff instead and apply only the "critical" bar below to new findings.
 2. Every review thread on the PR, with its comments, resolution and outdated state:
 
 ```bash
@@ -58,4 +56,4 @@ gh api -X PATCH repos/<owner>/<repo>/issues/comments/<comment id> -F body=@- <<'
 BODY
 ```
 
-The body keeps the `## Code review` heading, lists the issues still open (one line each), and ends with the marker carrying the new head SHA: `<!-- pr-review reviewed-sha=<headRefOid> -->`. Update the marker even when nothing else changed.
+The body keeps the `## Code review` heading, lists this review's threads that are still open (one line each), and ends with the marker carrying the new head SHA: `<!-- pr-review reviewed-sha=<headRefOid> -->`. Update the marker even when nothing else changed.
