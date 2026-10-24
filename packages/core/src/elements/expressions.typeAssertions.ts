@@ -830,6 +830,41 @@ type _Assert_IfNullArrayLiteralRefInfer = Assert<
   Equal<_IfNullArrayLiteralRefInfer, string[] | [string]>
 >;
 
+// Nested scopes: an inner $map sees its own binding (and the outer scope).
+type _NestedMapScopeInfer = InferExpression<
+  SetSchema,
+  {
+    $map: {
+      input: "$wrappers";
+      in: { $map: { input: "$$this.ids"; as: "id"; in: "$$id" } };
+    };
+  }
+>;
+type _Assert_NestedMapScopeInfer = Assert<
+  Equal<_NestedMapScopeInfer, string[][]>
+>;
+
+// Scoped array operators add `| null` for nullable operands too.
+type _MapScopedNullableConcatInfer = InferExpression<
+  SetSchema,
+  { $map: { input: "$items"; in: { $concatArrays: ["$maybeTags", ["x"]] } } }
+>;
+type _Assert_MapScopedNullableConcatInfer = Assert<
+  Equal<_MapScopedNullableConcatInfer, (string[] | null)[]>
+>;
+
+// Top-level object-form $cond; a `$$REMOVE` branch contributes nothing.
+type _CondObjectInfer = InferExpression<
+  SetSchema,
+  { $cond: { if: true; then: "$name"; else: null } }
+>;
+type _Assert_CondObjectInfer = Assert<Equal<_CondObjectInfer, string | null>>;
+type _CondRemoveInfer = InferExpression<
+  SetSchema,
+  { $cond: [true, "$name", "$$REMOVE"] }
+>;
+type _Assert_CondRemoveInfer = Assert<Equal<_CondRemoveInfer, string>>;
+
 // A set operator is a valid operand of ANOTHER set operator: each resolves to
 // an array, so `$setUnion: [{ $setIntersection: [...] }, ...]` is valid
 // MongoDB (the mutual recursion is safe — `ExpressionSpec` is an interface).
@@ -888,6 +923,10 @@ export type {
   _Assert_ReduceOptionalInputInfer,
   _Assert_NestedNullableSetUnionInfer,
   _Assert_NestedNullableElemAtInfer,
+  _Assert_NestedMapScopeInfer,
+  _Assert_MapScopedNullableConcatInfer,
+  _Assert_CondObjectInfer,
+  _Assert_CondRemoveInfer,
 };
 
 // The literal-dependent set is DERIVED from `returns`-omission on registry

@@ -5,7 +5,6 @@ import {
   RequiresMsg,
 } from "../utils/errors";
 import {
-  HasOperatorKey,
   HasSingleOperatorKey,
   NotAnExpression,
   OperatorKeyOf,
@@ -14,7 +13,6 @@ import { ExpressionOperand } from "./operands";
 import {
   FieldReference,
   GetFieldTypeWithoutArrays,
-  InferFieldReference,
   FieldReferencesThatInferTo,
 } from "./fieldReference";
 import { AnyLiteral } from "./literals";
@@ -935,76 +933,10 @@ export type LiteralDependentOps = {
   : K;
 }[keyof ExpressionSpec<Document>];
 
-/**
- * Helper to get union of all array element types
- * Recursively processes each array in the concat list
- */
-type UnionArrayElements<
-  Schema extends Document,
-  Arrays extends readonly unknown[],
-> =
-  Arrays extends readonly [infer First, ...infer Rest] ?
-    GetArrayElement<Schema, First> | UnionArrayElements<Schema, Rest>
-  : never;
-
-/**
- * Helper to extract element type from a single array argument
- * Handles both field references and array literals
- */
-type GetArrayElement<Schema extends Document, Item> =
-  Item extends readonly (infer E)[] ?
-    E // Array literal - extract element type
-  : Item extends `$$${string}` ?
-    // `$$`-system/`let`-variable reference: untracked outside a $map/$reduce
-    // scope — its elements degrade to `unknown` (never would silently DROP
-    // them from the result, a wrong type).
-    unknown
-  : Item extends FieldReference<Schema> ?
-    // Null-strip first: an OPTIONAL array field is `T[] | undefined`, which
-    // fails `extends (infer T)[]` and would collapse to `never` (an unsound,
-    // narrower-than-reality element type that poisons the whole union). It is
-    // still an array, so contribute its element type.
-    NonNullable<InferFieldReference<Schema, Item>> extends (infer T)[] ?
-      T // Field reference to array - extract element type
-    : never
-  : HasOperatorKey<Item> extends true ?
-    // Array-producing expression item ($filter/$concatArrays/$map/...):
-    // route through the single dispatch and unwrap. Without this arm the
-    // item's elements silently vanished from the result — a WRONG type,
-    // violating the degrade-to-widest contract.
-    NonNullable<InferExpression<Schema, Item>> extends (infer T)[] ?
-      T
-    : unknown
-  : never;
-
-/**
- * Helper to extract element type from an array source (field ref, literal,
- * or nested array-producing expression)
- */
-type InferArrayElementType<Schema extends Document, ArraySource> =
-  // Array literal - extract element type
-  ArraySource extends readonly (infer E)[] ? E
-  : // Field reference to array - get element type
-  ArraySource extends FieldReference<Schema> ?
-    // Null-strip first (see GetArrayElement): an optional array field is
-    // `T[] | undefined`; without this it degrades to `unknown` instead of the
-    // precise element type.
-    NonNullable<InferFieldReference<Schema, ArraySource>> extends (infer T)[] ?
-      T
-    : unknown
-  : HasOperatorKey<ArraySource> extends true ?
-    // Nested array-producing expression source ($map inside $reduce.input,
-    // $filter inside $map.input, ...): route through the single dispatch
-    // and unwrap; non-array results degrade to unknown.
-    NonNullable<InferExpression<Schema, ArraySource>> extends (
-      readonly (infer T)[]
-    ) ?
-      T
-    : unknown
-  : unknown;
-
 // ============================================================================
-// Scoped variable inference ($$this / $$value inside $map and $reduce)
+// Literal-dependent inference: ONE walk, parameterized by the variable scope
+// ($$this / $$value inside $map and $reduce). Top-level expressions are the
+// empty scope (`Vars = {}`).
 // ============================================================================
 
 /** Extracts the element type of an array type; never for non-arrays,
@@ -1013,6 +945,14 @@ type ElementOfArray<T> =
   unknown extends T ? unknown
   : T extends readonly (infer E)[] ? E
   : never;
+
+type NullIn<T> = [Extract<T, null | undefined>] extends [never] ? never : null;
+
+/** `Vars` with `Name` bound to `T`; inner bindings shadow outer ones. */
+type BindVar<Vars extends Document, Name extends string, T> = Omit<
+  Vars,
+  Name
+> & { [K in Name]: T };
 
 /**
  * Resolves a `$$variable` or `$$variable.path` reference (without the `$$`
@@ -1035,76 +975,20 @@ type ResolveScopedVariable<Vars extends Document, Ref extends string> =
   : unknown;
 
 /**
- * $ifNull operand resolution inside a variable scope (mirrors
- * InferIfNullOperand: null literals contribute never, everything else is
- * null-stripped). An array-literal operand contributes the ARRAY type, not
- * its element — MongoDB returns the replacement expression verbatim, and an
- * array literal evaluates to an array (the member-wise scoped walk resolves
- * it). The `unknown extends R` guard keeps untracked operands at `unknown`
- * — `NonNullable<unknown>` would collapse to `{}`.
- */
-type InferScopedIfNullOperand<
-  Schema extends Document,
-  Vars extends Document,
-  Operand,
-> =
-  Operand extends null ? never
-  : InferScopedExpression<Schema, Vars, Operand> extends infer R ?
-    unknown extends R ?
-      R
-    : NonNullable<R>
-  : never;
-
-type UnionScopedIfNullOperands<
-  Schema extends Document,
-  Vars extends Document,
-  Operands extends readonly unknown[],
-> =
-  Operands extends readonly [infer First, ...infer Rest] ?
-    | InferScopedIfNullOperand<Schema, Vars, First>
-    | UnionScopedIfNullOperands<Schema, Vars, Rest>
-  : never;
-
-/**
- * Union of the element types of an array of array-valued operands, resolved
- * inside a variable scope (the $concatArrays arm of InferScopedExpression —
- * `{ $concatArrays: ["$$value", ...] }` is THE $reduce accumulate pattern).
- * Operands that don't resolve to an array type contribute never.
- */
-type UnionScopedArrayElements<
-  Schema extends Document,
-  Vars extends Document,
-  Items extends readonly unknown[],
-> =
-  Items extends readonly [infer First, ...infer Rest] ?
-    | ElementOfArray<InferScopedExpression<Schema, Vars, First>>
-    | UnionScopedArrayElements<Schema, Vars, Rest>
-  : Items extends readonly (infer Item)[] ?
-    ElementOfArray<InferScopedExpression<Schema, Vars, Item>>
-  : never;
-
-/**
- * Best-effort inference for an expression appearing inside a variable scope
- * ($map's or $reduce's `in`). `$$var` / `$$var.path` references resolve
- * through `Vars`; single-`$` references resolve against the ROOT schema (a
- * `$path` inside $map/$reduce still reads the root document in MongoDB);
- * `$ifNull` / `$concatArrays` / the set operators / `$cond` recurse WITH
- * the scope (the array-shaping and branching operators `$$`-references
- * realistically flow through — `$cond` in particular is a hot shape inside
- * `in`, and its
- * scope-free branch would resolve a bare `$$this`/`$$value` operand as a
- * LITERAL string, leaking `"$$this"` into the result rather than degrading
- * to the element type). Any other operator routes to the scope-free
- * `InferExpression` dispatch (its $map/$reduce arms rebind their own scopes;
- * outer variables degrade to `unknown` there, never to a wrong type). `$`-less
- * literals resolve member-wise, mirroring InferNestedFieldReference.
+ * Infers any expression VALUE inside a variable scope: `$$var` / `$$var.path`
+ * resolve through `Vars`; single-`$` references resolve against the ROOT
+ * schema (a `$path` inside $map/$reduce still reads the root document);
+ * operator objects go through the single `InferExpression` dispatch with the
+ * scope; `$`-less literals resolve member-wise, mirroring
+ * InferNestedFieldReference.
  */
 type InferScopedExpression<
   Schema extends Document,
   Vars extends Document,
   Expr,
 > =
-  Expr extends `$$${infer Ref}` ? ResolveScopedVariable<Vars, Ref>
+  Expr extends "$$REMOVE" ? never
+  : Expr extends `$$${infer Ref}` ? ResolveScopedVariable<Vars, Ref>
   : Expr extends `$${infer Path}` ?
     GetFieldTypeWithoutArrays<Schema, Path> extends infer R ?
       [R] extends [PipeSafeError<string>] ?
@@ -1113,8 +997,6 @@ type InferScopedExpression<
     : never
   : Expr extends string ? Expr
   : [OperatorKeyOf<Expr>] extends [never] ?
-    // No `$`-key: a literal — resolve arrays/objects member-wise so nested
-    // `$$var` references still resolve (e.g. `in: { id: "$$this.id" }`).
     Expr extends readonly unknown[] ?
       { [I in keyof Expr]: InferScopedExpression<Schema, Vars, Expr[I]> }
     : Expr extends object ?
@@ -1122,207 +1004,116 @@ type InferScopedExpression<
         Expr
       : { [K in keyof Expr]: InferScopedExpression<Schema, Vars, Expr[K]> }
     : Expr
-  : [OperatorKeyOf<Expr>] extends ["$ifNull"] ?
-    Expr extends { $ifNull: infer Operands } ?
-      Operands extends readonly unknown[] ?
-        UnionScopedIfNullOperands<Schema, Vars, Operands>
-      : unknown
-    : never
-  : [OperatorKeyOf<Expr>] extends ["$concatArrays"] ?
-    Expr extends { $concatArrays: infer Operands } ?
-      Operands extends readonly unknown[] ?
-        UnionScopedArrayElements<Schema, Vars, Operands>[]
-      : unknown
-    : never
-  : [OperatorKeyOf<Expr>] extends ["$cond"] ?
-    // Only the two branches contribute to the result; each is resolved WITH
-    // the scope so `$$this`/`$$value` operands resolve instead of leaking as
-    // literal strings. `$cond` keeps nulls (no null-stripping, unlike
-    // $ifNull), which the member-wise literal walk preserves.
-    Expr extends { $cond: readonly [unknown, infer TrueVal, infer FalseVal] } ?
-      | InferScopedExpression<Schema, Vars, TrueVal>
-      | InferScopedExpression<Schema, Vars, FalseVal>
-    : Expr extends { $cond: { then: infer TrueVal; else: infer FalseVal } } ?
-      | InferScopedExpression<Schema, Vars, TrueVal>
-      | InferScopedExpression<Schema, Vars, FalseVal>
-    : unknown
-  : [OperatorKeyOf<Expr>] extends ["$setUnion" | "$setIntersection"] ?
-    Expr extends (
-      { $setUnion: infer Operands } | { $setIntersection: infer Operands }
-    ) ?
-      Operands extends readonly unknown[] ?
-        UnionScopedArrayElements<Schema, Vars, Operands>[]
-      : unknown
-    : never
-  : [OperatorKeyOf<Expr>] extends ["$setDifference"] ?
-    Expr extends { $setDifference: readonly [infer First, unknown] } ?
-      ElementOfArray<InferScopedExpression<Schema, Vars, First>>[]
-    : unknown
-  : InferExpression<Schema, Expr>;
+  : InferExpression<Schema, Expr, Vars>;
+
+/** Element type of an array INPUT ($map/$filter/$reduce/$arrayElemAt);
+ *  null-stripped, non-arrays degrade to unknown. */
+type InputElement<Schema extends Document, Vars extends Document, Source> =
+  NonNullable<InferScopedExpression<Schema, Vars, Source>> extends (
+    readonly (infer E)[]
+  ) ?
+    E
+  : unknown;
 
 /**
- * The variable scope a $map `in` expression sees: the element variable is
- * `$$this` unless the literal declares a custom `as` name — MongoDB does
- * NOT bind `$$this` when `as` is given, so binding only the declared name
- * keeps `$$this` correctly unresolvable there. A widened (non-literal)
- * `as` string can't be tracked: the scope stays empty and `$$var`
- * references degrade to `unknown`.
+ * Result of the array-combining operators: the union of the element types of
+ * `ElementOperands`, plus `null` when any of `Operands` can be null or
+ * missing (MongoDB then returns null).
  */
-type MapScopeVars<Expr, Element> =
+type ArrayResult<
+  Schema extends Document,
+  Vars extends Document,
+  Operands,
+  ElementOperands = Operands,
+> =
+  | ElementOfArray<InferScopedExpression<Schema, Vars, ElementOperands>>[]
+  | NullIn<InferScopedExpression<Schema, Vars, Operands>>;
+
+/** $ifNull skips null literals and null-strips the rest; `unknown` stays
+ *  `unknown` (`NonNullable<unknown>` would collapse to `{}`). */
+type IfNullOperand<Schema extends Document, Vars extends Document, Operand> =
+  Operand extends null ? never
+  : InferScopedExpression<Schema, Vars, Operand> extends infer R ?
+    unknown extends R ?
+      R
+    : NonNullable<R>
+  : never;
+
+/**
+ * The scope a $map `in` sees: the element is bound as `$$this` unless the
+ * literal declares a custom `as` name (MongoDB does NOT rebind `$$this`
+ * then). A widened (non-literal) `as` can't be tracked: only the outer scope
+ * stays visible.
+ */
+type MapScopeVars<Vars extends Document, Expr, Element> =
   Expr extends { $map: { as: infer As } } ?
     As extends string ?
       string extends As ?
-        {} // widened `as` — the variable name isn't statically known
-      : { [K in As]: Element }
-    : {}
-  : { this: Element };
-
-/**
- * Infer the result type of a $reduce expression: the `in` expression
- * evaluated with `$$this` bound to the input's element type and `$$value`
- * bound to the initialValue's type (a single-iteration approximation of the
- * accumulator's fixpoint, which covers the common accumulate-into-initial
- * patterns like concatenating arrays onto an `[]` initialValue).
- *
- * `initialValue` is evaluated BEFORE iteration begins (per MongoDB), so it
- * is resolved with an empty variable scope — `$$this` / `$$value` are only
- * in scope for the `in` expression.
- */
-type InferReduceExpression<Schema extends Document, ArraySource, Init, In> =
-  InferArrayElementType<Schema, ArraySource> extends infer Element ?
-    InferScopedExpression<
-      Schema,
-      {
-        this: Element;
-        value: InferScopedExpression<Schema, {}, Init>;
-      },
-      In
-    >
-  : never;
-
-/**
- * Shared operand inference for the conditional operators. The only semantic
- * difference between $ifNull and $cond is null handling, captured by
- * `SwallowsNull`: $ifNull returns the first NON-null operand, so null
- * literals contribute `never` and nullable field references are stripped;
- * $cond returns whichever branch is chosen, nulls included. Non-expression
- * operands are detected via the NotAnExpression sentinel and treated as
- * literals.
- */
-type InferConditionalOperandValue<
-  Schema extends Document,
-  Operand,
-  SwallowsNull extends boolean,
-> =
-  Operand extends null ?
-    SwallowsNull extends true ?
-      never // $ifNull skips null literals, they're never returned
-    : null // $cond CAN return null if it's in a branch
-  : Operand extends FieldReference<Schema> ?
-    SwallowsNull extends true ?
-      NonNullable<InferFieldReference<Schema, Operand>>
-    : InferFieldReference<Schema, Operand> // $cond keeps the field's null
-  : Operand extends readonly unknown[] ?
-    // Array literal: contributes the array type, elements resolved
-    // member-wise (`["$name"]` is `[string]`).
-    InferScopedExpression<Schema, {}, Operand>
-  : InferExpression<Schema, Operand> extends infer R ?
-    [R] extends [NotAnExpression] ?
-      Operand // Not an expression, treat as literal
-    : R // Is an expression — single dispatch, no second inference path
-  : never;
-
-type InferIfNullOperand<
-  Schema extends Document,
-  Operand,
-> = InferConditionalOperandValue<Schema, Operand, true>;
-
-type InferCondOperand<
-  Schema extends Document,
-  Operand,
-> = InferConditionalOperandValue<Schema, Operand, false>;
-
-/**
- * Helper to infer the union of all operand types in $ifNull
- * Recursively processes each operand and unions their types (filtering nulls)
- */
-type UnionIfNullOperandTypes<
-  Schema extends Document,
-  Operands extends readonly unknown[],
-> =
-  Operands extends readonly [infer First, ...infer Rest] ?
-    InferIfNullOperand<Schema, First> | UnionIfNullOperandTypes<Schema, Rest>
-  : never;
-
-type NullIn<T> = [Extract<T, null | undefined>] extends [never] ? never : null;
-
-/** `null` when an operand can be null or missing: MongoDB's array operators
- *  then return null. */
-type NullIfNullable<Schema extends Document, Operand> =
-  Operand extends FieldReference<Schema> ?
-    NullIn<InferFieldReference<Schema, Operand>>
-  : HasOperatorKey<Operand> extends true ?
-    NullIn<InferExpression<Schema, Operand>>
-  : never;
+        Vars
+      : BindVar<Vars, As, Element>
+    : Vars
+  : BindVar<Vars, "this", Element>;
 
 /**
  * Hand-written inference arms for the literal-dependent operators — the only
- * per-operator inference code left after the registry rebuild.
- *
- * All array/tuple PATTERNS here are `readonly`: since the registry's operand
- * positions became readonly, `<const>` call sites infer readonly tuples, and
- * a readonly pattern matches both mutabilities while a mutable pattern
- * matches neither (a mutable-pattern arm silently falls through and the
- * resolver DROPS the field).
+ * per-operator inference code left after the registry rebuild. Operands are
+ * resolved with the caller's variable scope. `$reduce` evaluates `in` once
+ * with `$$value` bound to the initialValue's type (initialValue itself is
+ * evaluated in the OUTER scope, before iteration).
  */
-type InferDependentExpression<Schema extends Document, Expr> =
-  Expr extends { $concatArrays: infer Arrays } ?
-    Arrays extends readonly unknown[] ?
-      | UnionArrayElements<Schema, Arrays>[]
-      | NullIfNullable<Schema, Arrays[number]>
-    : never
-  : Expr extends { $arrayElemAt: readonly [infer ArraySource, unknown] } ?
-    InferArrayElementType<Schema, ArraySource>
-  : Expr extends { $filter: { input: infer ArraySource } } ?
-    InferArrayElementType<Schema, ArraySource>[]
-  : Expr extends { $map: { input: infer ArraySource; in: infer In } } ?
+type InferDependentExpression<
+  Schema extends Document,
+  Expr,
+  Vars extends Document,
+> =
+  Expr extends { $concatArrays: infer Operands extends readonly unknown[] } ?
+    ArrayResult<Schema, Vars, Operands[number]>
+  : Expr extends { $arrayElemAt: readonly [infer Source, unknown] } ?
+    InputElement<Schema, Vars, Source>
+  : Expr extends { $filter: { input: infer Source } } ?
+    InputElement<Schema, Vars, Source>[]
+  : Expr extends { $map: { input: infer Source; in: infer In } } ?
     | InferScopedExpression<
         Schema,
-        MapScopeVars<Expr, InferArrayElementType<Schema, ArraySource>>,
+        MapScopeVars<Vars, Expr, InputElement<Schema, Vars, Source>>,
         In
       >[]
-    | NullIfNullable<Schema, ArraySource>
+    | NullIn<InferScopedExpression<Schema, Vars, Source>>
   : Expr extends (
     {
       $reduce: {
-        input: infer ArraySource;
+        input: infer Source;
         initialValue: infer Init;
         in: infer In;
       };
     }
   ) ?
-    | InferReduceExpression<Schema, ArraySource, Init, In>
-    | NullIfNullable<Schema, ArraySource>
+    | InferScopedExpression<
+        Schema,
+        BindVar<
+          BindVar<Vars, "this", InputElement<Schema, Vars, Source>>,
+          "value",
+          InferScopedExpression<Schema, Vars, Init>
+        >,
+        In
+      >
+    | NullIn<InferScopedExpression<Schema, Vars, Source>>
   : Expr extends (
-    { $setUnion: infer Operands } | { $setIntersection: infer Operands }
+    | { $setUnion: infer Operands extends readonly unknown[] }
+    | { $setIntersection: infer Operands extends readonly unknown[] }
   ) ?
-    // $setUnion and $setIntersection share one element-inference shape (the
-    // union of operand element types); intersection is an over-approximation
-    // that never widens past the union, same as union.
-    Operands extends readonly unknown[] ?
-      | UnionArrayElements<Schema, Operands>[]
-      | NullIfNullable<Schema, Operands[number]>
-    : never
+    // Intersection shares union's shape: an over-approximation that never
+    // widens past the union.
+    ArrayResult<Schema, Vars, Operands[number]>
   : Expr extends { $setDifference: readonly [infer First, infer Second] } ?
     // Removing elements never widens: the FIRST operand's element type.
-    | InferArrayElementType<Schema, First>[]
-    | NullIfNullable<Schema, First | Second>
-  : Expr extends { $ifNull: infer Operands } ?
-    Operands extends readonly unknown[] ?
-      UnionIfNullOperandTypes<Schema, Operands>
-    : never
+    ArrayResult<Schema, Vars, First | Second, First>
+  : Expr extends { $ifNull: infer Operands extends readonly unknown[] } ?
+    IfNullOperand<Schema, Vars, Operands[number]>
   : Expr extends { $cond: readonly [unknown, infer TrueVal, infer FalseVal] } ?
-    InferCondOperand<Schema, TrueVal> | InferCondOperand<Schema, FalseVal>
+    InferScopedExpression<Schema, Vars, TrueVal | FalseVal>
+  : Expr extends { $cond: { then: infer TrueVal; else: infer FalseVal } } ?
+    InferScopedExpression<Schema, Vars, TrueVal | FalseVal>
   : Expr extends { $literal: infer Value } ? Value
   : // No matching arm (out-of-lockstep operator, or a malformed operand
     // shape the patterns don't match): degrade to `unknown`, mirroring the
@@ -1342,11 +1133,15 @@ type InferDependentExpression<Schema extends Document, Expr> =
  *  - unregistered `$` operator (allow-listed or typo) → `unknown`;
  *    validation, not inference, rejects the typos.
  */
-export type InferExpression<Schema extends Document, Expr> =
+export type InferExpression<
+  Schema extends Document,
+  Expr,
+  Vars extends Document = {},
+> =
   [OperatorKeyOf<Expr>] extends [never] ? NotAnExpression
   : HasSingleOperatorKey<Expr> extends false ? MultiOperatorError
   : [OperatorKeyOf<Expr>] extends [LiteralDependentOps] ?
-    InferDependentExpression<Schema, Expr>
+    InferDependentExpression<Schema, Expr, Vars>
   : [OperatorKeyOf<Expr>] extends [keyof ExpressionSpec<Schema>] ?
     // Declared `returns` of a registered operator; a dependent entry the
     // arm dispatch missed degrades to `unknown` (never a dropped field).
