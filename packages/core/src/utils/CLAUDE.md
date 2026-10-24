@@ -3,7 +3,8 @@
 Six small TYPE modules with strict boundaries — do not grow a grab-bag here.
 (The directory also holds the test plumbing: `tests.ts` +
 `tests.typeAssertions.ts` — the Assert/Equal helpers — and
-`useMemoryMongo.ts`, the runtime mongodb-memory-server vitest fixture.
+`useMemoryMongo.ts`, the vitest fixture that hands a test file its own
+database on the ONE mongod the run shares — never a mongod per suite.
 They are deliberately NOT part of the six-module rule; don't add further
 runtime code here.)
 

@@ -2,8 +2,9 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    // Run-owned temp dir for mongodb-memory-server dbPaths; the teardown
-    // deterministically removes that one directory (see the file's doc).
+    // Starts the one mongod the run shares and owns the temp dir its dbPath
+    // lives in; the teardown stops that instance and removes that one
+    // directory (see the file's doc).
     globalSetup: ["./vitest.globalSetup.ts"],
     // Excludes Vitest's built-in defaults plus `.claude/` so stray Claude
     // Code worktrees (e.g. `.claude/worktrees/<feature>/`) aren't picked up
