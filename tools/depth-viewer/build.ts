@@ -26,7 +26,6 @@
  *   bun run build.ts --project ../../packages/manifold/tsconfig.json
  */
 
-import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -40,16 +39,23 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 import { DEPTH_STEP_EVENT, materializePatchedTsc } from "./patch-tsc";
-import type {
-  ChainStep,
-  InferredTypeInfo,
-  SymbolKind,
-  SymbolReference,
-  SymbolStats,
+import {
+  TS2589_CEILINGS,
+  type ChainStep,
+  type InferredTypeInfo,
+  type SymbolKind,
+  type SymbolReference,
+  type SymbolStats,
 } from "./src/types";
+import {
+  findTscBin,
+  parseJsonArray,
+  REPO_ROOT,
+  runTscTrace,
+  type RawTypeEntry,
+} from "./trace";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = resolve(HERE, "../..");
 const DATA_DIR = resolve(HERE, "public/data");
 const TRACE_DIR = resolve(HERE, ".cache/trace");
 
@@ -66,19 +72,6 @@ function argvHas(flag: string): boolean {
 // ---------------------------------------------------------------------------
 // Shapes
 // ---------------------------------------------------------------------------
-
-interface RawTypeEntry {
-  id: number;
-  symbolName?: string;
-  intrinsicName?: string;
-  display?: string;
-  flags?: string[];
-  firstDeclaration?: {
-    path: string;
-    start: { line: number; character: number };
-    end: { line: number; character: number };
-  };
-}
 
 // A `depthStep` instant event emitted by the depth-stats-patched tsc (see
 // patch-tsc.ts). One per Call/New expression that did instantiation work,
@@ -161,20 +154,7 @@ if (!existsSync(tsconfigPath)) {
   process.exit(2);
 }
 
-function findTscBin(): string {
-  const local = resolve(REPO_ROOT, "node_modules/.bin/tsc");
-  if (!existsSync(local)) {
-    console.error(`Local tsc not found at ${local}. Run 'bun install'.`);
-    process.exit(2);
-  }
-  return local;
-}
-
 function generateTrace(): string {
-  // Only the latest trace is kept; a coverage trace runs to gigabytes.
-  rmSync(TRACE_DIR, { recursive: true, force: true });
-  mkdirSync(TRACE_DIR, { recursive: true });
-
   // Resolve the compiler. By default a depth-stats-patched copy of tsc, run via
   // the current node, so the trace carries per-event instantiation-depth stats.
   let command: string;
@@ -197,24 +177,7 @@ function generateTrace(): string {
   console.log(
     `Running tsc --generateTrace on ${relative(REPO_ROOT, tsconfigPath)}...`
   );
-  const result = spawnSync(
-    command,
-    [
-      ...baseArgs,
-      "-p",
-      tsconfigPath,
-      "--noEmit",
-      "--generateTrace",
-      TRACE_DIR,
-      "--extendedDiagnostics",
-      // Force a full check without reading or writing the project's tsbuildinfo.
-      "--composite",
-      "false",
-      "--incremental",
-      "false",
-    ],
-    { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 200 * 1024 * 1024 }
-  );
+  const result = runTscTrace(command, baseArgs, tsconfigPath, TRACE_DIR);
 
   if (!existsSync(join(TRACE_DIR, "types.json"))) {
     console.error(`tsc failed to write types.json (exit=${result.status}).`);
@@ -222,25 +185,6 @@ function generateTrace(): string {
     process.exit(3);
   }
   return TRACE_DIR;
-}
-
-function parseJsonArray<T>(path: string): T[] {
-  const raw = readFileSync(path, "utf8");
-  try {
-    return JSON.parse(raw) as T[];
-  } catch {
-    const out: T[] = [];
-    for (const line of raw.split("\n")) {
-      const t = line.trim().replace(/,$/, "");
-      if (!t || t === "[" || t === "]") continue;
-      try {
-        out.push(JSON.parse(t) as T);
-      } catch {
-        // tsc occasionally truncates the trailing line; ignore.
-      }
-    }
-    return out;
-  }
 }
 
 // Aggregate raw `depthStep` payloads into the per-node index. checkExpression
@@ -366,9 +310,11 @@ const MAX_DISPLAY_LENGTH = 8000;
 // The checker's TS2589 ceilings. Reaching either is what raises the
 // "excessively deep" error. Mirrored from the `instantiationDepth === 100` and
 // `tailCount === 1000` guards in _tsc.js (see patch-tsc.ts) and meta.json.
-const DEPTH_CEILING = 100;
-const TAIL_CEILING = 1000;
-const COUNT_CEILING = 5_000_000;
+const {
+  instantiationDepth: DEPTH_CEILING,
+  tailCount: TAIL_CEILING,
+  instantiationCount: COUNT_CEILING,
+} = TS2589_CEILINGS;
 
 // Walk a variable's initializer expression backwards through every call /
 // new expression, recording each step's *declared* return-type annotation
@@ -1115,11 +1061,7 @@ function main(): void {
     totalEntries: totals.totalEntries,
     ownedEntries: totals.ownedEntries,
     totalSymbols: totals.totalSymbols,
-    ceilings: {
-      instantiationDepth: 100,
-      instantiationCount: 5_000_000,
-      tailCount: 1_000,
-    },
+    ceilings: TS2589_CEILINGS,
   };
   writeFileSync(join(DATA_DIR, "meta.json"), JSON.stringify(meta, null, 2));
 

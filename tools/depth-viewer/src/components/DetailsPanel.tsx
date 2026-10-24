@@ -1,12 +1,13 @@
 import { useMemo } from "react";
 
 import { findSymbolByName, fmtCount } from "../data";
-import type { Dataset, SymbolStats } from "../types";
+import { TS2589_CEILINGS, type Dataset, type SymbolStats } from "../types";
 
-/** The checker's three TS2589 ceilings: instantiation depth, count, tail recursion. */
-const DEPTH_CEILING = 100;
-const COUNT_CEILING = 5_000_000;
-const TAIL_CEILING = 1000;
+const {
+  instantiationDepth: DEPTH_CEILING,
+  instantiationCount: COUNT_CEILING,
+  tailCount: TAIL_CEILING,
+} = TS2589_CEILINGS;
 
 interface Props {
   data: Dataset;

@@ -20,6 +20,7 @@
     "patch-tsc.ts",
     "patch-tsc.test.ts",
     "query.ts",
+    "trace.ts",
     "src/types.ts"
   ]
 }

@@ -33,6 +33,7 @@ export default defineConfig([
       "tools/depth-viewer/rebuild-plugin.ts",
       "tools/depth-viewer/build.ts",
       "tools/depth-viewer/query.ts",
+      "tools/depth-viewer/trace.ts",
       "tools/depth-viewer/patch-tsc.ts",
       "tools/depth-viewer/patch-tsc.test.ts",
       "eslint.config.js",

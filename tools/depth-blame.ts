@@ -8,9 +8,17 @@
  * See docs/typescript-depth/fix-guide.md for the full workflow.
  */
 
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
+
+import { TS2589_CEILINGS } from "./depth-viewer/src/types";
+import {
+  findTscBin,
+  parseJsonArray,
+  REPO_ROOT,
+  runTscTrace,
+  type RawTypeEntry,
+} from "./depth-viewer/trace";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -23,22 +31,6 @@ interface TraceEvent {
   ts?: number;
   dur?: number;
   args?: Record<string, unknown>;
-}
-
-interface TypeEntry {
-  id: number;
-  symbolName?: string;
-  recursionId?: number;
-  flags?: string[];
-  display?: string;
-  intrinsicName?: string;
-  instantiatedType?: number;
-  typeArguments?: number[];
-  firstDeclaration?: {
-    path: string;
-    start: { line: number; character: number };
-    end: { line: number; character: number };
-  };
 }
 
 interface OffenderRow {
@@ -65,7 +57,6 @@ interface DepthLimitHit {
 // CLI parsing
 // ---------------------------------------------------------------------------
 
-const REPO_ROOT = resolve(import.meta.dir, "..");
 const TRACE_DIR = resolve(
   REPO_ROOT,
   "tools/depth-viewer/.cache/depth-blame-trace"
@@ -118,15 +109,6 @@ function fmt(n: number): string {
   return n.toLocaleString();
 }
 
-function findTscBin(): string {
-  const local = resolve(REPO_ROOT, "node_modules/.bin/tsc");
-  if (existsSync(local)) return local;
-  console.error(
-    `Could not find local tsc at ${local}. Run 'bun install' first.`
-  );
-  process.exit(2);
-}
-
 // ---------------------------------------------------------------------------
 // File / tsconfig resolution
 // ---------------------------------------------------------------------------
@@ -170,39 +152,13 @@ function generateTrace(targetFile: string): {
   exitCode: number | null;
   owningTsconfig: string;
 } {
-  // Only the latest trace is kept.
-  rmSync(TRACE_DIR, { recursive: true, force: true });
-  mkdirSync(TRACE_DIR, { recursive: true });
-
   const owningTsconfig = findOwningTsconfig(targetFile);
 
   // Use the owning tsconfig as-is and add --generateTrace via CLI.
   // This is more reliable than synthesising a derived tsconfig: type-checking
   // only fires when a Program is built that the file participates in, which
   // requires the include/references context the parent project provides.
-  const tsc = findTscBin();
-  const result = spawnSync(
-    tsc,
-    [
-      "-p",
-      owningTsconfig,
-      "--noEmit",
-      "--generateTrace",
-      TRACE_DIR,
-      "--extendedDiagnostics",
-      // A composite project's tsbuildinfo would turn the run into a cache hit
-      // with an empty trace; disable incrementality instead of deleting it.
-      "--composite",
-      "false",
-      "--incremental",
-      "false",
-    ],
-    {
-      cwd: REPO_ROOT,
-      encoding: "utf8",
-      maxBuffer: 200 * 1024 * 1024,
-    }
-  );
+  const result = runTscTrace(findTscBin(), [], owningTsconfig, TRACE_DIR);
 
   return {
     traceDir: TRACE_DIR,
@@ -217,30 +173,9 @@ function generateTrace(targetFile: string): {
 // Trace parsing
 // ---------------------------------------------------------------------------
 
-function parseJsonArrayFile<T>(path: string): T[] {
-  const raw = readFileSync(path, "utf8");
-  // tsc writes a (sometimes incomplete) JSON array. Try strict parse first;
-  // if it fails (e.g. truncated trailing entry), fall back to per-line parse.
-  try {
-    return JSON.parse(raw) as T[];
-  } catch {
-    const out: T[] = [];
-    for (const line of raw.split("\n")) {
-      const trimmed = line.trim().replace(/,$/, "");
-      if (!trimmed || trimmed === "[" || trimmed === "]") continue;
-      try {
-        out.push(JSON.parse(trimmed) as T);
-      } catch {
-        // ignore malformed lines (typically the very last one if truncated)
-      }
-    }
-    return out;
-  }
-}
-
 function loadTrace(traceDir: string): {
   events: TraceEvent[];
-  types: TypeEntry[];
+  types: RawTypeEntry[];
 } {
   const tracePath = join(traceDir, "trace.json");
   const typesPath = join(traceDir, "types.json");
@@ -251,8 +186,8 @@ function loadTrace(traceDir: string): {
     process.exit(3);
   }
   return {
-    events: parseJsonArrayFile<TraceEvent>(tracePath),
-    types: parseJsonArrayFile<TypeEntry>(typesPath),
+    events: parseJsonArray<TraceEvent>(tracePath),
+    types: parseJsonArray<RawTypeEntry>(typesPath),
   };
 }
 
@@ -315,8 +250,8 @@ function diagnoseDepthErrors(
       const c = (ev.args?.["instantiationCount"] as number | undefined) ?? 0;
       const d = (ev.args?.["instantiationDepth"] as number | undefined) ?? 0;
       if (c > out.peakInstantiationCount) out.peakInstantiationCount = c;
-      if (c >= 5_000_000) sawCountTrip = true;
-      if (d >= 100) sawDepthTrip = true;
+      if (c >= TS2589_CEILINGS.instantiationCount) sawCountTrip = true;
+      if (d >= TS2589_CEILINGS.instantiationDepth) sawDepthTrip = true;
     } else if (ev.name === "recursiveTypeRelatedTo_DepthLimit") {
       out.relatedToLimitHits += 1;
     }
@@ -348,8 +283,8 @@ function diagnoseDepthErrors(
 
 function resolveType(
   typeId: number,
-  typeById: Map<number, TypeEntry>
-): TypeEntry | undefined {
+  typeById: Map<number, RawTypeEntry>
+): RawTypeEntry | undefined {
   let cursor = typeById.get(typeId);
   let hops = 0;
   // Walk up the instantiatedType chain until we hit a type with a symbolName.
@@ -370,9 +305,9 @@ function resolveType(
 
 function aggregateOffenders(
   events: TraceEvent[],
-  types: TypeEntry[]
+  types: RawTypeEntry[]
 ): OffenderRow[] {
-  const typeById = new Map<number, TypeEntry>();
+  const typeById = new Map<number, RawTypeEntry>();
   for (const t of types) typeById.set(t.id, t);
 
   const buckets = new Map<string, OffenderRow>();
@@ -420,9 +355,9 @@ function aggregateOffenders(
 
 function aggregateDepthLimitHits(
   events: TraceEvent[],
-  types: TypeEntry[]
+  types: RawTypeEntry[]
 ): DepthLimitHit[] {
-  const typeById = new Map<number, TypeEntry>();
+  const typeById = new Map<number, RawTypeEntry>();
   for (const t of types) typeById.set(t.id, t);
 
   const out: DepthLimitHit[] = [];

@@ -5,6 +5,13 @@
 // is intentionally absent: trace events are sampling-based at 10ms and
 // machine-dependent. Counts come straight from the registry.
 
+/** The checker's three TS2589 ceilings, as guarded in `_tsc.js`. */
+export const TS2589_CEILINGS = {
+  instantiationDepth: 100,
+  instantiationCount: 5_000_000,
+  tailCount: 1_000,
+} as const;
+
 export type SymbolKind =
   | "const"
   | "let"
@@ -177,11 +184,7 @@ export interface Meta {
   ownedEntries: number;
   /** Per-file count of declared symbols. */
   totalSymbols: number;
-  ceilings: {
-    instantiationDepth: number;
-    instantiationCount: number;
-    tailCount: number;
-  };
+  ceilings: typeof TS2589_CEILINGS;
 }
 
 export interface Dataset {
