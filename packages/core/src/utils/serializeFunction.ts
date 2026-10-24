@@ -497,6 +497,16 @@ function parseFunctionExpression(src: string): { node: AnyNode; emit: string } {
 }
 
 /**
+ * esbuild's `keepNames` helper. Transpilers that enable it (tsx, and
+ * esbuild/vitest setups configured with `keepNames`) inject
+ * `__name(fn, "fn")` calls INSIDE a body for every nested named function,
+ * function-valued const, or class — so `Function.prototype.toString` yields
+ * a free `__name` reference the user never wrote. It is shimmed rather than
+ * reported (see the end of `serializeFunctionBody`).
+ */
+const ESBUILD_NAME_HELPER = "__name";
+
+/**
  * Serialize a `$function` body to the source string sent to MongoDB,
  * enforcing that it is self-contained. Throws when the body is native or
  * bound, async or a generator, or references identifiers from outer scope
@@ -524,9 +534,11 @@ export function serializeFunctionBody(
   // async/generator functions and visitExpression throws on dynamic import,
   // so the checks cover the whole body rather than only its top level.
   const freeVariables = new Set<string>();
+  let needsNameShim = false;
   const rootScope: Scope = { names: new Set(), parent: null };
   visitFunction(fnNode, rootScope, (name) => {
-    if (!MONGO_SERVER_GLOBALS.has(name)) freeVariables.add(name);
+    if (name === ESBUILD_NAME_HELPER) needsNameShim = true;
+    else if (!MONGO_SERVER_GLOBALS.has(name)) freeVariables.add(name);
   });
 
   if (freeVariables.size > 0) {
@@ -542,7 +554,13 @@ export function serializeFunctionBody(
     );
   }
 
-  return emit;
+  if (!needsNameShim) return emit;
+  // The helper only (re)defines `fn.name`, which a server-side body never
+  // observes meaningfully — an identity shim keeps the body runnable.
+  return (
+    `function() { var ${ESBUILD_NAME_HELPER} = function (fn) { return fn; }; ` +
+    `return (${emit}).apply(null, arguments); }`
+  );
 }
 
 // ============================================================================

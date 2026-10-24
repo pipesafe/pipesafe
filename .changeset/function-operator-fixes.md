@@ -13,3 +13,6 @@ Fix and harden the `$function` operator following review:
 - The `no-impure-function-body` ESLint rule now also analyzes bodies passed by identifier reference, flags a closure that shadows a server-global name, and rejects nested async/generator/dynamic-import — kept in lockstep with the runtime check by a shared conformance corpus. The pre-commit hook builds before linting so the rule can't be silently skipped
 - `@pipesafe/function-bundler` resolves the default export of a CommonJS module (`module.exports = fn`)
 - `new Project()` surfaces a model's `$function` build failure as an aggregated validation error instead of crashing mid-construction
+- Body argument typing: an optional field (`age?: number`) is now passed to the body as `number | null` — a missing field reaches the body as `null`, so the previous `number` typed bodies that threw on documents without the field
+- Purity check: the `__name` helper that tsx / esbuild `keepNames` inject into bodies with nested named functions, function-valued consts, or classes is shimmed instead of being rejected as a free variable
+- `MONGO_SERVER_GLOBALS` no longer lists `Promise` (bodies are synchronous; it was already documented as excluded)

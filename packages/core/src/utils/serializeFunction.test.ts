@@ -53,6 +53,23 @@ describe("serializeFunctionBody", () => {
     ).not.toThrow();
   });
 
+  it("shims esbuild's keepNames `__name` helper instead of rejecting it", () => {
+    // tsx (and esbuild with `keepNames`) injects `__name(...)` INSIDE bodies
+    // for nested named functions — reproduce that emitted source directly.
+    const transpiled = new Function(
+      'return (xs) => { function sq(n) { return n * n; } __name(sq, "sq"); return xs.map(sq); }'
+    )() as (xs: number[]) => number[];
+    const src = serializeFunctionBody(transpiled);
+    const run = new Function(`return (${src})`)() as (xs: number[]) => number[];
+    expect(run([2, 3])).toEqual([4, 9]);
+  });
+
+  it("does not add the `__name` shim to bodies that do not need it", () => {
+    expect(serializeFunctionBody((a: number) => a * 2)).not.toContain(
+      "__name"
+    );
+  });
+
   it("rejects console — not available in the server's JS engine", () => {
     expect(() =>
       serializeFunctionBody((a: number) => {
@@ -428,6 +445,9 @@ describe("Pipeline $function integration", () => {
 // End-to-end against real MongoDB
 // ============================================================================
 
+// The server's error when started with `security.javascriptEnabled: false`.
+const SCRIPTING_DISABLED = /without the javascript engine enabled/i;
+
 describe("$function e2e", async () => {
   const { client } = await useMemoryMongo();
 
@@ -454,8 +474,10 @@ describe("$function e2e", async () => {
       docs = await pipeline.execute().toArray();
     } catch (error) {
       // Some mongod builds ship with server-side scripting disabled — fall
-      // back to asserting the emitted pipeline shape.
-      if (!/javascript|scripting|\$function/i.test(String(error))) throw error;
+      // back to asserting the emitted pipeline shape. Match ONLY that
+      // error: a broken body also fails with "JavaScript execution failed",
+      // which must surface as a test failure.
+      if (!SCRIPTING_DISABLED.test(String(error))) throw error;
       const fnSpec = pipeline.getPipeline()[0]?.["$set"].doubled.$function;
       expect(typeof fnSpec.body).toBe("string");
       expect(fnSpec.args).toEqual(["$age"]);
@@ -483,7 +505,9 @@ describe("$function e2e", async () => {
     try {
       docs = await pipeline.execute().toArray();
     } catch (error) {
-      if (!/javascript|scripting|\$function/i.test(String(error))) throw error;
+      if (!SCRIPTING_DISABLED.test(String(error))) throw error;
+      const fnSpec = pipeline.getPipeline()[0]?.["$set"].taxed.$function;
+      expect(typeof fnSpec.body).toBe("string");
       return;
     }
     expect(docs.map((d) => d.taxed).sort((a, b) => a - b)).toEqual([12, 24]);

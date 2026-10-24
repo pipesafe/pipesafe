@@ -74,16 +74,33 @@ type TagCountTest = Assert<
   Equal<InferOutputType<typeof tagCount>["tagCount"], number>
 >;
 
-// Test 4: optional field arg — only `undefined` is stripped (BSON has no
-// undefined), so the param is `number`.
+// Test 4: optional field arg — a missing field reaches the body as `null`
+// (BSON has no undefined), so the param is `number | null`.
 const fromOptional = new Pipeline<User>().set({
   bumped: {
-    $function: { body: (s: number) => s + 1, args: ["$score"], lang: "js" },
+    $function: {
+      body: (s: number | null) => (s ?? 0) + 1,
+      args: ["$score"],
+      lang: "js",
+    },
   },
 });
 type FromOptionalTest = Assert<
   Equal<InferOutputType<typeof fromOptional>["bumped"], number>
 >;
+
+// A non-null annotation is REJECTED for an optional arg — documents without
+// the field would pass null to a body that cannot handle it.
+const _optionalRejectsNarrow = new Pipeline<User>().set({
+  bad: {
+    $function: {
+      // @ts-expect-error  '$score' may be missing (null); a `number` param cannot accept null
+      body: (s: number) => s + 1,
+      args: ["$score"],
+      lang: "js",
+    },
+  },
+});
 
 // Test 4b: a NULLABLE field keeps its `null` — the server passes null through,
 // so the param type is `number | null`, and a body that handles null infers a
@@ -638,6 +655,7 @@ void anyReturn;
 void _wrongAnnotation;
 void _wrongArity;
 void _nullableRejectsNarrow;
+void _optionalRejectsNarrow;
 void _unannotatedBodyChecked;
 void _nestedUnannotated;
 void deepAnnotated;

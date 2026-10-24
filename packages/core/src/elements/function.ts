@@ -60,6 +60,17 @@ type DeepMutable<T> =
   : T;
 
 /**
+ * The body param type for a `$field` arg of field type `T`. BSON has no
+ * `undefined`: a `number | null` field reaches the body as `number | null`,
+ * and a MISSING optional field evaluates to `null` inside the `args` array —
+ * so an optional field's `undefined` becomes `null` rather than being
+ * stripped (stripping it would type-check bodies that throw on documents
+ * without the field).
+ */
+type ResolveFieldArg<T> =
+  undefined extends T ? ExcludeUndefined<T> | null : T;
+
+/**
  * Resolve a single $function arg to the runtime type the server passes to
  * the body: field references and expressions resolve to their inferred
  * types; literals are themselves. Non-distributive (`[Arg] extends [...]`)
@@ -85,10 +96,7 @@ type ResolveFunctionArg<Schema extends Document, Arg> =
   // params cryptically; `unknown` would reject valid annotations.)
   [Arg] extends [`$$${string}`] ? any
   : [Arg] extends [`$${infer Path}`] ?
-    // Strip only `undefined` (optional fields), NOT `null`: BSON has no
-    // `undefined`, but a `number | null` field is passed to the body as
-    // `number | null`, so the param type must keep the `null`.
-    ExcludeUndefined<GetFieldTypeWithoutArrays<Schema, Path>>
+    ResolveFieldArg<GetFieldTypeWithoutArrays<Schema, Path>>
   : [Arg] extends [object] ?
     InferExpression<Schema, DeepMutable<Arg>> extends infer R ?
       [R] extends [NotAnExpression] ?

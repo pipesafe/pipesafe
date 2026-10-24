@@ -23,7 +23,6 @@ export const MONGO_SERVER_GLOBALS: ReadonlySet<string> = new Set([
   "Math",
   "Number",
   "Object",
-  "Promise",
   "Proxy",
   "Reflect",
   "RegExp",
