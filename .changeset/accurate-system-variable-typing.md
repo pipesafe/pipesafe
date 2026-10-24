@@ -20,6 +20,8 @@ Accurate types for `$$`-system variables and `$let`/`$map`/`$filter` bound varia
   The element binds from any input: a field ref (a nullable array binds
   its elements), a `$$`-variable, an expression, or a literal array whose
   elements are resolved (`input: ["$home", "$work"]` binds the documents).
+  Over a nullable or missing array source, `$map`/`$filter`/`$arrayElemAt`/
+  `$concatArrays` infer `| null`, as MongoDB returns null.
 - Validation matches inference: binder interiors are walked with their
   bindings (bad refs in `vars`, unknown `$$`-names in `in`/`cond`, and bad
   dotted paths brand at the chained call site), binders nested inside
@@ -30,13 +32,15 @@ Accurate types for `$$`-system variables and `$let`/`$map`/`$filter` bound varia
   `$map`/`$filter` inputs keep their array-operand demand for `$`-refs and
   `$$`-variables.
 - Typed operand positions accept system variables by their accurate type
-  (`$dateAdd: { startDate: "$$NOW", ... }`, `$map: { input: "$$USER_ROLES" }`),
+  (`$dateAdd: { startDate: "$$NOW", ... }`, `$map: { input: "$$USER_ROLES" }`,
+  `$size: "$$USER_ROLES.role"`), readonly array fields included,
   and `$cond`/`$ifNull`/comparison operands accept the enumerated system
   variables (`$gte: ["$expiresAt", "$$NOW"]`).
 - `$map.as` is now optional (MongoDB defaults the binding to `$$this`).
-- `$$REMOVE` drops the field: a `$cond`/`$ifNull` branch of `"$$REMOVE"`
-  infers `| undefined`, and a `"$$REMOVE"` value omits its field at any
-  depth of `$project`, `$set` and `replaceRoot` objects (`_id` included).
+- `$$REMOVE` drops the field: a `$cond` branch or final `$ifNull` operand of
+  `"$$REMOVE"` infers `| undefined`, and a `"$$REMOVE"` value omits its
+  field at any depth of `$project`, `$set` and `replaceRoot` objects (`_id`
+  included), array-literal elements and `$map` results.
 - Array literals in expression operands accept any field ref, variable or
   nested expression as an element, and `as const` tuples (`$literal`,
   `$let.vars`, `$cond` branches) infer as arrays rather than objects.
@@ -55,15 +59,17 @@ Accurate types for `$$`-system variables and `$let`/`$map`/`$filter` bound varia
   schema, matching MongoDB's scoping. Binding names (`let` and `$let.vars`
   keys, `$map`/`$filter` `as`) follow MongoDB's rule: non-empty, starting
   with a lowercase letter or non-ASCII character, and containing only
-  `[_a-zA-Z0-9]` or non-ASCII characters (`"my-var"` brands).
+  `[_a-zA-Z0-9]` or non-ASCII characters (`"my-var"`, `"a\tb"` and
+  numeric keys brand).
   Bound names autocomplete inside the sub-pipeline (`"$$order_qty"`),
   resolve to accurate types, and out-of-scope `$$`-names reject.
   Nested lookups inherit outer bindings; `$unionWith`/`$facet`
   sub-builders propagate the environment.
 - `$sum`/`$avg`/`$min`/`$max` type-check `$$`-variable operands against
-  their resolved type (`$sum: "$$NOW"` brands; `$sum: "$$ROOT.qty"` passes).
+  their resolved type (`$sum: "$$NOW"` brands; `$sum: "$$ROOT.qty"` passes),
+  and the other accumulators reject unknown `$$`-names (`$push: "$$nope"`).
 - A lookup or unionWith sub-pipeline that ends in `.group()` no longer
   fails with "Type instantiation is excessively deep". `Pipeline.group`'s
   return type uses `NoInfer`, so TypeScript 5.4 is the minimum.
 - `$set`/`$group`/`let` validation no longer walks the full expression
-  registry once per schema, cutting type-check instantiations by about 40%.
+  registry once per schema.

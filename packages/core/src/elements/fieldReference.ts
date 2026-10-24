@@ -2,6 +2,7 @@ import { Document, NonExpandableTypes, Prettify } from "../utils/objects";
 import { Join, DollarPrefixed, WithoutDollar } from "../utils/strings";
 import { PipeSafeError, UnknownFieldError } from "../utils/errors";
 import { HasOperatorKey } from "../utils/dispatch";
+import { RemoveNeverFields } from "../utils/updates";
 import { InferExpression } from "./expressions";
 import { InferVariableReference } from "./variables";
 
@@ -170,7 +171,8 @@ export type InferNestedFieldReference<
 
 /**
  * Helper type for resolving field references in arrays
- * Handles both tuple types and regular arrays
+ * Handles both tuple types and regular arrays; `$$REMOVE`d fields of
+ * element objects are dropped (no $set merge reaches inside arrays).
  */
 type InferNestedFieldReferenceArray<
   Schema extends Document,
@@ -180,11 +182,11 @@ type InferNestedFieldReferenceArray<
   Arr extends readonly [] ? []
   : Arr extends readonly [infer First, ...infer Rest] ?
     [
-      InferNestedFieldReference<Schema, First, Vars>,
+      RemoveNeverFields<InferNestedFieldReference<Schema, First, Vars>>,
       ...InferNestedFieldReferenceArray<Schema, Rest, Vars>,
     ]
   : Arr extends readonly (infer Item)[] ?
-    InferNestedFieldReference<Schema, Item, Vars>[]
+    RemoveNeverFields<InferNestedFieldReference<Schema, Item, Vars>>[]
   : never;
 
 /**

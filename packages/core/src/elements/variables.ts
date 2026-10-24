@@ -192,11 +192,12 @@ export type SystemVariablesThatInferTo<Schema extends Document, T> =
   | `${"$$ROOT" | "$$CURRENT"}.${WithoutDollar<FieldReferencesThatInferTo<Schema, T> & string>}`
   | `$$USER_ROLES.${WithoutDollar<FieldReferencesThatInferTo<SystemVariableSpec<Document>["$$USER_ROLES"][number], T extends readonly (infer E)[] ? E : never> & string>}`;
 
-type CharsOf<S extends string> =
-  S extends `${infer C}${infer Rest}` ? C | CharsOf<Rest> : never;
+type CharsOf<S extends string, Acc = never> =
+  S extends `${infer C}${infer Rest}` ? CharsOf<Rest, Acc | C> : Acc;
 
-/** The ASCII characters MongoDB rejects anywhere in a user variable name. */
-type InvalidVariableNameChar = CharsOf<" !\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~">;
+/** The ASCII characters (controls included) MongoDB rejects in a user variable name. */
+type InvalidVariableNameChar =
+  CharsOf<" !\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~\x7f\x00\x01\x02\x03\x04\x05\x06\x07\b\t\n\x0b\f\r\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f">;
 
 /**
  * Kernel contract for a user variable name (`$let.vars`/`$lookup.let` keys,

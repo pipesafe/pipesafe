@@ -1,11 +1,11 @@
 import { Document } from "../utils/objects";
+import { RemoveNeverFields } from "../utils/updates";
 import {
   MultiOperatorError,
   PipeSafeError,
   RequiresMsg,
 } from "../utils/errors";
 import {
-  HasOperatorKey,
   HasSingleOperatorKey,
   NotAnExpression,
   OperatorKeyOf,
@@ -51,7 +51,7 @@ import {
  * untyped while the reference arm targets `unknown[]`.
  */
 type ArrayOperand<Schema extends Document, Op extends string> =
-  | ReferencesInferringTo<Schema, unknown[]>
+  | ReferencesInferringTo<Schema, readonly unknown[]>
   | readonly (AnyLiteral<Schema> | ReferenceValue<Schema> | ExpressionShaped)[]
   | ArrayProducingExpression<Schema>
   | MapExpression<Schema>
@@ -902,7 +902,9 @@ type UnionArrayElements<
  * elements); non-arrays degrade to `unknown`.
  */
 type ElementOf<R> =
-  [NonNullable<R>] extends [readonly (infer T)[]] ? T : unknown;
+  [R] extends [never] ? unknown
+  : [NonNullable<R>] extends [readonly (infer T)[]] ? T
+  : unknown;
 
 /**
  * Element type of an array source: literal, field ref, `$$`-variable, or
@@ -914,16 +916,19 @@ export type InferArrayElementType<
   Schema extends Document,
   ArraySource,
   Vars extends Document = {},
+> = ElementOf<InferNestedFieldReference<Schema, ArraySource, Vars>>;
+
+/** `null` when an array source may be null or missing: MongoDB returns null. */
+type NullableInput<
+  Schema extends Document,
+  ArraySource,
+  Vars extends Document,
 > =
-  ArraySource extends readonly (infer E)[] ?
-    InferNestedFieldReference<Schema, E, Vars>
-  : ArraySource extends FieldReference<Schema> ?
-    ElementOf<InferFieldReference<Schema, ArraySource>>
-  : ArraySource extends `$$${string}` ?
-    ElementOf<InferVariableReference<Schema, ArraySource, Vars>>
-  : HasOperatorKey<ArraySource> extends true ?
-    ElementOf<InferExpression<Schema, ArraySource, Vars>>
-  : unknown;
+  InferNestedFieldReference<Schema, ArraySource, Vars> extends infer R ?
+    null extends R ? null
+    : undefined extends R ? null
+    : never
+  : never;
 
 /**
  * Shared operand inference for the conditional operators. The only semantic
@@ -986,7 +991,12 @@ type UnionIfNullOperandTypes<
   Vars extends Document = {},
 > =
   Operands extends readonly [infer First, ...infer Rest] ?
-    | InferIfNullOperand<Schema, First, Vars>
+    | (First extends "$$REMOVE" ?
+        // only the final (replacement) operand can be taken
+        Rest extends readonly [] ?
+          undefined
+        : never
+      : InferIfNullOperand<Schema, First, Vars>)
     | UnionIfNullOperandTypes<Schema, Rest, Vars>
   : never;
 
@@ -1009,23 +1019,29 @@ type InferDependentExpression<
 > =
   Expr extends { $concatArrays: infer Arrays } ?
     Arrays extends readonly unknown[] ?
-      UnionArrayElements<Schema, Arrays, Vars>[]
+      | UnionArrayElements<Schema, Arrays, Vars>[]
+      | NullableInput<Schema, Arrays[number], Vars>
     : never
   : Expr extends { $arrayElemAt: readonly [infer ArraySource, unknown] } ?
-    InferArrayElementType<Schema, ArraySource, Vars>
+    | InferArrayElementType<Schema, ArraySource, Vars>
+    | NullableInput<Schema, ArraySource, Vars>
   : Expr extends { $filter: { input: infer ArraySource } } ?
-    InferArrayElementType<Schema, ArraySource, Vars>[]
+    | InferArrayElementType<Schema, ArraySource, Vars>[]
+    | NullableInput<Schema, ArraySource, Vars>
   : Expr extends { $map: infer MapOperand } ?
     MapOperand extends { input: infer Input; in: infer In } ?
-      InferNestedFieldReference<
-        Schema,
-        In,
-        BindVariable<
-          Vars,
-          BoundAsName<MapOperand>,
-          InferArrayElementType<Schema, Input, Vars>
-        >
-      >[]
+      | RemoveNeverFields<
+          InferNestedFieldReference<
+            Schema,
+            In,
+            BindVariable<
+              Vars,
+              BoundAsName<MapOperand>,
+              InferArrayElementType<Schema, Input, Vars>
+            >
+          >
+        >[]
+      | NullableInput<Schema, Input, Vars>
     : unknown[] // malformed operand — keep the operator's array result kind
   : Expr extends { $let: { vars: infer LetVars; in: infer In } } ?
     InferNestedFieldReference<Schema, In, BindLetVars<Schema, LetVars, Vars>>

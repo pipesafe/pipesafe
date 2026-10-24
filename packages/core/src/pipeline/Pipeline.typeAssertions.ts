@@ -196,6 +196,10 @@ type _RootRemoveOutput = Assert<
 >;
 const _emptyRoot = _p.replaceRoot({ newRoot: {} });
 type _EmptyRootOutput = Assert<Equal<InferOutputType<typeof _emptyRoot>, {}>>;
+// A `$literal` tuple stays an array for array operands.
+const _literalSize = _p
+  .set({ lit: { $literal: ["x", "y"] } })
+  .set({ n: { $size: "$lit" } });
 
 // Binder element types: literal inputs resolve their elements, a nullable
 // array binds its elements, and array literals stay arrays.
@@ -221,6 +225,14 @@ const _binders = new Pipeline<BindDoc>().set({
   branch: { $cond: [_flag, ["$name"], []] },
   pair: { $let: { vars: { xs: ["$name", "$home"] }, in: "$$xs" } },
   literal: { $literal: ["x"] },
+  filtered: { $filter: { input: "$tags", cond: true } },
+  first: { $arrayElemAt: ["$tags", 0] },
+  joined: { $concatArrays: ["$tags", ["x"]] },
+  mapped: {
+    $map: { input: ["$home"], in: { c: "$$this.city", x: "$$REMOVE" } },
+  },
+  docs: [{ a: "$name", x: "$$REMOVE" }],
+  ifNullFirst: { $ifNull: ["$$REMOVE", "$name"] },
 });
 type _BindersOutput = Assert<
   Equal<
@@ -228,10 +240,16 @@ type _BindersOutput = Assert<
     {
       cities: string[];
       names: string[];
-      optionalTags: string[];
+      optionalTags: string[] | null;
       branch: [] | [string];
       pair: [string, { city: string }];
       literal: readonly ["x"];
+      filtered: string[] | null;
+      first: string | null;
+      joined: string[] | null;
+      mapped: { readonly c: string }[];
+      docs: [{ readonly a: string }];
+      ifNullFirst: string;
     }
   >
 >;
@@ -275,6 +293,7 @@ export {
   _rootRemove,
   _setNestedRemove,
   _emptyRoot,
+  _literalSize,
   _binders,
   _setThenSet,
   _setThenMatch,

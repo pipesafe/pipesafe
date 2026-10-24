@@ -11,7 +11,10 @@ import {
   ExpressionShaped,
   LiteralOrFieldReferenceInferringTo,
 } from "../elements/literals";
-import { ReferenceValue } from "../elements/variables";
+import {
+  ReferenceValue,
+  ValidateVariableReference,
+} from "../elements/variables";
 import {
   Expression,
   ConditionalExpression,
@@ -312,6 +315,24 @@ type BrandedAccumulatorFor<
   Op extends CheckedAccumulatorOps,
 > = { [K in Op]: AccumulatorBrand<Schema, K> };
 
+/**
+ * An unchecked accumulator's (`$push`, `$first`, allow-listed) `$$`-variable
+ * operand must resolve; field refs are not walked (they would stay deferred
+ * for generic-schema helpers).
+ */
+type ValidateVariableOperand<
+  Schema extends Document,
+  A,
+  Vars extends Document,
+> =
+  A[OperatorKeyOf<A> & keyof A] extends infer Ref extends `$$${string}` ?
+    ValidateVariableReference<Schema, Ref, Vars> extends infer E ?
+      [E] extends [never] ?
+        never
+      : { [K in OperatorKeyOf<A>]: E }
+    : never
+  : never;
+
 type ValidateAccumulatorValue<
   Schema extends Document,
   A,
@@ -327,7 +348,8 @@ type ValidateAccumulatorValue<
   // unresolved generic schemas — without it, generic-schema pipeline
   // helpers (`<D extends Document>(p: Pipeline<D, D>) => p.group(...)`)
   // fail on deferred conditionals even for schema-independent operands.
-  [A] extends [AccumulatorFor<{}, OperatorKeyOf<A>>] ? never
+  [A] extends [AccumulatorFor<{}, OperatorKeyOf<A>>] ?
+    ValidateVariableOperand<Schema, A, Vars> // unchecked operands pass it
   : // Schema-INDEPENDENT name check first, so it still runs on wide
   // schemas AND resolves for generic-schema helpers: the accumulator must
   // be registered or allow-listed — anything else is a typo, not a
@@ -370,7 +392,7 @@ type ValidateAccumulatorValue<
         : A[Op & keyof A] extends string ? never
         : BrandedAccumulatorFor<Schema, Op>
       : BrandedAccumulatorFor<Schema, Op>
-    : never // registered-but-unchecked ($push, ...) or allow-listed:
+    : ValidateVariableOperand<Schema, A, Vars> // allow-listed
   : // schema-free, so it RESOLVES for generic-schema helpers
     UnknownAccumulatorError<OperatorKeyOf<A> & string>;
 

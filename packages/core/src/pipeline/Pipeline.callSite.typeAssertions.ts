@@ -380,6 +380,26 @@ const _set_let_bad_var_chars = new Pipeline<User>().set({
   },
 });
 
+const _set_let_control_char_name = new Pipeline<User>().set({
+  x: {
+    $let: {
+      vars: {
+        // @ts-expect-error  a tab is not valid in a user variable name
+        "a\tb": 1,
+      },
+      in: 1,
+    },
+  },
+});
+
+// Unchecked accumulators still resolve `$$`-variable operands.
+const _group_push_unknown_var = new Pipeline<User>().group({
+  _id: null,
+  // @ts-expect-error  '$$nope' is not a recognized system variable
+  all: { $push: "$$nope" },
+  root: { $first: "$$ROOT" },
+});
+
 const _set_let_numeric_name = new Pipeline<User>().set({
   x: {
     $let: {
@@ -785,6 +805,8 @@ export {
   _set_map_of_map_ok,
   _set_let_bad_var_chars,
   _set_let_numeric_name,
+  _set_let_control_char_name,
+  _group_push_unknown_var,
   _set_map_expr_input_bad,
   _set_binder_input_unknown_var,
   _set_user_roles_path_ok,
