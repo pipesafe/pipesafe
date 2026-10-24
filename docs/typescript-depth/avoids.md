@@ -32,7 +32,7 @@ One-page list of what to avoid, what to prefer, and what doesn't actually fix TS
 - Adding one more `.lookup()` to an already-long chain produces TS2589 at the next step.
 - A test in `*.typeAssertions.ts` starts failing because an `Expect<...>` resolved to `any` instead of the expected shape.
 
-When you see these, run `bun run depth-blame <expr>` proactively — even before TS2589 fires. The trace will show which type is consuming the budget so you can fix it _before_ the next operator pushes you over the cliff.
+When you see these, run `bun run depth-blame <name> <file>` proactively — even before TS2589 fires. The trace will show which type is consuming the budget so you can fix it _before_ the next operator pushes you over the cliff.
 
 ## Don't reach for
 
@@ -45,7 +45,7 @@ When you see these, run `bun run depth-blame <expr>` proactively — even before
 ## When something hits the limit
 
 1. **Capture a minimal repro.** A single expression in a single file is enough; the smaller, the faster the trace.
-2. **Run `bun run depth-blame <varName> [file]`.** Reads which counter tripped (depth / count / tail) and ranks PipeSafe-owned offenders.
+2. **Run `bun run depth-blame <name> <file>`.** Names the call that tripped each counter (depth / count / tail) and the PipeSafe types instantiated at the ceiling.
 3. **Read the top three.** They almost always include one of: `FilterUnion`, `FlattenDotSet`, `ApplySetUpdates*`, `InferNestedFieldReference*`, `ValidateProjectQuery`. Match the offender to the technique:
    - distributing over a union → §2.6 in `limits.md` (non-distribution wrapping).
    - deep recursive walk → §2.1, then §2.2 if needed.

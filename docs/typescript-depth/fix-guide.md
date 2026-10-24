@@ -26,20 +26,18 @@ Don't try to fix TS2589 in a 500-line user file. The failing call alone is plent
 ## Step 2 — Run `depth-blame` on the failing expression
 
 ```sh
-bun run depth-blame <varName> [filePath]
+bun run depth-blame <name> <filePath>
 ```
 
-Defaults: `filePath` is the same scratch convention as `inspect-types.ts`.
+`<name>` is the `const`, `type` or `function` declared in `<filePath>`. The tool traces only that file, through the tsconfig that includes it (the viewer's source-resolved coverage/stress configs first), with the depth-stats-patched tsc.
 
 What you get:
 
-- **Which counter tripped.** One of:
-  - `instantiationDepth` (cap 100) — recursion was too deep at one point.
-  - `instantiationCount` (cap 5,000,000) — too much total type work.
-  - `tailCount` (cap 1,000) — a tail-recursive conditional iterated too many times.
-- **Top-N PipeSafe offenders** — ranked by self-time, scoped to types declared under `packages/core/src/**` and `packages/manifold/src/**`. Each line is `<typeName> <file>:<line>  <selfMs>ms  <count> calls`.
-- **Top-N upstream call sites** — the operator chain that triggered the instantiations.
-- **Path to the trace JSON** — feed it to the local viewer for a flame graph.
+- **The declaration's own diagnostics.**
+- **Ceilings.** Peak `instantiationDepth` (cap 100), real `instantiationCount` (cap 5,000,000) and `tailCount` (cap 1,000) over the declaration's calls, and the first call that reached each.
+- **Calls by own instantiations and by own depth** — per `.stage(…)` line: peak depth (+ depth this call added), peak tail, instantiations this call performed (`self`) and the checker's counter peak (`peak`).
+- **PipeSafe types instantiated at a ceiling** — owned types named by `instantiateType_DepthLimit` events inside the declaration's check. These are the offenders for Step 3.
+- **Trace directory** — `tools/depth-viewer/.cache/depth-blame-trace/`.
 
 > The trace is written _before_ the bail-out, so the report is useful even when the build is currently failing. AST tools like `inspect-types.ts` are not — when the checker bails, they see `any`.
 
@@ -91,7 +89,7 @@ Read the top three offenders. The fix depends on _what they are_, not just _how 
 
 **Tells:** the top frames live in `lib.es*.d.ts` or `mongodb` types, not under `packages/`.
 
-**Fix:** the cost is being _passed in_ to those types from one of ours. Look upstream. The depth-blame tool dims non-PipeSafe frames in the viewer; in the text output, scroll past them and find the first PipeSafe-owned frame. That's the responsible alias.
+**Fix:** the cost is being _passed in_ to those types from one of ours. Look upstream. depth-blame lists only PipeSafe-owned types at a ceiling; the top one is the responsible alias.
 
 ---
 
@@ -99,7 +97,7 @@ Read the top three offenders. The fix depends on _what they are_, not just _how 
 
 After the fix:
 
-1. **Re-run `bun run depth-blame`** on the same expression. The offender's `instantiationCount` should drop materially. If it didn't, the fix didn't address the actual cause — back to Step 3.
+1. **Re-run `bun run depth-blame`** on the same declaration. The tripping call's peak depth or count should drop materially. If it didn't, the fix didn't address the actual cause — back to Step 3.
 2. **`bun run build`.** TS2589 should be gone. If a different one fires somewhere else, treat it as a separate incident — repeat from Step 1 with the new expression.
 3. **`bun run test:ci`.** Specifically watch the `*.typeAssertions.ts` files. A "fix" that produces `any` for what should have been a structured type will pass the build and silently fail the assertions.
 4. **Add a regression case** to the relevant `*.typeAssertions.ts` if the offender was a public-facing type. Pin the resolved shape so a future refactor doesn't undo your fix.
@@ -132,7 +130,7 @@ There is no custom lint plugin for these anti-patterns (yet) — the guardrails 
 ```
 TS2589 fired                                                      [stop, breathe]
 
-→ bun run depth-blame <expr> [file]                          [diagnose, ranked offenders]
+→ bun run depth-blame <name> <file>                         [diagnose, ranked offenders]
    ├─ Counter: instantiationDepth (cap 100)         → tail-recurse + maybe unroll
    ├─ Counter: instantiationCount (cap 5M)          → cache via named alias
    └─ Counter: tailCount (cap 1000)                 → break tail (& {}) reluctantly

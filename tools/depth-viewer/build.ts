@@ -26,19 +26,13 @@
  *   bun run build.ts --project ../../packages/manifold/tsconfig.json
  */
 
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import ts from "typescript";
 
-import { DEPTH_STEP_EVENT, materializePatchedTsc } from "./patch-tsc";
+import { materializePatchedTsc } from "./patch-tsc";
 import {
   TS2589_CEILINGS,
   type ChainStep,
@@ -48,10 +42,14 @@ import {
   type SymbolStats,
 } from "./src/types";
 import {
+  depthKey,
+  describeCall,
   findTscBin,
+  parseDepthSteps,
   parseJsonArray,
   REPO_ROOT,
   runTscTrace,
+  type DepthIndex,
   type RawTypeEntry,
 } from "./trace";
 
@@ -67,64 +65,6 @@ const USE_PATCHED_TSC =
 
 function argvHas(flag: string): boolean {
   return process.argv.slice(2).includes(flag);
-}
-
-// ---------------------------------------------------------------------------
-// Shapes
-// ---------------------------------------------------------------------------
-
-// A `depthStep` instant event emitted by the depth-stats-patched tsc (see
-// patch-tsc.ts). One per Call/New expression that did instantiation work,
-// carrying the node's source range plus deterministic depth/count stats. The
-// outer `ph`/`name`/`ts` envelope is dropped; only `args` matters here.
-interface RawDepthStep {
-  /** SyntaxKind: 214 = CallExpression, 215 = NewExpression. */
-  kind: number;
-  /** Node full-width start/end (matches the Compiler API's node.pos/node.end). */
-  pos: number;
-  end: number;
-  /** Absolute source path (lowercased on case-insensitive filesystems). */
-  path?: string;
-  /** instantiationDepth on entry to this node's check (the ambient depth). */
-  enterDepth: number;
-  /** Peak instantiationDepth over this node's whole subtree (climbs to 100 = TS2589). */
-  spanPeakDepth: number;
-  /** Peak depth excluding nested Call/New children — the depth this node added. */
-  selfPeakDepth: number;
-  /** Peak tailCount over this node's subtree (climbs to 1000 = TS2589). */
-  spanPeakTail: number;
-  /** Peak tailCount in windows where this node is the innermost expression. */
-  selfPeakTail: number;
-  /**
-   * Instantiations performed while this node is the innermost expression — the
-   * marginal work it does, NOT inherited by later steps that contain it. A
-   * single step crossing 5,000,000 is what collapses the type to `any` (TS2589).
-   */
-  selfCount: number;
-  /**
-   * Peak of the checker's own `instantiationCount` over this node's subtree —
-   * the value TS compares against 5,000,000.
-   */
-  spanPeakCount: number;
-  /** Monotonic totalInstantiationCount bracketing this node's subtree. */
-  enterTotalCount: number;
-  exitTotalCount: number;
-}
-
-/** Aggregated per-node depth stats, keyed by `${path.toLowerCase()}::${end}`. */
-interface DepthRecord {
-  kind: number;
-  pos: number;
-  end: number;
-  enterDepth: number;
-  spanPeakDepth: number;
-  selfPeakDepth: number;
-  spanPeakTail: number;
-  selfPeakTail: number;
-  selfCount: number;
-  spanPeakCount: number;
-  enterTotalCount: number;
-  exitTotalCount: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -185,70 +125,6 @@ function generateTrace(): string {
     process.exit(3);
   }
   return TRACE_DIR;
-}
-
-// Aggregate raw `depthStep` payloads into the per-node index. checkExpression
-// runs a node more than once (contextual typing, overload resolution, re-checks)
-// and the patch emits a depthStep on every pass, so each (path,end) can have
-// several records. The canonical one is the deepest pass (max spanPeakDepth),
-// tie-broken by the largest subtree (max exitTotalCount) — both criteria are
-// total orders over the data, so the choice is deterministic. All fields of the
-// chosen record come from that single pass, so enter/exitTotalCount stay a
-// coherent pair (no cross-pass mixing). Exported for tests.
-export function indexDepthSteps(records: RawDepthStep[]): DepthIndex {
-  const index: DepthIndex = new Map();
-  for (const a of records) {
-    if (a.path === undefined || a.end === undefined) continue;
-    const key = depthKey(a.path.toLowerCase(), a.end);
-    const prev = index.get(key);
-    if (
-      !prev ||
-      a.spanPeakDepth > prev.spanPeakDepth ||
-      (a.spanPeakDepth === prev.spanPeakDepth &&
-        a.exitTotalCount > prev.exitTotalCount)
-    ) {
-      index.set(key, {
-        kind: a.kind,
-        pos: a.pos,
-        end: a.end,
-        enterDepth: a.enterDepth,
-        spanPeakDepth: a.spanPeakDepth,
-        selfPeakDepth: a.selfPeakDepth,
-        spanPeakTail: a.spanPeakTail,
-        selfPeakTail: a.selfPeakTail,
-        selfCount: a.selfCount,
-        spanPeakCount: a.spanPeakCount,
-        enterTotalCount: a.enterTotalCount,
-        exitTotalCount: a.exitTotalCount,
-      });
-    }
-  }
-  return index;
-}
-
-// Read the patched tsc's `depthStep` instant events from a trace dir and index
-// them. trace.json can be very large, so we scan line-by-line and only parse
-// lines that mention the event — every other event (the sampled X spans, etc.)
-// is irrelevant. tsc writes one event per line via writeEvent, and a depthStep's
-// args are numbers + the file path, so the `"name":"depthStep"` needle can't
-// appear inside another event's args.
-function parseDepthSteps(traceDir: string): DepthIndex {
-  const path = join(traceDir, "trace.json");
-  if (!existsSync(path)) return new Map();
-  const raw = readFileSync(path, "utf8");
-  const needle = `"name":"${DEPTH_STEP_EVENT}"`;
-  const records: RawDepthStep[] = [];
-  for (const line of raw.split("\n")) {
-    if (!line.includes(needle)) continue;
-    const trimmed = line.trim().replace(/,$/, "");
-    try {
-      const evt = JSON.parse(trimmed) as { args?: RawDepthStep };
-      if (evt.args) records.push(evt.args);
-    } catch {
-      // tsc occasionally truncates the trailing line; ignore.
-    }
-  }
-  return indexDepthSteps(records);
 }
 
 // ---------------------------------------------------------------------------
@@ -323,16 +199,6 @@ const {
 // like `ResolveSetOutput<S, PreviousStageDocs>` that the resolved form has
 // already eagerly reduced — the only way to see the chain that produced
 // the final shape.
-// Per-node depth records keyed by `${absolutePathLowercased}::${node.end}`.
-// `node.end` is unique per Call/New node within a file (chain steps share a
-// start but their ends strictly increase), so it's a stable join key against
-// the AST. Lowercasing both sides absorbs tsc's macOS path-casing.
-type DepthIndex = Map<string, DepthRecord>;
-
-function depthKey(absPathLower: string, end: number): string {
-  return `${absPathLower}::${end}`;
-}
-
 function buildInitializerChain(
   checker: ts.TypeChecker,
   decl: ts.VariableDeclaration,
@@ -375,39 +241,8 @@ function buildInitializerChain(
   const sf = decl.getSourceFile();
   const absLower = sf.fileName.toLowerCase();
   const out: ChainStep[] = [];
-  // Trace record per step, in execution order, for marginal-count deltas.
-  const records: (DepthRecord | undefined)[] = [];
   for (const call of calls) {
-    // `call.getStart()` on a chained call returns the start of the whole
-    // left-folded expression (the `new Pipeline()` at the chain root), so every
-    // step would report the same line. Report the *invocation site* instead —
-    // the `.set` member name for a property-access call, the `["set"]` key for an
-    // element-access call — so each step shows its own source line. New/plain
-    // calls fall back to the call's own start.
-    const siteNode: ts.Node =
-      (
-        ts.isCallExpression(call) &&
-        ts.isPropertyAccessExpression(call.expression)
-      ) ?
-        call.expression.name
-      : (
-        ts.isCallExpression(call) &&
-        ts.isElementAccessExpression(call.expression)
-      ) ?
-        call.expression.argumentExpression
-      : call;
-    const callLine =
-      sf.getLineAndCharacterOfPosition(siteNode.getStart(sf)).line + 1;
-    let label: string;
-    let member: string | undefined;
-    if (ts.isNewExpression(call)) {
-      label = `new ${call.expression.getText(sf)}(${call.typeArguments ? `<${call.typeArguments.map((a) => a.getText(sf)).join(", ")}>` : ""}…)`;
-    } else if (ts.isPropertyAccessExpression(call.expression)) {
-      member = call.expression.name.text;
-      label = `.${member}(…)`;
-    } else {
-      label = call.expression.getText(sf).slice(0, 60) + "(…)";
-    }
+    const { label, member, line: callLine } = describeCall(call, sf);
 
     const resolvedType = checker.typeToString(
       checker.getTypeAtLocation(call),
@@ -455,7 +290,6 @@ function buildInitializerChain(
 
     // Join this call/new node to its deterministic trace record by source end.
     const rec = depthIndex.get(depthKey(absLower, call.getEnd()));
-    records.push(rec);
     if (rec) {
       step.maxDepth = rec.spanPeakDepth;
       // Marginal depth this step's OWN resolution added, above the ambient
@@ -1070,7 +904,4 @@ function main(): void {
   console.log(`Trace files preserved at ${traceDir}`);
 }
 
-// Only run the build when executed directly (`bun run build.ts`), not when
-// imported — so tests can import pure helpers like `indexDepthSteps` without
-// triggering a full trace + project scan.
-if (import.meta.main) main();
+main();

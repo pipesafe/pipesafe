@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { indexDepthSteps } from "./build";
+import { indexDepthSteps } from "./trace";
 import {
   AnchorError,
   DEPTH_STEP_EVENT,

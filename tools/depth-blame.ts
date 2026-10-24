@@ -1,581 +1,311 @@
 #!/usr/bin/env bun
 /**
- * depth-blame — diagnose TypeScript instantiation-depth pressure for a single
- * expression. Generates a tsc trace, parses it, and ranks PipeSafe-owned types
- * by self-time. Survives an active TS2589 because the trace is flushed before
- * the bail-out.
+ * depth-blame — diagnose TS2589 pressure for one named declaration. Traces only
+ * the declaring file through the depth-stats-patched tsc, then reports the
+ * declaration's own diagnostics, its per-call depth/count/tail stats against
+ * the three ceilings, and the types instantiated where a ceiling was hit.
+ * Survives an active TS2589 because the trace is flushed before the bail-out.
  *
  * See docs/typescript-depth/fix-guide.md for the full workflow.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 
+import ts from "typescript";
+
+import { materializePatchedTsc } from "./depth-viewer/patch-tsc";
 import { TS2589_CEILINGS } from "./depth-viewer/src/types";
 import {
-  findTscBin,
+  describeCall,
+  parseDepthSteps,
   parseJsonArray,
   REPO_ROOT,
   runTscTrace,
+  type DepthRecord,
   type RawTypeEntry,
 } from "./depth-viewer/trace";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+const CACHE_DIR = resolve(REPO_ROOT, "tools/depth-viewer/.cache");
+const TRACE_DIR = join(CACHE_DIR, "depth-blame-trace");
+const SCOPED_TSCONFIG = join(CACHE_DIR, "depth-blame.tsconfig.json");
+// Source-resolved configs first: configs with project `references` resolve the
+// workspace packages to dist/, which loses source attribution.
+const PREFERRED_TSCONFIGS = [
+  "tools/depth-viewer/tsconfig.coverage.json",
+  "tools/depth-viewer/tsconfig.stress.json",
+].map((p) => resolve(REPO_ROOT, p));
+const OWNED_PREFIXES = ["packages/core/src/", "packages/manifold/src/"].map(
+  (p) => resolve(REPO_ROOT, p) + "/"
+);
+const {
+  instantiationDepth: DEPTH_CEILING,
+  instantiationCount: COUNT_CEILING,
+  tailCount: TAIL_CEILING,
+} = TS2589_CEILINGS;
 
 interface TraceEvent {
   ph: string;
-  cat?: string;
   name?: string;
-  ts?: number;
+  ts: number;
   dur?: number;
   args?: Record<string, unknown>;
 }
 
-interface OffenderRow {
-  symbolName: string;
-  filePath: string;
+interface Step {
+  rec: DepthRecord;
   line: number;
-  totalUs: number;
-  callCount: number;
-  owned: boolean;
+  label: string;
 }
 
-interface DepthLimitHit {
-  typeId: number;
-  symbolName: string;
-  filePath: string;
-  line: number;
-  instantiationDepth: number;
-  instantiationCount: number;
-  kind: "instantiate" | "relatedTo";
-  owned: boolean;
-}
-
-// ---------------------------------------------------------------------------
-// CLI parsing
-// ---------------------------------------------------------------------------
-
-const TRACE_DIR = resolve(
-  REPO_ROOT,
-  "tools/depth-viewer/.cache/depth-blame-trace"
-);
-const PIPESAFE_OWNED_PREFIXES = [
-  resolve(REPO_ROOT, "packages/core/src") + "/",
-  resolve(REPO_ROOT, "packages/manifold/src") + "/",
-];
-
-function usage(code = 1): never {
+function usage(code: number): never {
   console.log(`Usage:
-  bun run depth-blame <varName> [filePath]
-  bun run depth-blame --help
+  bun run depth-blame <name> <filePath>
 
 Examples:
-  bun run depth-blame ResolveSetOutputResult packages/core/src/stages/set.typeAssertions.ts
-  bun run depth-blame OwnersPipeline packages/core/examples/user-management.ts
+  bun run depth-blame depthStressPipeline tools/depth-viewer/fixtures/stress-pipelines.ts
+  bun run depth-blame salesByCategoryPipeline packages/core/examples/ecommerce-analytics.ts
 
-Generates a TypeScript --generateTrace, ranks PipeSafe-owned types by self-time,
-and reports which TS2589 counter (if any) tripped.
-
-For an interactive UI over the trace, run 'bun run depth-view'.`);
+Traces <filePath> with the depth-stats-patched tsc and reports, for the
+declaration named <name>: its diagnostics, which TS2589 ceiling each call
+reached, and the types being instantiated when a ceiling was hit.`);
   process.exit(code);
 }
 
-const args = process.argv.slice(2);
+const [name, fileArg] = process.argv.slice(2);
+if (name === "--help" || name === "-h") usage(0);
+if (!name || !fileArg) usage(1);
 
-if (args.length === 0 || args[0] === "--help" || args[0] === "-h") usage(0);
-
-const varName = args[0];
-const userFile = args[1];
-
-if (!varName) usage(1);
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function isOwned(path: string): boolean {
-  const abs = resolve(path);
-  return PIPESAFE_OWNED_PREFIXES.some((p) => abs.startsWith(p));
-}
-
-function shortPath(path: string): string {
-  const abs = resolve(path);
-  return relative(REPO_ROOT, abs) || abs;
-}
-
-function fmt(n: number): string {
-  return n.toLocaleString();
-}
-
-// ---------------------------------------------------------------------------
-// File / tsconfig resolution
-// ---------------------------------------------------------------------------
-
-function resolveTargetFile(): string {
-  if (userFile) {
-    const candidate = resolve(REPO_ROOT, userFile);
-    if (!existsSync(candidate)) {
-      console.error(`File not found: ${candidate}`);
-      process.exit(2);
-    }
-    return candidate;
-  }
-  console.error(
-    "filePath is required. Pass the file containing the symbol, e.g.\n" +
-      "  bun run depth-blame MyVar packages/core/src/stages/match.typeAssertions.ts"
-  );
+const targetFile = resolve(REPO_ROOT, fileArg);
+if (!existsSync(targetFile)) {
+  console.error(`File not found: ${targetFile}`);
   process.exit(2);
 }
 
-function findOwningTsconfig(file: string): string {
-  // Walk up from the file looking for a tsconfig.json that includes the file
-  // (or doesn't have an `include` and might catch it via globs).
-  let dir = dirname(file);
-  while (dir.length > 1 && dir.startsWith(REPO_ROOT)) {
-    const candidate = join(dir, "tsconfig.json");
-    if (existsSync(candidate)) return candidate;
-    dir = dirname(dir);
+const fmt = (n: number) => n.toLocaleString();
+const short = (p: string) => relative(REPO_ROOT, p);
+const isOwned = (p: string) => OWNED_PREFIXES.some((o) => p.startsWith(o));
+
+function includesFile(tsconfig: string, file: string): boolean {
+  const parsed = ts.getParsedCommandLineOfConfigFile(
+    tsconfig,
+    {},
+    { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => {} }
+  );
+  return parsed?.fileNames.some((f) => resolve(f) === file) ?? false;
+}
+
+function findTsconfig(file: string): string {
+  const candidates = [...PREFERRED_TSCONFIGS];
+  for (let dir = dirname(file); dir.startsWith(REPO_ROOT); dir = dirname(dir)) {
+    candidates.push(join(dir, "tsconfig.json"));
   }
-  return resolve(REPO_ROOT, "tsconfig.json");
-}
-
-// ---------------------------------------------------------------------------
-// Trace generation
-// ---------------------------------------------------------------------------
-
-function generateTrace(targetFile: string): {
-  traceDir: string;
-  stderr: string;
-  stdout: string;
-  exitCode: number | null;
-  owningTsconfig: string;
-} {
-  const owningTsconfig = findOwningTsconfig(targetFile);
-
-  // Use the owning tsconfig as-is and add --generateTrace via CLI.
-  // This is more reliable than synthesising a derived tsconfig: type-checking
-  // only fires when a Program is built that the file participates in, which
-  // requires the include/references context the parent project provides.
-  const result = runTscTrace(findTscBin(), [], owningTsconfig, TRACE_DIR);
-
-  return {
-    traceDir: TRACE_DIR,
-    stderr: result.stderr ?? "",
-    stdout: result.stdout ?? "",
-    exitCode: result.status,
-    owningTsconfig,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Trace parsing
-// ---------------------------------------------------------------------------
-
-function loadTrace(traceDir: string): {
-  events: TraceEvent[];
-  types: RawTypeEntry[];
-} {
-  const tracePath = join(traceDir, "trace.json");
-  const typesPath = join(traceDir, "types.json");
-  if (!existsSync(tracePath) || !existsSync(typesPath)) {
-    console.error(
-      `Trace files missing in ${traceDir}. tsc may have failed before writing them.`
-    );
-    process.exit(3);
+  const found = candidates.find((c) => existsSync(c) && includesFile(c, file));
+  if (!found) {
+    console.error(`No tsconfig includes ${short(file)}.`);
+    process.exit(2);
   }
-  return {
-    events: parseJsonArray<TraceEvent>(tracePath),
-    types: parseJsonArray<RawTypeEntry>(typesPath),
-  };
+  return found;
 }
 
-// ---------------------------------------------------------------------------
-// TS2589 detection
-// ---------------------------------------------------------------------------
-
-interface DepthDiagnosis {
-  hadError: boolean;
-  errorLines: string[];
-  inferredCounter: "depth" | "count" | "tail" | "unknown" | null;
-  instantiationCount?: number;
-  totalInstantiations?: number;
-  checkTimeMs?: number;
-  depthLimitHits: number;
-  relatedToLimitHits: number;
-  peakInstantiationCount: number;
-}
-
-function diagnoseDepthErrors(
-  stdout: string,
-  stderr: string,
-  events: TraceEvent[]
-): DepthDiagnosis {
-  const combined = stdout + "\n" + stderr;
-  const errorLines = combined
-    .split("\n")
-    .filter(
-      (l) =>
-        l.includes("TS2589") ||
-        l.toLowerCase().includes("excessively deep") ||
-        l.toLowerCase().includes("possibly infinite")
-    );
-
-  const out: DepthDiagnosis = {
-    hadError: errorLines.length > 0,
-    errorLines,
-    inferredCounter: null,
-    depthLimitHits: 0,
-    relatedToLimitHits: 0,
-    peakInstantiationCount: 0,
-  };
-
-  // Pull diagnostics totals if present (--extendedDiagnostics output is on stdout).
-  const matchInst = stdout.match(/Instantiations:\s*([0-9,]+)/);
-  if (matchInst?.[1])
-    out.totalInstantiations = Number(matchInst[1].replace(/,/g, ""));
-  const matchCheck = stdout.match(/Check time:\s*([0-9.]+)\s*s/);
-  if (matchCheck?.[1]) out.checkTimeMs = Number(matchCheck[1]) * 1000;
-
-  // Trace-side: count *_DepthLimit events. `instantiateType_DepthLimit` fires
-  // for BOTH the depth (=== 100) and the count (>= 5,000,000) trigger — they
-  // share one guard in instantiateTypeWithAlias — so read the event's args to
-  // tell them apart.
-  let sawDepthTrip = false;
-  let sawCountTrip = false;
-  for (const ev of events) {
-    if (ev.name === "instantiateType_DepthLimit") {
-      out.depthLimitHits += 1;
-      const c = (ev.args?.["instantiationCount"] as number | undefined) ?? 0;
-      const d = (ev.args?.["instantiationDepth"] as number | undefined) ?? 0;
-      if (c > out.peakInstantiationCount) out.peakInstantiationCount = c;
-      if (c >= TS2589_CEILINGS.instantiationCount) sawCountTrip = true;
-      if (d >= TS2589_CEILINGS.instantiationDepth) sawDepthTrip = true;
-    } else if (ev.name === "recursiveTypeRelatedTo_DepthLimit") {
-      out.relatedToLimitHits += 1;
-    }
-  }
-
-  // Counter inference from the bail events:
-  //   - an event at instantiationCount >= 5M ⇒ count
-  //   - an event at instantiationDepth 100 (or with no readable args) ⇒ depth
-  //   - TS2589 with no instantiate bail event ⇒ tail (getConditionalType's
-  //     tailCount guard emits no trace event)
-  // The project-wide `Instantiations:` total is NOT used: the 5M ceiling is
-  // per check unit, so a large project's total says nothing about which
-  // counter tripped.
-  if (out.hadError) {
-    if (sawCountTrip) {
-      out.inferredCounter = "count";
-    } else if (sawDepthTrip || out.depthLimitHits > 0) {
-      out.inferredCounter = "depth";
-    } else {
-      out.inferredCounter = "tail";
-    }
-  }
-  return out;
-}
-
-// ---------------------------------------------------------------------------
-// Type lookup
-// ---------------------------------------------------------------------------
-
-function resolveType(
-  typeId: number,
-  typeById: Map<number, RawTypeEntry>
-): RawTypeEntry | undefined {
-  let cursor = typeById.get(typeId);
-  let hops = 0;
-  // Walk up the instantiatedType chain until we hit a type with a symbolName.
-  while (cursor && !cursor.symbolName && hops < 8) {
-    if (cursor.instantiatedType !== undefined) {
-      cursor = typeById.get(cursor.instantiatedType);
-    } else {
-      break;
-    }
-    hops += 1;
-  }
-  return cursor;
-}
-
-// ---------------------------------------------------------------------------
-// Aggregation
-// ---------------------------------------------------------------------------
-
-function aggregateOffenders(
-  events: TraceEvent[],
-  types: RawTypeEntry[]
-): OffenderRow[] {
-  const typeById = new Map<number, RawTypeEntry>();
-  for (const t of types) typeById.set(t.id, t);
-
-  const buckets = new Map<string, OffenderRow>();
-
-  for (const ev of events) {
-    if (ev.ph !== "X" || !ev.dur || !ev.args) continue;
-    if (ev.cat !== "checkTypes") continue;
-    const args = ev.args;
-    const idCandidate = args["typeId"] ?? args["sourceId"] ?? args["targetId"];
-    const id = typeof idCandidate === "number" ? idCandidate : undefined;
-
-    let symbolName: string | undefined;
-    let path: string | undefined;
-    let line = 0;
-
-    if (id !== undefined) {
-      const t = resolveType(id, typeById);
-      if (t) {
-        symbolName = t.symbolName ?? t.intrinsicName;
-        if (t.firstDeclaration) {
-          path = t.firstDeclaration.path;
-          line = t.firstDeclaration.start.line;
-        }
-      }
-    }
-
-    if (!symbolName) {
-      symbolName = (ev.name ?? "<anonymous>") + " (unattributed)";
-    }
-    const filePath = path ?? "<unknown>";
-    const owned = path ? isOwned(path) : false;
-
-    const key = `${symbolName}|${filePath}:${line}`;
-    let row = buckets.get(key);
-    if (!row) {
-      row = { symbolName, filePath, line, totalUs: 0, callCount: 0, owned };
-      buckets.set(key, row);
-    }
-    row.totalUs += ev.dur;
-    row.callCount += 1;
-  }
-
-  return Array.from(buckets.values()).sort((a, b) => b.totalUs - a.totalUs);
-}
-
-function aggregateDepthLimitHits(
-  events: TraceEvent[],
-  types: RawTypeEntry[]
-): DepthLimitHit[] {
-  const typeById = new Map<number, RawTypeEntry>();
-  for (const t of types) typeById.set(t.id, t);
-
-  const out: DepthLimitHit[] = [];
-  for (const ev of events) {
+function findDeclaration(sf: ts.SourceFile): ts.Node | undefined {
+  const visit = (node: ts.Node): ts.Node | undefined => {
     if (
-      ev.name !== "instantiateType_DepthLimit" &&
-      ev.name !== "recursiveTypeRelatedTo_DepthLimit"
+      (ts.isVariableDeclaration(node) ||
+        ts.isTypeAliasDeclaration(node) ||
+        ts.isFunctionDeclaration(node)) &&
+      node.name &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === name
     ) {
-      continue;
+      return node;
     }
-    if (!ev.args) continue;
-    const id =
-      (ev.args["typeId"] as number | undefined) ??
-      (ev.args["sourceId"] as number | undefined);
-    if (id === undefined) continue;
-    const t = resolveType(id, typeById);
-    if (!t) continue;
-    const path = t.firstDeclaration?.path ?? "<unknown>";
-    out.push({
-      typeId: id,
-      symbolName: t.symbolName ?? t.intrinsicName ?? `Type#${id}`,
-      filePath: path,
-      line: t.firstDeclaration?.start.line ?? 0,
-      instantiationDepth: (ev.args["instantiationDepth"] as number) ?? 0,
-      instantiationCount: (ev.args["instantiationCount"] as number) ?? 0,
-      kind:
-        ev.name === "instantiateType_DepthLimit" ? "instantiate" : "relatedTo",
-      owned: path ? isOwned(path) : false,
-    });
-  }
+    return ts.forEachChild(node, visit);
+  };
+  return visit(sf);
+}
+
+function callsByEnd(
+  decl: ts.Node,
+  sf: ts.SourceFile
+): Map<number, Omit<Step, "rec">> {
+  const out = new Map<number, Omit<Step, "rec">>();
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
+      out.set(node.end, describeCall(node, sf));
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(decl);
   return out;
 }
 
-// ---------------------------------------------------------------------------
-// Reporting
-// ---------------------------------------------------------------------------
+const sf = ts.createSourceFile(
+  targetFile,
+  readFileSync(targetFile, "utf8"),
+  ts.ScriptTarget.Latest,
+  true
+);
+const decl = findDeclaration(sf);
+if (!decl) {
+  console.error(`No declaration named '${name}' in ${short(targetFile)}.`);
+  process.exit(2);
+}
+const lineOf = (pos: number) => sf.getLineAndCharacterOfPosition(pos).line + 1;
+const startLine = lineOf(decl.getStart(sf));
+const endLine = lineOf(decl.end);
 
-function findVarOccurrence(
-  targetFile: string,
-  variable: string
-): { line: number; col: number } | null {
-  try {
-    const src = readFileSync(targetFile, "utf8");
-    const lines = src.split("\n");
-    // Escape regex metacharacters — symbol names here are routinely
-    // `$`-prefixed (`$Result`), and an unescaped `$` mid-pattern is an
-    // end-anchor that can never match. `\b` also can't sit next to `$`
-    // (a non-word char), so use explicit lookaround on [\w$] instead of
-    // word boundaries.
-    const escaped = variable.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(`(?<![\\w$])${escaped}(?![\\w$])`);
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i] ?? "";
-      const m = re.exec(line);
-      if (m) return { line: i + 1, col: m.index + 1 };
-    }
-  } catch {
-    // ignore
-  }
-  return null;
+// --- trace --------------------------------------------------------------------
+
+const tsconfig = findTsconfig(targetFile);
+const { path: patchedTsc } = materializePatchedTsc({ repoRoot: REPO_ROOT });
+writeFileSync(
+  SCOPED_TSCONFIG,
+  JSON.stringify({ extends: tsconfig, include: [], files: [targetFile] })
+);
+console.log(`Tracing ${short(targetFile)} via ${short(tsconfig)}...`);
+const result = runTscTrace(
+  process.execPath,
+  [patchedTsc],
+  SCOPED_TSCONFIG,
+  TRACE_DIR
+);
+if (!existsSync(join(TRACE_DIR, "types.json"))) {
+  console.error(`tsc failed before writing the trace (exit=${result.status}).`);
+  console.error(result.stderr || result.stdout);
+  process.exit(3);
 }
 
-function printReport(
-  targetFile: string,
-  diag: DepthDiagnosis,
-  offenders: OffenderRow[],
-  hits: DepthLimitHit[],
-  traceDir: string,
-  owningTsconfig: string
-): void {
-  const ownedTop = offenders.filter((o) => o.owned).slice(0, 15);
-  const allTop = offenders.slice(0, 10);
+// --- diagnostics ----------------------------------------------------------------
 
-  const banner = "─".repeat(78);
-  console.log(banner);
-  console.log(`depth-blame  ·  ${shortPath(targetFile)}  ·  ${varName}`);
-  console.log(banner);
-  console.log(`  tsconfig: ${shortPath(owningTsconfig)}`);
+const DIAGNOSTIC = /^(.+?)\((\d+),(\d+)\): error (TS\d+): (.*)$/;
+const diagnostics = [
+  ...new Set(
+    result.stdout.split("\n").filter((l) => {
+      const m = DIAGNOSTIC.exec(l);
+      if (!m || resolve(REPO_ROOT, m[1]!) !== targetFile) return false;
+      const line = Number(m[2]);
+      return line >= startLine && line <= endLine;
+    })
+  ),
+];
 
-  const occ = findVarOccurrence(targetFile, varName);
-  if (occ) {
+// --- per-call stats -------------------------------------------------------------
+
+const prefix = `${targetFile.toLowerCase()}::`;
+const sites = callsByEnd(decl, sf);
+const steps: Step[] = [];
+for (const [key, rec] of parseDepthSteps(TRACE_DIR)) {
+  const site = key.startsWith(prefix) ? sites.get(rec.end) : undefined;
+  if (site) steps.push({ ...site, rec });
+}
+steps.sort((a, b) => a.rec.end - b.rec.end);
+
+const ownDepth = (r: DepthRecord) =>
+  Math.max(0, r.selfPeakDepth - r.enterDepth);
+const peak = (f: (r: DepthRecord) => number) =>
+  Math.max(0, ...steps.map((s) => f(s.rec)));
+const ceilings = [
+  ["instantiationDepth", (r: DepthRecord) => r.spanPeakDepth, DEPTH_CEILING],
+  ["instantiationCount", (r: DepthRecord) => r.spanPeakCount, COUNT_CEILING],
+  ["tailCount", (r: DepthRecord) => r.spanPeakTail, TAIL_CEILING],
+] as const;
+
+// --- types at the ceiling -------------------------------------------------------
+
+// The `checkExpression`/`checkVariableDeclaration` spans inside the declaration
+// bound its check in time; `*_DepthLimit` events in that window are its own.
+const events = parseJsonArray<TraceEvent>(join(TRACE_DIR, "trace.json"));
+const inDecl = (a: Record<string, unknown> | undefined) =>
+  typeof a?.["path"] === "string" &&
+  resolve(a["path"]) === targetFile &&
+  (a["pos"] as number) >= decl.pos &&
+  (a["end"] as number) <= decl.end;
+const spans = events.filter((e) => e.ph === "X" && e.dur && inDecl(e.args));
+const from = Math.min(...spans.map((e) => e.ts));
+const to = Math.max(...spans.map((e) => e.ts + e.dur!));
+
+const typeById = new Map(
+  parseJsonArray<RawTypeEntry>(join(TRACE_DIR, "types.json")).map((t) => [
+    t.id,
+    t,
+  ])
+);
+function named(id: number): RawTypeEntry | undefined {
+  let t = typeById.get(id);
+  while (t && !t.symbolName && t.instantiatedType !== undefined) {
+    if (t.instantiatedType === t.id) return t;
+    t = typeById.get(t.instantiatedType);
+  }
+  return t;
+}
+const limitHits = new Map<string, number>();
+for (const e of events) {
+  if (e.name !== "instantiateType_DepthLimit" || e.ts < from || e.ts > to) {
+    continue;
+  }
+  const t = named(e.args?.["typeId"] as number);
+  const at = t?.firstDeclaration;
+  if (!at || !isOwned(at.path)) continue;
+  const key = `${t.symbolName}  ${short(at.path)}:${at.start.line}`;
+  limitHits.set(key, (limitHits.get(key) ?? 0) + 1);
+}
+
+// --- report ---------------------------------------------------------------------
+
+const rule = "─".repeat(78);
+const row = (s: Step) =>
+  `  line ${String(s.line).padEnd(6)} ${s.label.padEnd(22)} ` +
+  `depth ${s.rec.spanPeakDepth} (+${ownDepth(s.rec)})  tail ${s.rec.spanPeakTail}  ` +
+  `count ${fmt(s.rec.selfCount)} self / ${fmt(s.rec.spanPeakCount)} peak`;
+
+console.log(rule);
+console.log(
+  `depth-blame  ·  ${name}  ·  ${short(targetFile)}:${startLine}-${endLine}`
+);
+console.log(rule);
+console.log(
+  diagnostics.length ?
+    diagnostics.map((d) => `  ${d}`).join("\n")
+  : "  No errors in the declaration."
+);
+console.log("");
+
+if (steps.length === 0) {
+  console.log("  No call expressions with trace records in the declaration.");
+} else {
+  console.log("Ceilings (peak over the declaration's calls):");
+  for (const [label, f, cap] of ceilings) {
+    const hit = steps.find((s) => f(s.rec) >= cap);
     console.log(
-      `  Symbol located at ${shortPath(targetFile)}:${occ.line}:${occ.col}`
-    );
-  } else {
-    console.log(
-      `  Symbol '${varName}' not found textually in ${shortPath(targetFile)} ` +
-        `(may exist via re-export).`
+      `  ${label.padEnd(19)} ${fmt(peak(f)).padStart(10)} / ${fmt(cap)}` +
+        (hit ? `  TRIPPED at line ${hit.line} ${hit.label}` : "")
     );
   }
   console.log("");
-
-  // Diagnosis block
-  if (diag.hadError) {
-    console.log("  TS2589 fired.");
-    console.log(`  Inferred counter: ${diag.inferredCounter ?? "unknown"}`);
-  } else if (diag.depthLimitHits > 0 || diag.relatedToLimitHits > 0) {
-    console.log("  No TS2589, but the depth ceiling was approached:");
-    console.log(
-      `    ${diag.depthLimitHits} instantiateType_DepthLimit events ` +
-        `(instantiationDepth=100 threshold reached)`
-    );
-    console.log(
-      `    ${diag.relatedToLimitHits} recursiveTypeRelatedTo_DepthLimit events`
-    );
-    console.log(
-      "  This is a leading indicator. Adding one more deep call could trip TS2589."
-    );
-  } else {
-    console.log("  Healthy: no depth-limit events recorded.");
-  }
-  if (diag.totalInstantiations !== undefined) {
-    console.log(
-      `  Total instantiations: ${fmt(diag.totalInstantiations)} ` +
-        `(project-wide; the 5,000,000 ceiling is per check unit — ` +
-        `peak per-unit at a bail: ${fmt(diag.peakInstantiationCount)})`
-    );
-  }
-  if (diag.checkTimeMs !== undefined) {
-    console.log(`  Check time: ${diag.checkTimeMs.toFixed(0)}ms`);
-  }
-  for (const line of diag.errorLines.slice(0, 3)) {
-    console.log(`    ${line.trim()}`);
-  }
-  console.log("");
-
-  // Depth-limit hits (the most actionable when TS2589 fired)
-  if (hits.length > 0) {
-    const ownedHits = hits.filter((h) => h.owned);
-    const hitBuckets = new Map<string, { hit: DepthLimitHit; count: number }>();
-    for (const h of ownedHits.length > 0 ? ownedHits : hits) {
-      const key = `${h.symbolName}|${h.filePath}:${h.line}|${h.kind}`;
-      const cur = hitBuckets.get(key);
-      if (cur) cur.count += 1;
-      else hitBuckets.set(key, { hit: h, count: 1 });
-    }
-    const ranked = Array.from(hitBuckets.values()).sort(
-      (a, b) => b.count - a.count
-    );
-
-    console.log("Depth-limit events (where the checker stopped descending):");
-    console.log(banner);
-    for (const r of ranked.slice(0, 10)) {
-      const tag = r.hit.owned ? "★" : " ";
-      console.log(
-        `  ${tag} ${String(r.count).padStart(5)}×  [${r.hit.kind}]  ` +
-          `${r.hit.symbolName}  ${shortPath(r.hit.filePath)}:${r.hit.line}`
-      );
+  const top = (title: string, f: (r: DepthRecord) => number) => {
+    console.log(title);
+    for (const s of [...steps]
+      .sort((a, b) => f(b.rec) - f(a.rec))
+      .slice(0, 5)) {
+      console.log(row(s));
     }
     console.log("");
-  }
-
-  // Owned offenders by self-time
-  console.log("Top PipeSafe-owned offenders by self-time:");
-  console.log(banner);
-  if (ownedTop.length === 0) {
-    console.log(
-      "  (no PipeSafe-owned types in trace — cost may be in lib.es*.d.ts " +
-        "or downstream. Look at the all-categories list below.)"
-    );
-  } else {
-    for (const r of ownedTop) {
-      const ms = (r.totalUs / 1000).toFixed(1);
-      console.log(
-        `  ${ms.padStart(8)}ms  ${fmt(r.callCount).padStart(7)}×  ` +
-          `${r.symbolName}  ${shortPath(r.filePath)}:${r.line}`
-      );
-    }
-  }
-  console.log("");
-
-  console.log("Top 10 across all categories (★ = PipeSafe-owned):");
-  console.log(banner);
-  for (const r of allTop) {
-    const ms = (r.totalUs / 1000).toFixed(1);
-    const prefix = r.owned ? "★" : " ";
-    console.log(
-      `  ${prefix} ${ms.padStart(8)}ms  ${fmt(r.callCount).padStart(7)}×  ` +
-        `${r.symbolName}  ${shortPath(r.filePath)}:${r.line}`
-    );
-  }
-  console.log("");
-
-  console.log("Trace files:");
-  console.log(`  ${traceDir}/trace.json`);
-  console.log(`  ${traceDir}/types.json`);
-  console.log("");
-  console.log("Interactive viewer:");
-  console.log("  bun run depth-view");
-  console.log("");
-  console.log("Decision tree: docs/typescript-depth/fix-guide.md §3");
+  };
+  top("Calls by own instantiations:", (r) => r.selfCount);
+  top("Calls by own depth:", ownDepth);
 }
 
-// ---------------------------------------------------------------------------
-// Entrypoint
-// ---------------------------------------------------------------------------
-
-function main(): void {
-  const targetFile = resolveTargetFile();
-  console.log(
-    `Generating trace via owning tsconfig of ${shortPath(targetFile)}...`
-  );
-
-  const { traceDir, stdout, stderr, exitCode, owningTsconfig } =
-    generateTrace(targetFile);
-
-  if (!existsSync(join(traceDir, "trace.json"))) {
-    console.error(`tsc failed before writing the trace (exit=${exitCode}).`);
-    if (stderr.trim()) console.error(stderr);
-    if (stdout.trim()) console.error(stdout);
-    process.exit(4);
+if (limitHits.size > 0) {
+  console.log("PipeSafe types instantiated at a ceiling:");
+  for (const [key, n] of [...limitHits]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)) {
+    console.log(`  ${String(n).padStart(6)}×  ${key}`);
   }
-
-  const { events, types } = loadTrace(traceDir);
-  const diag = diagnoseDepthErrors(stdout, stderr, events);
-  const offenders = aggregateOffenders(events, types);
-  const hits = aggregateDepthLimitHits(events, types);
-  printReport(targetFile, diag, offenders, hits, traceDir, owningTsconfig);
+  console.log("");
 }
 
-main();
+console.log(
+  `Trace: ${short(TRACE_DIR)}/  ·  Decision tree: docs/typescript-depth/fix-guide.md §3`
+);
