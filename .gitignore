@@ -23,3 +23,6 @@ benchmarks/
 # playwright-mcp screenshots and snapshots
 .playwright-mcp/
 cf-*.png
+
+# pr-review validator scratch files
+packages/core/examples/pr-review-scratch-*.ts
