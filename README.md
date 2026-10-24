@@ -1,4 +1,10 @@
-# PipeSafe
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./website-brand/public/banner-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="./website-brand/public/banner-light.png">
+    <img alt="PipeSafe — type-safe MongoDB aggregation pipelines for TypeScript" src="./website-brand/public/banner-dark.png">
+  </picture>
+</p>
 
 **PipeSafe** - A fully type-safe MongoDB aggregation pipeline builder for TypeScript projects.
 

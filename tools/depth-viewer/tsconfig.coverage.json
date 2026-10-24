@@ -1,0 +1,23 @@
+{
+  "extends": "../../tsconfig.options.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "incremental": false,
+    "types": [],
+    // Resolve the workspace packages to source, not their built dist/*.d.mts,
+    // so instantiation work is attributed to source declarations.
+    "paths": {
+      "@pipesafe/core": ["../../packages/core/src/index.ts"],
+      "@pipesafe/manifold": ["../../packages/manifold/src/index.ts"]
+    }
+  },
+  "include": [
+    "../../packages/core/src/**/*.ts",
+    "../../packages/core/examples/**/*.ts",
+    "../../packages/core/benchmarking/**/*.ts",
+    "../../packages/manifold/src/**/*.ts",
+    "../../packages/manifold/examples/**/*.ts"
+  ],
+  "exclude": ["**/dist/**", "**/node_modules/**", "**/*.test.ts"]
+}
