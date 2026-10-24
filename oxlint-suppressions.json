@@ -1,11 +1,5 @@
 {
   "packages/core-completions-tests/src/Pipeline.completions.test.ts": {
-    "max-lines": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    },
     "unicorn/no-array-sort": {
       "count": 2
     }
@@ -170,50 +164,13 @@
       "count": 1
     }
   },
-  "packages/core/src/elements/expressions.typeAssertions.ts": {
-    "max-lines": {
-      "count": 1
-    }
-  },
-  "packages/core/src/elements/fieldReference.typeAssertions.ts": {
-    "max-lines": {
-      "count": 1
-    },
-    "typescript/no-empty-object-type": {
-      "count": 2
-    },
-    "typescript/no-unnecessary-type-assertion": {
-      "count": 8
-    }
-  },
-  "packages/core/src/elements/fieldSelector.typeAssertions.ts": {
-    "max-lines": {
-      "count": 1
-    },
-    "typescript/no-empty-object-type": {
-      "count": 2
-    },
-    "typescript/no-unnecessary-type-assertion": {
-      "count": 6
-    }
-  },
   "packages/core/src/elements/literals.ts": {
     "typescript/no-redundant-type-constituents": {
       "count": 1
     }
   },
-  "packages/core/src/elements/validation.ts": {
-    "typescript/no-empty-object-type": {
-      "count": 1
-    }
-  },
   "packages/core/src/index.ts": {
     "typescript/no-deprecated": {
-      "count": 1
-    }
-  },
-  "packages/core/src/pipeline/Pipeline.callSite.typeAssertions.ts": {
-    "max-lines": {
       "count": 1
     }
   },
@@ -240,19 +197,6 @@
       "count": 1
     },
     "typescript/strict-boolean-expressions": {
-      "count": 1
-    }
-  },
-  "packages/core/src/pipeline/Pipeline.typeAssertions.ts": {
-    "typescript/no-empty-object-type": {
-      "count": 1
-    },
-    "typescript/no-unnecessary-type-arguments": {
-      "count": 1
-    }
-  },
-  "packages/core/src/singleton/pipesafe.test.ts": {
-    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -291,25 +235,9 @@
       "count": 4
     }
   },
-  "packages/core/src/stages/facet.typeAssertions.ts": {
-    "typescript/no-unnecessary-type-arguments": {
-      "count": 3
-    }
-  },
-  "packages/core/src/stages/graphLookup.typeAssertions.ts": {
-    "max-lines": {
-      "count": 1
-    },
-    "typescript/no-unnecessary-type-arguments": {
-      "count": 2
-    }
-  },
   "packages/core/src/stages/group.ts": {
     "max-lines": {
       "count": 1
-    },
-    "typescript/no-empty-object-type": {
-      "count": 3
     },
     "typescript/no-explicit-any": {
       "count": 4
@@ -319,25 +247,13 @@
     }
   },
   "packages/core/src/stages/group.typeAssertions.ts": {
-    "max-lines": {
-      "count": 1
-    },
-    "typescript/no-empty-object-type": {
-      "count": 4
-    },
     "typescript/no-explicit-any": {
       "count": 4
     }
   },
   "packages/core/src/stages/lookup.typeAssertions.ts": {
-    "max-lines": {
-      "count": 1
-    },
     "typescript/no-explicit-any": {
       "count": 1
-    },
-    "typescript/no-unnecessary-type-arguments": {
-      "count": 2
     }
   },
   "packages/core/src/stages/match.ts": {
@@ -346,16 +262,6 @@
     },
     "typescript/no-unnecessary-type-constraint": {
       "count": 3
-    }
-  },
-  "packages/core/src/stages/match.typeAssertions.ts": {
-    "max-lines": {
-      "count": 1
-    }
-  },
-  "packages/core/src/stages/merge.typeAssertions.ts": {
-    "typescript/no-unnecessary-type-arguments": {
-      "count": 1
     }
   },
   "packages/core/src/stages/out.ts": {
@@ -367,30 +273,16 @@
     "max-lines": {
       "count": 1
     },
-    "typescript/no-empty-object-type": {
-      "count": 4
-    },
     "typescript/no-explicit-any": {
       "count": 2
     }
   },
   "packages/core/src/stages/project.typeAssertions.ts": {
-    "max-lines": {
-      "count": 1
-    },
     "typescript/no-deprecated": {
       "count": 2
     }
   },
-  "packages/core/src/stages/set.ts": {
-    "typescript/no-empty-object-type": {
-      "count": 1
-    }
-  },
   "packages/core/src/stages/set.typeAssertions.ts": {
-    "max-lines": {
-      "count": 1
-    },
     "typescript/no-redundant-type-constituents": {
       "count": 2
     }
@@ -398,21 +290,6 @@
   "packages/core/src/stages/stages.contract.typeAssertions.ts": {
     "typescript/no-redundant-type-constituents": {
       "count": 1
-    }
-  },
-  "packages/core/src/stages/unset.typeAssertions.ts": {
-    "max-lines": {
-      "count": 1
-    }
-  },
-  "packages/core/src/stages/unwind.ts": {
-    "typescript/no-empty-object-type": {
-      "count": 1
-    }
-  },
-  "packages/core/src/stages/unwind.typeAssertions.ts": {
-    "typescript/no-unnecessary-type-arguments": {
-      "count": 6
     }
   },
   "packages/core/src/utils/objects.ts": {
@@ -424,9 +301,6 @@
     }
   },
   "packages/core/src/utils/paths.ts": {
-    "typescript/no-empty-object-type": {
-      "count": 2
-    },
     "typescript/no-explicit-any": {
       "count": 3
     }
@@ -442,9 +316,6 @@
     }
   },
   "packages/core/src/utils/updates.ts": {
-    "typescript/no-empty-object-type": {
-      "count": 3
-    },
     "typescript/no-explicit-any": {
       "count": 2
     }
@@ -461,9 +332,6 @@
     }
   },
   "packages/manifold/src/model/Model.test.ts": {
-    "max-lines-per-function": {
-      "count": 2
-    },
     "unicorn/no-useless-undefined": {
       "count": 1
     }
@@ -486,12 +354,6 @@
     }
   },
   "packages/manifold/src/project/Project.run.test.ts": {
-    "max-lines": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 3
-    },
     "typescript/no-non-null-assertion": {
       "count": 2
     },
@@ -550,11 +412,6 @@
     },
     "unicorn/no-negated-condition": {
       "count": 1
-    }
-  },
-  "packages/manifold/src/project/Project.validation.test.ts": {
-    "max-lines-per-function": {
-      "count": 4
     }
   },
   "website/src/App.tsx": {

@@ -26,7 +26,6 @@
     "typescript/no-duplicate-enum-values": "error",
     "typescript/no-duplicate-type-constituents": "error",
     "typescript/no-dynamic-delete": "error",
-    "typescript/no-empty-object-type": "error",
     "typescript/no-explicit-any": "error",
     "typescript/no-extra-non-null-assertion": "error",
     "typescript/no-extraneous-class": "error",
@@ -123,6 +122,8 @@
     "no-underscore-dangle": "off",
     "typescript/prefer-readonly-parameter-types": "off",
     "no-inline-comments": "off",
+    // `{}` is the "nothing to add" result of the ValidateXxxQuery pattern.
+    "typescript/no-empty-object-type": "off",
 
     "no-restricted-imports": [
       "error",
@@ -138,10 +139,19 @@
   },
   "overrides": [
     {
-      // Assertion files pin types with `{} as T`.
+      // Assertion files pin types with `{} as T` and spell out type arguments.
       "files": ["**/*.typeAssertions.ts"],
       "rules": {
-        "typescript/no-unsafe-type-assertion": "off"
+        "typescript/no-unsafe-type-assertion": "off",
+        "typescript/no-unnecessary-type-assertion": "off",
+        "typescript/no-unnecessary-type-arguments": "off"
+      }
+    },
+    {
+      "files": ["**/*.typeAssertions.ts", "**/*.test.ts"],
+      "rules": {
+        "max-lines": "off",
+        "max-lines-per-function": "off"
       }
     }
   ]

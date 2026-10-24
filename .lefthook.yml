@@ -11,8 +11,7 @@ pre-commit:
     - group:
         parallel: true
         jobs:
-          # Check only: `oxlint --fix` also rewrites suppressed findings,
-          # including the `as T` pins in *.typeAssertions.ts.
+          # Check only: `oxlint --fix` also rewrites suppressed findings.
           - name: lint
             run: bun run lint
           - name: test
