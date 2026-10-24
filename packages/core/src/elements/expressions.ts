@@ -42,17 +42,17 @@ import {
 
 /**
  * Array operand — accepts a field reference to an array field, an array
- * literal of any element type, or an array-producing expression
- * ($concatArrays/$arrayElemAt/$filter/$map — e.g. `$size: { $filter: … }`).
- * The branded `PipeSafeError` arm surfaces in IDE hovers when a user passes
- * a non-array value (e.g. a string field reference) where an array is
- * required. Specialized rather than an `ExpressionOperand` one-liner
- * because the literal arm is `AnyLiteral[]` while the reference arm targets
- * `unknown[]`.
+ * literal (elements: literals, any ref or variable, expressions), or an
+ * array-producing expression ($concatArrays/$arrayElemAt/$filter/$map —
+ * e.g. `$size: { $filter: … }`). The branded `PipeSafeError` arm surfaces
+ * in IDE hovers when a user passes a non-array value (e.g. a string field
+ * reference) where an array is required. Specialized rather than an
+ * `ExpressionOperand` one-liner because the literal arm's elements are
+ * untyped while the reference arm targets `unknown[]`.
  */
 type ArrayOperand<Schema extends Document, Op extends string> =
   | ReferencesInferringTo<Schema, unknown[]>
-  | readonly AnyLiteral<Schema>[]
+  | readonly (AnyLiteral<Schema> | ReferenceValue<Schema> | ExpressionShaped)[]
   | ArrayProducingExpression<Schema>
   | MapExpression<Schema>
   | PipeSafeError<RequiresMsg<"Operator", Op, "an array operand">>;
@@ -893,40 +893,37 @@ type UnionArrayElements<
   Vars extends Document = {},
 > =
   Arrays extends readonly [infer First, ...infer Rest] ?
-    | InferInputElement<Schema, First, Vars>
+    | InferArrayElementType<Schema, First, Vars>
     | UnionArrayElements<Schema, Rest, Vars>
   : never;
 
-/** Element type of a resolved array type; non-arrays degrade to `unknown`. */
-type ElementOf<R> = R extends readonly (infer T)[] ? T : unknown;
+/**
+ * Element type of a resolved array type (a nullable array binds its
+ * elements); non-arrays degrade to `unknown`.
+ */
+type ElementOf<R> =
+  [NonNullable<R>] extends [readonly (infer T)[]] ? T : unknown;
 
 /**
- * Element type of an array source (field ref, `$$`-variable reference, or
- * literal). Exported: the validation kernel's $map/$filter walks bind the
- * SAME element type inference uses.
+ * Element type of an array source: literal, field ref, `$$`-variable, or
+ * expression (`input: { $filter }`, `$concatArrays` items). Exported: the
+ * validation kernel's $map/$filter walks bind the SAME element type
+ * inference uses.
  */
 export type InferArrayElementType<
   Schema extends Document,
   ArraySource,
   Vars extends Document = {},
 > =
-  ArraySource extends readonly (infer E)[] ? E
+  ArraySource extends readonly (infer E)[] ?
+    InferNestedFieldReference<Schema, E, Vars>
   : ArraySource extends FieldReference<Schema> ?
     ElementOf<InferFieldReference<Schema, ArraySource>>
   : ArraySource extends `$$${string}` ?
     ElementOf<InferVariableReference<Schema, ArraySource, Vars>>
+  : HasOperatorKey<ArraySource> extends true ?
+    ElementOf<InferExpression<Schema, ArraySource, Vars>>
   : unknown;
-
-/**
- * Element type extended to expression inputs (`input: { $filter }`,
- * `$concatArrays` items). Inference-only: the validation walk's shared
- * InferArrayElementType must not recurse into InferExpression (TS2589
- * across the project).
- */
-type InferInputElement<Schema extends Document, Input, Vars extends Document> =
-  HasOperatorKey<Input> extends true ?
-    ElementOf<InferExpression<Schema, Input, Vars>>
-  : InferArrayElementType<Schema, Input, Vars>;
 
 /**
  * Shared operand inference for the conditional operators. The only semantic
@@ -959,8 +956,8 @@ type InferConditionalOperandValue<
     SwallowsNull extends true ?
       NonNullable<InferVariableReference<Schema, Operand, Vars>>
     : InferVariableReference<Schema, Operand, Vars>
-  : Operand extends readonly (infer T)[] ?
-    T // Array literal
+  : Operand extends readonly unknown[] ?
+    InferNestedFieldReference<Schema, Operand, Vars> // array literal
   : InferExpression<Schema, Operand, Vars> extends infer R ?
     [R] extends [NotAnExpression] ?
       Operand // Not an expression, treat as literal
@@ -1017,7 +1014,7 @@ type InferDependentExpression<
   : Expr extends { $arrayElemAt: readonly [infer ArraySource, unknown] } ?
     InferArrayElementType<Schema, ArraySource, Vars>
   : Expr extends { $filter: { input: infer ArraySource } } ?
-    InferInputElement<Schema, ArraySource, Vars>[]
+    InferArrayElementType<Schema, ArraySource, Vars>[]
   : Expr extends { $map: infer MapOperand } ?
     MapOperand extends { input: infer Input; in: infer In } ?
       InferNestedFieldReference<
@@ -1026,7 +1023,7 @@ type InferDependentExpression<
         BindVariable<
           Vars,
           BoundAsName<MapOperand>,
-          InferInputElement<Schema, Input, Vars>
+          InferArrayElementType<Schema, Input, Vars>
         >
       >[]
     : unknown[] // malformed operand — keep the operator's array result kind

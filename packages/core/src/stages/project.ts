@@ -193,18 +193,6 @@ export type ValidateProjectQuery<
     : ValidateProjectQueryKeys<Schema, P, Vars>
   : ValidateProjectQueryKeys<Schema, P, Vars>;
 
-// Helper: Resolve nested objects with field references and expressions.
-// InferNestedFieldReference key-dispatches expressions internally, so no
-// separate expression structural check is needed.
-type ResolveNestedProjection<
-  Schema extends Document,
-  Obj extends Document,
-  Vars extends Document = {},
-> = {
-  [K in keyof Obj as Obj[K] extends "$$REMOVE" ? never
-  : K]: InferNestedFieldReference<Schema, Obj[K], Vars>;
-};
-
 // Helper: Resolve a single field value (handles both regular and dotted keys)
 type ResolveFieldValue<
   Schema extends Document,
@@ -238,7 +226,7 @@ type ResolveFieldValue<
     InferExpression<Schema, Value, Vars>
   : Value extends Document ?
     // Nested object - recursively resolve field references and expressions within it
-    ResolveNestedProjection<Schema, Value, Vars>
+    InferNestedFieldReference<Schema, Value, Vars>
   : [Value] extends [string] ?
     Value // plain-string literal assignment (valid MongoDB; $-refs handled above)
   : PipeSafeError<`Stage '$project' requires a valid projection value for field '${Key}'.`>;
@@ -300,6 +288,9 @@ type DeepMergeProjection<T> =
     : T
   : T;
 
+/** Values that leave the field out of the output. */
+type DropsField = 0 | false | "$$REMOVE";
+
 // Helper: Resolve inclusion mode projection
 // Use MergeNested to deeply merge nested intersections (e.g., { user: { name } } & { user: { email } })
 type ResolveInclusionMode<
@@ -314,7 +305,7 @@ type ResolveInclusionMode<
         // Always include _id unless explicitly excluded (only if _id exists in schema)
         [K in "_id" as K extends keyof Schema ?
           K extends keyof Query ?
-            Query[K] extends 0 | false ?
+            Query[K] extends DropsField ?
               never
             : K
           : K // Include _id by default in inclusion mode
@@ -328,7 +319,7 @@ type ResolveInclusionMode<
         // values can't reach the fallthrough because genuine mixing already
         // branded at dispatch.
         [K in keyof NonDottedKeys<Query> as K extends "_id" ? never
-        : Query[K] extends 0 | false | "$$REMOVE" ? never
+        : Query[K] extends DropsField ? never
         : K]: ResolveFieldValue<Schema, Query[K], K & string, Vars>;
       } & ExpandDottedProjection<Schema, Query>
     >
@@ -345,7 +336,7 @@ type ResolveExclusionMode<
     // Always include _id unless explicitly excluded (only if _id exists in schema)
     [K in "_id" as K extends keyof Schema ?
       K extends keyof Query ?
-        Query[K] extends 0 | false ?
+        Query[K] extends DropsField ?
           never
         : K
       : K // Include _id by default in exclusion mode

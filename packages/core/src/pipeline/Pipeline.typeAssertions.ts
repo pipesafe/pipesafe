@@ -174,6 +174,50 @@ type _ProjectRemoveOutput = Assert<
     { _id: string; name: string; nested: { readonly kept: string } }
   >
 >;
+const _removeDeep = _p.project({
+  _id: "$$REMOVE",
+  name: 1,
+  deep: { mid: { gone: "$$REMOVE", kept: "$name" } },
+});
+type _RemoveDeepOutput = Assert<
+  Equal<
+    InferOutputType<typeof _removeDeep>,
+    { name: string; deep: { readonly mid: { readonly kept: string } } }
+  >
+>;
+const _emptyRoot = _p.replaceRoot({ newRoot: {} });
+type _EmptyRootOutput = Assert<Equal<InferOutputType<typeof _emptyRoot>, {}>>;
+
+// Binder element types: literal inputs resolve their elements, a nullable
+// array binds its elements, and array literals stay arrays.
+type BindDoc = {
+  _id: string;
+  name: string;
+  home: { city: string };
+  work: { city: string };
+  tags?: string[];
+};
+const _binders = new Pipeline<BindDoc>().set({
+  cities: { $map: { input: ["$home", "$work"], as: "a", in: "$$a.city" } },
+  names: { $map: { input: ["$name", "$name"], in: "$$this" } },
+  optionalTags: { $map: { input: "$tags", in: "$$this" } },
+  branch: { $cond: [_flag, ["$name"], []] },
+  pair: { $let: { vars: { xs: ["$name", "$home"] }, in: "$$xs" } },
+  literal: { $literal: ["x"] },
+});
+type _BindersOutput = Assert<
+  Equal<
+    Omit<InferOutputType<typeof _binders>, keyof BindDoc>,
+    {
+      cities: string[];
+      names: string[];
+      optionalTags: string[];
+      branch: [] | [string];
+      pair: [string, { city: string }];
+      literal: readonly ["x"];
+    }
+  >
+>;
 
 // =============================================================================
 // Test: .group() then .set() - reference aggregated fields
@@ -210,6 +254,9 @@ export {
   _lookupEndingInGroup,
   _condRemove,
   _projectRemove,
+  _removeDeep,
+  _emptyRoot,
+  _binders,
   _setThenSet,
   _setThenMatch,
   _setThenUnset,
@@ -280,6 +327,9 @@ export type {
   _LookupEndingInGroupOutput,
   _CondRemoveOutput,
   _ProjectRemoveOutput,
+  _RemoveDeepOutput,
+  _EmptyRootOutput,
+  _BindersOutput,
   _MatchPassthrough,
   _SetPassthrough,
   _ProjectPassthrough,

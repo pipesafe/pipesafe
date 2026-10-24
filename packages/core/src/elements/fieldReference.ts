@@ -153,7 +153,8 @@ export type InferNestedFieldReference<
   : // Unknown single-`$` refs: validation brands them at the call site, so
   // inference must not invent a type for them.
   Obj extends `$${string}` ? never
-  : Obj extends unknown[] ? InferNestedFieldReferenceArray<Schema, Obj, Vars>
+  : Obj extends readonly unknown[] ?
+    InferNestedFieldReferenceArray<Schema, Obj, Vars>
   : Obj extends object ?
     Obj extends NonExpandableTypes ? Obj
     : // Only objects carrying a `$`-prefixed key are candidates for
@@ -176,23 +177,26 @@ type InferNestedFieldReferenceArray<
   Arr,
   Vars extends Document = {},
 > =
-  Arr extends [] ? []
-  : Arr extends [infer First, ...infer Rest] ?
+  Arr extends readonly [] ? []
+  : Arr extends readonly [infer First, ...infer Rest] ?
     [
       InferNestedFieldReference<Schema, First, Vars>,
       ...InferNestedFieldReferenceArray<Schema, Rest, Vars>,
     ]
-  : Arr extends (infer Item)[] ? InferNestedFieldReference<Schema, Item, Vars>[]
+  : Arr extends readonly (infer Item)[] ?
+    InferNestedFieldReference<Schema, Item, Vars>[]
   : never;
 
 /**
  * Helper type for resolving field references in objects
- * Preserves object structure while resolving any field references
+ * Preserves object structure while resolving any field references; a
+ * `"$$REMOVE"` value omits its field, as in MongoDB.
  */
 type InferNestedFieldReferenceObject<
   Schema extends Document,
   Obj,
   Vars extends Document = {},
 > = Prettify<{
-  [K in keyof Obj]: InferNestedFieldReference<Schema, Obj[K], Vars>;
+  [K in keyof Obj as Obj[K] extends "$$REMOVE" ? never
+  : K]: InferNestedFieldReference<Schema, Obj[K], Vars>;
 }>;

@@ -98,7 +98,7 @@ export type ValidateExpressionValue<
     // fast-accept below — their `unknown`-typed interiors pass the
     // whole-operand relation vacuously, skipping exactly the positions
     // that need the Vars environment.
-    [OperatorKeyOf<V>] extends ["$concat" | "$let" | "$map" | "$filter"] ?
+    [OperatorKeyOf<V>] extends ["$concat" | BinderOp] ?
       [OperatorKeyOf<V>] extends ["$concat"] ?
         ValidateConcatValue<Schema, V, Vars>
       : [OperatorKeyOf<V>] extends ["$let"] ? ValidateLetValue<Schema, V, Vars>
@@ -341,8 +341,9 @@ type ValidateArrayInputValue<
       : string extends keyof Schema ?
         never // operand checks are meaningless on a wide/index-signature schema
       : [Input] extends [RegistryArrayInputOperand<Schema, Op>] ? never
-      : UserVariableOperand<Vars, Input> extends true ?
-        never // the relation is Vars-blind; a user variable fails it
+      : // The relation is Vars-blind; a user variable fails it.
+      UserVariableOperand<Vars, Input> extends true ?
+        ValidateNestedValue<Schema, Input, Vars>
       : PipeSafeError<RequiresMsg<"Operator", Op, "an array operand">>
     : B
   : never;
@@ -468,7 +469,12 @@ export type ValidateNestedBinders<
   : ContainsBinder<V> extends true ? ValidateNestedValue<Schema, V, Vars>
   : never;
 
-type BinderOp = "$let" | "$map" | "$filter";
+export const BINDER_OPERATORS = [
+  "$let",
+  "$map",
+  "$filter",
+] as const satisfies readonly (keyof ExpressionSpec<Document>)[];
+type BinderOp = (typeof BINDER_OPERATORS)[number];
 
 /**
  * `true` when a literal value tree holds a binder. Non-distributive, like

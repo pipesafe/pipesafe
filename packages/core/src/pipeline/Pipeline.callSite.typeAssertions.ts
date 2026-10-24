@@ -380,6 +380,61 @@ const _set_let_bad_var_chars = new Pipeline<User>().set({
   },
 });
 
+const _set_let_numeric_name = new Pipeline<User>().set({
+  x: {
+    $let: {
+      vars: {
+        // @ts-expect-error  '1' is not a valid user variable name
+        1: "$name",
+      },
+      in: 1,
+    },
+  },
+});
+
+// Expression inputs bind the same element type for validation as for
+// inference ($$this is a number here, so $concat rejects it).
+const _set_map_expr_input_bad = new Pipeline<User>().set({
+  x: {
+    $map: {
+      input: { $filter: { input: [1, 2], cond: true } },
+      in: {
+        $concat: [
+          // @ts-expect-error  $$this is a number
+          "$$this",
+        ],
+      },
+    },
+  },
+});
+
+// A binder input that references a user variable is walked: unknown
+// names inside it brand.
+const _set_binder_input_unknown_var = new Pipeline<User>().set({
+  x: {
+    $map: {
+      input: "$tags",
+      in: {
+        $map: {
+          input: {
+            $concatArrays: [
+              ["$$this"],
+              // @ts-expect-error  '$$tpyo' is not bound
+              "$$tpyo",
+            ],
+          },
+          as: "t",
+          in: "$$t",
+        },
+      },
+    },
+  },
+});
+
+const _set_user_roles_path_ok = new Pipeline<User>().set({
+  n: { $size: "$$USER_ROLES.role" },
+});
+
 const _set_map_bad_as_name = new Pipeline<User>().set({
   t: {
     // @ts-expect-error  '_t' is not a valid user variable name
@@ -713,6 +768,10 @@ export {
   _group_nested_binder_bad,
   _set_map_of_map_ok,
   _set_let_bad_var_chars,
+  _set_let_numeric_name,
+  _set_map_expr_input_bad,
+  _set_binder_input_unknown_var,
+  _set_user_roles_path_ok,
   _set_let_bad_var_name,
   _set_map_bad_as_name,
   _set_filter_bad_cond_var,

@@ -17,6 +17,9 @@ Accurate types for `$$`-system variables and `$let`/`$map`/`$filter` bound varia
   array, binding the element under the `as` name (default `"this"`). The
   variable environment threads through nested expressions, nested binders
   shadow outer bindings, and `$filter`'s element type flows the same way.
+  The element binds from any input: a field ref (a nullable array binds
+  its elements), a `$$`-variable, an expression, or a literal array whose
+  elements are resolved (`input: ["$home", "$work"]` binds the documents).
 - Validation matches inference: binder interiors are walked with their
   bindings (bad refs in `vars`, unknown `$$`-names in `in`/`cond`, and bad
   dotted paths brand at the chained call site), binders nested inside
@@ -32,8 +35,11 @@ Accurate types for `$$`-system variables and `$let`/`$map`/`$filter` bound varia
   variables (`$gte: ["$expiresAt", "$$NOW"]`).
 - `$map.as` is now optional (MongoDB defaults the binding to `$$this`).
 - `$$REMOVE` drops the field: a `$cond`/`$ifNull` branch of `"$$REMOVE"`
-  infers `| undefined`, and `$project: { f: "$$REMOVE" }` (top level or
-  nested) omits `f` from the output.
+  infers `| undefined`, and a `"$$REMOVE"` value omits its field at any
+  depth of `$project`, `$set` and `replaceRoot` objects (`_id` included).
+- Array literals in expression operands accept any field ref, variable or
+  nested expression as an element, and `as const` tuples (`$literal`,
+  `$let.vars`, `$cond` branches) infer as arrays rather than objects.
 - `$$`-references resolve through the bound `Vars` environment (binder and
   lookup-let bindings) first, then `SystemVariableSpec`, with the same
   dotted-path handling either way. `SystemVariableReferences<Schema>` and
@@ -57,6 +63,7 @@ Accurate types for `$$`-system variables and `$let`/`$map`/`$filter` bound varia
 - `$sum`/`$avg`/`$min`/`$max` type-check `$$`-variable operands against
   their resolved type (`$sum: "$$NOW"` brands; `$sum: "$$ROOT.qty"` passes).
 - A lookup or unionWith sub-pipeline that ends in `.group()` no longer
-  fails with "Type instantiation is excessively deep".
+  fails with "Type instantiation is excessively deep". `Pipeline.group`'s
+  return type uses `NoInfer`, so TypeScript 5.4 is the minimum.
 - `$set`/`$group`/`let` validation no longer walks the full expression
   registry once per schema, cutting type-check instantiations by about 40%.

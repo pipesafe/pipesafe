@@ -176,8 +176,8 @@ export type ValidateVariableReference<
  * The `$$`-sibling of FieldReferencesThatInferTo, for typed operand sets
  * ($dateAdd's `startDate` accepts "$$NOW"; a numeric operand accepts
  * "$$ROOT.price"). The dotted arms REUSE the schema's cached ref→type map
- * via prefix rewrite rather than building a second map; all arms are
- * finite. `$$REMOVE`'s `never` is excluded explicitly (`never` is
+ * via prefix rewrite rather than building a second map ($$USER_ROLES's
+ * schema-independent map is built once); all arms are finite. `$$REMOVE`'s `never` is excluded explicitly (`never` is
  * assignable to every target). Deliberately Vars-blind: binder/lookup-let
  * interiors skip the operand relation, so bound names never reach these
  * sets.
@@ -189,7 +189,8 @@ export type SystemVariablesThatInferTo<Schema extends Document, T> =
       : SystemVariableSpec<Schema>[K] extends T ? K
       : never;
     }[SystemVariable]
-  | `${"$$ROOT" | "$$CURRENT"}.${WithoutDollar<FieldReferencesThatInferTo<Schema, T> & string>}`;
+  | `${"$$ROOT" | "$$CURRENT"}.${WithoutDollar<FieldReferencesThatInferTo<Schema, T> & string>}`
+  | `$$USER_ROLES.${WithoutDollar<FieldReferencesThatInferTo<SystemVariableSpec<Document>["$$USER_ROLES"][number], T extends readonly (infer E)[] ? E : never> & string>}`;
 
 type CharsOf<S extends string> =
   S extends `${infer C}${infer Rest}` ? C | CharsOf<Rest> : never;
@@ -205,7 +206,9 @@ type InvalidVariableNameChar = CharsOf<" !\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~">;
  * the system tier in LookupVariable.
  */
 export type ValidateVariableName<Name> =
-  Name extends (
+  Name extends number ?
+    InvalidVariableNameError<`${Name}`> // digit-first
+  : Name extends (
     | ""
     | `${UpperAlphabet | Digit | "_"}${string}`
     | `${string}${InvalidVariableNameChar}${string}`
