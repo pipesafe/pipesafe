@@ -217,6 +217,11 @@ export function parseDepthSteps(traceDir: string): DepthIndex {
   }
   return indexDepthSteps(records);
 }
+/** Depth a node's own resolution added above its entry depth. */
+export function ownDepth(rec: DepthRecord): number {
+  return Math.max(0, rec.selfPeakDepth - rec.enterDepth);
+}
+
 /**
  * Label a Call/New node and locate its invocation site: the member name of a
  * property-access call, the key of an element-access call, else the node's own

@@ -14,15 +14,20 @@ import { dirname, join, relative, resolve } from "node:path";
 
 import ts from "typescript";
 
-import { materializePatchedTsc } from "./depth-viewer/patch-tsc";
+import {
+  DEPTH_STEP_EVENT,
+  materializePatchedTsc,
+} from "./depth-viewer/patch-tsc";
 import { TS2589_CEILINGS } from "./depth-viewer/src/types";
 import {
   describeCall,
-  parseDepthSteps,
+  indexDepthSteps,
+  ownDepth,
   parseJsonArray,
   REPO_ROOT,
   runTscTrace,
   type DepthRecord,
+  type RawDepthStep,
   type RawTypeEntry,
 } from "./depth-viewer/trace";
 
@@ -35,8 +40,9 @@ const PREFERRED_TSCONFIGS = [
   "tools/depth-viewer/tsconfig.coverage.json",
   "tools/depth-viewer/tsconfig.stress.json",
 ].map((p) => resolve(REPO_ROOT, p));
+// Trace paths are lowercased on case-insensitive filesystems.
 const OWNED_PREFIXES = ["packages/core/src/", "packages/manifold/src/"].map(
-  (p) => resolve(REPO_ROOT, p) + "/"
+  (p) => (resolve(REPO_ROOT, p) + "/").toLowerCase()
 );
 const {
   instantiationDepth: DEPTH_CEILING,
@@ -45,10 +51,7 @@ const {
 } = TS2589_CEILINGS;
 
 interface TraceEvent {
-  ph: string;
   name?: string;
-  ts: number;
-  dur?: number;
   args?: Record<string, unknown>;
 }
 
@@ -84,7 +87,8 @@ if (!existsSync(targetFile)) {
 
 const fmt = (n: number) => n.toLocaleString();
 const short = (p: string) => relative(REPO_ROOT, p);
-const isOwned = (p: string) => OWNED_PREFIXES.some((o) => p.startsWith(o));
+const isOwned = (p: string) =>
+  OWNED_PREFIXES.some((o) => p.toLowerCase().startsWith(o));
 
 function includesFile(tsconfig: string, file: string): boolean {
   const parsed = ts.getParsedCommandLineOfConfigFile(
@@ -111,9 +115,7 @@ function findTsconfig(file: string): string {
 function findDeclaration(sf: ts.SourceFile): ts.Node | undefined {
   const visit = (node: ts.Node): ts.Node | undefined => {
     if (
-      (ts.isVariableDeclaration(node) ||
-        ts.isTypeAliasDeclaration(node) ||
-        ts.isFunctionDeclaration(node)) &&
+      (ts.isVariableDeclaration(node) || ts.isFunctionDeclaration(node)) &&
       node.name &&
       ts.isIdentifier(node.name) &&
       node.name.text === name
@@ -148,7 +150,9 @@ const sf = ts.createSourceFile(
 );
 const decl = findDeclaration(sf);
 if (!decl) {
-  console.error(`No declaration named '${name}' in ${short(targetFile)}.`);
+  console.error(
+    `No const or function named '${name}' in ${short(targetFile)}.`
+  );
   process.exit(2);
 }
 const lineOf = (pos: number) => sf.getLineAndCharacterOfPosition(pos).line + 1;
@@ -178,31 +182,51 @@ if (!existsSync(join(TRACE_DIR, "types.json"))) {
 
 // --- diagnostics ----------------------------------------------------------------
 
-const DIAGNOSTIC = /^(.+?)\((\d+),(\d+)\): error (TS\d+): (.*)$/;
-const diagnostics = [
-  ...new Set(
-    result.stdout.split("\n").filter((l) => {
-      const m = DIAGNOSTIC.exec(l);
-      if (!m || resolve(REPO_ROOT, m[1]!) !== targetFile) return false;
-      const line = Number(m[2]);
-      return line >= startLine && line <= endLine;
-    })
-  ),
-];
+// A head line plus its indented elaboration lines (which carry PipeSafeError
+// brand messages).
+const DIAGNOSTIC = /^(.+?)\((\d+),(\d+)\): error TS\d+: /;
+const diagnostics = new Set<string>();
+let current: string | undefined;
+for (const l of result.stdout.split("\n")) {
+  const m = DIAGNOSTIC.exec(l);
+  if (m) {
+    const line = Number(m[2]);
+    current =
+      (
+        resolve(REPO_ROOT, m[1]!) === targetFile &&
+        line >= startLine &&
+        line <= endLine
+      ) ?
+        l
+      : undefined;
+    if (current) diagnostics.add(current);
+  } else if (current && l.startsWith("  ")) {
+    diagnostics.delete(current);
+    current = `${current}\n${l}`;
+    diagnostics.add(current);
+  } else {
+    current = undefined;
+  }
+}
 
 // --- per-call stats -------------------------------------------------------------
 
-const prefix = `${targetFile.toLowerCase()}::`;
+const events = parseJsonArray<TraceEvent>(join(TRACE_DIR, "trace.json"));
+const targetLower = targetFile.toLowerCase();
+const prefix = `${targetLower}::`;
 const sites = callsByEnd(decl, sf);
 const steps: Step[] = [];
-for (const [key, rec] of parseDepthSteps(TRACE_DIR)) {
+const depthIndex = indexDepthSteps(
+  events.flatMap((e) =>
+    e.name === DEPTH_STEP_EVENT ? [e.args as unknown as RawDepthStep] : []
+  )
+);
+for (const [key, rec] of depthIndex) {
   const site = key.startsWith(prefix) ? sites.get(rec.end) : undefined;
   if (site) steps.push({ ...site, rec });
 }
 steps.sort((a, b) => a.rec.end - b.rec.end);
 
-const ownDepth = (r: DepthRecord) =>
-  Math.max(0, r.selfPeakDepth - r.enterDepth);
 const peak = (f: (r: DepthRecord) => number) =>
   Math.max(0, ...steps.map((s) => f(s.rec)));
 const ceilings = [
@@ -213,17 +237,12 @@ const ceilings = [
 
 // --- types at the ceiling -------------------------------------------------------
 
-// The `checkExpression`/`checkVariableDeclaration` spans inside the declaration
-// bound its check in time; `*_DepthLimit` events in that window are its own.
-const events = parseJsonArray<TraceEvent>(join(TRACE_DIR, "trace.json"));
+// The patch tags each bail event with the node being checked.
 const inDecl = (a: Record<string, unknown> | undefined) =>
   typeof a?.["path"] === "string" &&
-  resolve(a["path"]) === targetFile &&
+  a["path"].toLowerCase() === targetLower &&
   (a["pos"] as number) >= decl.pos &&
   (a["end"] as number) <= decl.end;
-const spans = events.filter((e) => e.ph === "X" && e.dur && inDecl(e.args));
-const from = Math.min(...spans.map((e) => e.ts));
-const to = Math.max(...spans.map((e) => e.ts + e.dur!));
 
 const typeById = new Map(
   parseJsonArray<RawTypeEntry>(join(TRACE_DIR, "types.json")).map((t) => [
@@ -240,13 +259,15 @@ function named(id: number): RawTypeEntry | undefined {
   return t;
 }
 const limitHits = new Map<string, number>();
+let unownedHits = 0;
 for (const e of events) {
-  if (e.name !== "instantiateType_DepthLimit" || e.ts < from || e.ts > to) {
-    continue;
-  }
+  if (e.name !== "instantiateType_DepthLimit" || !inDecl(e.args)) continue;
   const t = named(e.args?.["typeId"] as number);
   const at = t?.firstDeclaration;
-  if (!at || !isOwned(at.path)) continue;
+  if (!at || !isOwned(at.path)) {
+    unownedHits++;
+    continue;
+  }
   const key = `${t.symbolName}  ${short(at.path)}:${at.start.line}`;
   limitHits.set(key, (limitHits.get(key) ?? 0) + 1);
 }
@@ -265,8 +286,8 @@ console.log(
 );
 console.log(rule);
 console.log(
-  diagnostics.length ?
-    diagnostics.map((d) => `  ${d}`).join("\n")
+  diagnostics.size ?
+    [...diagnostics].join("\n").replace(/^/gm, "  ")
   : "  No errors in the declaration."
 );
 console.log("");
@@ -304,6 +325,9 @@ if (limitHits.size > 0) {
     console.log(`  ${String(n).padStart(6)}×  ${key}`);
   }
   console.log("");
+}
+if (unownedHits > 0) {
+  console.log(`${fmt(unownedHits)} ceiling hits on types outside PipeSafe.\n`);
 }
 
 console.log(

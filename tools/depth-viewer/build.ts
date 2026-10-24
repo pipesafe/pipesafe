@@ -45,6 +45,7 @@ import {
   depthKey,
   describeCall,
   findTscBin,
+  ownDepth,
   parseDepthSteps,
   parseJsonArray,
   REPO_ROOT,
@@ -292,9 +293,7 @@ function buildInitializerChain(
     const rec = depthIndex.get(depthKey(absLower, call.getEnd()));
     if (rec) {
       step.maxDepth = rec.spanPeakDepth;
-      // Marginal depth this step's OWN resolution added, above the ambient
-      // entry depth (selfPeakDepth is absolute). Clamped at 0.
-      step.ownDepth = Math.max(0, rec.selfPeakDepth - rec.enterDepth);
+      step.ownDepth = ownDepth(rec);
       step.maxTail = rec.spanPeakTail;
       // Marginal instantiations THIS step performed (not inherited). Spikes at
       // the culprit step and is ~0 once the type has collapsed to `any`.

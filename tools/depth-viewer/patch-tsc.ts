@@ -78,7 +78,7 @@ const REPO_ROOT = resolve(HERE, "../..");
  * Bump when the patch logic below changes so previously-cached bundles are
  * invalidated even when the underlying _tsc.js is byte-identical.
  */
-export const PATCH_VERSION = 7;
+export const PATCH_VERSION = 8;
 
 /** Injected into the source so a patched bundle is recognisable + idempotent. */
 export const MARKER = "/*__DEPTH_PATCH__*/";
@@ -151,6 +151,8 @@ interface Edit {
  *                          peaks and self-count do NOT), and — for Call/New nodes
  *                          that actually instantiated — emit a `depthStep` instant
  *                          carrying the node's source range plus its stats.
+ *   6. `depthlimit-node` — add `currentNode`'s pos/end/path to the
+ *                          `instantiateType_DepthLimit` instant.
  *
  * `spanPeak*` is the max over the node's whole subtree. `selfPeak*`/`selfCount`
  * are reset on EVERY nested `checkExpression` (not only Call/New), so they
@@ -230,6 +232,16 @@ const EDITS: Edit[] = [
       "currentNode = saveCurrentNode;\n" +
       `    ${MARKER} { const __dvNodeSpan = __dvSpanPeak, __dvNodeSelf = __dvSelfPeak, __dvNodeTailSpan = __dvTailSpan, __dvNodeTailSelf = __dvTailSelf, __dvNodeSelfCount = __dvSelfCount, __dvNodeCountSpan = __dvCountSpan; __dvSpanPeak = __dvSaveSpan > __dvNodeSpan ? __dvSaveSpan : __dvNodeSpan; __dvSelfPeak = __dvSaveSelf; __dvTailSpan = __dvSaveTailSpan > __dvNodeTailSpan ? __dvSaveTailSpan : __dvNodeTailSpan; __dvTailSelf = __dvSaveTailSelf; __dvSelfCount = __dvSaveSelfCount; __dvCountSpan = __dvSaveCountSpan > __dvNodeCountSpan ? __dvSaveCountSpan : __dvNodeCountSpan; if (tracing && (node.kind === ${CALL_KIND} || node.kind === ${NEW_KIND}) && (totalInstantiationCount > __dvEnterTotal || __dvNodeSpan > __dvEnterDepth)) { tracing.instant(tracing.Phase.Check, ${JSON.stringify(DEPTH_STEP_EVENT)}, { kind: node.kind, pos: node.pos, end: node.end, path: node.tracingPath, enterDepth: __dvEnterDepth, spanPeakDepth: __dvNodeSpan, selfPeakDepth: __dvNodeSelf, spanPeakTail: __dvNodeTailSpan, selfPeakTail: __dvNodeTailSelf, selfCount: __dvNodeSelfCount, spanPeakCount: __dvNodeCountSpan, enterTotalCount: __dvEnterTotal, exitTotalCount: totalInstantiationCount }); } }\n` +
       "    (_b = tracing) == null ? void 0 : _b.pop();\n    return type;",
+  },
+
+  // 6. The depth/count bail event: add the range of the node being checked, so
+  //    a ceiling hit is attributable to source without the sampled X spans.
+  {
+    name: "depthlimit-node",
+    anchor:
+      '"instantiateType_DepthLimit", { typeId: type.id, instantiationDepth, instantiationCount }',
+    mode: "replace",
+    text: '"instantiateType_DepthLimit", { typeId: type.id, instantiationDepth, instantiationCount, pos: currentNode == null ? void 0 : currentNode.pos, end: currentNode == null ? void 0 : currentNode.end, path: currentNode == null ? void 0 : currentNode.tracingPath }',
   },
 ];
 

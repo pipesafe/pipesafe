@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import ts from "typescript";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { indexDepthSteps } from "./trace";
@@ -23,13 +24,17 @@ const REPO_ROOT = resolve(HERE, "../..");
 // A hermetic fixture (no repo-config inheritance). `build(10)` is a
 // CallExpression whose return type is a recursive alias instantiated to depth
 // ~10, and `new Holder(...)` is a NewExpression — so both kinds the patch emits
-// `depthStep` for fire, with a real (sub-ceiling) peak depth. `lib: ["es2020"]`
-// is required: without a lib the checker skips the interesting work.
+// `depthStep` for fire, with a real (sub-ceiling) peak depth. `Nest` trips the
+// depth ceiling so `instantiateType_DepthLimit` fires. `lib: ["es2020"]` is
+// required: without a lib the checker skips the interesting work.
 const FIXTURE_TS = `
 type Rec<T, N extends number, A extends unknown[] = []> =
   A["length"] extends N ? T : Rec<{ v: T }, N, [unknown, ...A]>;
 declare function build<N extends number>(n: N): Rec<string, N>;
 class Holder<T> { constructor(public value: T) {} }
+type Nest<T, N extends unknown[] = []> = N["length"] extends 200 ? T
+  : Nest<{ v: T }, [...N, 1]>["v"] extends infer V ? { v: V } : never;
+declare function nest<T>(x: T): Nest<T>;
 const built = build(10);
 const held = new Holder(built);
 void built;
@@ -165,11 +170,12 @@ describe("patched tsc trace (integration)", () => {
   it("emits depthStep instants for the fixture's Call/New expressions", () => {
     const steps = depthSteps(patched);
     expect(steps.length).toBeGreaterThan(0);
-    // Only Call (214) and New (215) expressions are emitted.
-    for (const s of steps) expect([214, 215]).toContain(s.kind);
+    const { CallExpression, NewExpression } = ts.SyntaxKind;
+    for (const s of steps)
+      expect([CallExpression, NewExpression]).toContain(s.kind);
     // Both kinds appear: build(10) is a call, new Holder(...) is a new.
-    expect(steps.some((s) => s.kind === 214)).toBe(true);
-    expect(steps.some((s) => s.kind === 215)).toBe(true);
+    expect(steps.some((s) => s.kind === CallExpression)).toBe(true);
+    expect(steps.some((s) => s.kind === NewExpression)).toBe(true);
   });
 
   it("every depthStep carries all numeric depth/tail/count fields", () => {
@@ -206,6 +212,16 @@ describe("patched tsc trace (integration)", () => {
     const stepEvents = patched.filter((e) => e.name === DEPTH_STEP_EVENT);
     expect(stepEvents.length).toBeGreaterThan(0);
     for (const e of stepEvents) expect(e.ph).toBe("I");
+  });
+
+  it("adds the checked node's range to instantiateType_DepthLimit", () => {
+    const hits = patched.filter((e) => e.name === "instantiateType_DepthLimit");
+    expect(hits.length).toBeGreaterThan(0);
+    for (const e of hits) {
+      expect(typeof e.args?.["pos"]).toBe("number");
+      expect(typeof e.args?.["end"]).toBe("number");
+      expect(String(e.args?.["path"])).toMatch(/t\.ts$/);
+    }
   });
 
   it("stock tsc emits NO depthStep events (control)", () => {
