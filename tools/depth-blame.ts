@@ -226,6 +226,21 @@ for (const [key, rec] of depthIndex) {
   if (site) steps.push({ ...site, rec });
 }
 steps.sort((a, b) => a.rec.end - b.rec.end);
+// Each node's record is picked per pass, so a container can read lower than a
+// call it contains; lift span peaks to the max over contained calls.
+const lifted = steps.map(({ rec }) => {
+  const inner = steps
+    .map((y) => y.rec)
+    .filter((r) => r.pos >= rec.pos && r.end <= rec.end);
+  const max = (f: (r: DepthRecord) => number) => Math.max(...inner.map(f));
+  return {
+    ...rec,
+    spanPeakDepth: max((r) => r.spanPeakDepth),
+    spanPeakTail: max((r) => r.spanPeakTail),
+    spanPeakCount: max((r) => r.spanPeakCount),
+  };
+});
+steps.forEach((s, i) => (s.rec = lifted[i]!));
 
 const peak = (f: (r: DepthRecord) => number) =>
   Math.max(0, ...steps.map((s) => f(s.rec)));
