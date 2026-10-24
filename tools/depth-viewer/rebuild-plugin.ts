@@ -140,6 +140,7 @@ export function rebuildPlugin(): Plugin {
       broadcast();
     });
     child.on("close", (code) => {
+      if (job.error) return;
       job.running = false;
       job.endedAt = Date.now();
       job.exitCode = code ?? -1;

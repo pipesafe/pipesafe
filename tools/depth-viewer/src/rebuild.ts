@@ -20,7 +20,8 @@ export interface UseRebuild {
 export function useRebuild(onComplete: () => void): UseRebuild {
   const [snapshot, setSnapshot] = useState<RebuildSnapshot | null>(null);
   const [rejected, setRejected] = useState(false);
-  const lastDoneId = useRef(0);
+  // Seeded from the first snapshot, which replays the last finished job.
+  const lastDoneId = useRef<number | null>(null);
 
   // Keep the latest callback without re-subscribing the EventSource.
   const onCompleteRef = useRef(onComplete);
@@ -32,7 +33,9 @@ export function useRebuild(onComplete: () => void): UseRebuild {
     source.onmessage = (ev: MessageEvent<string>) => {
       const snap = JSON.parse(ev.data) as RebuildSnapshot;
       setSnapshot(snap);
-      if (
+      if (lastDoneId.current === null) {
+        lastDoneId.current = snap.running ? 0 : snap.id;
+      } else if (
         !snap.running &&
         snap.exitCode === 0 &&
         snap.id > 0 &&
