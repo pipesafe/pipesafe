@@ -1,51 +1,107 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  // typescript-eslint's `strict-type-checked` set, named once rather than
-  // re-listed rule by rule. Oxlint has no built-in preset names, so the set
-  // is vendored (generated, not curated) at the path below — see the header
-  // of that file. This is what the old eslint.config.js meant to extend and
-  // did not (#114).
-  "extends": [".oxlint/strict-type-checked.json"],
-  // Oxlint's default plugin set, spelled out because listing `plugins` at all
-  // replaces it.
   "plugins": ["typescript", "oxc", "unicorn"],
-  // Oxlint's own categories, taken wholesale as the baseline for the rules
-  // that would otherwise be off. `correctness` ("outright wrong or useless")
-  // is the nearest thing to the `js/recommended` set this repo used to
-  // extend; the other three are what an opinionated repo wants on top of it.
-  // Everything they turn up today is carried in `oxlint-suppressions.json`,
-  // so nothing is switched off and nothing can regress.
-  //
-  // `style` and `restriction` are deliberately NOT in the baseline:
-  //   - `style` contains `no-ternary` and `no-nested-ternary`, which the
-  //     formatter's ternary layout exists to make readable, plus `sort-keys`,
-  //     `no-magic-numbers` and `id-length` — ~3,000 findings that are not
-  //     "wrong", just a different house style from this one.
-  //   - `restriction` is oxlint's own opt-in-per-rule bucket ("lints which
-  //     prevent the use of language and library features"); wholesale it bans
-  //     `async`/`await`, optional chaining and `undefined`.
-  // Both are a rule-by-rule conversation, not a baseline.
+  // `style` and `restriction` are left out: they ban ternaries, async/await,
+  // optional chaining and `undefined` wholesale.
   "categories": {
     "correctness": "error",
     "suspicious": "error",
     "pedantic": "error",
     "perf": "error"
   },
-  // Type-aware rules run through tsgolint (`oxlint-tsgolint`), which builds
-  // the TypeScript programs with typescript-go. Without this, every rule in
-  // the preset above that needs type information is silently inert — which is
-  // exactly what #114 was about. `bun run lint` passes `--type-aware` too, so
-  // the flag is there whichever way oxlint is invoked.
   "options": {
     "typeAware": true
   },
   "ignorePatterns": [".claude/**", "**/dist/**", "**/benchmarks/**"],
-  // Local overrides on top of the preset and the categories. Rules the tree
-  // does not pass yet are NOT switched off here — their findings are carried
-  // in `oxlint-suppressions.json` so the rules stay on and cannot regress.
+  // Findings that predate a rule live in `oxlint-suppressions.json`.
   "rules": {
-    // `strict-type-checked` enables this with default options; the repo's
-    // leading-underscore convention predates it.
+    // Strict, type-checked TypeScript.
+    "typescript/await-thenable": "error",
+    "typescript/ban-ts-comment": ["error", { "minimumDescriptionLength": 10 }],
+    "no-array-constructor": "error",
+    "typescript/no-array-delete": "error",
+    "typescript/no-base-to-string": "error",
+    "typescript/no-confusing-void-expression": "error",
+    "typescript/no-deprecated": "error",
+    "typescript/no-duplicate-enum-values": "error",
+    "typescript/no-duplicate-type-constituents": "error",
+    "typescript/no-dynamic-delete": "error",
+    "typescript/no-empty-object-type": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-extra-non-null-assertion": "error",
+    "typescript/no-extraneous-class": "error",
+    "typescript/no-floating-promises": "error",
+    "typescript/no-for-in-array": "error",
+    "typescript/no-implied-eval": "error",
+    "typescript/no-invalid-void-type": "error",
+    "typescript/no-meaningless-void-operator": "error",
+    "typescript/no-misused-new": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/no-misused-spread": "error",
+    "typescript/no-mixed-enums": "error",
+    "typescript/no-namespace": "error",
+    "typescript/no-non-null-asserted-nullish-coalescing": "error",
+    "typescript/no-non-null-asserted-optional-chain": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/no-redundant-type-constituents": "error",
+    "typescript/no-require-imports": "error",
+    "typescript/no-this-alias": "error",
+    "typescript/no-unnecessary-boolean-literal-compare": "error",
+    "typescript/no-unnecessary-condition": "error",
+    "typescript/no-unnecessary-template-expression": "error",
+    "typescript/no-unnecessary-type-arguments": "error",
+    "typescript/no-unnecessary-type-assertion": "error",
+    "typescript/no-unnecessary-type-constraint": "error",
+    "typescript/no-unnecessary-type-conversion": "error",
+    "typescript/no-unnecessary-type-parameters": "error",
+    "typescript/no-unsafe-argument": "error",
+    "typescript/no-unsafe-assignment": "error",
+    "typescript/no-unsafe-call": "error",
+    "typescript/no-unsafe-declaration-merging": "error",
+    "typescript/no-unsafe-enum-comparison": "error",
+    "typescript/no-unsafe-function-type": "error",
+    "typescript/no-unsafe-member-access": "error",
+    "typescript/no-unsafe-return": "error",
+    "typescript/no-unsafe-unary-minus": "error",
+    "no-unused-expressions": "error",
+    "no-useless-constructor": "error",
+    "typescript/no-useless-default-assignment": "error",
+    "typescript/no-wrapper-object-types": "error",
+    "typescript/only-throw-error": "error",
+    "typescript/prefer-as-const": "error",
+    "typescript/prefer-literal-enum-member": "error",
+    "typescript/prefer-namespace-keyword": "error",
+    "typescript/prefer-promise-reject-errors": "error",
+    "typescript/prefer-reduce-type-parameter": "error",
+    "typescript/prefer-return-this-type": "error",
+    "typescript/related-getter-setter-pairs": "error",
+    "typescript/require-await": "error",
+    "typescript/restrict-plus-operands": [
+      "error",
+      {
+        "allowAny": false,
+        "allowBoolean": false,
+        "allowNullish": false,
+        "allowNumberAndString": false,
+        "allowRegExp": false
+      }
+    ],
+    "typescript/restrict-template-expressions": [
+      "error",
+      {
+        "allowAny": false,
+        "allowBoolean": false,
+        "allowNever": false,
+        "allowNullish": false,
+        "allowNumber": false,
+        "allowRegExp": false
+      }
+    ],
+    "typescript/return-await": ["error", "error-handling-correctness-only"],
+    "typescript/triple-slash-reference": "error",
+    "typescript/unbound-method": "error",
+    "typescript/unified-signatures": "error",
+    "typescript/use-unknown-in-catch-callback-variable": "error",
     "no-unused-vars": [
       "error",
       {
@@ -56,25 +112,18 @@
       }
     ],
 
-    // Twins: each of these is the base or legacy copy of a rule that is also
-    // on, so leaving both on reports every finding twice.
-    //   - `require-await`: `typescript/require-await` is the type-aware version.
-    //   - `no-negated-condition`: `unicorn/no-negated-condition` is the same check.
-    //   - `typescript/ban-types`: deprecated in typescript-eslint 8, replaced by
-    //     `no-empty-object-type`, `no-unsafe-function-type` and
-    //     `no-wrapper-object-types`, all three on.
+    // Duplicates of rules that are on: `typescript/require-await`,
+    // `unicorn/no-negated-condition`, and `ban-types`' three successors.
     "require-await": "off",
     "no-negated-condition": "off",
     "typescript/ban-types": "off",
 
-    // Style rules the repo's conventions break: `_`-prefixed names (see
-    // `no-unused-vars` below), mutable parameters, trailing comments.
+    // Style rules the repo's conventions break: `_`-prefixed names, mutable
+    // parameters, trailing comments.
     "no-underscore-dangle": "off",
     "typescript/prefer-readonly-parameter-types": "off",
     "no-inline-comments": "off",
 
-    // Use package imports ("@pipesafe/core") rather than relative paths
-    // across package boundaries.
     "no-restricted-imports": [
       "error",
       {

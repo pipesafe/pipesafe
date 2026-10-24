@@ -241,11 +241,10 @@ TODO: Document the rest of the stages
   entry). NEVER use assertion pins to keep a type and a runtime constant in
   sync — a forgotten update must fail at the declaration site, not in a
   remote assertion file
-- Suppressing formatter/lint findings is unacceptable — no `// oxfmt-ignore`
-  or `// oxlint-disable*` (nor the `prettier-ignore` / `eslint-disable*`
-  spellings oxlint still honours) anywhere; restructure the code until the
+- Suppressing formatter/lint findings is unacceptable — no inline ignore or
+  disable comments of any spelling anywhere; restructure the code until the
   tools pass. The one exception is `oxlint-suppressions.json`, which carries
-  the findings that already existed when `strict-type-checked` and the
+  the findings that already existed when the type-checked rules and the
   `suspicious` / `pedantic` / `perf` categories were switched on. It only ever
   shrinks: fix findings and, in the same commit, run
   `oxlint --type-aware --prune-suppressions` (lint fails on a count that is
