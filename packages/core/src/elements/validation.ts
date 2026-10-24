@@ -284,6 +284,42 @@ type ValidateArrayInputValue<
   : never; // binder interior — the relation is Vars-blind; skip
 
 /**
+ * The binder walks' sibling-key re-check (`as`, `limit`): each key other
+ * than the walked ones relates against the registry's schema-free operand
+ * (`as` must be a string, `limit` a number) — `never` when valid, else an
+ * Operator brand, so TS2322 lands on the offending key (the bare expected
+ * type would intersect the literal to `never` and misplace the error).
+ */
+type ValidateBinderSiblingKey<
+  Op extends "$map" | "$filter",
+  K,
+  Value,
+  Reg = ExpressionSpec<{}>[Op]["operand"],
+> =
+  K extends keyof Reg & string ?
+    [Value] extends [Exclude<Reg[K], undefined>] ?
+      never
+    : PipeSafeError<
+        RequiresMsg<
+          "Operator",
+          Op,
+          `${Exclude<Reg[K], undefined> extends number ? "a numeric" : "a string"} '${K}'`
+        >
+      >
+  : never;
+
+/** `true` when any sibling key of a binder operand fails its re-check. */
+type BinderSiblingErr<
+  Op extends "$map" | "$filter",
+  Operand,
+  Walked extends string,
+> = {
+  [K in keyof Operand]: K extends Walked ? never
+  : [ValidateBinderSiblingKey<Op, K, Operand[K]>] extends [never] ? never
+  : true;
+}[keyof Operand];
+
+/**
  * `$map` interior walk: `input` in the outer environment, `in` with the
  * element bound under the `as` name (default "this"). The replacement
  * keeps sibling operand keys so TS2322 lands on the offending member.
@@ -303,7 +339,11 @@ type ValidateMapValue<Schema extends Document, V, Vars extends Document = {}> =
             InferArrayElementType<Schema, Input, Vars>
           >
         > extends infer InErr ?
-          [InputErr | InErr] extends [never] ?
+          [
+            | InputErr
+            | InErr
+            | BinderSiblingErr<"$map", MapOperand, "input" | "in">,
+          ] extends [never] ?
             never
           : {
               $map: {
@@ -315,7 +355,11 @@ type ValidateMapValue<Schema extends Document, V, Vars extends Document = {}> =
                   [InErr] extends [never] ?
                     MapOperand[K]
                   : InErr
-                : MapOperand[K];
+                : [ValidateBinderSiblingKey<"$map", K, MapOperand[K]>] extends (
+                  [never]
+                ) ?
+                  MapOperand[K]
+                : ValidateBinderSiblingKey<"$map", K, MapOperand[K]>;
               };
             }
         : never
@@ -346,7 +390,11 @@ type ValidateFilterValue<
             InferArrayElementType<Schema, Input, Vars>
           >
         > extends infer CondErr ?
-          [InputErr | CondErr] extends [never] ?
+          [
+            | InputErr
+            | CondErr
+            | BinderSiblingErr<"$filter", FilterOperand, "input" | "cond">,
+          ] extends [never] ?
             never
           : {
               $filter: {
@@ -358,7 +406,11 @@ type ValidateFilterValue<
                   [CondErr] extends [never] ?
                     FilterOperand[K]
                   : CondErr
-                : FilterOperand[K];
+                : [
+                  ValidateBinderSiblingKey<"$filter", K, FilterOperand[K]>,
+                ] extends [never] ?
+                  FilterOperand[K]
+                : ValidateBinderSiblingKey<"$filter", K, FilterOperand[K]>;
               };
             }
         : never

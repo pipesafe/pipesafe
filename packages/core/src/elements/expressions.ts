@@ -996,8 +996,8 @@ type UnionIfNullOperandTypes<
 /**
  * The `as` name a $map/$filter binds its element under (MongoDB defaults to
  * "this" when `as` is omitted). A non-literal `as` (a widened string) binds
- * nothing — lookups of the real name then miss the environment and degrade
- * to `unknown`, never to a wrong type.
+ * nothing — inference of the real name then degrades to `unknown` (never a
+ * wrong type), while validation brands it as an unknown variable.
  */
 export type BoundAsName<Operand> =
   Operand extends { as: infer As extends string } ?

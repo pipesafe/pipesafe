@@ -246,6 +246,41 @@ const _set_filter_bad_cond_var = new Pipeline<User>().set({
   },
 });
 
+// set — the binder walks still re-check the sibling operand keys against
+// the registry (`limit` is a number, `as` a string).
+const _set_filter_bad_limit = new Pipeline<User>().set({
+  t: {
+    $filter: {
+      input: "$tags",
+      cond: true,
+      // @ts-expect-error  $filter's limit must be a number
+      limit: "abc",
+    },
+  },
+});
+
+const _set_filter_bad_as = new Pipeline<User>().set({
+  t: {
+    $filter: {
+      input: "$tags",
+      // @ts-expect-error  $filter's as must be a string
+      as: 5,
+      cond: true,
+    },
+  },
+});
+
+const _set_map_bad_as = new Pipeline<User>().set({
+  t: {
+    // @ts-expect-error  $map's as must be a string
+    $map: { input: "$tags", as: 5, in: 1 },
+  },
+});
+
+const _set_filter_limit_ok = new Pipeline<User>().set({
+  t: { $filter: { input: "$tags", as: "t", cond: true, limit: 2 } },
+});
+
 // group — accumulator operand brands fire at the chained call site via
 // the key-filtered ValidateGroupQuery intersection (GroupQuery's
 // `[key: string]:` index signature suppresses the in-Query brands).
@@ -499,6 +534,10 @@ export {
   _set_let_unknown_var,
   _set_map_ok,
   _set_filter_ok,
+  _set_filter_bad_limit,
+  _set_filter_bad_as,
+  _set_map_bad_as,
+  _set_filter_limit_ok,
   _set_filter_bad_cond_var,
   _group_system_vars_ok,
   _group_bad_sysvar_path,
