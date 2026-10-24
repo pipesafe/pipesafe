@@ -247,7 +247,10 @@ TODO: Document the rest of the stages
   tools pass. The one exception is `oxlint-suppressions.json`, which carries
   the findings that already existed when `strict-type-checked` and the
   `suspicious` / `pedantic` / `perf` categories were switched on. It only ever
-  shrinks: fix findings and run `oxlint --prune-suppressions`. NEVER run
+  shrinks: fix findings and, in the same commit, run
+  `oxlint --type-aware --prune-suppressions` (lint fails on a count that is
+  now too high, with "There are suppressions that do not occur anymore").
+  NEVER run
   `oxlint --suppress-all` to make new code pass — the counts are per file and
   per rule, so one extra violation in an already-listed file still fails.
   `bun run lint:fix` is NOT part of the pre-commit hook and is not safe to

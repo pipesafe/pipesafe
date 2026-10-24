@@ -56,6 +56,17 @@
       }
     ],
 
+    // Twins: each of these is the base or legacy copy of a rule that is also
+    // on, so leaving both on reports every finding twice.
+    //   - `require-await`: `typescript/require-await` is the type-aware version.
+    //   - `no-negated-condition`: `unicorn/no-negated-condition` is the same check.
+    //   - `typescript/ban-types`: deprecated in typescript-eslint 8, replaced by
+    //     `no-empty-object-type`, `no-unsafe-function-type` and
+    //     `no-wrapper-object-types`, all three on.
+    "require-await": "off",
+    "no-negated-condition": "off",
+    "typescript/ban-types": "off",
+
     // Use package imports ("@pipesafe/core") rather than relative paths
     // across package boundaries.
     "no-restricted-imports": [
@@ -69,5 +80,17 @@
         ]
       }
     ]
-  }
+  },
+  "overrides": [
+    {
+      // Assertion files pin types with `{} as T` and name their probes with a
+      // leading `_` (the `no-unused-vars` convention above). Both rules would
+      // reject the idiom these files exist to use, in every new pin.
+      "files": ["**/*.typeAssertions.ts"],
+      "rules": {
+        "typescript/no-unsafe-type-assertion": "off",
+        "no-underscore-dangle": "off"
+      }
+    }
+  ]
 }

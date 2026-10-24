@@ -1,7 +1,16 @@
 pre-commit:
-  parallel: true
+  # Piped, in this order: type-aware lint reads core's dist, so it must run
+  # after the build rather than alongside it (a missing or half-written dist
+  # turns every cross-package type into `error`). Formatting goes first so the
+  # build and lint see the files as they will be committed.
+  piped: true
   commands:
+    format:
+      priority: 1
+      run: bun run format:fix
+      stage_fixed: true
     build:
+      priority: 2
       run: bun run build
       stage_fixed: true
     # Checks, does not fix. `oxlint --fix` applies fixes to violations that
@@ -11,11 +20,10 @@ pre-commit:
     # those files. Run `bun run lint:fix` by hand, deliberately, and read the
     # diff.
     lint:
+      priority: 3
       run: bun run lint
-    format:
-      run: bun run format:fix
-      stage_fixed: true
     test:
+      priority: 4
       run: bun run test:ci
       stage_fixed: true
 

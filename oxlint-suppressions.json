@@ -195,9 +195,6 @@
     }
   },
   "packages/core/src/collection/Collection.ts": {
-    "require-await": {
-      "count": 23
-    },
     "typescript/no-explicit-any": {
       "count": 1
     },
@@ -221,9 +218,6 @@
     }
   },
   "packages/core/src/database/Database.ts": {
-    "require-await": {
-      "count": 5
-    },
     "typescript/prefer-readonly-parameter-types": {
       "count": 9
     }
@@ -253,17 +247,11 @@
     "no-inline-comments": {
       "count": 5
     },
-    "typescript/ban-types": {
-      "count": 2
-    },
     "typescript/no-empty-object-type": {
       "count": 2
     },
     "typescript/no-unnecessary-type-assertion": {
       "count": 8
-    },
-    "typescript/no-unsafe-type-assertion": {
-      "count": 89
     }
   },
   "packages/core/src/elements/fieldSelector.ts": {
@@ -275,17 +263,11 @@
     "max-lines": {
       "count": 1
     },
-    "typescript/ban-types": {
-      "count": 2
-    },
     "typescript/no-empty-object-type": {
       "count": 2
     },
     "typescript/no-unnecessary-type-assertion": {
       "count": 6
-    },
-    "typescript/no-unsafe-type-assertion": {
-      "count": 102
     }
   },
   "packages/core/src/elements/literals.ts": {
@@ -296,9 +278,6 @@
   "packages/core/src/elements/validation.ts": {
     "no-inline-comments": {
       "count": 11
-    },
-    "typescript/ban-types": {
-      "count": 1
     },
     "typescript/no-empty-object-type": {
       "count": 1
@@ -312,9 +291,6 @@
   "packages/core/src/pipeline/Pipeline.callSite.typeAssertions.ts": {
     "max-lines": {
       "count": 1
-    },
-    "no-underscore-dangle": {
-      "count": 43
     },
     "typescript/prefer-readonly-parameter-types": {
       "count": 3
@@ -364,28 +340,16 @@
     "no-inline-comments": {
       "count": 15
     },
-    "no-underscore-dangle": {
-      "count": 14
-    },
-    "typescript/ban-types": {
-      "count": 1
-    },
     "typescript/no-empty-object-type": {
       "count": 1
     },
     "typescript/no-unnecessary-type-arguments": {
-      "count": 1
-    },
-    "typescript/no-unsafe-type-assertion": {
       "count": 1
     }
   },
   "packages/core/src/singleton/pipesafe.test.ts": {
     "max-lines-per-function": {
       "count": 1
-    },
-    "require-await": {
-      "count": 6
     },
     "typescript/await-thenable": {
       "count": 5
@@ -436,9 +400,6 @@
     }
   },
   "packages/core/src/stages/facet.typeAssertions.ts": {
-    "no-underscore-dangle": {
-      "count": 5
-    },
     "typescript/no-unnecessary-type-arguments": {
       "count": 3
     },
@@ -452,9 +413,6 @@
     },
     "no-inline-comments": {
       "count": 1
-    },
-    "no-underscore-dangle": {
-      "count": 3
     },
     "typescript/no-unnecessary-type-arguments": {
       "count": 2
@@ -470,9 +428,6 @@
     "no-inline-comments": {
       "count": 11
     },
-    "typescript/ban-types": {
-      "count": 3
-    },
     "typescript/no-empty-object-type": {
       "count": 3
     },
@@ -487,9 +442,6 @@
     "max-lines": {
       "count": 1
     },
-    "typescript/ban-types": {
-      "count": 4
-    },
     "typescript/no-empty-object-type": {
       "count": 4
     },
@@ -503,9 +455,6 @@
     },
     "no-inline-comments": {
       "count": 1
-    },
-    "no-underscore-dangle": {
-      "count": 15
     },
     "typescript/no-explicit-any": {
       "count": 1
@@ -534,9 +483,6 @@
     }
   },
   "packages/core/src/stages/merge.typeAssertions.ts": {
-    "no-underscore-dangle": {
-      "count": 17
-    },
     "typescript/no-unnecessary-type-arguments": {
       "count": 1
     }
@@ -552,9 +498,6 @@
     },
     "no-inline-comments": {
       "count": 15
-    },
-    "typescript/ban-types": {
-      "count": 4
     },
     "typescript/no-empty-object-type": {
       "count": 4
@@ -580,9 +523,6 @@
     "no-inline-comments": {
       "count": 3
     },
-    "typescript/ban-types": {
-      "count": 1
-    },
     "typescript/no-empty-object-type": {
       "count": 1
     }
@@ -599,9 +539,6 @@
     }
   },
   "packages/core/src/stages/stages.contract.typeAssertions.ts": {
-    "no-underscore-dangle": {
-      "count": 14
-    },
     "typescript/no-redundant-type-constituents": {
       "count": 1
     }
@@ -622,9 +559,6 @@
     }
   },
   "packages/core/src/stages/unwind.ts": {
-    "typescript/ban-types": {
-      "count": 1
-    },
     "typescript/no-empty-object-type": {
       "count": 1
     }
@@ -638,9 +572,6 @@
     "no-inline-comments": {
       "count": 6
     },
-    "typescript/ban-types": {
-      "count": 3
-    },
     "typescript/no-explicit-any": {
       "count": 3
     },
@@ -652,9 +583,6 @@
     "no-inline-comments": {
       "count": 2
     },
-    "typescript/ban-types": {
-      "count": 2
-    },
     "typescript/no-empty-object-type": {
       "count": 2
     },
@@ -663,9 +591,6 @@
     }
   },
   "packages/core/src/utils/strings.ts": {
-    "typescript/ban-types": {
-      "count": 1
-    },
     "typescript/no-explicit-any": {
       "count": 1
     }
@@ -678,9 +603,6 @@
   "packages/core/src/utils/updates.ts": {
     "no-inline-comments": {
       "count": 12
-    },
-    "typescript/ban-types": {
-      "count": 3
     },
     "typescript/no-empty-object-type": {
       "count": 3
@@ -788,9 +710,6 @@
       "count": 3
     },
     "no-await-in-loop": {
-      "count": 1
-    },
-    "no-negated-condition": {
       "count": 1
     },
     "typescript/no-explicit-any": {
