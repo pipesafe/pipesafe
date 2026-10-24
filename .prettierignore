@@ -1,7 +1,0 @@
-node_modules
-dist
-*.lock
-*.log
-benchmarks/
-.claude/
-

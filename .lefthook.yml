@@ -1,18 +1,22 @@
 pre-commit:
-  parallel: true
-  commands:
-    build:
-      run: bun run build
-      stage_fixed: true
-    lint:
-      run: bun run lint:fix
-      stage_fixed: true
-    format:
+  # Lint is type-aware and reads core's dist, so it runs after the build.
+  piped: true
+  jobs:
+    - name: format
       run: bun run format:fix
       stage_fixed: true
-    test:
-      run: bun run test:ci
+    - name: build
+      run: bun run build
       stage_fixed: true
+    - group:
+        parallel: true
+        jobs:
+          # Check only: `oxlint --fix` also rewrites suppressed findings.
+          - name: lint
+            run: bun run lint
+          - name: test
+            run: bun run test:ci
+            stage_fixed: true
 
 # The assertion regression net (two full tsc passes) runs before anything
 # leaves the machine rather than on every commit — CI enforces it too.

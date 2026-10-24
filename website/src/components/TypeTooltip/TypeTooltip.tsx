@@ -56,10 +56,13 @@ export default function TypeTooltip({ children, content }: TypeTooltipProps) {
 
       // Choose placement based on available space within container
       const placement =
-        spaceAbove >= tooltipHeight + 12 ? "above"
-        : spaceBelow >= tooltipHeight + 12 ? "below"
-        : spaceAbove > spaceBelow ? "above"
-        : "below";
+        spaceAbove >= tooltipHeight + 12
+          ? "above"
+          : spaceBelow >= tooltipHeight + 12
+            ? "below"
+            : spaceAbove > spaceBelow
+              ? "above"
+              : "below";
 
       // Calculate vertical position
       const top =

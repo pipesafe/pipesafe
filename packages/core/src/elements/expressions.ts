@@ -593,9 +593,11 @@ export type UnimplementedExpressionOps =
  * The expression object shape for one operator (or a union of single-key
  * shapes when `Op` is a union — the conditional distributes deliberately).
  */
-export type ExpressionFor<Schema extends Document, Op> =
-  Op extends keyof ExpressionSpec<Schema> ?
-    { [K in Op]: ExpressionSpec<Schema>[K]["operand"] }
+export type ExpressionFor<
+  Schema extends Document,
+  Op,
+> = Op extends keyof ExpressionSpec<Schema>
+  ? { [K in Op]: ExpressionSpec<Schema>[K]["operand"] }
   : never;
 
 /**
@@ -605,13 +607,13 @@ export type ExpressionFor<Schema extends Document, Op> =
  * `{ $size: ... }`).
  */
 type OpsReturning<Schema extends Document, T> = {
-  [K in keyof ExpressionSpec<Schema>]: ExpressionSpec<Schema>[K] extends (
-    { returns: infer R }
-  ) ?
-    R extends T ?
-      K
-    : never
-  : never; // literal-dependent (no declared `returns`) — never in a fixed set
+  [K in keyof ExpressionSpec<Schema>]: ExpressionSpec<Schema>[K] extends {
+    returns: infer R;
+  }
+    ? R extends T
+      ? K
+      : never
+    : never; // literal-dependent (no declared `returns`) — never in a fixed set
 }[keyof ExpressionSpec<Schema>];
 
 /** Union of expression shapes whose declared result is assignable to `T`. */
@@ -854,11 +856,11 @@ export type Expression<Schema extends Document> = ExpressionFor<
  * (expressions.typeAssertions.ts).
  */
 export type LiteralDependentOps = {
-  [K in keyof ExpressionSpec<Document>]: ExpressionSpec<Document>[K] extends (
-    { returns: unknown }
-  ) ?
-    never
-  : K;
+  [K in keyof ExpressionSpec<Document>]: ExpressionSpec<Document>[K] extends {
+    returns: unknown;
+  }
+    ? never
+    : K;
 }[keyof ExpressionSpec<Document>];
 
 /**
@@ -868,46 +870,48 @@ export type LiteralDependentOps = {
 type UnionArrayElements<
   Schema extends Document,
   Arrays extends readonly unknown[],
-> =
-  Arrays extends readonly [infer First, ...infer Rest] ?
-    GetArrayElement<Schema, First> | UnionArrayElements<Schema, Rest>
+> = Arrays extends readonly [infer First, ...infer Rest]
+  ? GetArrayElement<Schema, First> | UnionArrayElements<Schema, Rest>
   : never;
 
 /**
  * Helper to extract element type from a single array argument
  * Handles both field references and array literals
  */
-type GetArrayElement<Schema extends Document, Item> =
-  Item extends readonly (infer E)[] ?
-    E // Array literal - extract element type
-  : Item extends FieldReference<Schema> ?
-    InferFieldReference<Schema, Item> extends (infer T)[] ?
-      T // Field reference to array - extract element type
-    : never
-  : HasOperatorKey<Item> extends true ?
-    // Array-producing expression item ($filter/$concatArrays/$map/...):
-    // route through the single dispatch and unwrap. Without this arm the
-    // item's elements silently vanished from the result — a WRONG type,
-    // violating the degrade-to-widest contract.
-    InferExpression<Schema, Item> extends infer R ?
-      R extends (infer T)[] ?
-        T
-      : unknown
-    : never
-  : never;
+type GetArrayElement<
+  Schema extends Document,
+  Item,
+> = Item extends readonly (infer E)[]
+  ? E // Array literal - extract element type
+  : Item extends FieldReference<Schema>
+    ? InferFieldReference<Schema, Item> extends (infer T)[]
+      ? T // Field reference to array - extract element type
+      : never
+    : HasOperatorKey<Item> extends true
+      ? // Array-producing expression item ($filter/$concatArrays/$map/...):
+        // route through the single dispatch and unwrap. Without this arm the
+        // item's elements silently vanished from the result — a WRONG type,
+        // violating the degrade-to-widest contract.
+        InferExpression<Schema, Item> extends infer R
+        ? R extends (infer T)[]
+          ? T
+          : unknown
+        : never
+      : never;
 
 /**
  * Helper to extract element type from an array source (field ref or literal)
  */
 type InferArrayElementType<Schema extends Document, ArraySource> =
   // Array literal - extract element type
-  ArraySource extends readonly (infer E)[] ? E
-  : // Field reference to array - get element type
-  ArraySource extends FieldReference<Schema> ?
-    InferFieldReference<Schema, ArraySource> extends (infer T)[] ?
-      T
-    : unknown
-  : unknown;
+  ArraySource extends readonly (infer E)[]
+    ? E
+    : // Field reference to array - get element type
+      ArraySource extends FieldReference<Schema>
+      ? InferFieldReference<Schema, ArraySource> extends (infer T)[]
+        ? T
+        : unknown
+      : unknown;
 
 /**
  * Shared operand inference for the conditional operators. The only semantic
@@ -922,22 +926,21 @@ type InferConditionalOperandValue<
   Schema extends Document,
   Operand,
   SwallowsNull extends boolean,
-> =
-  Operand extends null ?
-    SwallowsNull extends true ?
-      never // $ifNull skips null literals, they're never returned
+> = Operand extends null
+  ? SwallowsNull extends true
+    ? never // $ifNull skips null literals, they're never returned
     : null // $cond CAN return null if it's in a branch
-  : Operand extends FieldReference<Schema> ?
-    SwallowsNull extends true ?
-      NonNullable<InferFieldReference<Schema, Operand>>
-    : InferFieldReference<Schema, Operand> // $cond keeps the field's null
-  : Operand extends readonly (infer T)[] ?
-    T // Array literal
-  : InferExpression<Schema, Operand> extends infer R ?
-    [R] extends [NotAnExpression] ?
-      Operand // Not an expression, treat as literal
-    : R // Is an expression — single dispatch, no second inference path
-  : never;
+  : Operand extends FieldReference<Schema>
+    ? SwallowsNull extends true
+      ? NonNullable<InferFieldReference<Schema, Operand>>
+      : InferFieldReference<Schema, Operand> // $cond keeps the field's null
+    : Operand extends readonly (infer T)[]
+      ? T // Array literal
+      : InferExpression<Schema, Operand> extends infer R
+        ? [R] extends [NotAnExpression]
+          ? Operand // Not an expression, treat as literal
+          : R // Is an expression — single dispatch, no second inference path
+        : never;
 
 type InferIfNullOperand<
   Schema extends Document,
@@ -956,9 +959,8 @@ type InferCondOperand<
 type UnionIfNullOperandTypes<
   Schema extends Document,
   Operands extends readonly unknown[],
-> =
-  Operands extends readonly [infer First, ...infer Rest] ?
-    InferIfNullOperand<Schema, First> | UnionIfNullOperandTypes<Schema, Rest>
+> = Operands extends readonly [infer First, ...infer Rest]
+  ? InferIfNullOperand<Schema, First> | UnionIfNullOperandTypes<Schema, Rest>
   : never;
 
 /**
@@ -971,26 +973,32 @@ type UnionIfNullOperandTypes<
  * matches neither (a mutable-pattern arm silently falls through and the
  * resolver DROPS the field).
  */
-type InferDependentExpression<Schema extends Document, Expr> =
-  Expr extends { $concatArrays: infer Arrays } ?
-    Arrays extends readonly unknown[] ?
-      UnionArrayElements<Schema, Arrays>[]
+type InferDependentExpression<Schema extends Document, Expr> = Expr extends {
+  $concatArrays: infer Arrays;
+}
+  ? Arrays extends readonly unknown[]
+    ? UnionArrayElements<Schema, Arrays>[]
     : never
-  : Expr extends { $arrayElemAt: readonly [infer ArraySource, unknown] } ?
-    InferArrayElementType<Schema, ArraySource>
-  : Expr extends { $filter: { input: infer ArraySource } } ?
-    InferArrayElementType<Schema, ArraySource>[]
-  : Expr extends { $ifNull: infer Operands } ?
-    Operands extends readonly unknown[] ?
-      UnionIfNullOperandTypes<Schema, Operands>
-    : never
-  : Expr extends { $cond: readonly [unknown, infer TrueVal, infer FalseVal] } ?
-    InferCondOperand<Schema, TrueVal> | InferCondOperand<Schema, FalseVal>
-  : Expr extends { $literal: infer Value } ? Value
-  : // No matching arm (out-of-lockstep operator, or a malformed operand
-    // shape the patterns don't match): degrade to `unknown`, mirroring the
-    // dispatch tail — `never` here would DROP the field from resolvers.
-    unknown;
+  : Expr extends { $arrayElemAt: readonly [infer ArraySource, unknown] }
+    ? InferArrayElementType<Schema, ArraySource>
+    : Expr extends { $filter: { input: infer ArraySource } }
+      ? InferArrayElementType<Schema, ArraySource>[]
+      : Expr extends { $ifNull: infer Operands }
+        ? Operands extends readonly unknown[]
+          ? UnionIfNullOperandTypes<Schema, Operands>
+          : never
+        : Expr extends {
+              $cond: readonly [unknown, infer TrueVal, infer FalseVal];
+            }
+          ?
+              | InferCondOperand<Schema, TrueVal>
+              | InferCondOperand<Schema, FalseVal>
+          : Expr extends { $literal: infer Value }
+            ? Value
+            : // No matching arm (out-of-lockstep operator, or a malformed operand
+              // shape the patterns don't match): degrade to `unknown`, mirroring the
+              // dispatch tail — `never` here would DROP the field from resolvers.
+              unknown;
 
 /**
  * Infer the result type of any expression — THE single dispatch:
@@ -1005,24 +1013,27 @@ type InferDependentExpression<Schema extends Document, Expr> =
  *  - unregistered `$` operator (allow-listed or typo) → `unknown`;
  *    validation, not inference, rejects the typos.
  */
-export type InferExpression<Schema extends Document, Expr> =
-  [OperatorKeyOf<Expr>] extends [never] ? NotAnExpression
-  : HasSingleOperatorKey<Expr> extends false ? MultiOperatorError
-  : [OperatorKeyOf<Expr>] extends [LiteralDependentOps] ?
-    InferDependentExpression<Schema, Expr>
-  : [OperatorKeyOf<Expr>] extends [keyof ExpressionSpec<Schema>] ?
-    // Declared `returns` of a registered operator; a dependent entry the
-    // arm dispatch missed degrades to `unknown` (never a dropped field).
-    ExpressionSpec<Schema>[OperatorKeyOf<Expr> &
-      keyof ExpressionSpec<Schema>] extends { returns: infer R } ?
-      R
-    : unknown
-  : // Unregistered operator: degrade to `unknown`, never to a dropped
-    // field — `never` here made the resolvers DROP it, and a later stage
-    // reading it errored with a misleading Field-not-on-schema. Inference
-    // stays lenient for ALL unregistered keys (allow-listed
-    // UnimplementedExpressionOps AND typos alike): rejection is
-    // validation's job (elements/validation.ts brands operators outside
-    // registry + allow-list), and a branded call site never ships, so its
-    // inferred output type is moot.
-    unknown;
+export type InferExpression<Schema extends Document, Expr> = [
+  OperatorKeyOf<Expr>,
+] extends [never]
+  ? NotAnExpression
+  : HasSingleOperatorKey<Expr> extends false
+    ? MultiOperatorError
+    : [OperatorKeyOf<Expr>] extends [LiteralDependentOps]
+      ? InferDependentExpression<Schema, Expr>
+      : [OperatorKeyOf<Expr>] extends [keyof ExpressionSpec<Schema>]
+        ? // Declared `returns` of a registered operator; a dependent entry the
+          // arm dispatch missed degrades to `unknown` (never a dropped field).
+          ExpressionSpec<Schema>[OperatorKeyOf<Expr> &
+            keyof ExpressionSpec<Schema>] extends { returns: infer R }
+          ? R
+          : unknown
+        : // Unregistered operator: degrade to `unknown`, never to a dropped
+          // field — `never` here made the resolvers DROP it, and a later stage
+          // reading it errored with a misleading Field-not-on-schema. Inference
+          // stays lenient for ALL unregistered keys (allow-listed
+          // UnimplementedExpressionOps AND typos alike): rejection is
+          // validation's job (elements/validation.ts brands operators outside
+          // registry + allow-list), and a branded call site never ships, so its
+          // inferred output type is moot.
+          unknown;

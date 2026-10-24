@@ -29,7 +29,7 @@ describe("Connections", async () => {
       .insertMany(exampleDocs);
   });
 
-  describe("Singleton", async () => {
+  describe("Singleton", () => {
     beforeAll(() => {
       pipesafe.connect(memoryMongoUri);
     });
@@ -40,16 +40,16 @@ describe("Connections", async () => {
       await pipesafe.close();
     });
 
-    it("should create a client when connected", async () => {
+    it("should create a client when connected", () => {
       expect(pipesafe.client).toBeDefined();
     });
 
-    it("should pass that client to child databases", async () => {
+    it("should pass that client to child databases", () => {
       const db = pipesafe.db(DBName);
       expect(db["client"]).toBeDefined();
     });
 
-    it("should pass that client to child databases then collections", async () => {
+    it("should pass that client to child databases then collections", () => {
       const collection = pipesafe
         .db(DBName)
         .collection<{ test: string }>("my_collection");
@@ -60,20 +60,20 @@ describe("Connections", async () => {
       const collection = new Collection<{ test: string }>({
         collectionName: CollectionName,
       });
-      const cursor = await collection.aggregate().execute();
+      const cursor = collection.aggregate().execute();
       const results = await cursor.toArray();
       expect(results).toEqual(exampleDocs);
     });
   });
 
-  describe("Chained", async () => {
+  describe("Chained", () => {
     it("from DB", async () => {
       const db = new Database({
         client,
         databaseName: DBName,
       });
       const collection = db.collection<{ test: string }>(CollectionName);
-      const cursor = await collection.aggregate().execute();
+      const cursor = collection.aggregate().execute();
       const results = await cursor.toArray();
       expect(results).toEqual(exampleDocs);
     });
@@ -83,18 +83,18 @@ describe("Connections", async () => {
         client,
         collectionName: CollectionName,
       });
-      const cursor = await collection.aggregate().execute();
+      const cursor = collection.aggregate().execute();
       const results = await cursor.toArray();
       expect(results).toEqual(exampleDocs);
     });
   });
 
-  describe("On execution", async () => {
+  describe("On execution", () => {
     it("Collection's pipeline can be passed a client", async () => {
       const collection = new Collection<{ test: string }>({
         collectionName: CollectionName,
       });
-      const cursor = await collection.aggregate().execute({
+      const cursor = collection.aggregate().execute({
         client,
       });
       const results = await cursor.toArray();
@@ -103,7 +103,7 @@ describe("Connections", async () => {
 
     it("Pipeline can be executed directly", async () => {
       const pipeline = new Pipeline<{ test: string }>();
-      const cursor = await pipeline.execute({
+      const cursor = pipeline.execute({
         client,
         databaseName: DBName,
         collectionName: CollectionName,

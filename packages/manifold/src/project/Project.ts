@@ -337,9 +337,7 @@ export class Project {
       );
 
       // Check for failures
-      const failures = stageResults.filter(
-        (r) => r.status === "rejected"
-      ) as PromiseRejectedResult[];
+      const failures = stageResults.filter((r) => r.status === "rejected");
       if (failures.length > 0) {
         // Stop execution on failure
         break;

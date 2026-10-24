@@ -1,0 +1,516 @@
+{
+  "packages/core-completions-tests/src/Pipeline.completions.test.ts": {
+    "unicorn/no-array-sort": {
+      "count": 2
+    }
+  },
+  "packages/core-completions-tests/src/harness.ts": {
+    "unicorn/prefer-import-meta-properties": {
+      "count": 1
+    }
+  },
+  "packages/core/benchmarking/benchmark.ts": {
+    "max-depth": {
+      "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 6
+    },
+    "no-shadow": {
+      "count": 1
+    },
+    "require-unicode-regexp": {
+      "count": 7
+    },
+    "typescript/no-explicit-any": {
+      "count": 1
+    },
+    "typescript/no-unnecessary-condition": {
+      "count": 1
+    },
+    "typescript/no-unsafe-argument": {
+      "count": 1
+    },
+    "typescript/no-unsafe-assignment": {
+      "count": 3
+    },
+    "typescript/no-unsafe-call": {
+      "count": 4
+    },
+    "typescript/no-unsafe-member-access": {
+      "count": 5
+    },
+    "typescript/prefer-nullish-coalescing": {
+      "count": 15
+    },
+    "typescript/restrict-template-expressions": {
+      "count": 10
+    },
+    "typescript/strict-boolean-expressions": {
+      "count": 28
+    },
+    "unicorn/no-typeof-undefined": {
+      "count": 1
+    },
+    "unicorn/prefer-array-some": {
+      "count": 4
+    },
+    "unicorn/prefer-import-meta-properties": {
+      "count": 2
+    },
+    "unicorn/prefer-number-coercion": {
+      "count": 2
+    },
+    "unicorn/prefer-string-replace-all": {
+      "count": 1
+    }
+  },
+  "packages/core/benchmarking/check-instantiation-budget.ts": {
+    "require-unicode-regexp": {
+      "count": 1
+    },
+    "typescript/no-unsafe-type-assertion": {
+      "count": 2
+    },
+    "unicorn/prefer-import-meta-properties": {
+      "count": 1
+    }
+  },
+  "packages/core/benchmarking/project.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "typescript/no-unnecessary-condition": {
+      "count": 1
+    },
+    "typescript/no-unsafe-type-assertion": {
+      "count": 1
+    },
+    "typescript/restrict-template-expressions": {
+      "count": 1
+    },
+    "typescript/strict-boolean-expressions": {
+      "count": 2
+    },
+    "unicorn/no-typeof-undefined": {
+      "count": 1
+    }
+  },
+  "packages/core/benchmarking/unset.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "typescript/strict-boolean-expressions": {
+      "count": 5
+    },
+    "unicorn/no-typeof-undefined": {
+      "count": 1
+    }
+  },
+  "packages/core/benchmarking/without-dotted-keys.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "typescript/restrict-template-expressions": {
+      "count": 13
+    },
+    "unicorn/no-immediate-mutation": {
+      "count": 1
+    },
+    "unicorn/prefer-single-call": {
+      "count": 3
+    }
+  },
+  "packages/core/examples/content-management.ts": {
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "packages/core/examples/ecommerce-analytics.ts": {
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "packages/core/examples/user-management.ts": {
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "packages/core/src/collection/Collection.ts": {
+    "typescript/no-explicit-any": {
+      "count": 1
+    },
+    "typescript/no-unnecessary-type-parameters": {
+      "count": 1
+    },
+    "typescript/no-unsafe-type-assertion": {
+      "count": 1
+    },
+    "typescript/prefer-nullish-coalescing": {
+      "count": 4
+    },
+    "typescript/strict-boolean-expressions": {
+      "count": 1
+    },
+    "unicorn/no-array-callback-reference": {
+      "count": 1
+    }
+  },
+  "packages/core/src/elements/expressions.ts": {
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "packages/core/src/elements/literals.ts": {
+    "typescript/no-redundant-type-constituents": {
+      "count": 1
+    }
+  },
+  "packages/core/src/index.ts": {
+    "typescript/no-deprecated": {
+      "count": 1
+    }
+  },
+  "packages/core/src/pipeline/Pipeline.ts": {
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 3
+    },
+    "typescript/no-explicit-any": {
+      "count": 34
+    },
+    "typescript/no-redundant-type-constituents": {
+      "count": 1
+    },
+    "typescript/no-unnecessary-type-arguments": {
+      "count": 4
+    },
+    "typescript/no-unnecessary-type-parameters": {
+      "count": 2
+    },
+    "typescript/no-unsafe-type-assertion": {
+      "count": 1
+    },
+    "typescript/strict-boolean-expressions": {
+      "count": 1
+    }
+  },
+  "packages/core/src/singleton/pipesafe.ts": {
+    "typescript/no-deprecated": {
+      "count": 1
+    },
+    "typescript/no-duplicate-type-constituents": {
+      "count": 1
+    },
+    "typescript/strict-boolean-expressions": {
+      "count": 1
+    }
+  },
+  "packages/core/src/singleton/tagClient.test.ts": {
+    "no-new": {
+      "count": 3
+    },
+    "typescript/no-confusing-void-expression": {
+      "count": 2
+    },
+    "typescript/no-unsafe-type-assertion": {
+      "count": 2
+    },
+    "unicorn/no-useless-undefined": {
+      "count": 1
+    }
+  },
+  "packages/core/src/singleton/tagClient.ts": {
+    "typescript/strict-boolean-expressions": {
+      "count": 1
+    }
+  },
+  "packages/core/src/stages/facet.ts": {
+    "typescript/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "packages/core/src/stages/group.ts": {
+    "max-lines": {
+      "count": 1
+    },
+    "typescript/no-explicit-any": {
+      "count": 4
+    },
+    "typescript/no-redundant-type-constituents": {
+      "count": 1
+    }
+  },
+  "packages/core/src/stages/group.typeAssertions.ts": {
+    "typescript/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "packages/core/src/stages/lookup.typeAssertions.ts": {
+    "typescript/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "packages/core/src/stages/match.ts": {
+    "max-lines": {
+      "count": 1
+    },
+    "typescript/no-unnecessary-type-constraint": {
+      "count": 3
+    }
+  },
+  "packages/core/src/stages/out.ts": {
+    "typescript/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "packages/core/src/stages/project.ts": {
+    "max-lines": {
+      "count": 1
+    },
+    "typescript/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "packages/core/src/stages/project.typeAssertions.ts": {
+    "typescript/no-deprecated": {
+      "count": 2
+    }
+  },
+  "packages/core/src/stages/set.typeAssertions.ts": {
+    "typescript/no-redundant-type-constituents": {
+      "count": 2
+    }
+  },
+  "packages/core/src/stages/stages.contract.typeAssertions.ts": {
+    "typescript/no-redundant-type-constituents": {
+      "count": 1
+    }
+  },
+  "packages/core/src/utils/objects.ts": {
+    "typescript/no-explicit-any": {
+      "count": 3
+    },
+    "typescript/no-unsafe-function-type": {
+      "count": 2
+    }
+  },
+  "packages/core/src/utils/paths.ts": {
+    "typescript/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "packages/core/src/utils/strings.ts": {
+    "typescript/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "packages/core/src/utils/tests.ts": {
+    "typescript/no-unnecessary-type-parameters": {
+      "count": 5
+    }
+  },
+  "packages/core/src/utils/updates.ts": {
+    "typescript/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "packages/core/src/utils/useMemoryMongo.ts": {
+    "no-await-in-loop": {
+      "count": 1
+    },
+    "require-unicode-regexp": {
+      "count": 1
+    },
+    "unicorn/prefer-string-replace-all": {
+      "count": 1
+    }
+  },
+  "packages/manifold/src/model/Model.test.ts": {
+    "unicorn/no-useless-undefined": {
+      "count": 1
+    }
+  },
+  "packages/manifold/src/model/Model.ts": {
+    "typescript/no-explicit-any": {
+      "count": 8
+    },
+    "typescript/no-unnecessary-condition": {
+      "count": 1
+    },
+    "typescript/no-unnecessary-type-arguments": {
+      "count": 3
+    },
+    "typescript/no-unsafe-type-assertion": {
+      "count": 1
+    },
+    "typescript/strict-boolean-expressions": {
+      "count": 1
+    }
+  },
+  "packages/manifold/src/project/Project.run.test.ts": {
+    "typescript/no-non-null-assertion": {
+      "count": 2
+    },
+    "typescript/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "typescript/no-unsafe-assignment": {
+      "count": 3
+    },
+    "typescript/no-unsafe-member-access": {
+      "count": 1
+    },
+    "typescript/strict-void-return": {
+      "count": 2
+    }
+  },
+  "packages/manifold/src/project/Project.ts": {
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 3
+    },
+    "no-await-in-loop": {
+      "count": 1
+    },
+    "typescript/no-explicit-any": {
+      "count": 26
+    },
+    "typescript/no-non-null-assertion": {
+      "count": 1
+    },
+    "typescript/no-unsafe-argument": {
+      "count": 6
+    },
+    "typescript/no-unsafe-assignment": {
+      "count": 8
+    },
+    "typescript/no-unsafe-member-access": {
+      "count": 8
+    },
+    "typescript/no-unsafe-return": {
+      "count": 2
+    },
+    "typescript/prefer-nullish-coalescing": {
+      "count": 1
+    },
+    "typescript/restrict-template-expressions": {
+      "count": 4
+    },
+    "typescript/strict-boolean-expressions": {
+      "count": 1
+    },
+    "unicorn/no-array-callback-reference": {
+      "count": 2
+    },
+    "unicorn/no-negated-condition": {
+      "count": 1
+    }
+  },
+  "website/src/App.tsx": {
+    "typescript/restrict-template-expressions": {
+      "count": 2
+    }
+  },
+  "website/src/components/CompileTerminal/CompileTerminal.tsx": {
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "website/src/components/CompileTerminal/ErrorIfFiring.tsx": {
+    "typescript/strict-boolean-expressions": {
+      "count": 1
+    }
+  },
+  "website/src/components/RuntimeTerminal/RuntimeTerminal.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "website/src/components/TypeTooltip/ErrorTooltipContent.tsx": {
+    "typescript/strict-boolean-expressions": {
+      "count": 1
+    }
+  },
+  "website/src/components/TypeTooltip/OrderTypeContent.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "typescript/no-unsafe-type-assertion": {
+      "count": 1
+    },
+    "typescript/strict-boolean-expressions": {
+      "count": 1
+    }
+  },
+  "website/src/components/TypeTooltip/TypeTooltip.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "typescript/no-non-null-assertion": {
+      "count": 1
+    },
+    "typescript/strict-boolean-expressions": {
+      "count": 1
+    }
+  },
+  "website/src/hooks/useCompileAnimation.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "typescript/consistent-return": {
+      "count": 1
+    },
+    "typescript/no-confusing-void-expression": {
+      "count": 1
+    },
+    "typescript/strict-void-return": {
+      "count": 1
+    }
+  },
+  "website/src/hooks/useCopyToClipboard.ts": {
+    "typescript/no-confusing-void-expression": {
+      "count": 1
+    }
+  },
+  "website/src/hooks/useFixAnimation.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "typescript/no-confusing-void-expression": {
+      "count": 2
+    },
+    "unicorn/prefer-single-call": {
+      "count": 1
+    }
+  },
+  "website/src/hooks/useTerminalAnimation.ts": {
+    "max-lines-per-function": {
+      "count": 2
+    },
+    "typescript/consistent-return": {
+      "count": 1
+    },
+    "typescript/no-confusing-void-expression": {
+      "count": 7
+    },
+    "unicorn/prefer-single-call": {
+      "count": 6
+    }
+  },
+  "website/src/main.tsx": {
+    "unicorn/prefer-query-selector": {
+      "count": 1
+    }
+  }
+}

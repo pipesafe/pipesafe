@@ -177,13 +177,13 @@ describe("Model", () => {
         },
       });
       const pipeline = modelWithDb.buildPipeline();
-      const lastStage = pipeline[pipeline.length - 1];
+      const lastStage = pipeline.at(-1);
       expect(lastStage).toEqual({ $out: { db: "analytics", coll: "with_db" } });
     });
 
     it("should build $merge for Upsert mode", () => {
       const pipeline = dailyMetrics.buildPipeline();
-      const lastStage = pipeline[pipeline.length - 1];
+      const lastStage = pipeline.at(-1);
       expect(lastStage).toEqual({
         $merge: {
           into: "daily_metrics",
@@ -206,7 +206,7 @@ describe("Model", () => {
         },
       });
       const pipeline = modelWithDb.buildPipeline();
-      const lastStage = pipeline[pipeline.length - 1];
+      const lastStage = pipeline.at(-1);
       expect(lastStage).toEqual({
         $merge: {
           into: { db: "analytics", coll: "with_db" },
@@ -225,7 +225,7 @@ describe("Model", () => {
         materialize: { type: "collection", mode: Model.Mode.Append },
       });
       const pipeline = appendModel.buildPipeline();
-      const lastStage = pipeline[pipeline.length - 1];
+      const lastStage = pipeline.at(-1);
       expect(lastStage).toEqual({
         $merge: {
           into: "append_only",

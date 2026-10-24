@@ -24,7 +24,7 @@ jobs:
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     env:
-      REPLY_TOOLS: ",Edit,Write,Bash(git add *),Bash(git commit *),Bash(git push),Bash(bunx eslint *),Bash(bunx prettier *),Bash(bun run build),Bash(bun run typecheck:packages),Bash(bunx vitest run *)"
+      REPLY_TOOLS: ",Edit,Write,Bash(git add *),Bash(git commit *),Bash(git push),Bash(bunx oxlint *),Bash(bunx oxfmt *),Bash(bun run build),Bash(bun run typecheck:packages),Bash(bunx vitest run *)"
     permissions:
       contents: write
       pull-requests: write
