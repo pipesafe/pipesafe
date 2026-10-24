@@ -194,3 +194,23 @@ export interface Dataset {
   /** File → full source text, for the snippet renderer. */
   sources: Record<string, string>;
 }
+
+export const REBUILD_TARGETS = ["coverage", "sample", "stress"] as const;
+export type RebuildTarget = (typeof REBUILD_TARGETS)[number];
+
+/** The dev server's rebuild job, streamed to the browser over SSE. */
+export interface RebuildSnapshot {
+  /** Monotonic id — increments each time a build starts. */
+  id: number;
+  running: boolean;
+  target: RebuildTarget;
+  /** Current phase text, derived from the build's stdout. */
+  phase: string;
+  startedAt: number;
+  endedAt: number | null;
+  /** Tail of the build's combined stdout/stderr (most recent last). */
+  log: string[];
+  exitCode: number | null;
+  /** Set when the build failed — a short summary for the UI. */
+  error: string | null;
+}

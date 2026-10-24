@@ -43,6 +43,19 @@ const DATA_DIR = resolve(HERE, "public/data");
 
 type Index = Record<string, SymbolStats[]>;
 
+const TOP_BY = ["entriesCreated", "callSites", "depth", "uniqueTypes"] as const;
+type TopBy = (typeof TOP_BY)[number];
+
+const TOP_SCORES: Record<TopBy, (s: SymbolStats) => number> = {
+  entriesCreated: (s) => s.entriesCreated,
+  callSites: (s) => s.callSites,
+  depth: (s) => s.inferred?.depth ?? 0,
+  uniqueTypes: (s) => s.inferred?.uniqueTypes ?? 0,
+};
+
+const isTopBy = (v: string): v is TopBy =>
+  (TOP_BY as readonly string[]).includes(v);
+
 // ---------------------------------------------------------------------------
 // Dataset loading
 // ---------------------------------------------------------------------------
@@ -162,26 +175,13 @@ if (!Number.isInteger(limit) || limit < 1) {
 switch (command) {
   case "top": {
     const by = flag("by") ?? "entriesCreated";
-    const BY_VALUES = ["entriesCreated", "callSites", "depth", "uniqueTypes"];
-    if (!BY_VALUES.includes(by)) {
-      console.error(`--by must be one of ${BY_VALUES.join("|")}, got '${by}'`);
+    if (!isTopBy(by)) {
+      console.error(`--by must be one of ${TOP_BY.join("|")}, got '${by}'`);
       usage();
     }
     const kind = flag("kind");
     const all = flatten(loadIndex()).filter((s) => !kind || s.kind === kind);
-    const score = (s: SymbolStats): number => {
-      switch (by) {
-        case "callSites":
-          return s.callSites;
-        case "depth":
-          return s.inferred?.depth ?? 0;
-        case "uniqueTypes":
-          return s.inferred?.uniqueTypes ?? 0;
-        case "entriesCreated":
-        default:
-          return s.entriesCreated;
-      }
-    };
+    const score = TOP_SCORES[by];
     const top = all
       .filter((s) => score(s) > 0)
       .sort((a, b) => score(b) - score(a))

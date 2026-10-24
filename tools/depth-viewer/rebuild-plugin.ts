@@ -6,6 +6,12 @@ import { fileURLToPath } from "node:url";
 
 import type { Plugin } from "vite";
 
+import {
+  REBUILD_TARGETS,
+  type RebuildSnapshot,
+  type RebuildTarget,
+} from "./src/types";
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(HERE, "public", "data");
 
@@ -25,28 +31,6 @@ const DATA_DIR = join(HERE, "public", "data");
  * `vite build` never sees them.
  */
 
-/** A phase the browser renders as a progress step. */
-export interface RebuildSnapshot {
-  /** Monotonic id — increments each time a build starts. */
-  id: number;
-  running: boolean;
-  /** Human-readable target label, e.g. "coverage" or "sample". */
-  target: string;
-  /** Current phase text, derived from the build's stdout. */
-  phase: string;
-  startedAt: number;
-  endedAt: number | null;
-  /** Tail of the build's combined stdout/stderr (most recent last). */
-  log: string[];
-  /** Present once the build has finished. */
-  exitCode: number | null;
-  /** Present when the build failed — a short summary for the UI. */
-  error: string | null;
-}
-
-/** How the browser names a build target; maps to a --project argument. */
-type Target = "coverage" | "sample" | "stress" | string;
-
 const LOG_TAIL = 200;
 
 /**
@@ -63,19 +47,33 @@ function phaseFor(line: string): string | null {
   return null;
 }
 
-/** Resolve the browser's target name to build.ts arguments. */
-function argsForTarget(target: Target, patch: boolean): string[] {
-  const args = ["run", join(HERE, "build.ts")];
-  if (target === "sample") {
-    args.push("--project", "tools/depth-viewer/sample/tsconfig.json");
-  } else if (target === "stress") {
-    args.push("--project", "tools/depth-viewer/tsconfig.stress.json");
-  } else if (target !== "coverage") {
-    // Treat anything else as an explicit tsconfig path (relative to repo root).
-    args.push("--project", target);
-  }
-  if (!patch) args.push("--no-patch");
+const TARGET_PROJECTS: Record<RebuildTarget, string> = {
+  coverage: "tools/depth-viewer/tsconfig.coverage.json",
+  sample: "tools/depth-viewer/sample/tsconfig.json",
+  stress: "tools/depth-viewer/tsconfig.stress.json",
+};
+
+function argsForTarget(target: RebuildTarget): string[] {
+  const args = [
+    "run",
+    join(HERE, "build.ts"),
+    "--project",
+    TARGET_PROJECTS[target],
+  ];
+  // The sample has no Pipeline calls, so the stock compiler is enough.
+  if (target === "sample") args.push("--no-patch");
   return args;
+}
+
+function parseTarget(body: string): RebuildTarget | null {
+  try {
+    const { target } = JSON.parse(body) as { target?: unknown };
+    return (REBUILD_TARGETS as readonly unknown[]).includes(target) ?
+        (target as RebuildTarget)
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 export function rebuildPlugin(): Plugin {
@@ -112,11 +110,11 @@ export function rebuildPlugin(): Plugin {
     broadcast();
   };
 
-  const start = (target: Target, patch: boolean): void => {
+  const start = (target: RebuildTarget): void => {
     job = {
       id: job.id + 1,
       running: true,
-      target: typeof target === "string" ? target : "coverage",
+      target,
       phase: "Starting…",
       startedAt: Date.now(),
       endedAt: null,
@@ -126,7 +124,7 @@ export function rebuildPlugin(): Plugin {
     };
     broadcast();
 
-    child = spawn("bun", argsForTarget(target, patch), {
+    child = spawn("bun", argsForTarget(target), {
       cwd: HERE,
       env: process.env,
     });
@@ -250,22 +248,19 @@ export function rebuildPlugin(): Plugin {
             // check above and spawn concurrent builds.
             pending = true;
             void readBody(req).then((body) => {
-              let target: Target = "coverage";
-              let patch = true;
-              if (body) {
-                try {
-                  const parsed = JSON.parse(body) as {
-                    target?: Target;
-                    patch?: boolean;
-                  };
-                  if (parsed.target) target = parsed.target;
-                  if (parsed.patch === false) patch = false;
-                } catch {
-                  // Ignore a malformed body and use defaults.
-                }
-              }
               pending = false;
-              start(target, patch);
+              const target = parseTarget(body);
+              if (!target) {
+                res.statusCode = 400;
+                res.setHeader("Content-Type", "application/json");
+                res.end(
+                  JSON.stringify({
+                    error: `target must be ${REBUILD_TARGETS.join("|")}`,
+                  })
+                );
+                return;
+              }
+              start(target);
               res.statusCode = 202;
               res.setHeader("Content-Type", "application/json");
               res.end(JSON.stringify({ started: true, job }));

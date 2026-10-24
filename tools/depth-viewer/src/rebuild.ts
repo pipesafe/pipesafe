@@ -1,26 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-/**
- * Snapshot of the dev server's build job. Mirrors `RebuildSnapshot` in
- * ../rebuild-plugin.ts — kept as a separate declaration because that module
- * imports Node built-ins and must not be pulled into the browser bundle.
- */
-export interface RebuildSnapshot {
-  id: number;
-  running: boolean;
-  target: string;
-  phase: string;
-  startedAt: number;
-  endedAt: number | null;
-  log: string[];
-  exitCode: number | null;
-  error: string | null;
-}
-
-export interface RebuildTarget {
-  target: "coverage" | "sample" | "stress";
-  patch: boolean;
-}
+import type { RebuildSnapshot, RebuildTarget } from "./types";
 
 export interface UseRebuild {
   /** Latest job snapshot, or null before the first server message. */
@@ -29,7 +9,7 @@ export interface UseRebuild {
   busy: boolean;
   /** Set when a POST was rejected because a build was already running. */
   rejected: boolean;
-  trigger: (opts: RebuildTarget) => void;
+  trigger: (target: RebuildTarget) => void;
 }
 
 /**
@@ -65,12 +45,12 @@ export function useRebuild(onComplete: () => void): UseRebuild {
     return () => source.close();
   }, []);
 
-  const trigger = useCallback((opts: RebuildTarget) => {
+  const trigger = useCallback((target: RebuildTarget) => {
     setRejected(false);
     void fetch("/__depth/rebuild", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(opts),
+      body: JSON.stringify({ target }),
     }).then((res) => {
       // 409 => a build was already running; the stream keeps us in sync.
       if (res.status === 409) setRejected(true);

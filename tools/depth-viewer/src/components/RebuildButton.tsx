@@ -1,6 +1,10 @@
 import { useState } from "react";
 
-import type { RebuildSnapshot, RebuildTarget } from "../rebuild";
+import {
+  REBUILD_TARGETS,
+  type RebuildSnapshot,
+  type RebuildTarget,
+} from "../types";
 
 interface Props {
   snapshot: RebuildSnapshot | null;
@@ -8,15 +12,15 @@ interface Props {
   rejected: boolean;
   /** True while the app is re-fetching the freshly built dataset. */
   reloading: boolean;
-  onTrigger: (opts: RebuildTarget) => void;
+  onTrigger: (target: RebuildTarget) => void;
   variant: "header" | "empty";
 }
 
-const TARGETS: { value: RebuildTarget["target"]; label: string }[] = [
-  { value: "coverage", label: "coverage (full)" },
-  { value: "sample", label: "sample (fast)" },
-  { value: "stress", label: "stress fixtures" },
-];
+const TARGET_LABELS: Record<RebuildTarget, string> = {
+  coverage: "coverage (full)",
+  sample: "sample (fast)",
+  stress: "stress fixtures",
+};
 
 /**
  * Dev-only control that rebuilds the dataset from the browser and shows live
@@ -32,7 +36,7 @@ export function RebuildButton({
   onTrigger,
   variant,
 }: Props) {
-  const [target, setTarget] = useState<RebuildTarget["target"]>("coverage");
+  const [target, setTarget] = useState<RebuildTarget>("coverage");
 
   const active = busy || reloading;
   const phase =
@@ -48,11 +52,11 @@ export function RebuildButton({
           className="rebuild-target"
           value={target}
           disabled={active}
-          onChange={(e) => setTarget(e.target.value as RebuildTarget["target"])}
+          onChange={(e) => setTarget(e.target.value as RebuildTarget)}
         >
-          {TARGETS.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
+          {REBUILD_TARGETS.map((t) => (
+            <option key={t} value={t}>
+              {TARGET_LABELS[t]}
             </option>
           ))}
         </select>
@@ -60,7 +64,7 @@ export function RebuildButton({
           type="button"
           className="rebuild-btn"
           disabled={active}
-          onClick={() => onTrigger({ target, patch: target !== "sample" })}
+          onClick={() => onTrigger(target)}
         >
           {active ?
             <>
