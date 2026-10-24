@@ -962,14 +962,17 @@ type BindVar<Vars extends Document, Name extends string, T> = Omit<
  * to `unknown` so surrounding inference degrades gracefully instead of
  * producing `never` (which would DROP fields from resolvers).
  */
+/** Unresolvable path: validation brands it, inference degrades to unknown;
+ *  union members missing the path read as null. */
+type DegradeBrand<T> =
+  [T] extends [PipeSafeError<string>] ? unknown
+  : T extends PipeSafeError<string> ? null
+  : T;
+
 type ResolveScopedVariable<Vars extends Document, Ref extends string> =
   Ref extends `${infer Name}.${infer Path}` ?
     Name extends keyof Vars ?
-      GetFieldTypeWithoutArrays<Vars[Name], Path> extends infer T ?
-        [T] extends [PipeSafeError<string>] ?
-          unknown // untracked interior (e.g. Element is unknown) — degrade
-        : T
-      : never
+      DegradeBrand<GetFieldTypeWithoutArrays<Vars[Name], Path>>
     : unknown
   : Ref extends keyof Vars ? Vars[Ref]
   : unknown;
@@ -990,11 +993,7 @@ type InferScopedExpression<
   Expr extends "$$REMOVE" ? never
   : Expr extends `$$${infer Ref}` ? ResolveScopedVariable<Vars, Ref>
   : Expr extends `$${infer Path}` ?
-    GetFieldTypeWithoutArrays<Schema, Path> extends infer R ?
-      [R] extends [PipeSafeError<string>] ?
-        unknown // unresolvable ref: validation brands it, inference degrades
-      : R
-    : never
+    DegradeBrand<GetFieldTypeWithoutArrays<Schema, Path>>
   : Expr extends string ? Expr
   : [OperatorKeyOf<Expr>] extends [never] ?
     Expr extends readonly unknown[] ?
@@ -1027,7 +1026,9 @@ type ArrayResult<
   ElementOperands = Operands,
 > =
   | ElementOfArray<InferScopedExpression<Schema, Vars, ElementOperands>>[]
-  | NullIn<InferScopedExpression<Schema, Vars, Operands>>;
+  | NullIn<InferScopedExpression<Schema, Vars, Operands>> extends infer R ?
+    R // evaluated, so hovers show the type rather than this alias
+  : never;
 
 /** $ifNull skips null literals and null-strips the rest; `unknown` stays
  *  `unknown` (`NonNullable<unknown>` would collapse to `{}`). */
@@ -1069,9 +1070,11 @@ type InferDependentExpression<
   Expr extends { $concatArrays: infer Operands extends readonly unknown[] } ?
     ArrayResult<Schema, Vars, Operands[number]>
   : Expr extends { $arrayElemAt: readonly [infer Source, unknown] } ?
-    InputElement<Schema, Vars, Source>
+    | InputElement<Schema, Vars, Source>
+    | NullIn<InferScopedExpression<Schema, Vars, Source>>
   : Expr extends { $filter: { input: infer Source } } ?
-    InputElement<Schema, Vars, Source>[]
+    | InputElement<Schema, Vars, Source>[]
+    | NullIn<InferScopedExpression<Schema, Vars, Source>>
   : Expr extends { $map: { input: infer Source; in: infer In } } ?
     | InferScopedExpression<
         Schema,
@@ -1108,8 +1111,10 @@ type InferDependentExpression<
   : Expr extends { $setDifference: readonly [infer First, infer Second] } ?
     // Removing elements never widens: the FIRST operand's element type.
     ArrayResult<Schema, Vars, First | Second, First>
-  : Expr extends { $ifNull: infer Operands extends readonly unknown[] } ?
-    IfNullOperand<Schema, Vars, Operands[number]>
+  : Expr extends { $ifNull: readonly [...infer Tests, infer Replacement] } ?
+    // The replacement is returned as-is, null included.
+    | IfNullOperand<Schema, Vars, Tests[number]>
+    | InferScopedExpression<Schema, Vars, Replacement>
   : Expr extends { $cond: readonly [unknown, infer TrueVal, infer FalseVal] } ?
     InferScopedExpression<Schema, Vars, TrueVal | FalseVal>
   : Expr extends { $cond: { then: infer TrueVal; else: infer FalseVal } } ?

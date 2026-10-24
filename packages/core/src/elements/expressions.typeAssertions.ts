@@ -646,8 +646,35 @@ type _NestedNullableElemAtInfer = InferExpression<
   { $arrayElemAt: [{ $concatArrays: ["$maybeTags", ["x"]] }, 0] }
 >;
 type _Assert_NestedNullableElemAtInfer = Assert<
-  Equal<_NestedNullableElemAtInfer, string>
+  Equal<_NestedNullableElemAtInfer, string | null>
 >;
+type _FilterOptionalInputInfer = InferExpression<
+  SetSchema,
+  { $filter: { input: "$maybeTags"; cond: true } }
+>;
+type _Assert_FilterOptionalInputInfer = Assert<
+  Equal<_FilterOptionalInputInfer, string[] | null>
+>;
+
+// $ifNull returns its replacement as-is, null included.
+type _IfNullNullReplacementInfer = InferExpression<
+  SetSchema,
+  { $ifNull: ["$maybeTags", null] }
+>;
+type _Assert_IfNullNullReplacementInfer = Assert<
+  Equal<_IfNullNullReplacementInfer, string[] | null>
+>;
+
+// A path missing from some members of a union element reads as null, not
+// as the validation brand.
+type _MapUnionElementPathInfer = InferExpression<
+  { items: ({ kind: "a"; x: string } | { kind: "b" })[] },
+  { $map: { input: "$items"; in: "$$this.x" } }
+>;
+type _Assert_MapUnionElementPathInfer = Assert<
+  Equal<_MapUnionElementPathInfer, (string | null)[]>
+>;
+
 type _ReduceOptionalInputInfer = InferExpression<
   SetSchema,
   { $reduce: { input: "$maybeTags"; initialValue: ""; in: "$$this" } }
@@ -927,6 +954,9 @@ export type {
   _Assert_MapScopedNullableConcatInfer,
   _Assert_CondObjectInfer,
   _Assert_CondRemoveInfer,
+  _Assert_FilterOptionalInputInfer,
+  _Assert_IfNullNullReplacementInfer,
+  _Assert_MapUnionElementPathInfer,
 };
 
 // The literal-dependent set is DERIVED from `returns`-omission on registry
