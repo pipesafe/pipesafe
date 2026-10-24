@@ -42,11 +42,10 @@ describe("Connection and query options", async () => {
   it("passes each layer's configured options to the driver at execute", () => {
     const dbOptions = { readConcern: new ReadConcern("majority") };
     const collectionOptions = { readPreference: "secondaryPreferred" } as const;
-    const collection = new Collection<TestDoc>({
+    const collection = new Database({
       client,
       db: { name: DBName, options: dbOptions },
-      collection: { name: "inherit_docs", options: collectionOptions },
-    });
+    }).collection<TestDoc>("inherit_docs", collectionOptions);
 
     const dbSpy = vi.spyOn(MongoClient.prototype, "db");
     const collectionSpy = vi.spyOn(Db.prototype, "collection");
@@ -66,16 +65,14 @@ describe("Connection and query options", async () => {
   });
 
   it("replaces a layer's inherited options when execute re-targets it", () => {
-    const collection = new Collection<TestDoc>({
+    const collection = new Database({
       client,
       db: {
         name: DBName,
         options: { readConcern: new ReadConcern("majority") },
       },
-      collection: {
-        name: "inherit_docs",
-        options: { readPreference: "secondaryPreferred" },
-      },
+    }).collection<TestDoc>("inherit_docs", {
+      readPreference: "secondaryPreferred",
     });
 
     const dbSpy = vi.spyOn(MongoClient.prototype, "db");
@@ -93,27 +90,26 @@ describe("Connection and query options", async () => {
     }
   });
 
-  it("exposes configured options through the Source accessors", () => {
-    const dbOptions = { readConcern: new ReadConcern("majority") };
-    const collectionOptions = { readPreference: "secondaryPreferred" } as const;
+  it("runs a db-less Collection in the execute-time database", () => {
     const collection = new Collection<TestDoc>({
       client,
-      db: { name: DBName, options: dbOptions },
-      collection: { name: "accessor_docs", options: collectionOptions },
+      collection: { name: "dbless_docs" },
     });
 
-    // Consumers reading a Collection through the Source interface (e.g.
-    // manifold's Project) rely on these to honor the configured options
-    expect(collection.getOutputDb()?.options).toBe(dbOptions);
-    expect(collection.getOutputCollection().options).toBe(collectionOptions);
+    const dbSpy = vi.spyOn(MongoClient.prototype, "db");
+    try {
+      collection.aggregate().execute({ db: { name: "elsewhere" } });
+      expect(dbSpy).toHaveBeenLastCalledWith("elsewhere", undefined);
+    } finally {
+      dbSpy.mockRestore();
+    }
   });
 
   it("passes AggregateOptions through Pipeline.execute", async () => {
-    const collection = new Collection<TestDoc>({
+    const collection = new Database({
       client,
       db: { name: DBName },
-      collection: { name: "agg_docs" },
-    });
+    }).collection<TestDoc>("agg_docs");
     await collection.insertMany(docs);
 
     const aggregateOptions = {
@@ -142,11 +138,10 @@ describe("Connection and query options", async () => {
   it("supports transactions via aggregateOptions.session", async () => {
     // The collection must exist before the transaction reads from it
     await client.db(DBName).createCollection("txn_docs");
-    const collection = new Collection<TestDoc>({
+    const collection = new Database({
       client,
       db: { name: DBName },
-      collection: { name: "txn_docs" },
-    });
+    }).collection<TestDoc>("txn_docs");
 
     const session = client.startSession();
     try {

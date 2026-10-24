@@ -13,6 +13,8 @@ import {
 } from "../elements/fieldReference";
 import { Expression, InferExpression } from "../elements/expressions";
 import { Collection } from "../collection/Collection";
+import type { CollectionInDatabase } from "../collection/CollectionInDatabase";
+import type { PipeSafeError } from "../utils/errors";
 import {
   ResolveLookupOutput,
   LookupForeignFieldOrError,
@@ -44,19 +46,27 @@ import { CountQuery, ResolveCountOutput } from "../stages/count";
 import { OutQuery } from "../stages/out";
 import { MergeQuery } from "../stages/merge";
 import { AggregateOptions, AggregationCursor, MongoClient } from "mongodb";
-import { type Source, type InferSourceType } from "../source/Source";
+import {
+  type Source,
+  type InferSourceType,
+  type InferSourceDb,
+} from "../source/Source";
 import type { CollectionConfig, DbConfig } from "../database/config";
 
 // ============================================================================
 // Lookup Mode - Controls what sources can be used in lookup/unionWith
 // ============================================================================
 
+/** Mode of a pipeline bound to database `Db` (from `CollectionInDatabase.aggregate()`) */
+export type InDatabase<Db extends string> = { readonly db: Db };
+
 /**
  * Pipeline lookup mode:
- * - "runtime": Only Collection allowed in lookup/unionWith (default, for app code)
- * - "model": Collection OR Model allowed (for DAG/DW pipelines inside Model)
+ * - "runtime": Only db-less Collection allowed in lookup/unionWith (default, for app code)
+ * - "model": db-less Collection OR Model allowed (for DAG/DW pipelines inside Model)
+ * - InDatabase<Db>: Collection OR CollectionInDatabase in database `Db`
  */
-export type LookupMode = "runtime" | "model";
+export type LookupMode = "runtime" | "model" | InDatabase<string>;
 
 // ============================================================================
 // Used Stages - Tracks which pipeline stages have been used
@@ -118,7 +128,28 @@ export type FacetAllowedStages = AllPipelineStagesExcept<
 >;
 
 type AllowedSource<Mode extends LookupMode, T extends Document> =
-  Mode extends "model" ? Source<T> : Collection<T>;
+  Mode extends "model" ? Source<T>
+  : Mode extends InDatabase<string> ? Collection<T> | CollectionInDatabase<T>
+  : Collection<T>;
+
+/**
+ * Join sources must live in the reading pipeline's database: MongoDB
+ * resolves `from`/`coll` there. Model pipelines run in the run's database,
+ * so their sources must have none; a bound pipeline accepts its own
+ * database, none, or an unchecked `string`.
+ */
+type SameDatabaseSource<
+  Mode extends LookupMode,
+  C,
+  Stage extends string,
+  SourceDb = InferSourceDb<C>,
+> =
+  [SourceDb] extends [undefined] ? unknown
+  : Mode extends InDatabase<infer Db> ?
+    string extends Db | SourceDb ? unknown
+    : [SourceDb] extends [Db] ? unknown
+    : PipeSafeError<`Stage '${Stage}' requires a source in database '${Db}'.`>
+  : PipeSafeError<`Stage '${Stage}' requires a source in the run's database.`>;
 
 /**
  * Helper to create pipeline functions with proper typing.
@@ -261,7 +292,7 @@ export class Pipeline<
   >(
     $lookup:
       | {
-          from: C;
+          from: C & SameDatabaseSource<Mode, C, "$lookup">;
           localField: LocalField;
           foreignField: ForeignField;
           as: NewKey;
@@ -273,7 +304,7 @@ export class Pipeline<
           >;
         }
       | {
-          from: C;
+          from: C & SameDatabaseSource<Mode, C, "$lookup">;
           as: NewKey;
           pipeline: PipelineBuilder<
             InferSourceType<C>,
@@ -356,7 +387,7 @@ export class Pipeline<
     DepthField extends string = never,
     const RestrictMatch extends MatchQuery<InferSourceType<C>> = never,
   >($graphLookup: {
-    from: C;
+    from: C & SameDatabaseSource<Mode, C, "$graphLookup">;
     startWith: StartWith;
     connectFromField: ConnectFromField;
     connectToField: ConnectToField;
@@ -577,7 +608,7 @@ export class Pipeline<
   >(
     $unionWith:
       | {
-          coll: C;
+          coll: C & SameDatabaseSource<Mode, C, "$unionWith">;
           pipeline?: PipelineBuilder<
             InferSourceType<C>,
             Foreign,
@@ -586,7 +617,7 @@ export class Pipeline<
           >;
         }
       | {
-          coll: C;
+          coll: C & SameDatabaseSource<Mode, C, "$unionWith">;
           pipeline: PipelineBuilder<
             InferSourceType<C>,
             Foreign,
@@ -700,6 +731,7 @@ export class Pipeline<
    *
    * `db` / `collection` re-target the execution: each pairs a name with its
    * driver options and replaces that layer's inherited name and options.
+   * A pipeline bound to a database (`InDatabase` mode) cannot re-target `db`.
    *
    * @example
    * .execute({ aggregateOptions: { session, maxTimeMS: 5000 } })
@@ -711,7 +743,7 @@ export class Pipeline<
   execute(
     args: {
       client?: MongoClient | undefined;
-      db?: DbConfig | undefined;
+      db?: Mode extends InDatabase<string> ? never : DbConfig | undefined;
       collection?: CollectionConfig | undefined;
       /** Driver `AggregateOptions` (e.g. `session`, `maxTimeMS`, `allowDiskUse`) */
       aggregateOptions?: AggregateOptions | undefined;

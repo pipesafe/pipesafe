@@ -14,7 +14,7 @@ pipesafe/
 │   │   │   ├── pipeline/        # Pipeline - aggregation builder
 │   │   │   ├── stages/          # Pipeline stage implementations (one trio per stage)
 │   │   │   ├── elements/        # Type system building blocks (+ operand kernel)
-│   │   │   ├── collection/      # Collection wrapper
+│   │   │   ├── collection/      # Collection (db-less) + CollectionInDatabase
 │   │   │   ├── source/          # Source interface
 │   │   │   ├── utils/           # errors/strings/objects/paths/dispatch/updates type utilities
 │   │   │   ├── singleton/       # Global pipesafe instance
@@ -110,7 +110,9 @@ Note: The interactive `bun run changeset` command doesn't work in non-TTY enviro
 
 - **Project**: Located in `packages/manifold/src/project/Project.ts`. DAG orchestrator that manages models, resolves dependencies, validates the graph, and executes models in topological order. Models are provided at construction time and validated immediately (immutable after creation). Auto-discovers all dependencies (upstream via `from` and lookup via `lookup`/`unionWith` stages) - just specify leaf models.
 
-- **Source**: Located in `packages/core/src/source/Source.ts`. Unified interface that both `Collection` and `Model` implement, allowing them to be used interchangeably as pipeline sources.
+- **Source**: Located in `packages/core/src/source/Source.ts`. Unified interface that `Collection`, `CollectionInDatabase` and `Model` implement, allowing them to be used interchangeably as pipeline sources. `Source<T, Db>` carries the source's database as a phantom (`__outputDb`): `undefined` resolves in the reading pipeline's database, a literal is checked, `string` is unchecked.
+
+- **Collection / CollectionInDatabase**: `Collection<Docs>` (`collection/Collection.ts`) has no database — a source/join target only. `CollectionInDatabase<Docs, Db>` (from `Database<Db>.collection()`) holds its `Database`, owns the direct driver commands, and its `aggregate()` returns a `Pipeline` in `InDatabase<Db>` mode, where `SameDatabaseSource` (Pipeline.ts) brands joins on a source in a different literal database. Model pipelines (`"model"` mode) require sources with no database; `ModelOutputDb<TMat>` gives a model's literal `materialize.db`.
 
 ### Type System Architecture
 

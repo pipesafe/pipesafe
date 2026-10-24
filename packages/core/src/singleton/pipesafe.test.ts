@@ -53,7 +53,7 @@ describe("Connections", async () => {
       const collection = pipesafe
         .db(DBName)
         .collection<{ test: string }>("my_collection");
-      expect(collection["client"]).toBeDefined();
+      expect(collection.database["client"]).toBeDefined();
     });
 
     it("uses a singleton client for collection aggregations", async () => {

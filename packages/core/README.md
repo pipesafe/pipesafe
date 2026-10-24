@@ -155,9 +155,26 @@ const cursor2 = await pipeline.execute({
 const results2 = await cursor2.toArray();
 ```
 
+## Collections and Databases
+
+There are two kinds of collection:
+
+- `Collection<Docs>` has no database. It is a pipeline source or join target that resolves in whichever database the pipeline runs in (`execute({ db })`, `Project.run({ db })`, else the client's default database).
+- `CollectionInDatabase<Docs, Db>` comes from `Database.collection()` and holds its `Database`. Its pipelines are bound to `Db`, and a join (`lookup`, `graphLookup`, `unionWith`) on a collection in a different database is a compile error, because MongoDB can only join within one database.
+
+A literal database name (`pipesafe.db("app")`) is checked. A `string` name is unchecked and accepted anywhere a database is expected.
+
+```typescript
+const app = pipesafe.db("app");
+const users = app.collection<User>("users");
+
+users.aggregate().lookup({ from: app.collection<Org>("orgs"), ... }); // ok
+users.aggregate().lookup({ from: pipesafe.db("other").collection<Org>("orgs"), ... }); // compile error
+```
+
 ## Collection Commands
 
-`Collection` provides type-safe passthrough methods to all standard MongoDB collection operations:
+`CollectionInDatabase` provides type-safe passthrough methods to all standard MongoDB collection operations:
 
 ```typescript
 import { pipesafe } from "@pipesafe/core";
