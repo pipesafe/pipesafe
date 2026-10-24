@@ -13,9 +13,9 @@
  *     depth comes from chain accumulation, not per-key dotted truncation.
  *
  *   - countStressPipeline — per-unit instantiationCount → 5,000,000 (collapses
- *     the type to `any`). Each stage sets many DISTINCT shallow keys, so the
- *     checker does a huge wide merge with little nesting: count saturates while
- *     depth stays low (~30).
+ *     the type to `any`). A wide `.set()` over a large discriminated-union
+ *     schema: the merge distributes over every member, so count saturates in
+ *     one step while depth stays low (~18) and memory stays under ~0.5 GB.
  *
  *   - tailStressPipeline — tail-recursive conditional elaboration (tailCount).
  *     A deep literal-schema field path drives the tail-recursive `GetFieldType`
@@ -30,12 +30,15 @@ import { resolve } from "node:path";
 // --- Tunables -------------------------------------------------------------
 const DEPTH_STAGES = Number(process.argv[2] ?? 120); // chain length for depth
 const DEPTH_NEST = Number(process.argv[3] ?? 6); // dotted depth per key (< ~10)
-const COUNT_STAGES = Number(process.argv[4] ?? 5); // stages for count
-const COUNT_WIDTH = Number(process.argv[5] ?? 1500); // distinct keys per stage
+const COUNT_STAGES = Number(process.argv[4] ?? 2); // stages for count
+const COUNT_WIDTH = Number(process.argv[5] ?? 120); // distinct keys per stage
 // Field-path segments for tail. 22 is the deepest that still resolves: each
 // segment adds ~1 tailCount and ~4.5 instantiationDepth, so at 23 depth hits the
 // 100 ceiling, the type errors, and tail collapses to 0. 22 → tail 22, depth 99.
 const TAIL_PATH = Number(process.argv[6] ?? 22);
+// Union members in the count schema. Count scales with UNION x WIDTH; 500 x 120
+// trips 5M at the first stage.
+const COUNT_UNION = Number(process.argv[7] ?? 500);
 
 // ---------------------------------------------------------------------------
 
@@ -67,17 +70,20 @@ function depthPipeline(): string[] {
 
 function countPipeline(): string[] {
   const lines = [
-    "type CountSchema = { _id: string; base: string };",
+    `type CountSchema = ${Array.from(
+      { length: COUNT_UNION },
+      (_, i) => `{ _id: string; kind: "k${i}"; base: string; v${i}: number }`
+    ).join(" | ")};`,
     "",
-    "// Each stage sets many DISTINCT shallow keys, forcing a huge wide merge with",
-    "// little nesting — per-unit instantiationCount saturates at 5,000,000 (which",
+    "// A wide $set over a large union schema distributes the merge over every",
+    "// member — per-unit instantiationCount saturates at 5,000,000 (which",
     "// collapses the whole type to `any`) while DEPTH stays low.",
     "export const countStressPipeline = new Pipeline<CountSchema>()",
   ];
   for (let s = 0; s < COUNT_STAGES; s++) {
     const fields = Array.from(
       { length: COUNT_WIDTH },
-      (_, i) => `"s${s}k${i}.a": "$base"`
+      (_, i) => `"s${s}k${i}": "$base"`
     ).join(", ");
     lines.push(`  .set({ ${fields} })`);
   }
@@ -120,5 +126,5 @@ const dest = resolve(
 );
 writeFileSync(dest, out);
 console.log(
-  `Wrote ${dest}\n  depth: ${DEPTH_STAGES} stages x nest ${DEPTH_NEST}\n  count: ${COUNT_STAGES} stages x ${COUNT_WIDTH} keys\n  tail:  path depth ${TAIL_PATH}`
+  `Wrote ${dest}\n  depth: ${DEPTH_STAGES} stages x nest ${DEPTH_NEST}\n  count: ${COUNT_STAGES} stages x ${COUNT_WIDTH} keys over a ${COUNT_UNION}-member union\n  tail:  path depth ${TAIL_PATH}`
 );
