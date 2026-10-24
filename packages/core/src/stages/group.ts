@@ -1,3 +1,4 @@
+import { Timestamp } from "mongodb";
 import { InferNestedFieldReference } from "../elements/fieldReference";
 import {
   UserVariableOperand,
@@ -37,7 +38,7 @@ import {
 import { ExpressionOperand, ReferencesInferringTo } from "../elements/operands";
 
 /** The BSON-comparable values $min/$max are modeled over. */
-type Comparable = number | Date | string | boolean;
+type Comparable = number | Date | Timestamp | string | boolean;
 
 /**
  * The value type each checked accumulator's operand must resolve to — the
@@ -75,7 +76,7 @@ type NumericAccumulatorOperand<
 
 /**
  * Operand for $min/$max. MongoDB defines them over BSON-comparable values —
- * numbers, dates, AND strings (lexicographic) are the ones this library
+ * numbers, dates, timestamps AND strings (lexicographic) are the ones this library
  * models; `$min: "$name"` is valid MongoDB and must compile.
  */
 type MinMaxAccumulatorOperand<
@@ -91,7 +92,7 @@ type MinMaxAccumulatorOperand<
       RequiresMsg<
         "Accumulator",
         Op,
-        "a comparable (number, date, string, or boolean) operand"
+        "a comparable (number, date, timestamp, string, or boolean) operand"
       >
     >
   | NoDollarString
@@ -336,7 +337,7 @@ type ValidateVariableOperand<
 type ValidateAccumulatorValue<
   Schema extends Document,
   A,
-  Vars extends Document = {},
+  Vars extends Document,
 > =
   // Schema-FREE fast-accept: an operand valid against the EMPTY schema is
   // valid against any schema (the ref arms collapse to `never` under `{}`).
@@ -407,12 +408,7 @@ type ValidateAccumulatorValue<
  * yet. Distributes over union-typed values so a union of valid
  * accumulators stays valid.
  */
-type ValidateGroupValue<
-  Schema extends Document,
-  K,
-  V,
-  Vars extends Document = {},
-> =
+type ValidateGroupValue<Schema extends Document, K, V, Vars extends Document> =
   V extends unknown ?
     K extends "_id" ? ValidateNestedValue<Schema, V, Vars>
     : [OperatorKeyOf<V>] extends [never] ? ValidateNestedValue<Schema, V, Vars>

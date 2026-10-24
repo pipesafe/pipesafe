@@ -1,5 +1,4 @@
 import { Document } from "../utils/objects";
-import { RemoveNeverFields } from "../utils/updates";
 import {
   MultiOperatorError,
   PipeSafeError,
@@ -12,6 +11,7 @@ import {
 } from "../utils/dispatch";
 import { ExpressionOperand, ReferencesInferringTo } from "./operands";
 import {
+  ArrayElementValue,
   FieldReference,
   InferFieldReference,
   InferNestedFieldReference,
@@ -244,9 +244,15 @@ export interface ExpressionSpec<Schema extends Document> {
   };
   /** Transforms each element. `in` sees the element bound as `$$this`
    *  (or the `as` name, optional in MongoDB); the result is the inferred
-   *  `in` type lifted to an array — literal-dependent, so no `returns`. */
+   *  `in` type lifted to an array — literal-dependent, so no `returns`.
+   *  Any literal array is an input; the validation walk checks its
+   *  elements. */
   $map: {
-    operand: { input: ArrayOperand<Schema, "$map">; as?: string; in: unknown };
+    operand: {
+      input: ArrayOperand<Schema, "$map"> | readonly unknown[];
+      as?: string;
+      in: unknown;
+    };
   };
   /** Sums numeric values in an array ($group accumulation lives in group.ts). */
   $sum: {
@@ -890,7 +896,7 @@ export type LiteralDependentOps = {
 type UnionArrayElements<
   Schema extends Document,
   Arrays extends readonly unknown[],
-  Vars extends Document = {},
+  Vars extends Document,
 > =
   Arrays extends readonly [infer First, ...infer Rest] ?
     | InferArrayElementType<Schema, First, Vars>
@@ -943,7 +949,7 @@ type InferConditionalOperandValue<
   Schema extends Document,
   Operand,
   SwallowsNull extends boolean,
-  Vars extends Document = {},
+  Vars extends Document,
 > =
   Operand extends null ?
     SwallowsNull extends true ?
@@ -972,13 +978,13 @@ type InferConditionalOperandValue<
 type InferIfNullOperand<
   Schema extends Document,
   Operand,
-  Vars extends Document = {},
+  Vars extends Document,
 > = InferConditionalOperandValue<Schema, Operand, true, Vars>;
 
 type InferCondOperand<
   Schema extends Document,
   Operand,
-  Vars extends Document = {},
+  Vars extends Document,
 > = InferConditionalOperandValue<Schema, Operand, false, Vars>;
 
 /**
@@ -988,7 +994,7 @@ type InferCondOperand<
 type UnionIfNullOperandTypes<
   Schema extends Document,
   Operands extends readonly unknown[],
-  Vars extends Document = {},
+  Vars extends Document,
 > =
   Operands extends readonly [infer First, ...infer Rest] ?
     | (First extends "$$REMOVE" ?
@@ -1015,7 +1021,7 @@ type UnionIfNullOperandTypes<
 type InferDependentExpression<
   Schema extends Document,
   Expr,
-  Vars extends Document = {},
+  Vars extends Document,
 > =
   Expr extends { $concatArrays: infer Arrays } ?
     Arrays extends readonly unknown[] ?
@@ -1030,7 +1036,7 @@ type InferDependentExpression<
     | NullableInput<Schema, ArraySource, Vars>
   : Expr extends { $map: infer MapOperand } ?
     MapOperand extends { input: infer Input; in: infer In } ?
-      | RemoveNeverFields<
+      | ArrayElementValue<
           InferNestedFieldReference<
             Schema,
             In,

@@ -29,8 +29,8 @@ Accurate types for `$$`-system variables and `$let`/`$map`/`$filter` bound varia
   too, `$concat` requires string-RESOLVING variables (`"$$ROOT.name"`
   passes, `"$$NOW"` brands — a real MongoDB runtime error) and accepts
   nested string-returning expressions (`{ $toUpper: "$name" }`), and
-  `$map`/`$filter` inputs keep their array-operand demand for `$`-refs and
-  `$$`-variables.
+  `$map`/`$filter` inputs keep their array-operand demand for `$`-refs,
+  `$$`-variables and `$let` results.
 - Typed operand positions accept system variables by their accurate type
   (`$dateAdd: { startDate: "$$NOW", ... }`, `$map: { input: "$$USER_ROLES" }`,
   `$size: "$$USER_ROLES.role"`), readonly array fields included,
@@ -40,7 +40,8 @@ Accurate types for `$$`-system variables and `$let`/`$map`/`$filter` bound varia
 - `$$REMOVE` drops the field: a `$cond` branch or final `$ifNull` operand of
   `"$$REMOVE"` infers `| undefined`, and a `"$$REMOVE"` value omits its
   field at any depth of `$project`, `$set` and `replaceRoot` objects (`_id`
-  included), array-literal elements and `$map` results.
+  included), array-literal elements and `$map` results. A missing or
+  `"$$REMOVE"` array element infers `null`, as MongoDB stores it.
 - Array literals in expression operands accept any field ref, variable or
   nested expression as an element, and `as const` tuples (`$literal`,
   `$let.vars`, `$cond` branches) infer as arrays rather than objects.
@@ -68,6 +69,7 @@ Accurate types for `$$`-system variables and `$let`/`$map`/`$filter` bound varia
 - `$sum`/`$avg`/`$min`/`$max` type-check `$$`-variable operands against
   their resolved type (`$sum: "$$NOW"` brands; `$sum: "$$ROOT.qty"` passes),
   and the other accumulators reject unknown `$$`-names (`$push: "$$nope"`).
+  `$min`/`$max` accept timestamps (`$max: "$$CLUSTER_TIME"`).
 - A lookup or unionWith sub-pipeline that ends in `.group()` no longer
   fails with "Type instantiation is excessively deep". `Pipeline.group`'s
   return type uses `NoInfer`, so TypeScript 5.4 is the minimum.

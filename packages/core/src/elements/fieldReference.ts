@@ -170,23 +170,31 @@ export type InferNestedFieldReference<
   : Obj; // Handles literals (string, number, boolean, null, undefined, etc.)
 
 /**
+ * An array element as MongoDB stores it: a missing or `$$REMOVE`d value is
+ * null, and `$$REMOVE`d fields of element objects are dropped (no $set
+ * merge reaches inside arrays).
+ */
+export type ArrayElementValue<T> =
+  [T] extends [never] ? null
+  : RemoveNeverFields<undefined extends T ? Exclude<T, undefined> | null : T>;
+
+/**
  * Helper type for resolving field references in arrays
- * Handles both tuple types and regular arrays; `$$REMOVE`d fields of
- * element objects are dropped (no $set merge reaches inside arrays).
+ * Handles both tuple types and regular arrays
  */
 type InferNestedFieldReferenceArray<
   Schema extends Document,
   Arr,
-  Vars extends Document = {},
+  Vars extends Document,
 > =
   Arr extends readonly [] ? []
   : Arr extends readonly [infer First, ...infer Rest] ?
     [
-      RemoveNeverFields<InferNestedFieldReference<Schema, First, Vars>>,
+      ArrayElementValue<InferNestedFieldReference<Schema, First, Vars>>,
       ...InferNestedFieldReferenceArray<Schema, Rest, Vars>,
     ]
   : Arr extends readonly (infer Item)[] ?
-    RemoveNeverFields<InferNestedFieldReference<Schema, Item, Vars>>[]
+    ArrayElementValue<InferNestedFieldReference<Schema, Item, Vars>>[]
   : never;
 
 /**
@@ -196,7 +204,7 @@ type InferNestedFieldReferenceArray<
 type InferNestedFieldReferenceObject<
   Schema extends Document,
   Obj,
-  Vars extends Document = {},
+  Vars extends Document,
 > = Prettify<{
   [K in keyof Obj]: InferNestedFieldReference<Schema, Obj[K], Vars>;
 }>;

@@ -398,6 +398,7 @@ const _group_push_unknown_var = new Pipeline<User>().group({
   // @ts-expect-error  '$$nope' is not a recognized system variable
   all: { $push: "$$nope" },
   root: { $first: "$$ROOT" },
+  latest: { $max: "$$CLUSTER_TIME" },
 });
 
 const _set_let_numeric_name = new Pipeline<User>().set({
@@ -461,6 +462,24 @@ const _set_literal_inputs_ok = new Pipeline<User>().set({
   v: { $map: { input: ["", null, "-"], in: "$$this" } },
   f: { $filter: { input: [" - "], cond: true } },
   t: { $literal: { $map: "placeholder" } },
+});
+
+// Nested $map inputs accept any literal array; a $let input must yield an
+// array.
+const _set_nested_map_inputs_ok = new Pipeline<User>().set({
+  s: { $sum: { $map: { input: [null, 1], as: "e", in: 1 } } },
+  n: { $size: { $map: { input: ["", "a"], in: "$$this" } } },
+  l: { $map: { input: { $let: { vars: {}, in: "$tags" } }, in: "$$this" } },
+});
+
+const _set_let_input_not_array = new Pipeline<User>().set({
+  m: {
+    $map: {
+      // @ts-expect-error  a $let input must resolve to an array
+      input: { $let: { vars: {}, in: "$name" } },
+      in: "$$this",
+    },
+  },
 });
 
 // Generic-schema helpers compile with binders over bound variables (the
@@ -810,6 +829,8 @@ export {
   _set_map_expr_input_bad,
   _set_binder_input_unknown_var,
   _set_user_roles_path_ok,
+  _set_nested_map_inputs_ok,
+  _set_let_input_not_array,
   _set_literal_inputs_ok,
   _set_generic_binder_ok,
   _set_let_bad_var_name,

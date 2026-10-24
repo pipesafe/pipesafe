@@ -202,7 +202,8 @@ const _literalSize = _p
   .set({ n: { $size: "$lit" } });
 
 // Binder element types: literal inputs resolve their elements, a nullable
-// array binds its elements, and array literals stay arrays.
+// array binds its elements, and array literals stay arrays. Missing array
+// elements are null.
 type BindDoc = {
   _id: string;
   name: string;
@@ -233,6 +234,8 @@ const _binders = new Pipeline<BindDoc>().set({
   },
   docs: [{ a: "$name", x: "$$REMOVE" }],
   ifNullFirst: { $ifNull: ["$$REMOVE", "$name"] },
+  holes: ["$$REMOVE", "$tags"],
+  removedEach: { $map: { input: "$tags", in: "$$REMOVE" } },
 });
 type _BindersOutput = Assert<
   Equal<
@@ -250,6 +253,8 @@ type _BindersOutput = Assert<
       mapped: { readonly c: string }[];
       docs: [{ readonly a: string }];
       ifNullFirst: string;
+      holes: [null, string[] | null];
+      removedEach: null[] | null;
     }
   >
 >;

@@ -154,11 +154,7 @@ type ValidateRegisteredExpression<
  * are skipped); any non-`$` string literal passes (separators like " - "
  * that NoDollarString can't cover included). Kernel contract throughout.
  */
-type ValidateConcatValue<
-  Schema extends Document,
-  V,
-  Vars extends Document = {},
-> =
+type ValidateConcatValue<Schema extends Document, V, Vars extends Document> =
   V extends { readonly $concat: infer Arr } ?
     Arr extends readonly unknown[] ?
       true extends (
@@ -183,11 +179,7 @@ type ValidateConcatValue<
     : ExpressionFor<Schema, "$concat"> // non-array operand → expected shape
   : never;
 
-type ValidateConcatElement<
-  Schema extends Document,
-  E,
-  Vars extends Document = {},
-> =
+type ValidateConcatElement<Schema extends Document, E, Vars extends Document> =
   E extends `$${string}` ?
     ValidateRefResolvesTo<
       Schema,
@@ -228,28 +220,29 @@ export type ValidateRefResolvesTo<
   Ref extends `$$${string}` ?
     ValidateVariableReference<Schema, Ref, Vars> extends infer VarErr ?
       [VarErr] extends [never] ?
-        InferVariableReference<Schema, Ref, Vars> extends infer R ?
-          unknown extends R ? never
-          : [NonNullable<R>] extends [T] ? never
-          : Err
-        : never
+        ResolvesTo<InferVariableReference<Schema, Ref, Vars>, T, Err>
       : VarErr
     : never
   : string extends keyof Schema ?
     never // ref resolution is meaningless on a wide/index-signature schema
   : GetFieldTypeWithoutArrays<Schema, WithoutDollar<Ref>> extends infer R ?
-    IsPipeSafeError<R> extends true ? R
-    : unknown extends R ? never
-    : [NonNullable<R>] extends [T] ? never
-    : Err
+    IsPipeSafeError<R> extends true ?
+      R
+    : ResolvesTo<R, T, Err>
   : never;
+
+/** `Err` unless the resolved `R` (nulls aside) is a `T`; opaque types pass. */
+type ResolvesTo<R, T, Err> =
+  unknown extends R ? never
+  : [NonNullable<R>] extends [T] ? never
+  : Err;
 
 /**
  * `$let` interior walk: `vars` values check in the OUTER environment; `in`
  * with the block's bindings layered on (BindLetVars — the same environment
  * inference binds). Malformed shapes get the registry's expected shape.
  */
-type ValidateLetValue<Schema extends Document, V, Vars extends Document = {}> =
+type ValidateLetValue<Schema extends Document, V, Vars extends Document> =
   V extends { $let: { vars: infer LetVars extends object; in: infer In } } ?
     ValidateBindings<Schema, LetVars, Vars> extends infer VarsErr ?
       ValidateNestedValue<
@@ -315,7 +308,7 @@ type ValidateArrayInputValue<
   Schema extends Document,
   Input,
   Op extends "$map" | "$filter",
-  Vars extends Document = {},
+  Vars extends Document,
 > =
   Input extends `$${string}` ?
     ValidateRefResolvesTo<
@@ -330,9 +323,19 @@ type ValidateArrayInputValue<
   Input extends (
     | { $map: { input: string | readonly unknown[] } }
     | { $filter: { input: string | readonly unknown[] } }
-    | { $let: unknown }
   ) ?
     ValidateExpressionValue<Schema, Input, Vars>
+  : // `$let` declares no result type, so its inferred result must be an array.
+  Input extends { $let: unknown } ?
+    ValidateExpressionValue<Schema, Input, Vars> extends infer E ?
+      [E] extends [never] ?
+        ResolvesTo<
+          InferExpression<Schema, Input, Vars>,
+          readonly unknown[],
+          PipeSafeError<RequiresMsg<"Operator", Op, "an array operand">>
+        >
+      : E
+    : never
   : // A literal array is walked element-wise: any element the walk accepts
   // is valid ("" and null included, which the relation can't express).
   Input extends readonly unknown[] ? ValidateNestedValue<Schema, Input, Vars>
@@ -403,7 +406,7 @@ type ValidateBinderValue<
   Schema extends Document,
   V,
   Op extends keyof BinderBodyKey,
-  Vars extends Document = {},
+  Vars extends Document,
   Body extends string = BinderBodyKey[Op],
 > =
   V extends Record<Op, infer Operand> ?
@@ -600,11 +603,7 @@ export type ValidateNestedRecord<
  * key is filtered out by the wrapper). The double `ValidateNestedValue`
  * spelling per child is an alias-cache hit, not a recomputation.
  */
-type ValidateObjectValue<
-  Schema extends Document,
-  V,
-  Vars extends Document = {},
-> =
+type ValidateObjectValue<Schema extends Document, V, Vars extends Document> =
   true extends (
     {
       [K in keyof V]: [ValidateNestedValue<Schema, V[K], Vars>] extends (
@@ -631,7 +630,7 @@ type ValidateObjectValue<
 type ValidateArrayValue<
   Schema extends Document,
   V extends readonly unknown[],
-  Vars extends Document = {},
+  Vars extends Document,
 > =
   true extends (
     {

@@ -34,7 +34,7 @@ import { InferVariableReference, ReferenceValue } from "../elements/variables";
  * - Nested reshaping: { nested: { a: "$field1", b: "$field2" } }
  */
 // The value union for a $project assignment.
-type ProjectValue<Schema extends Document, Vars extends Document = {}> =
+type ProjectValue<Schema extends Document, Vars extends Document> =
   // Inclusion/exclusion flags (1/0/true/false). `number | boolean` IS the
   // literal set: TS normalizes `1 | 0 | number` to `number` and
   // `true | false` to `boolean` at union creation, so spelling the
@@ -129,7 +129,7 @@ type ValidateProjectKey<
   Schema extends Document,
   P,
   K extends keyof P,
-  Vars extends Document = {},
+  Vars extends Document,
 > =
   [P[K]] extends [number | boolean] ?
     string extends keyof Schema ?
@@ -141,7 +141,7 @@ type ValidateProjectKey<
 type ValidateProjectQueryKeys<
   Schema extends Document,
   P,
-  Vars extends Document = {},
+  Vars extends Document,
 > = OmitNeverValues<{
   [K in keyof P]: ValidateProjectKey<Schema, P, K, Vars>;
 }>;
@@ -199,7 +199,7 @@ type ResolveFieldValue<
   Schema extends Document,
   Value,
   Key extends string,
-  Vars extends Document = {},
+  Vars extends Document,
 > =
   Value extends 0 | false ?
     // Exclusion - return never (field is excluded). Intentional: `never`
@@ -297,7 +297,7 @@ type DropsField = 0 | false | "$$REMOVE";
 type ResolveInclusionMode<
   Schema extends Document,
   Query,
-  Vars extends Document = {},
+  Vars extends Document,
 > = Prettify<
   DeepMergeProjection<
     MergeNested<
@@ -331,7 +331,7 @@ type ResolveInclusionMode<
 type ResolveExclusionMode<
   Schema extends Document,
   Query,
-  Vars extends Document = {},
+  Vars extends Document,
 > = Prettify<
   {
     // Always include _id unless explicitly excluded (only if _id exists in schema)

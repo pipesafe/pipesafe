@@ -106,9 +106,10 @@ before touching any Query/operand union.
   member of ArrayProducingExpression (hence of every ArrayOperand), and
   walking the registry's own `$filter` shape re-enters its `input` forever
   (TS2589 on unrelated `.set()` call sites). Only a binder-shaped input
-  whose own `input` is a string or literal array (and `$let`), or an input
-  that references a user variable, is routed to a walk; those guards are
-  what exclude the registry shape.
+  whose own `input` is a string or literal array (and `$let`, whose
+  inferred result must be an array), or an input that references a user
+  variable, is routed to a walk; those guards are what exclude the
+  registry shape.
 - Registry binder bodies (`in`/`cond`) are `unknown`, so the relation
   passes ANY value nesting a binder. `ValidateNestedBinders` walks such
   values BEFORE the relation, gated on `ContainsBinder`. Do NOT move it
