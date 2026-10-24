@@ -1,31 +1,23 @@
 pre-commit:
-  # Piped, in this order: type-aware lint reads core's dist, so it must run
-  # after the build rather than alongside it (a missing or half-written dist
-  # turns every cross-package type into `error`). Formatting goes first so the
-  # build and lint see the files as they will be committed.
+  # Lint is type-aware and reads core's dist, so it runs after the build.
   piped: true
-  commands:
-    format:
-      priority: 1
+  jobs:
+    - name: format
       run: bun run format:fix
       stage_fixed: true
-    build:
-      priority: 2
+    - name: build
       run: bun run build
       stage_fixed: true
-    # Checks, does not fix. `oxlint --fix` applies fixes to violations that
-    # `oxlint-suppressions.json` suppresses, so running it here would rewrite
-    # the code the suppressions exist to defer — including collapsing the
-    # `x as T` in the *.typeAssertions.ts files, which is the whole point of
-    # those files. Run `bun run lint:fix` by hand, deliberately, and read the
-    # diff.
-    lint:
-      priority: 3
-      run: bun run lint
-    test:
-      priority: 4
-      run: bun run test:ci
-      stage_fixed: true
+    - group:
+        parallel: true
+        jobs:
+          # Check only: `oxlint --fix` also rewrites suppressed findings,
+          # including the `as T` pins in *.typeAssertions.ts.
+          - name: lint
+            run: bun run lint
+          - name: test
+            run: bun run test:ci
+            stage_fixed: true
 
 # The assertion regression net (two full tsc passes) runs before anything
 # leaves the machine rather than on every commit — CI enforces it too.
