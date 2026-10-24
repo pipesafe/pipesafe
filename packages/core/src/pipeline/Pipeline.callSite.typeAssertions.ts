@@ -435,6 +435,22 @@ const _set_user_roles_path_ok = new Pipeline<User>().set({
   n: { $size: "$$USER_ROLES.role" },
 });
 
+// Literal-array inputs are walked element-wise ("" and null are valid
+// elements), and `$literal` content is data, not a binder.
+const _set_literal_inputs_ok = new Pipeline<User>().set({
+  v: { $map: { input: ["", null, "-"], in: "$$this" } },
+  f: { $filter: { input: [" - "], cond: true } },
+  t: { $literal: { $map: "placeholder" } },
+});
+
+// Generic-schema helpers compile with binders over bound variables (the
+// user-variable walk runs ahead of the deferred schema-dependent arms).
+const _set_generic_binder_ok = <D extends Document>(p: Pipeline<D, D>): void =>
+  void p.set({
+    x: { $let: { vars: { a: 1 }, in: { $add: ["$$a", 1] } } },
+    y: { $map: { input: [1, 2], as: "v", in: { $add: ["$$v", 1] } } },
+  });
+
 const _set_map_bad_as_name = new Pipeline<User>().set({
   t: {
     // @ts-expect-error  '_t' is not a valid user variable name
@@ -772,6 +788,8 @@ export {
   _set_map_expr_input_bad,
   _set_binder_input_unknown_var,
   _set_user_roles_path_ok,
+  _set_literal_inputs_ok,
+  _set_generic_binder_ok,
   _set_let_bad_var_name,
   _set_map_bad_as_name,
   _set_filter_bad_cond_var,

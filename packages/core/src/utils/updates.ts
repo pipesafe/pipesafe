@@ -122,7 +122,7 @@ type MergeSetValue<BaseValue, UpdateValue> =
 // Handles both required never fields and optional never fields (never | undefined)
 // Recursively removes never fields from nested objects, with early exits for
 // arrays and non-object types.
-type RemoveNeverFields<T> =
+export type RemoveNeverFields<T> =
   T extends object ?
     T extends readonly unknown[] ?
       T // Early exit: arrays are preserved as-is

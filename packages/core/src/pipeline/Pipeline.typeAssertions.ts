@@ -185,6 +185,15 @@ type _RemoveDeepOutput = Assert<
     { name: string; deep: { readonly mid: { readonly kept: string } } }
   >
 >;
+const _rootRemove = _p.replaceRoot({
+  newRoot: { a: "$$REMOVE", b: { c: "$$REMOVE", d: "$name" } },
+});
+type _RootRemoveOutput = Assert<
+  Equal<
+    InferOutputType<typeof _rootRemove>,
+    { readonly b: { readonly d: string } }
+  >
+>;
 const _emptyRoot = _p.replaceRoot({ newRoot: {} });
 type _EmptyRootOutput = Assert<Equal<InferOutputType<typeof _emptyRoot>, {}>>;
 
@@ -195,8 +204,16 @@ type BindDoc = {
   name: string;
   home: { city: string };
   work: { city: string };
+  profile: { email: string; age: number };
   tags?: string[];
 };
+// A nested `$$REMOVE` in $set removes the existing embedded field.
+const _setNestedRemove = new Pipeline<BindDoc>().set({
+  profile: { email: "$$REMOVE" },
+});
+type _SetNestedRemoveOutput = Assert<
+  Equal<InferOutputType<typeof _setNestedRemove>["profile"], { age: number }>
+>;
 const _binders = new Pipeline<BindDoc>().set({
   cities: { $map: { input: ["$home", "$work"], as: "a", in: "$$a.city" } },
   names: { $map: { input: ["$name", "$name"], in: "$$this" } },
@@ -255,6 +272,8 @@ export {
   _condRemove,
   _projectRemove,
   _removeDeep,
+  _rootRemove,
+  _setNestedRemove,
   _emptyRoot,
   _binders,
   _setThenSet,
@@ -328,6 +347,8 @@ export type {
   _CondRemoveOutput,
   _ProjectRemoveOutput,
   _RemoveDeepOutput,
+  _RootRemoveOutput,
+  _SetNestedRemoveOutput,
   _EmptyRootOutput,
   _BindersOutput,
   _MatchPassthrough,

@@ -189,14 +189,12 @@ type InferNestedFieldReferenceArray<
 
 /**
  * Helper type for resolving field references in objects
- * Preserves object structure while resolving any field references; a
- * `"$$REMOVE"` value omits its field, as in MongoDB.
+ * Preserves object structure while resolving any field references
  */
 type InferNestedFieldReferenceObject<
   Schema extends Document,
   Obj,
   Vars extends Document = {},
 > = Prettify<{
-  [K in keyof Obj as Obj[K] extends "$$REMOVE" ? never
-  : K]: InferNestedFieldReference<Schema, Obj[K], Vars>;
+  [K in keyof Obj]: InferNestedFieldReference<Schema, Obj[K], Vars>;
 }>;

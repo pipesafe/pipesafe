@@ -9,6 +9,7 @@ import {
 import { PassThrough, PipeSafeError, UnknownFieldError } from "../utils/errors";
 import { HasOperatorKey } from "../utils/dispatch";
 import { ExpandDottedKey, IsDottedKey } from "../utils/paths";
+import { RemoveNeverFields } from "../utils/updates";
 import { NoDollarString, WithoutDollar } from "../utils/strings";
 import {
   GetFieldTypeWithoutArrays,
@@ -225,8 +226,8 @@ type ResolveFieldValue<
     // $-keyed object = expression
     InferExpression<Schema, Value, Vars>
   : Value extends Document ?
-    // Nested object - recursively resolve field references and expressions within it
-    InferNestedFieldReference<Schema, Value, Vars>
+    // Nested object: resolve, then drop `$$REMOVE`d (never-valued) fields
+    RemoveNeverFields<InferNestedFieldReference<Schema, Value, Vars>>
   : [Value] extends [string] ?
     Value // plain-string literal assignment (valid MongoDB; $-refs handled above)
   : PipeSafeError<`Stage '$project' requires a valid projection value for field '${Key}'.`>;

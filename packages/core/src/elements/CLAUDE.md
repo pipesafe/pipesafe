@@ -96,15 +96,19 @@ before touching any Query/operand union.
   until TS's depth limiter (TS2589 at every lookup-let sub-pipeline
   stage). The user-variable scan is non-distributive for the same reason:
   TS instantiates it with the registry's recursive operand unions while
-  contextually typing a call.
-- ValidateArrayInputValue's non-`$`-string arm RELATES against the
-  registry's input operand; do NOT "improve" it into a ValidateNestedValue
-  re-entry — `$filter` is a member of ArrayProducingExpression (hence of
-  every ArrayOperand), and walking the registry's own `$filter` shape
-  re-enters its `input` forever (TS2589 on unrelated `.set()` call sites).
-  Only a binder-shaped input whose own `input` is a string or literal
-  array (and `$let`) is routed to its interior walk; that guard is what
-  excludes the registry shape.
+  contextually typing a call. The user-variable gate sits AHEAD of the
+  `string extends keyof Schema` guard and the schema relation: both stay
+  deferred for a generic schema, which would reject generic helpers that
+  use bound variables.
+- ValidateArrayInputValue walks literal arrays element-wise, but an
+  expression input RELATES against the registry's input operand; do NOT
+  "improve" that into a ValidateNestedValue re-entry — `$filter` is a
+  member of ArrayProducingExpression (hence of every ArrayOperand), and
+  walking the registry's own `$filter` shape re-enters its `input` forever
+  (TS2589 on unrelated `.set()` call sites). Only a binder-shaped input
+  whose own `input` is a string or literal array (and `$let`), or an input
+  that references a user variable, is routed to a walk; those guards are
+  what exclude the registry shape.
 - Registry binder bodies (`in`/`cond`) are `unknown`, so the relation
   passes ANY value nesting a binder. `ValidateNestedBinders` walks such
   values BEFORE the relation, gated on `ContainsBinder`. Do NOT move it

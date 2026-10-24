@@ -133,17 +133,18 @@ type ValidateRegisteredExpression<
   // fast-accepts are ALSO the wide-shape cycle breaker for the binder
   // walk below (see elements/CLAUDE.md).
   [V] extends [ExpressionFor<{}, OperatorKeyOf<V>>] ? never
+  : // The relation is Vars-blind, so user `$$vars` fail it: an operand
+  // that references one gets the ref/variable/operator-name walk instead.
+  // Ahead of the schema-dependent arms, which stay deferred for
+  // generic-schema helpers.
+  UserVariableOperand<Vars, V> extends true ?
+    ValidateOperandTree<Schema, V, OperatorKeyOf<V>, Vars>
   : string extends keyof Schema ?
     never // schema-dependent operand check is meaningless on a wide schema
   : // Readonly-tolerant WITHOUT per-literal transformation: the
   // registry's operand array positions are `readonly`, so mutable and
   // `as const` operands both relate directly.
   [V] extends [ExpressionFor<Schema, OperatorKeyOf<V>>] ? never
-  : // The relation is Vars-blind, so user `$$vars` fail it: only an
-  // operand that references one falls back to the
-  // ref/variable/operator-name walk.
-  UserVariableOperand<Vars, V> extends true ?
-    ValidateOperandTree<Schema, V, OperatorKeyOf<V>, Vars>
   : ExpressionFor<Schema, OperatorKeyOf<V>>;
 
 /**
@@ -332,18 +333,21 @@ type ValidateArrayInputValue<
     | { $let: unknown }
   ) ?
     ValidateExpressionValue<Schema, Input, Vars>
+  : // A literal array is walked element-wise: any element the walk accepts
+  // is valid ("" and null included, which the relation can't express).
+  Input extends readonly unknown[] ? ValidateNestedValue<Schema, Input, Vars>
   : ValidateNestedBinders<Schema, Input, Vars> extends infer B ?
     [B] extends [never] ?
       // Schema-FREE fast-accept (mirrors ValidateExpressionValue's):
       // resolves for generic-schema helpers and skips the Schema operand
       // types for literal inputs.
       [Input] extends [RegistryArrayInputOperand<{}, Op>] ? never
-      : string extends keyof Schema ?
-        never // operand checks are meaningless on a wide/index-signature schema
-      : [Input] extends [RegistryArrayInputOperand<Schema, Op>] ? never
       : // The relation is Vars-blind; a user variable fails it.
       UserVariableOperand<Vars, Input> extends true ?
         ValidateNestedValue<Schema, Input, Vars>
+      : string extends keyof Schema ?
+        never // operand checks are meaningless on a wide/index-signature schema
+      : [Input] extends [RegistryArrayInputOperand<Schema, Op>] ? never
       : PipeSafeError<RequiresMsg<"Operator", Op, "an array operand">>
     : B
   : never;
@@ -454,19 +458,18 @@ export type UserVariableOperand<Vars extends Document, V> =
 /**
  * Binders NESTED in a value: the registry relation passes a binder's
  * `unknown`-typed interior vacuously, so they are walked before it. A
- * binder-keyed value itself is left to the binder dispatch.
+ * binder-keyed value itself is left to the binder dispatch, and a
+ * `$literal` operand is data.
  */
 export type ValidateNestedBinders<
   Schema extends Document,
   V,
   Vars extends Document,
 > =
-  HasOperatorKey<V> extends true ?
-    [OperatorKeyOf<V>] extends [BinderOp] ? never
-    : ContainsBinder<V[OperatorKeyOf<V> & keyof V]> extends true ?
-      ValidateOperandTree<Schema, V, OperatorKeyOf<V>, Vars>
-    : never
-  : ContainsBinder<V> extends true ? ValidateNestedValue<Schema, V, Vars>
+  // `never` (no operator key) also lands in the first arm.
+  [OperatorKeyOf<V>] extends [BinderOp | "$literal"] ? never
+  : ContainsBinder<V[OperatorKeyOf<V> & keyof V]> extends true ?
+    ValidateOperandTree<Schema, V, OperatorKeyOf<V>, Vars>
   : never;
 
 export const BINDER_OPERATORS = [

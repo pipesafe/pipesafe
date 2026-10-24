@@ -3,6 +3,7 @@ import { Expression } from "../elements/expressions";
 import { AnyLiteral } from "../elements/literals";
 import { ReferenceValue } from "../elements/variables";
 import { Document, Prettify } from "../utils/objects";
+import { RemoveNeverFields } from "../utils/updates";
 import { PassThrough } from "../utils/errors";
 
 /**
@@ -49,6 +50,8 @@ export type ResolveReplaceRootOutput<
       [NewRoot] extends [Record<string, never>] ?
         {}
       : Document
-    : Prettify<InferNestedFieldReference<Schema, NewRoot, Vars>>
+    : Prettify<
+        RemoveNeverFields<InferNestedFieldReference<Schema, NewRoot, Vars>>
+      >
   : never
 >;
