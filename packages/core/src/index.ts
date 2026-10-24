@@ -10,18 +10,21 @@ export { pipesafe } from "./singleton/pipesafe";
 export { tagClient } from "./singleton/tagClient";
 export { Pipeline } from "./pipeline/Pipeline";
 export { Collection } from "./collection/Collection";
+export { CollectionInDatabase } from "./collection/CollectionInDatabase";
+export { Database } from "./database/Database";
 
 // Type inference helpers
 export type {
   InferOutputType,
   LookupMode,
+  InDatabase,
   PipelineBuilder,
   LookupAllowedStages,
   UnionWithAllowedStages,
   FacetAllowedStages,
 } from "./pipeline/Pipeline";
 export type { InferCollectionType } from "./collection/Collection";
-export type { Source, InferSourceType } from "./source/Source";
+export type { Source, InferSourceType, InferSourceDb } from "./source/Source";
 export type { DbConfig, CollectionConfig } from "./database/config";
 export type { Document, Prettify } from "./utils/objects";
 export type {

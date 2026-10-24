@@ -1,292 +1,57 @@
-import {
-  MongoClient,
-  Collection as MongoCollection,
-  Filter,
-  UpdateFilter,
-  DeleteOptions,
-  UpdateOptions,
-  InsertOneOptions,
-  BulkWriteOptions,
-  ReplaceOptions,
-  FindOptions,
-  OptionalUnlessRequiredId,
-  WithoutId,
-  AnyBulkWriteOperation,
-  CountDocumentsOptions,
-  EstimatedDocumentCountOptions,
-  FindOneAndUpdateOptions,
-  FindOneAndDeleteOptions,
-  FindOneAndReplaceOptions,
-  DistinctOptions,
-  IndexSpecification,
-  CreateIndexesOptions,
-  IndexDescription,
-  DropIndexesOptions,
-  ListIndexesOptions,
-  CreateCollectionOptions,
-  DropCollectionOptions,
-} from "mongodb";
+import { MongoClient } from "mongodb";
 import { Pipeline } from "../pipeline/Pipeline";
-import type { CollectionConfig, DbConfig } from "../database/config";
+import type { CollectionConfig } from "../database/config";
 import { Document } from "../utils/objects";
-import { pipesafe } from "../singleton/pipesafe";
 import { tagClient } from "../singleton/tagClient";
 import { Source } from "../source/Source";
+import type { CollectionInDatabase } from "./CollectionInDatabase";
 
-export class Collection<Docs extends Document> implements Source<Docs> {
+/**
+ * A collection with no database: a pipeline source or join target that
+ * resolves in whichever database the pipeline runs in (`execute({ db })`,
+ * `Project.run({ db })`, else the client's default database).
+ *
+ * For direct driver commands, use `Database.collection()`.
+ */
+export class Collection<Docs extends Document> implements Source<
+  Docs,
+  undefined
+> {
   readonly sourceType = "collection" as const;
 
   /** @internal Phantom type for inference */
   readonly __outputType!: Docs;
+  /** @internal Phantom database name: none */
+  readonly __outputDb!: undefined;
 
   private client: MongoClient | undefined;
-  private db: DbConfig | undefined;
   private collection: CollectionConfig;
 
   constructor(args: {
     client?: MongoClient | undefined;
-    db?: DbConfig | undefined;
     collection: CollectionConfig;
   }) {
     this.client = args.client;
-    this.db = args.db;
     this.collection = args.collection;
     tagClient(this.client);
   }
 
-  // Accessors
-
   getCollectionName(): string {
     return this.collection.name;
-  }
-
-  getOutputDb(): DbConfig | undefined {
-    return this.db;
   }
 
   getOutputCollection(): CollectionConfig {
     return this.collection;
   }
 
-  private getClient() {
-    const client = this.client ?? pipesafe.client;
-    if (!client) {
-      throw new Error(
-        "No client available. Either pass a client to Collection or connect via pipesafe.connect()"
-      );
-    }
-    return client;
-  }
-
-  private getDatabase() {
-    const client = this.getClient();
-    return client.db(this.db?.name, this.db?.options);
-  }
-
-  private getCollection(): MongoCollection<Docs> {
-    return this.getDatabase().collection<Docs>(
-      this.collection.name,
-      this.collection.options
-    );
-  }
-
-  // Aggregation
-
   aggregate(): Pipeline<Docs, Docs> {
     return new Pipeline<Docs, Docs>({
       client: this.client,
-      db: this.db,
       collection: this.collection,
     });
   }
-
-  // Query
-
-  find(filter?: Filter<Docs>, options?: FindOptions) {
-    const collection = this.getCollection();
-    return collection.find(filter || {}, options);
-  }
-
-  async findOne(filter?: Filter<Docs>, options?: FindOptions) {
-    const collection = this.getCollection();
-    return collection.findOne(filter || {}, options);
-  }
-
-  // Insert
-
-  async insertOne(
-    doc: OptionalUnlessRequiredId<Docs>,
-    options?: InsertOneOptions
-  ) {
-    const collection = this.getCollection();
-    return collection.insertOne(doc, options);
-  }
-
-  async insertMany(
-    docs: OptionalUnlessRequiredId<Docs>[],
-    options?: BulkWriteOptions
-  ) {
-    const collection = this.getCollection();
-    return collection.insertMany(docs, options);
-  }
-
-  // Update
-
-  async updateOne(
-    filter: Filter<Docs>,
-    update: UpdateFilter<Docs>,
-    options?: UpdateOptions
-  ) {
-    const collection = this.getCollection();
-    return collection.updateOne(filter, update, options);
-  }
-
-  async updateMany(
-    filter: Filter<Docs>,
-    update: UpdateFilter<Docs>,
-    options?: UpdateOptions
-  ) {
-    const collection = this.getCollection();
-    return collection.updateMany(filter, update, options);
-  }
-
-  async replaceOne(
-    filter: Filter<Docs>,
-    replacement: WithoutId<Docs>,
-    options?: ReplaceOptions
-  ) {
-    const collection = this.getCollection();
-    return collection.replaceOne(filter, replacement, options);
-  }
-
-  // Delete
-
-  async deleteOne(filter?: Filter<Docs>, options?: DeleteOptions) {
-    const collection = this.getCollection();
-    return collection.deleteOne(filter || {}, options);
-  }
-
-  async deleteMany(filter?: Filter<Docs>, options?: DeleteOptions) {
-    const collection = this.getCollection();
-    return collection.deleteMany(filter || {}, options);
-  }
-
-  // Find and Modify
-
-  async findOneAndUpdate(
-    filter: Filter<Docs>,
-    update: UpdateFilter<Docs>,
-    options?: FindOneAndUpdateOptions
-  ) {
-    const collection = this.getCollection();
-    return collection.findOneAndUpdate(filter, update, options ?? {});
-  }
-
-  async findOneAndReplace(
-    filter: Filter<Docs>,
-    replacement: WithoutId<Docs>,
-    options?: FindOneAndReplaceOptions
-  ) {
-    const collection = this.getCollection();
-    return collection.findOneAndReplace(filter, replacement, options ?? {});
-  }
-
-  async findOneAndDelete(
-    filter: Filter<Docs>,
-    options?: FindOneAndDeleteOptions
-  ) {
-    const collection = this.getCollection();
-    return collection.findOneAndDelete(filter, options ?? {});
-  }
-
-  // Bulk Operations
-
-  async bulkWrite(
-    operations: AnyBulkWriteOperation<Docs>[],
-    options?: BulkWriteOptions
-  ) {
-    const collection = this.getCollection();
-    return collection.bulkWrite(operations, options);
-  }
-
-  // Count and Distinct
-
-  async countDocuments(filter?: Filter<Docs>, options?: CountDocumentsOptions) {
-    const collection = this.getCollection();
-    return collection.countDocuments(filter, options);
-  }
-
-  async estimatedDocumentCount(options?: EstimatedDocumentCountOptions) {
-    const collection = this.getCollection();
-    return collection.estimatedDocumentCount(options);
-  }
-
-  async distinct<Key extends keyof Docs>(
-    key: Key,
-    filter?: Filter<Docs>,
-    options?: DistinctOptions
-  ) {
-    const collection = this.getCollection();
-    return collection.distinct(key as string, filter ?? {}, options ?? {});
-  }
-
-  // Index Management
-
-  async createIndex(
-    indexSpec: IndexSpecification,
-    options?: CreateIndexesOptions
-  ) {
-    const collection = this.getCollection();
-    return collection.createIndex(indexSpec, options);
-  }
-
-  async createIndexes(
-    indexSpecs: IndexDescription[],
-    options?: CreateIndexesOptions
-  ) {
-    const collection = this.getCollection();
-    return collection.createIndexes(indexSpecs, options);
-  }
-
-  async dropIndex(indexName: string, options?: DropIndexesOptions) {
-    const collection = this.getCollection();
-    return collection.dropIndex(indexName, options);
-  }
-
-  async dropIndexes(options?: DropIndexesOptions) {
-    const collection = this.getCollection();
-    return collection.dropIndexes(options);
-  }
-
-  listIndexes(options?: ListIndexesOptions) {
-    const collection = this.getCollection();
-    return collection.listIndexes(options);
-  }
-
-  async indexExists(indexes: string | string[], options?: ListIndexesOptions) {
-    const collection = this.getCollection();
-    return collection.indexExists(indexes, options);
-  }
-
-  async indexes(options?: ListIndexesOptions) {
-    const collection = this.getCollection();
-    return collection.indexes(options);
-  }
-
-  // Collection Management
-
-  async createCollection(options?: CreateCollectionOptions) {
-    return this.getDatabase().createCollection<Docs>(
-      this.collection.name,
-      options
-    );
-  }
-
-  async drop(options?: DropCollectionOptions) {
-    const collection = this.getCollection();
-    return collection.drop(options);
-  }
 }
 
-export type InferCollectionType<C extends Collection<any>> =
-  C extends Collection<infer Docs> ? Docs : never;
+export type InferCollectionType<
+  C extends Collection<any> | CollectionInDatabase<any, any>,
+> = C extends { __outputType: infer Docs } ? Docs : never;

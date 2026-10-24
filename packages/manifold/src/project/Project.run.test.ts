@@ -439,74 +439,41 @@ describe("Project.run()", async () => {
       ).toBe(2);
     });
 
-    it("rejects a view in another db before running any model", async () => {
-      const stagingSpy = vi.fn();
-      const crossDbView = new Model({
-        name: "cross_db_view",
-        from: new Collection<RawDoc>({
-          db: { name: "raw_source_db" },
-          collection: { name: "raw_docs" },
-        }),
-        pipeline: (p) => p.match({ active: true }),
-        materialize: { type: "view" },
-      });
-
-      await expect(
-        new Project({
-          name: "cross_db_view_project",
-          models: [stagingModel, crossDbView],
-        }).run({
-          client,
-          db: { name: client.db().databaseName },
-          onModelStart: stagingSpy,
-        })
-      ).rejects.toThrow(
-        "View 'cross_db_view' must be in its source's database 'raw_source_db'"
-      );
-      expect(stagingSpy).not.toHaveBeenCalled();
-    });
-
-    it("writes model outputs where downstream models read them", async () => {
-      const rawDb = client.db("raw_source_db");
-      await rawDb.collection<RawDoc>("raw_docs").insertMany(sampleDocs);
-
-      const rawSource = new Collection<RawDoc>({
-        db: { name: "raw_source_db" },
-        collection: { name: "raw_docs" },
-      });
-      const staging = new Model({
-        name: "staging_xdb",
-        from: rawSource,
-        pipeline: (p) => p.match({ active: true }),
-        materialize: { type: "collection", mode: Model.Mode.Replace },
-      });
-      const downstream = new Model({
-        name: "downstream_xdb",
-        from: staging,
-        pipeline: (p) => p.match({}),
-        materialize: { type: "collection", mode: Model.Mode.Replace },
-      });
-
+    it("writes a model's output to its materialize.db, reading the run's db", async () => {
       const db = client.db();
+      await db.collection<RawDoc>("raw_docs").insertMany(sampleDocs);
+
+      const exported = new Model({
+        name: "exported_xdb",
+        from: sourceCollection,
+        pipeline: (p) => p.match({ active: true }),
+        materialize: {
+          type: "collection",
+          db: "export_db",
+          mode: Model.Mode.Replace,
+        },
+      });
+
       const result = await new Project({
         name: "xdb_project",
-        models: [downstream],
+        models: [exported],
       }).run({ client, db: { name: db.databaseName } });
 
       expect(result.success).toBe(true);
-      expect(await db.collection("staging_xdb").countDocuments()).toBe(2);
-      expect(await db.collection("downstream_xdb").countDocuments()).toBe(2);
+      expect(
+        await client.db("export_db").collection("exported_xdb").countDocuments()
+      ).toBe(2);
+      expect(await db.collection("exported_xdb").countDocuments()).toBe(0);
     });
   });
 
   describe("source driver options", () => {
-    it("honors the source Collection's db/collection options when reading", async () => {
+    it("honors the run's db options and the source's collection options when reading", async () => {
       const db = client.db();
       await db.collection<RawDoc>("raw_docs_opts").insertMany(sampleDocs);
 
       const majority = new ReadConcern("majority");
       const optionedSource = new Collection<RawDoc>({
-        db: { name: db.databaseName, options: { readConcern: majority } },
         collection: {
           name: "raw_docs_opts",
           options: { readPreference: "secondaryPreferred" },
@@ -528,12 +495,10 @@ describe("Project.run()", async () => {
       try {
         const result = await project.run({
           client,
-          db: { name: db.databaseName },
+          db: { name: db.databaseName, options: { readConcern: majority } },
         });
 
         expect(result.success).toBe(true);
-        // The source read resolves the db/collection with the options the
-        // Collection was configured with — same as aggregate().execute()
         expect(dbSpy).toHaveBeenCalledWith(db.databaseName, {
           readConcern: majority,
         });

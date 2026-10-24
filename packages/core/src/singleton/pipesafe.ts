@@ -40,10 +40,20 @@ class PipeSafe {
     this.client = undefined;
   }
 
-  db(databaseName?: string | undefined, options?: DbOptions): Database {
-    const dbName = databaseName ?? this.client?.db().databaseName;
+  /**
+   * A literal `databaseName` is checked at compile time: its collections'
+   * pipelines can only join sources in the same database. A `string` (or
+   * omitted, for the client's default database) is unchecked.
+   */
+  db<const Db extends string = string>(
+    databaseName?: Db | undefined,
+    options?: DbOptions
+  ): Database<Db> {
+    const dbName = (databaseName ?? this.client?.db().databaseName) as
+      | Db
+      | undefined;
     if (!dbName) throw new Error("Db name required");
-    return new Database({
+    return new Database<Db>({
       client: this.client,
       db: { name: dbName, options },
     });

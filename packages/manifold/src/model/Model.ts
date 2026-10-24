@@ -62,7 +62,11 @@ export type CollectionMode<TOutput extends Document> =
  * Materialization configuration.
  */
 export type MaterializeConfig<TOutput extends Document = Document> =
-  | { type: "view"; db?: string }
+  | {
+      type: "view";
+      /** Views live in their source's database: the run's database */
+      db?: never;
+    }
   | {
       type: "collection";
       db?: string;
@@ -75,6 +79,15 @@ export type MaterializeConfig<TOutput extends Document = Document> =
 // ============================================================================
 
 /**
+ * The database a model's output lives in: its literal `materialize.db`,
+ * `undefined` for the run's database, or `string` when not a literal.
+ */
+export type ModelOutputDb<TMaterializeConfig> =
+  TMaterializeConfig extends { db: infer Db extends string } ? Db
+  : TMaterializeConfig extends { db?: infer Db extends string } ? Db | undefined
+  : undefined;
+
+/**
  * Model configuration - source can be a collection OR another model.
  * When source is a model, this creates an implicit DAG edge.
  *
@@ -83,12 +96,16 @@ export type MaterializeConfig<TOutput extends Document = Document> =
  */
 export type ModelConfig<
   TName extends string,
-  TSource extends Source<Document>,
+  TSource extends Source<Document, undefined>,
   TOutput extends Document,
   TMaterializeConfig extends MaterializeConfig<TOutput>,
 > = {
   name: TName;
-  /** Source collection or upstream model */
+  /**
+   * Source collection or upstream model. Models read from the run's
+   * database, so the source must have none: a db-less `Collection` or a
+   * model without `materialize.db`.
+   */
   from: TSource;
   /** Pipeline function - receives a "model" mode pipeline that can lookup from other models */
   pipeline: (
@@ -133,9 +150,9 @@ export class Model<
   TName extends string = string,
   TInput extends Document = Document,
   TOutput extends Document = Document,
-  TMaterializeConfig extends MaterializeConfig<TOutput> =
+  const TMaterializeConfig extends MaterializeConfig<TOutput> =
     MaterializeConfig<TOutput>,
-> implements Source<TOutput> {
+> implements Source<TOutput, ModelOutputDb<TMaterializeConfig>> {
   /** Preset modes for common materialization patterns */
   static readonly Mode = {
     /** Replace entire collection using $out */
@@ -159,17 +176,23 @@ export class Model<
   // Phantom types for inference (not used at runtime)
   readonly __inputType!: TInput;
   readonly __outputType!: TOutput;
+  readonly __outputDb!: ModelOutputDb<TMaterializeConfig>;
 
-  private readonly _from: Source<TInput>;
+  private readonly _from: Source<TInput, undefined>;
   private readonly _pipelineFn: (
     p: Pipeline<TInput, TInput, "model", never>
   ) => Pipeline<TInput, TOutput, "model", string>;
 
   constructor(
-    config: ModelConfig<TName, Source<TInput>, TOutput, TMaterializeConfig>
+    config: ModelConfig<
+      TName,
+      Source<TInput, undefined>,
+      TOutput,
+      TMaterializeConfig
+    >
   ) {
     this.name = config.name;
-    this._from = config.from as Source<TInput>;
+    this._from = config.from;
     this._pipelineFn = config.pipeline as (
       p: Pipeline<TInput, TInput, "model">
     ) => Pipeline<TInput, TOutput, "model">;
@@ -179,7 +202,7 @@ export class Model<
   /**
    * Get the source (collection or upstream model).
    */
-  getSource(): Source<TInput> {
+  getSource(): Source<TInput, undefined> {
     return this._from;
   }
 
@@ -200,6 +223,7 @@ export class Model<
     return undefined;
   }
 
+  /** The model's output database, or undefined for the run's database. */
   getOutputDb(): DbConfig | undefined {
     const { db } = this.materialize;
     return db === undefined ? undefined : { name: db };

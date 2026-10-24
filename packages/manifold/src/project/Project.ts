@@ -314,18 +314,6 @@ export class Project {
     const dbName = (config: DbConfig | undefined) =>
       config?.name ?? defaultDb?.name ?? mongoClient.db().databaseName;
 
-    // Views cannot span databases: check them all before anything is written
-    for (const modelName of executionPlan.stages.flat()) {
-      const model = this.models.get(modelName)!;
-      const sourceDbName = dbName(model.getSource().getOutputDb());
-      const viewDbName = dbName(model.getOutputDb());
-      if (model.materialize.type === "view" && sourceDbName !== viewDbName) {
-        throw new Error(
-          `View '${modelName}' must be in its source's database '${sourceDbName}', not '${viewDbName}'.`
-        );
-      }
-    }
-
     // Execute stages sequentially, models within a stage in parallel
     for (const stage of executionPlan.stages) {
       const stageResults = await Promise.allSettled(
@@ -395,14 +383,14 @@ export class Project {
     const ddlOptions =
       aggregateOptions?.session ? { session: aggregateOptions.session } : {};
 
+    // Sources and views live in the run's database (enforced by Model's types)
     const source = model.getSource();
-    const sourceDb = source.getOutputDb() ?? defaultDb;
     const outputDb = model.getOutputDb() ?? defaultDb;
 
     // Handle view creation separately
     if (model.materialize.type === "view") {
       const viewName = model.name;
-      const viewDb = client.db(outputDb?.name, outputDb?.options);
+      const viewDb = client.db(defaultDb?.name, defaultDb?.options);
 
       try {
         await viewDb.dropCollection(viewName, ddlOptions);
@@ -453,7 +441,7 @@ export class Project {
     await new Pipeline({ pipeline: model.buildPipeline(outputDbName) })
       .execute({
         client,
-        db: sourceDb,
+        db: defaultDb,
         collection: source.getOutputCollection(),
         aggregateOptions,
       })

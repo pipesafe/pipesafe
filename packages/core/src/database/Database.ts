@@ -9,32 +9,43 @@ import {
   CollectionOptions,
 } from "mongodb";
 import { Document } from "../utils/objects";
-import { Collection } from "../collection/Collection";
+import { CollectionInDatabase } from "../collection/CollectionInDatabase";
 import { pipesafe } from "../singleton/pipesafe";
 import { tagClient } from "../singleton/tagClient";
 import type { DbConfig } from "./config";
 
-export class Database {
+export class Database<Db extends string = string> {
   private client: MongoClient | undefined;
-  private db: DbConfig;
-  constructor(args: { client?: MongoClient | undefined; db: DbConfig }) {
+  private db: DbConfig & { name: Db };
+  constructor(args: {
+    client?: MongoClient | undefined;
+    db: DbConfig & { name: Db };
+  }) {
     this.client = args.client;
     this.db = args.db;
     tagClient(this.client);
   }
 
-  getDatabaseName(): string {
+  getDatabaseName(): Db {
     return this.db.name;
+  }
+
+  getDbConfig(): DbConfig & { name: Db } {
+    return this.db;
+  }
+
+  /** @internal The explicitly passed client, if any */
+  getMongoClient(): MongoClient | undefined {
+    return this.client;
   }
 
   collection<Schema extends Document>(
     collectionName: string,
     options?: CollectionOptions
-  ): Collection<Schema> {
-    return new Collection<Schema>({
-      client: this.client,
-      db: this.db,
-      collection: { name: collectionName, options },
+  ): CollectionInDatabase<Schema, Db> {
+    return new CollectionInDatabase<Schema, Db>(this, {
+      name: collectionName,
+      options,
     });
   }
 
@@ -50,7 +61,8 @@ export class Database {
     return client;
   }
 
-  private getDatabase() {
+  /** @internal */
+  getDriverDb() {
     const client = this.getClient();
     return client.db(this.db.name, this.db.options);
   }
@@ -58,18 +70,18 @@ export class Database {
   // Collection Management
 
   listCollections(filter?: Document, options?: ListCollectionsOptions) {
-    return this.getDatabase().listCollections(filter, options);
+    return this.getDriverDb().listCollections(filter, options);
   }
 
   async createCollection<Schema extends Document>(
     name: string,
     options?: CreateCollectionOptions
   ) {
-    return this.getDatabase().createCollection<Schema>(name, options);
+    return this.getDriverDb().createCollection<Schema>(name, options);
   }
 
   async dropCollection(name: string, options?: DropCollectionOptions) {
-    return this.getDatabase().dropCollection(name, options);
+    return this.getDriverDb().dropCollection(name, options);
   }
 
   async renameCollection(
@@ -77,7 +89,7 @@ export class Database {
     toCollection: string,
     options?: RenameOptions
   ) {
-    return this.getDatabase().renameCollection(
+    return this.getDriverDb().renameCollection(
       fromCollection,
       toCollection,
       options
@@ -87,10 +99,10 @@ export class Database {
   // Database Information
 
   async stats(options?: DbStatsOptions) {
-    return this.getDatabase().stats(options);
+    return this.getDriverDb().stats(options);
   }
 
   async command(command: Document, options?: RunCommandOptions) {
-    return this.getDatabase().command(command, options);
+    return this.getDriverDb().command(command, options);
   }
 }
