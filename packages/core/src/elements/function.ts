@@ -131,6 +131,15 @@ type ResolveFunctionParams<Schema extends Document, Args> =
     { -readonly [I in keyof Args]: ResolveFunctionArg<Schema, Args[I]> }
   : never;
 
+/** The body (inline or `serverFn()`) a $function with args `A` expects. */
+type ExpectedBody<
+  Schema extends Document,
+  A,
+  F extends (...args: any[]) => unknown = (
+    ...params: ResolveFunctionParams<Schema, A> & unknown[]
+  ) => unknown,
+> = F | ServerFunctionRef<F>;
+
 /**
  * Identity rewrite unless V contains a $function — recursive, so bodies are
  * correlated with their args at ANY depth (inside $add, $cond branches,
@@ -159,15 +168,7 @@ type DeepValidateFunctionsRewrite<Schema extends Document, V> =
     // (NormalizeFunctionReturn in elements/expressions.ts).
     NoInfer<{
       $function: {
-        body:
-          | ((
-              ...params: ResolveFunctionParams<Schema, A> & unknown[]
-            ) => unknown)
-          | ServerFunctionRef<
-              (
-                ...params: ResolveFunctionParams<Schema, A> & unknown[]
-              ) => unknown
-            >;
+        body: ExpectedBody<Schema, A>;
         // args may nest $function expressions of their own
         args: {
           -readonly [I in keyof A]: DeepValidateFunctionsRewrite<Schema, A[I]>;
@@ -231,11 +232,7 @@ export type DeepValidateFunctions<Schema extends Document, V> =
 type FunctionSlot<Schema extends Document, A> = {
   $function: {
     args: A;
-    body:
-      | ((...params: ResolveFunctionParams<Schema, A> & unknown[]) => unknown)
-      | ServerFunctionRef<
-          (...params: ResolveFunctionParams<Schema, A> & unknown[]) => unknown
-        >;
+    body: ExpectedBody<Schema, A>;
     lang: "js";
   };
 };
