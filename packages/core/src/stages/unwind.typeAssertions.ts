@@ -165,9 +165,9 @@ type OptionalUnwindOutput = ResolveUnwindOutput<
   never
 >;
 // When unwinding optional array, the field stays optional and element type is unwound
-// tags?: string[] becomes tags?: string | undefined (optional field with unwound element)
+// tags?: string[] becomes tags?: string (optional field with unwound element)
 type OptionalUnwindTest = Assert<
-  Equal<OptionalUnwindOutput, { _id: string; tags?: string | undefined }>
+  Equal<OptionalUnwindOutput, { _id: string; tags?: string }>
 >;
 
 // Export test types to prevent unused variable errors

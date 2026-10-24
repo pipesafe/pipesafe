@@ -24,7 +24,9 @@ type RemoveAtSegments<Schema extends Document, Segs extends readonly string[]> =
         NestedValue extends Document ?
           {
             [K in keyof Schema]: K extends Head ?
-              undefined extends Schema[K] ?
+              // Optional keys keep `?`; only required ones re-add undefined
+              {} extends Pick<Schema, K> ? RemoveAtSegments<NestedValue, Rest>
+              : undefined extends Schema[K] ?
                 RemoveAtSegments<NestedValue, Rest> | undefined
               : RemoveAtSegments<NestedValue, Rest>
             : Schema[K];

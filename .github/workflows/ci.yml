@@ -6,6 +6,7 @@ on:
 
 env:
   BUN_VERSION: 1.2.17
+  TS7_VERSION: 7.0.2
 
 jobs:
   lint:
@@ -99,6 +100,32 @@ jobs:
       # the budget is the only automatic enforcement of plan §3.4's rule.
       - name: Instantiation budget (perf gate)
         run: bun run budget:check
+
+  typecheck-ts7:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build packages
+        run: bun run build
+
+      # typescript@latest is 7.x; eslint and tsdown stay on the repo's TS until
+      # they support the 7.x API.
+      - name: Type check on TypeScript 7
+        run: |
+          npx -y -p typescript@${{ env.TS7_VERSION }} tsc --noEmit -p packages/core
+          npx -y -p typescript@${{ env.TS7_VERSION }} tsc --noEmit -p packages/manifold
+          npx -y -p typescript@${{ env.TS7_VERSION }} tsc --noEmit -p tsconfig.json
 
   changeset:
     runs-on: ubuntu-latest

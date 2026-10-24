@@ -690,8 +690,8 @@ export class Pipeline<
    *
    * @see https://www.mongodb.com/docs/manual/reference/operator/aggregation/merge/
    */
-  merge(
-    $merge: MergeQuery<PreviousStageDocs>
+  merge<const M extends MergeQuery<PreviousStageDocs>>(
+    $merge: M
   ): Pipeline<StartingDocs, never, Mode, UsedStages | "$merge"> {
     return this._chain<never, "$merge">([{ $merge }]);
   }
