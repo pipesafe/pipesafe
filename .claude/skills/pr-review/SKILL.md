@@ -1,7 +1,7 @@
 ---
 name: pr-review
-description: Review a GitHub pull request for high-signal bugs and CLAUDE.md violations, then re-review incrementally on later pushes. Use when CI or a user asks to review a PR.
-argument-hint: "<owner/repo/pull/N> [--comment]"
+description: Review a GitHub pull request for high-signal bugs and CLAUDE.md violations, re-review incrementally on later pushes, and answer replies on its threads. Use when CI or a user asks to review a PR.
+argument-hint: "<owner/repo/pull/N> [--comment] [--reply <comment-id>]"
 disable-model-invocation: true
 allowed-tools: Agent, Task, Bash(gh pr view:*), Bash(gh pr diff:*), Bash(gh pr comment:*), Bash(gh pr list:*), Bash(gh issue view:*), Bash(gh issue list:*), Bash(gh search:*), Bash(gh api:*), mcp__github_inline_comment__create_inline_comment
 ---
@@ -21,6 +21,8 @@ Every comment this review posts costs a human reviewer attention, so the bar is 
 ## 1. Decide the mode
 
 Do this directly with `gh`; it takes a few calls and needs no subagent.
+
+With `--reply <comment-id>`, follow [reply.md](reply.md) and skip the rest of this file.
 
 1. `gh pr view --json state,isDraft,title,body,headRefOid,files`. Stop if the PR is closed or a draft, or is an automated PR that needs no review (such as a changesets "Version Packages" PR). Claude-authored PRs still get reviewed.
 2. Find this review's summary comment: the latest issue comment on the PR by a bot account (`user.type` is `Bot`) containing `<!-- pr-review reviewed-sha=`. Use `gh api repos/<owner>/<repo>/issues/<N>/comments --paginate`.
