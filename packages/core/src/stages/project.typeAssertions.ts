@@ -967,3 +967,32 @@ export type {
   _Assert_MixedMode,
   _Assert_ValidInclusion,
 };
+
+// ============================================================================
+// Readonly (const-generic) query literals
+// ============================================================================
+// `Pipeline.project` infers its literal through an unconstrained `<const P>`,
+// so array literals arrive as `readonly [...]` tuples. The registry's operand
+// positions and InferDependentExpression's tuple PATTERNS are readonly for
+// exactly this reason — a mutable pattern would let tuple-based expressions
+// like $ifNull fall through the expression arm and leak the operator wrapper
+// into the output type. This pins the end-to-end behavior on a fully
+// readonly query literal.
+
+type ReadonlySchema = {
+  maybeTags?: string[];
+  name: string;
+};
+
+type _ReadonlyIfNullResult = ResolveProjectOutput<
+  ReadonlySchema,
+  { readonly a: { readonly $ifNull: readonly ["$maybeTags", readonly []] } }
+>;
+// The array-literal fallback contributes the ARRAY type (MongoDB returns
+// the replacement expression verbatim), so the result unions the field's
+// array type with the literal fallback array.
+type _Assert_ReadonlyIfNull = Assert<
+  Equal<_ReadonlyIfNullResult, { a: string[] | readonly [] }>
+>;
+
+export type { _Assert_ReadonlyIfNull };

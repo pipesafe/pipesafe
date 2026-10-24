@@ -330,10 +330,17 @@ describe("structured stages", () => {
     const probe = at(`orders.lookup({ ‸ });`);
     expectExactly(
       probe,
-      ["from", "localField", "foreignField", "as", "pipeline"],
+      ["from", "localField", "foreignField", "as", "let", "pipeline"],
       {
         memberCompletion: true,
       }
     );
+  });
+
+  it("lookup let values suggest exactly the local field references and system variables", () => {
+    const probe = at(
+      `orders.lookup({ from: orders, as: "joined", let: { v: "‸" }, pipeline: (p) => p });`
+    );
+    expectExactly(probe, [...FIELD_REFS, ...SYSTEM_VARIABLES]);
   });
 });

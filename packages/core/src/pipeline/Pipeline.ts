@@ -16,6 +16,8 @@ import { Collection } from "../collection/Collection";
 import {
   ResolveLookupOutput,
   LookupForeignFieldOrError,
+  LookupLet,
+  ValidateLookupLetQuery,
 } from "../stages/lookup";
 import { ResolveGraphLookupOutput } from "../stages/graphLookup";
 import { FacetQuery, ResolveFacetOutput } from "../stages/facet";
@@ -257,6 +259,14 @@ export class Pipeline<
     >,
     NewKey extends string,
     Foreign extends Document = InferSourceType<C>,
+    // `let` uses the constraint + validation intersection pattern (like
+    // $set/$project/$group): the index signature suppresses per-value
+    // checks, so the key-filtered wrapper re-checks the literal via the
+    // shared nested-validation kernel and brands offending values.
+    // MongoDB rejects `let` without `pipeline` (FailedToParse), so only
+    // the pipeline-carrying parameter shapes declare it — a let-without-
+    // pipeline literal is rejected by excess-property checking.
+    const Let extends LookupLet<PreviousStageDocs> = {},
   >(
     $lookup:
       | {
@@ -264,7 +274,19 @@ export class Pipeline<
           localField: LocalField;
           foreignField: ForeignField;
           as: NewKey;
-          pipeline?: PipelineBuilder<
+          // Plain equality-join form: no sub-pipeline, so no `let` either
+          // (`never` rejects the value even on non-fresh objects, with the
+          // TS2322 landing on the `let` value itself).
+          let?: never;
+          pipeline?: never;
+        }
+      | {
+          from: C;
+          localField: LocalField;
+          foreignField: ForeignField;
+          as: NewKey;
+          let?: Let & ValidateLookupLetQuery<PreviousStageDocs, Let>;
+          pipeline: PipelineBuilder<
             InferSourceType<C>,
             Foreign,
             Mode,
@@ -274,6 +296,7 @@ export class Pipeline<
       | {
           from: C;
           as: NewKey;
+          let?: Let & ValidateLookupLetQuery<PreviousStageDocs, Let>;
           pipeline: PipelineBuilder<
             InferSourceType<C>,
             Foreign,

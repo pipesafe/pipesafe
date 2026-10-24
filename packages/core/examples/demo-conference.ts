@@ -86,6 +86,19 @@ const vipReport = attendees
         },
       },
     },
+    // $reduce folds an array into one value: `$$value` is the accumulator
+    // (seeded by `initialValue`), `$$this` the current element. Here it sums
+    // each talk's duration into a single `number`.
+    // BUG 3b (uncomment): change `talkDocs` to `talkDoc`
+    //   ↳ '$talkDoc' is not an array field the pipeline exposes — `input`
+    //     must resolve to an array, so the reference is rejected.
+    totalDurationMin: {
+      $reduce: {
+        input: "$talkDocs",
+        initialValue: 0,
+        in: { $add: ["$$value", "$$this.durationMin"] },
+      },
+    },
   })
   // BUG 4 (uncomment): the $project above doesn't expose `conferenceId` →
   //   { conferenceId: 1 } so $group can use it. If we drop it, this
@@ -94,12 +107,14 @@ const vipReport = attendees
     _id: "$conferenceId",
     totalTalks: { $sum: "$talkCount" },
     mainStageTotal: { $sum: "$mainStageTalks" },
+    totalDurationMin: { $sum: "$totalDurationMin" },
   })
   .sort({ totalTalks: -1 });
 
 // Hover this on stage — full structural type, no `any`.
 type VipReport = InferOutputType<typeof vipReport>;
-//   ^? { _id: string; totalTalks: number; mainStageTotal: number }[]
+//   ^? { _id: string; totalTalks: number; mainStageTotal: number;
+//        totalDurationMin: number }[]
 
 // ============================================================================
 // Bonus: cross-collection join with `speakers` to show $lookup typing

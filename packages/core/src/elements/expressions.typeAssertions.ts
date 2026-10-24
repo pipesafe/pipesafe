@@ -22,6 +22,9 @@ import type {
   ConcatArraysExpression,
   ArrayElemAtExpression,
   FilterExpression,
+  SetUnionExpression,
+  SetIntersectionExpression,
+  SetDifferenceExpression,
 } from "./expressions";
 
 /**
@@ -458,6 +461,510 @@ type _Assert_FilterBrand = Assert<
 type _Assert_SizeAcceptsArrayRef = Assert<
   Equal<"$tags" extends SizeOperand<ArithSchema> ? true : false, true>
 >;
+// Every array-producing operator is an array operand (distinct-count idiom).
+type _Assert_SizeAcceptsSetUnion = Assert<
+  Equal<
+    { $setUnion: ["$tags"] } extends SizeOperand<ArithSchema> ? true : false,
+    true
+  >
+>;
+
+// ----------------------------------------------------------------------------
+// Set operators — $setUnion / $setIntersection / $setDifference
+// ----------------------------------------------------------------------------
+
+type SetSchema = {
+  tags: string[];
+  maybeTags?: string[];
+  nums: number[];
+  name: string;
+  items: { id: string; score: number }[];
+  wrappers: { ids: string[] }[];
+  posts: { tags?: string[] }[];
+};
+
+type SetUnionOperandElement<S extends Document> =
+  SetUnionExpression<S>["$setUnion"][number];
+type SetIntersectionOperandElement<S extends Document> =
+  SetIntersectionExpression<S>["$setIntersection"][number];
+type SetDifferenceOperandTuple<S extends Document> =
+  SetDifferenceExpression<S>["$setDifference"];
+
+// Each set operand union must include the branded error arm.
+type _SetUnion_Brand = Extract<
+  SetUnionOperandElement<SetSchema>,
+  PipeSafeError<string>
+>;
+type _Assert_SetUnionBrand = Assert<
+  AssertPipeSafeError<
+    _SetUnion_Brand,
+    "Operator '$setUnion' requires an array operand."
+  >
+>;
+
+type _SetIntersection_Brand = Extract<
+  SetIntersectionOperandElement<SetSchema>,
+  PipeSafeError<string>
+>;
+type _Assert_SetIntersectionBrand = Assert<
+  AssertPipeSafeError<
+    _SetIntersection_Brand,
+    "Operator '$setIntersection' requires an array operand."
+  >
+>;
+
+type _SetDifference_Brand = Extract<
+  SetDifferenceOperandTuple<SetSchema>[0],
+  PipeSafeError<string>
+>;
+type _Assert_SetDifferenceBrand = Assert<
+  AssertPipeSafeError<
+    _SetDifference_Brand,
+    "Operator '$setDifference' requires an array operand."
+  >
+>;
+type _Assert_SetDifferenceIs2Tuple = Assert<
+  Equal<SetDifferenceOperandTuple<SetSchema>["length"], 2>
+>;
+
+// Positive sweeps: array field references and nested array-producing
+// expressions ($ifNull defaulting an optional array, $reduce accumulation)
+// are valid set operands.
+type _Assert_SetUnionAcceptsArrayRef = Assert<
+  Equal<"$tags" extends SetUnionOperandElement<SetSchema> ? true : false, true>
+>;
+type _Assert_SetUnionAcceptsIfNull = Assert<
+  Equal<
+    { $ifNull: ["$maybeTags", []] } extends SetUnionOperandElement<SetSchema> ?
+      true
+    : false,
+    true
+  >
+>;
+type _Assert_SetUnionAcceptsReduce = Assert<
+  Equal<
+    {
+      $reduce: { input: "$wrappers"; initialValue: []; in: unknown };
+    } extends SetUnionOperandElement<SetSchema> ?
+      true
+    : false,
+    true
+  >
+>;
+
+// `$$`-system/`let`-variable references are valid set operands and
+// $map/$reduce inputs — exactly what a $lookup-let sub-pipeline produces
+// (`$setUnion: ["$labels", "$$localTags"]`). Untracked outside a scope,
+// their contribution degrades to `unknown`.
+type _Assert_SetUnionAcceptsSystemVar = Assert<
+  Equal<
+    "$$localTags" extends SetUnionOperandElement<SetSchema> ? true : false,
+    true
+  >
+>;
+type _SetUnionSystemVarInfer = InferExpression<
+  SetSchema,
+  { $setUnion: ["$tags", "$$localTags"] }
+>;
+type _Assert_SetUnionSystemVarInfer = Assert<
+  Equal<_SetUnionSystemVarInfer, unknown[]>
+>;
+type _ReduceSystemVarInputInfer = InferExpression<
+  SetSchema,
+  { $reduce: { input: "$$localTags"; initialValue: 0; in: "$$this" } }
+>;
+type _Assert_ReduceSystemVarInputInfer = Assert<
+  Equal<_ReduceSystemVarInputInfer, unknown>
+>;
+
+// ----------------------------------------------------------------------------
+// Set operator result inference
+// ----------------------------------------------------------------------------
+
+// $setUnion: union of operand element types (here both resolve to string).
+type _SetUnionInfer = InferExpression<
+  SetSchema,
+  { $setUnion: ["$tags", { $ifNull: ["$maybeTags", []] }] }
+>;
+type _Assert_SetUnionInfer = Assert<Equal<_SetUnionInfer, string[]>>;
+
+// $setIntersection: same element-union shape as $setUnion (the "a" | "b"
+// literal elements are absorbed into string during union normalization).
+type _SetIntersectionInfer = InferExpression<
+  SetSchema,
+  { $setIntersection: ["$tags", ["a", "b"]] }
+>;
+type _Assert_SetIntersectionInfer = Assert<
+  Equal<_SetIntersectionInfer, string[]>
+>;
+
+// $setDifference: the FIRST operand's element type (removing elements never
+// widens the element type).
+type _SetDifferenceInfer = InferExpression<
+  SetSchema,
+  {
+    $setDifference: [
+      "$nums",
+      { $map: { input: "$items"; in: "$$this.score" } },
+    ];
+  }
+>;
+type _Assert_SetDifferenceInfer = Assert<Equal<_SetDifferenceInfer, number[]>>;
+
+// A null or missing input makes the array operators return null.
+type _SetUnionOptionalFieldInfer = InferExpression<
+  SetSchema,
+  { $setUnion: ["$maybeTags"] }
+>;
+type _Assert_SetUnionOptionalFieldInfer = Assert<
+  Equal<_SetUnionOptionalFieldInfer, string[] | null>
+>;
+type _SetDifferenceOptionalSecondInfer = InferExpression<
+  SetSchema,
+  { $setDifference: ["$tags", "$maybeTags"] }
+>;
+type _Assert_SetDifferenceOptionalSecondInfer = Assert<
+  Equal<_SetDifferenceOptionalSecondInfer, string[] | null>
+>;
+type _ConcatArraysOptionalFieldInfer = InferExpression<
+  SetSchema,
+  { $concatArrays: ["$tags", "$maybeTags"] }
+>;
+type _Assert_ConcatArraysOptionalFieldInfer = Assert<
+  Equal<_ConcatArraysOptionalFieldInfer, string[] | null>
+>;
+type _MapOptionalInputInfer = InferExpression<
+  SetSchema,
+  { $map: { input: "$maybeTags"; in: "$$this" } }
+>;
+type _Assert_MapOptionalInputInfer = Assert<
+  Equal<_MapOptionalInputInfer, string[] | null>
+>;
+// Nested array operators over nullable inputs keep their element type.
+type _NestedNullableSetUnionInfer = InferExpression<
+  SetSchema,
+  { $setUnion: [{ $setUnion: ["$maybeTags"] }, "$tags"] }
+>;
+type _Assert_NestedNullableSetUnionInfer = Assert<
+  Equal<_NestedNullableSetUnionInfer, string[] | null>
+>;
+type _NestedNullableElemAtInfer = InferExpression<
+  SetSchema,
+  { $arrayElemAt: [{ $concatArrays: ["$maybeTags", ["x"]] }, 0] }
+>;
+type _Assert_NestedNullableElemAtInfer = Assert<
+  Equal<_NestedNullableElemAtInfer, string | null>
+>;
+type _FilterOptionalInputInfer = InferExpression<
+  SetSchema,
+  { $filter: { input: "$maybeTags"; cond: true } }
+>;
+type _Assert_FilterOptionalInputInfer = Assert<
+  Equal<_FilterOptionalInputInfer, string[] | null>
+>;
+
+// $ifNull returns its replacement as-is, null included.
+type _IfNullNullReplacementInfer = InferExpression<
+  SetSchema,
+  { $ifNull: ["$maybeTags", null] }
+>;
+type _Assert_IfNullNullReplacementInfer = Assert<
+  Equal<_IfNullNullReplacementInfer, string[] | null>
+>;
+
+// A path missing from some members of a union element reads as null, not
+// as the validation brand.
+type _MapUnionElementPathInfer = InferExpression<
+  { items: ({ kind: "a"; x: string } | { kind: "b" })[] },
+  { $map: { input: "$items"; in: "$$this.x" } }
+>;
+type _Assert_MapUnionElementPathInfer = Assert<
+  Equal<_MapUnionElementPathInfer, (string | null)[]>
+>;
+
+type _ReduceOptionalInputInfer = InferExpression<
+  SetSchema,
+  { $reduce: { input: "$maybeTags"; initialValue: ""; in: "$$this" } }
+>;
+type _Assert_ReduceOptionalInputInfer = Assert<
+  Equal<_ReduceOptionalInputInfer, string | null>
+>;
+
+// ----------------------------------------------------------------------------
+// Scoped $$this / $$value inference for $map and $reduce
+// ----------------------------------------------------------------------------
+
+// $map with a `$$this.path` reference resolves against the input element.
+type _MapThisPathInfer = InferExpression<
+  SetSchema,
+  { $map: { input: "$items"; in: "$$this.id" } }
+>;
+type _Assert_MapThisPathInfer = Assert<Equal<_MapThisPathInfer, string[]>>;
+
+// $map with a bare `$$this` resolves to the element type itself.
+type _MapThisInfer = InferExpression<
+  SetSchema,
+  { $map: { input: "$nums"; in: "$$this" } }
+>;
+type _Assert_MapThisInfer = Assert<Equal<_MapThisInfer, number[]>>;
+
+// $map with a custom `as` binds THAT variable name to the element type.
+type _MapCustomAsInfer = InferExpression<
+  SetSchema,
+  { $map: { input: "$items"; as: "item"; in: "$$item.id" } }
+>;
+type _Assert_MapCustomAsInfer = Assert<Equal<_MapCustomAsInfer, string[]>>;
+
+// ... and `$$this` is NOT bound under a custom `as` (per MongoDB, `as`
+// REPLACES the default variable) — it degrades to unknown[].
+type _MapCustomAsThisInfer = InferExpression<
+  SetSchema,
+  { $map: { input: "$items"; as: "item"; in: "$$this.id" } }
+>;
+type _Assert_MapCustomAsThisInfer = Assert<
+  Equal<_MapCustomAsThisInfer, unknown[]>
+>;
+
+// $map whose `in` is a plain object literal resolves member-wise.
+type _MapObjectInInfer = InferExpression<
+  SetSchema,
+  { $map: { input: "$items"; in: { key: "$$this.id"; fixed: 1 } } }
+>;
+type _Assert_MapObjectInInfer = Assert<
+  Equal<_MapObjectInInfer, { key: string; fixed: 1 }[]>
+>;
+
+// $ifNull's array-literal fallback contributes the ARRAY type (MongoDB
+// returns the replacement expression verbatim) — NOT its element type, so
+// the $map result is a per-element union of arrays, never a scalar/array
+// mix like ("none" | string[])[].
+type _MapIfNullFallbackInfer = InferExpression<
+  SetSchema,
+  { $map: { input: "$posts"; in: { $ifNull: ["$$this.tags", ["none"]] } } }
+>;
+type _Assert_MapIfNullFallbackInfer = Assert<
+  Equal<_MapIfNullFallbackInfer, (string[] | ["none"])[]>
+>;
+
+// $reduce accumulate-into-[] pattern: $$value starts as [] and each step
+// concatenates an array reached through $$this — infers the flattened array.
+type _ReduceConcatInfer = InferExpression<
+  SetSchema,
+  {
+    $reduce: {
+      input: "$wrappers";
+      initialValue: [];
+      in: { $concatArrays: ["$$value", { $ifNull: ["$$this.ids", []] }] };
+    };
+  }
+>;
+type _Assert_ReduceConcatInfer = Assert<Equal<_ReduceConcatInfer, string[]>>;
+
+// $reduce whose `in` is a direct `$$this` reference returns the element type.
+type _ReduceThisInfer = InferExpression<
+  SetSchema,
+  { $reduce: { input: "$nums"; initialValue: 0; in: "$$this" } }
+>;
+type _Assert_ReduceThisInfer = Assert<Equal<_ReduceThisInfer, number>>;
+
+// $reduce's initialValue is evaluated BEFORE iteration begins (per MongoDB),
+// so `$$this` is NOT in scope there: it must resolve to unknown, not to the
+// input element type, and that unknown flows through `$$value`.
+type _ReduceInitNoThisInfer = InferExpression<
+  SetSchema,
+  { $reduce: { input: "$nums"; initialValue: "$$this"; in: "$$value" } }
+>;
+type _Assert_ReduceInitNoThis = Assert<Equal<_ReduceInitNoThisInfer, unknown>>;
+
+// $cond inside $map `in` resolves scoped `$$this` operands instead of leaking
+// them as literal strings: the then-branch `$$this.id` resolves to the element
+// field type (string), unioned with the literal else-branch (0). Before the
+// scoped `$cond` arm this inferred `("$$this.id" | 0)[]` — a wrong type.
+type _MapCondScopedInfer = InferExpression<
+  SetSchema,
+  { $map: { input: "$items"; in: { $cond: [true, "$$this.id", 0] } } }
+>;
+type _Assert_MapCondScopedInfer = Assert<
+  Equal<_MapCondScopedInfer, (string | 0)[]>
+>;
+
+// $cond inside $reduce `in` resolves BOTH `$$value` (seeded by initialValue)
+// and `$$this` — never the literal strings "$$value"/"$$this".
+type _ReduceCondScopedInfer = InferExpression<
+  SetSchema,
+  {
+    $reduce: {
+      input: "$nums";
+      initialValue: 0;
+      in: { $cond: [true, "$$value", "$$this"] };
+    };
+  }
+>;
+type _Assert_ReduceCondScopedInfer = Assert<
+  Equal<_ReduceCondScopedInfer, number>
+>;
+
+// The object form of $cond resolves scoped operands too.
+type _MapCondObjectScopedInfer = InferExpression<
+  SetSchema,
+  {
+    $map: {
+      input: "$items";
+      in: { $cond: { if: true; then: "$$this.id"; else: 0 } };
+    };
+  }
+>;
+type _Assert_MapCondObjectScopedInfer = Assert<
+  Equal<_MapCondObjectScopedInfer, (string | 0)[]>
+>;
+
+// $reduce dedupe pattern: set operators resolve `$$value`/`$$this` operands.
+type _ReduceSetUnionInfer = InferExpression<
+  SetSchema,
+  {
+    $reduce: {
+      input: "$wrappers";
+      initialValue: [];
+      in: { $setUnion: ["$$value", "$$this.ids"] };
+    };
+  }
+>;
+type _Assert_ReduceSetUnionInfer = Assert<
+  Equal<_ReduceSetUnionInfer, string[]>
+>;
+type _ReduceSetDifferenceInfer = InferExpression<
+  SetSchema,
+  {
+    $reduce: {
+      input: "$wrappers";
+      initialValue: [];
+      in: { $setDifference: ["$$this.ids", "$$value"] };
+    };
+  }
+>;
+type _Assert_ReduceSetDifferenceInfer = Assert<
+  Equal<_ReduceSetDifferenceInfer, string[]>
+>;
+
+// Untracked `$$` operands degrade to unknown elements, never drop to never.
+type _MapUntrackedSetUnionInfer = InferExpression<
+  SetSchema,
+  { $map: { input: "$tags"; as: "t"; in: { $setUnion: ["$$this"] } } }
+>;
+type _Assert_MapUntrackedSetUnionInfer = Assert<
+  Equal<_MapUntrackedSetUnionInfer, unknown[][]>
+>;
+
+// Array-literal fallbacks resolve element-wise, not as literal "$name".
+type _IfNullArrayLiteralRefInfer = InferExpression<
+  SetSchema,
+  { $ifNull: ["$maybeTags", ["$name"]] }
+>;
+type _Assert_IfNullArrayLiteralRefInfer = Assert<
+  Equal<_IfNullArrayLiteralRefInfer, string[] | [string]>
+>;
+
+// Nested scopes: an inner $map sees its own binding (and the outer scope).
+type _NestedMapScopeInfer = InferExpression<
+  SetSchema,
+  {
+    $map: {
+      input: "$wrappers";
+      in: { $map: { input: "$$this.ids"; as: "id"; in: "$$id" } };
+    };
+  }
+>;
+type _Assert_NestedMapScopeInfer = Assert<
+  Equal<_NestedMapScopeInfer, string[][]>
+>;
+
+// Scoped array operators add `| null` for nullable operands too.
+type _MapScopedNullableConcatInfer = InferExpression<
+  SetSchema,
+  { $map: { input: "$items"; in: { $concatArrays: ["$maybeTags", ["x"]] } } }
+>;
+type _Assert_MapScopedNullableConcatInfer = Assert<
+  Equal<_MapScopedNullableConcatInfer, (string[] | null)[]>
+>;
+
+// Top-level object-form $cond; a `$$REMOVE` branch contributes nothing.
+type _CondObjectInfer = InferExpression<
+  SetSchema,
+  { $cond: { if: true; then: "$name"; else: null } }
+>;
+type _Assert_CondObjectInfer = Assert<Equal<_CondObjectInfer, string | null>>;
+type _CondRemoveInfer = InferExpression<
+  SetSchema,
+  { $cond: [true, "$name", "$$REMOVE"] }
+>;
+type _Assert_CondRemoveInfer = Assert<Equal<_CondRemoveInfer, string>>;
+
+// A set operator is a valid operand of ANOTHER set operator: each resolves to
+// an array, so `$setUnion: [{ $setIntersection: [...] }, ...]` is valid
+// MongoDB (the mutual recursion is safe — `ExpressionSpec` is an interface).
+type _Assert_SetUnionAcceptsNestedSetOp = Assert<
+  Equal<
+    { $setIntersection: ["$tags", "$tags"] } extends (
+      SetUnionOperandElement<SetSchema>
+    ) ?
+      true
+    : false,
+    true
+  >
+>;
+type _NestedSetOpInfer = InferExpression<
+  SetSchema,
+  { $setUnion: [{ $setIntersection: ["$tags", "$tags"] }, "$tags"] }
+>;
+type _Assert_NestedSetOpInfer = Assert<Equal<_NestedSetOpInfer, string[]>>;
+
+export type {
+  _Assert_SetUnionBrand,
+  _Assert_SetIntersectionBrand,
+  _Assert_SetDifferenceBrand,
+  _Assert_SetDifferenceIs2Tuple,
+  _Assert_SetUnionAcceptsArrayRef,
+  _Assert_SetUnionAcceptsIfNull,
+  _Assert_SetUnionAcceptsReduce,
+  _Assert_SetUnionAcceptsSystemVar,
+  _Assert_SetUnionSystemVarInfer,
+  _Assert_ReduceSystemVarInputInfer,
+  _Assert_SetUnionInfer,
+  _Assert_SetIntersectionInfer,
+  _Assert_SetDifferenceInfer,
+  _Assert_SetUnionOptionalFieldInfer,
+  _Assert_MapThisPathInfer,
+  _Assert_MapThisInfer,
+  _Assert_MapCustomAsInfer,
+  _Assert_MapCustomAsThisInfer,
+  _Assert_MapObjectInInfer,
+  _Assert_MapIfNullFallbackInfer,
+  _Assert_ReduceConcatInfer,
+  _Assert_ReduceThisInfer,
+  _Assert_ReduceInitNoThis,
+  _Assert_MapCondScopedInfer,
+  _Assert_ReduceCondScopedInfer,
+  _Assert_SetUnionAcceptsNestedSetOp,
+  _Assert_NestedSetOpInfer,
+  _Assert_MapCondObjectScopedInfer,
+  _Assert_ReduceSetUnionInfer,
+  _Assert_ReduceSetDifferenceInfer,
+  _Assert_IfNullArrayLiteralRefInfer,
+  _Assert_MapUntrackedSetUnionInfer,
+  _Assert_SetDifferenceOptionalSecondInfer,
+  _Assert_ConcatArraysOptionalFieldInfer,
+  _Assert_MapOptionalInputInfer,
+  _Assert_ReduceOptionalInputInfer,
+  _Assert_NestedNullableSetUnionInfer,
+  _Assert_NestedNullableElemAtInfer,
+  _Assert_NestedMapScopeInfer,
+  _Assert_MapScopedNullableConcatInfer,
+  _Assert_CondObjectInfer,
+  _Assert_CondRemoveInfer,
+  _Assert_FilterOptionalInputInfer,
+  _Assert_IfNullNullReplacementInfer,
+  _Assert_MapUnionElementPathInfer,
+};
 
 // The literal-dependent set is DERIVED from `returns`-omission on registry
 // entries. This pin (a) documents the current set and (b) catches both
@@ -470,6 +977,11 @@ type _DerivedLiteralDependentOps = Assert<
     | "$concatArrays"
     | "$arrayElemAt"
     | "$filter"
+    | "$map"
+    | "$reduce"
+    | "$setUnion"
+    | "$setIntersection"
+    | "$setDifference"
     | "$ifNull"
     | "$cond"
     | "$literal"
@@ -525,4 +1037,5 @@ export type {
   _Assert_ArrayElemAtBrand,
   _Assert_FilterBrand,
   _Assert_SizeAcceptsArrayRef,
+  _Assert_SizeAcceptsSetUnion,
 };
