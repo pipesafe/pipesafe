@@ -296,9 +296,7 @@ export class Pipeline<
     const resolvedPipeline =
       pipeline ?
         (pipeline as PipelineBuilder<any, any, any, any>)(
-          new Pipeline<InferSourceType<C>, InferSourceType<C>, Mode, never>({
-            collection: { name: collectionName },
-          })
+          new Pipeline<InferSourceType<C>, InferSourceType<C>, Mode, never>()
         )
       : undefined;
 

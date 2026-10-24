@@ -17,7 +17,8 @@ export interface Source<T = unknown> {
 
   /**
    * Database to read from: a collection's configured db, or a model's output
-   * db. Undefined means the client's default database.
+   * db. Undefined defers to the caller's default (e.g. `Project.run({ db })`,
+   * else the client's default database).
    */
   getOutputDb(): DbConfig | undefined;
 
