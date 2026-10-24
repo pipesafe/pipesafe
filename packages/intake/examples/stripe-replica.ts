@@ -75,13 +75,29 @@ const customers = new Intake({
           String(Math.floor(scope.window.from.getTime() / 1000))
         );
       }
-      const res = await ctx.fetch(
-        `https://api.stripe.com/v1/customers?${params}`,
-        { headers: { Authorization: `Bearer ${apiKey}` } }
-      );
-      const page = (await res.json()) as { data: StripeCustomer[] };
-      for (const customer of page.data) {
-        yield customer;
+      if (scope.window?.to) {
+        params.set(
+          "created[lte]",
+          String(Math.floor(scope.window.to.getTime() / 1000))
+        );
+      }
+      // Page to the end: a sweep treats every document this run did not
+      // yield as deleted, so stopping early would soft-delete real data.
+      for (;;) {
+        const res = await ctx.fetch(
+          `https://api.stripe.com/v1/customers?${params}`,
+          { headers: { Authorization: `Bearer ${apiKey}` } }
+        );
+        const page = (await res.json()) as {
+          data: StripeCustomer[];
+          has_more: boolean;
+        };
+        for (const customer of page.data) {
+          yield customer;
+        }
+        const last = page.data.at(-1);
+        if (!page.has_more || !last) break;
+        params.set("starting_after", last.id);
       }
     },
     schedules: [
