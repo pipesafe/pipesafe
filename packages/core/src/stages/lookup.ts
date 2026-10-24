@@ -1,8 +1,33 @@
 import { Document, Prettify } from "../utils/objects";
 import { PassThrough, PipeSafeError } from "../utils/errors";
 import { FieldPathsThatInferToForLookup } from "../elements/fieldReference";
+import { ExpressionValue } from "../elements/expressions";
+import { ValidateBindings } from "../elements/validation";
 import { FlattenDotSet, IsDottedKey } from "../utils/paths";
 import { ApplySetUpdates } from "../utils/updates";
+
+/**
+ * The `$lookup.let` block: variable name → an expression over the OUTER
+ * schema/environment (the shared computed-value union; ValidateLookupLet
+ * re-checks the literal).
+ */
+export type LookupLetQuery<
+  Schema extends Document,
+  Vars extends Document = {},
+> = {
+  [name: string]: ExpressionValue<Schema, Vars>;
+};
+
+/**
+ * `let` values validate against the OUTER schema/environment. The
+ * sub-pipeline's environment is BindLetVars (elements/variables.ts) over
+ * the enclosing `Env`; `$$ROOT` inside it is the FOREIGN document.
+ */
+export type ValidateLookupLet<
+  Schema extends Document,
+  Let,
+  Vars extends Document = {},
+> = ValidateBindings<Schema, Let, Vars>;
 
 /**
  * A dotted `as` path NESTS in MongoDB — `as: "user.orders"` writes

@@ -876,7 +876,7 @@ type _MinOperand_HasBrand = MinOperand<AccumulatorTestSchema>;
 type _Assert_MinBrand = Assert<
   AssertPipeSafeError<
     Extract<_MinOperand_HasBrand, PipeSafeError<string>>,
-    "Accumulator '$min' requires a comparable (number, date, string, or boolean) operand."
+    "Accumulator '$min' requires a comparable (number, date, timestamp, string, or boolean) operand."
   >
 >;
 
@@ -884,7 +884,7 @@ type _MaxOperand_HasBrand = MaxOperand<AccumulatorTestSchema>;
 type _Assert_MaxBrand = Assert<
   AssertPipeSafeError<
     Extract<_MaxOperand_HasBrand, PipeSafeError<string>>,
-    "Accumulator '$max' requires a comparable (number, date, string, or boolean) operand."
+    "Accumulator '$max' requires a comparable (number, date, timestamp, string, or boolean) operand."
   >
 >;
 
@@ -917,8 +917,9 @@ type _Assert_MinValid = Assert<
 
 // ---------------------------------------------------------------------------
 // `$$`-system variables in _id/accumulator positions: accepted, and their
-// inference degrades to `unknown` ($push wraps it in an array) — never to a
-// dropped field or a brand.
+// inference is ACCURATE (SystemVariableSpec) — $$NOW is a Date, $$ROOT is
+// the input document ($push wraps it in an array) — never a dropped field
+// or a brand.
 // ---------------------------------------------------------------------------
 
 type _SystemVarGroupResult = ResolveGroupOutput<
@@ -928,7 +929,7 @@ type _SystemVarGroupResult = ResolveGroupOutput<
 type _Assert_SystemVarGroup = Assert<
   Equal<
     _SystemVarGroupResult,
-    { _id: unknown; latest: unknown; docs: unknown[] }
+    { _id: Date; latest: Date; docs: { a: string }[] }
   >
 >;
 

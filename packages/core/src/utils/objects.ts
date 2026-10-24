@@ -32,7 +32,7 @@ export type ExcludeUndefined<T> = T extends undefined ? never : T;
 // Merge plain objects deeply (does NOT merge arrays/Date/etc.)
 export type IsPlainObject<T> =
   T extends object ?
-    T extends any[] ? false
+    T extends readonly unknown[] ? false
     : T extends Function ? false
     : T extends Date ? false
     : T extends RegExp ? false

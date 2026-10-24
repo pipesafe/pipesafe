@@ -7,7 +7,7 @@
  * Pattern: .set() a new field, then use that field in the next stage
  */
 
-import { Pipeline } from "./Pipeline";
+import { InferOutputType, Pipeline } from "./Pipeline";
 import { Collection } from "../collection/Collection";
 import { Assert, Equal } from "../utils/tests";
 import { PipeSafeError } from "../utils/errors";
@@ -106,6 +106,160 @@ const _setThenLookup = _p.set({ lookupKey: "$_id" }).lookup({
 });
 
 // =============================================================================
+// Test: .lookup() with `let` — bindings infer against the OUTER schema and
+// resolve, accurately typed, inside every sub-pipeline stage; `$$ROOT`
+// there is the FOREIGN document.
+// =============================================================================
+const _lookupWithLet = _p.lookup({
+  from: _otherCollection,
+  as: "picked",
+  let: { outerName: "$name", bonus: "$value" },
+  pipeline: (p) =>
+    p.set({
+      fromOuter: "$$outerName",
+      boosted: { $add: ["$$bonus", 1] },
+      foreignId: "$$ROOT._id",
+    }),
+});
+type _LookupLetSubOutput = Assert<
+  Equal<
+    InferOutputType<typeof _lookupWithLet>["picked"],
+    {
+      _id: string;
+      refId: string;
+      data: string;
+      fromOuter: string;
+      boosted: number;
+      foreignId: string;
+    }[]
+  >
+>;
+
+// =============================================================================
+// Test: a sub-pipeline that ENDS in .group() — the builder's contextual
+// return type must not drive inference of the group query.
+// =============================================================================
+const _lookupEndingInGroup = _p.lookup({
+  from: _otherCollection,
+  as: "counts",
+  let: { outerName: "$name" },
+  pipeline: (p) => p.group({ _id: "$refId", n: { $sum: 1 } }),
+});
+type _LookupEndingInGroupOutput = Assert<
+  Equal<
+    InferOutputType<typeof _lookupEndingInGroup>["counts"],
+    { _id: string; n: number }[]
+  >
+>;
+
+// =============================================================================
+// Test: $$REMOVE — a conditional branch types the field as possibly absent;
+// $project drops a removed field outright.
+// =============================================================================
+declare const _flag: boolean;
+const _condRemove = _p.set({
+  maybeName: { $cond: [_flag, "$name", "$$REMOVE"] },
+});
+type _CondRemoveOutput = Assert<
+  Equal<InferOutputType<typeof _condRemove>["maybeName"], string | undefined>
+>;
+const _projectRemove = _p.project({
+  name: 1,
+  gone: "$$REMOVE",
+  nested: { kept: "$name", gone: "$$REMOVE" },
+});
+type _ProjectRemoveOutput = Assert<
+  Equal<
+    InferOutputType<typeof _projectRemove>,
+    { _id: string; name: string; nested: { readonly kept: string } }
+  >
+>;
+const _removeDeep = _p.project({
+  _id: "$$REMOVE",
+  name: 1,
+  deep: { mid: { gone: "$$REMOVE", kept: "$name" } },
+});
+type _RemoveDeepOutput = Assert<
+  Equal<
+    InferOutputType<typeof _removeDeep>,
+    { name: string; deep: { readonly mid: { readonly kept: string } } }
+  >
+>;
+const _rootRemove = _p.replaceRoot({
+  newRoot: { a: "$$REMOVE", b: { c: "$$REMOVE", d: "$name" } },
+});
+type _RootRemoveOutput = Assert<
+  Equal<
+    InferOutputType<typeof _rootRemove>,
+    { readonly b: { readonly d: string } }
+  >
+>;
+const _emptyRoot = _p.replaceRoot({ newRoot: {} });
+type _EmptyRootOutput = Assert<Equal<InferOutputType<typeof _emptyRoot>, {}>>;
+// A `$literal` tuple stays an array for array operands.
+const _literalSize = _p
+  .set({ lit: { $literal: ["x", "y"] } })
+  .set({ n: { $size: "$lit" } });
+
+// Binder element types: literal inputs resolve their elements, a nullable
+// array binds its elements, and array literals stay arrays. Missing array
+// elements are null.
+type BindDoc = {
+  _id: string;
+  name: string;
+  home: { city: string };
+  work: { city: string };
+  profile: { email: string; age: number };
+  tags?: string[];
+};
+// A nested `$$REMOVE` in $set removes the existing embedded field.
+const _setNestedRemove = new Pipeline<BindDoc>().set({
+  profile: { email: "$$REMOVE" },
+});
+type _SetNestedRemoveOutput = Assert<
+  Equal<InferOutputType<typeof _setNestedRemove>["profile"], { age: number }>
+>;
+const _binders = new Pipeline<BindDoc>().set({
+  cities: { $map: { input: ["$home", "$work"], as: "a", in: "$$a.city" } },
+  names: { $map: { input: ["$name", "$name"], in: "$$this" } },
+  optionalTags: { $map: { input: "$tags", in: "$$this" } },
+  branch: { $cond: [_flag, ["$name"], []] },
+  pair: { $let: { vars: { xs: ["$name", "$home"] }, in: "$$xs" } },
+  literal: { $literal: ["x"] },
+  filtered: { $filter: { input: "$tags", cond: true } },
+  first: { $arrayElemAt: ["$tags", 0] },
+  joined: { $concatArrays: ["$tags", ["x"]] },
+  mapped: {
+    $map: { input: ["$home"], in: { c: "$$this.city", x: "$$REMOVE" } },
+  },
+  docs: [{ a: "$name", x: "$$REMOVE" }],
+  ifNullFirst: { $ifNull: ["$$REMOVE", "$name"] },
+  holes: ["$$REMOVE", "$tags"],
+  removedEach: { $map: { input: "$tags", in: "$$REMOVE" } },
+});
+type _BindersOutput = Assert<
+  Equal<
+    Omit<InferOutputType<typeof _binders>, keyof BindDoc>,
+    {
+      cities: string[];
+      names: string[];
+      optionalTags: string[] | null;
+      branch: [] | [string];
+      pair: [string, { city: string }];
+      literal: readonly ["x"];
+      filtered: string[] | null;
+      first: string | null;
+      joined: string[] | null;
+      mapped: { readonly c: string }[];
+      docs: [{ readonly a: string }];
+      ifNullFirst: string;
+      holes: [null, string[] | null];
+      removedEach: null[] | null;
+    }
+  >
+>;
+
+// =============================================================================
 // Test: .group() then .set() - reference aggregated fields
 // =============================================================================
 const _groupThenSet = _p
@@ -136,6 +290,16 @@ const _projectThenMatch = _p
   .match({ computedName: { $exists: true } }); // Can match on computed field from project
 
 export {
+  _lookupWithLet,
+  _lookupEndingInGroup,
+  _condRemove,
+  _projectRemove,
+  _removeDeep,
+  _rootRemove,
+  _setNestedRemove,
+  _emptyRoot,
+  _literalSize,
+  _binders,
   _setThenSet,
   _setThenMatch,
   _setThenUnset,
@@ -202,6 +366,15 @@ type _ValidNoLeak = ResolveMatchOutput<{ x: number; y: string }, { x: 1 }>;
 type _ValidNoLeakAssert = Assert<Equal<_ValidNoLeak, { x: number; y: string }>>;
 
 export type {
+  _LookupLetSubOutput,
+  _LookupEndingInGroupOutput,
+  _CondRemoveOutput,
+  _ProjectRemoveOutput,
+  _RemoveDeepOutput,
+  _RootRemoveOutput,
+  _SetNestedRemoveOutput,
+  _EmptyRootOutput,
+  _BindersOutput,
   _MatchPassthrough,
   _SetPassthrough,
   _ProjectPassthrough,

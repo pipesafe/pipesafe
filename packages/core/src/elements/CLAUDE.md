@@ -1,7 +1,8 @@
 # elements/ — type-system building blocks
 
 Schema-parameterized primitives consumed by every stage: field selectors/
-references, literals, the operand kernel, the expression registry, and the
+references, literals, the `$$`-variable authority (`variables.ts`), the
+operand kernel, the expression registry, and the
 nested-validation kernel (`validation.ts` — THE rejection surface for
 structurally-accepted `$`-shapes; `never` = valid, anything else is the
 branded replacement; unimplemented-but-valid operators are allow-listed BY
@@ -66,11 +67,61 @@ before touching any Query/operand union.
 - `ResolveToPrimitive`'s literal-value arm carries Date/ObjectId as the
   keyless `object` — `{}` is NOT equivalent (it accepts primitive strings
   and breaks the replaceRoot `"$missing"` rejection pin).
-- `SYSTEM_VARIABLES`/`SystemVariable` (literals.ts) is the enumerated `$$`
-  vocabulary — never widen a consumer back to `` `$$${string}` ``. The
-  validation kernel brands unlisted names with `UnknownSystemVariableError`;
-  `$let`/`$map`/`$filter`-bound user variables never reach the walk (their
-  binding interiors are `unknown`-typed).
+- `Vars` threads the USER environment only (binder and lookup-let
+  bindings, names without the `$$` prefix; default `{}`); system variables
+  resolve through the resolvers' STATIC second tier (SystemVariableSpec,
+  which carries each variable's ACCURATE type: `$$NOW` → Date, `$$ROOT` →
+  Schema, `$$REMOVE` → the load-bearing `never`). Do NOT re-unify by seeding
+  the spec into the `Vars` defaults — that costs ~270k whole-project
+  instantiations for no behavior change. User variable names must start
+  with a lowercase letter or non-ASCII character (`ValidateVariableName`
+  brands the rest, as MongoDB does), so the tiers cannot collide. `$let`/`$map`/`$filter` binding arms extend the user env
+  (BindLetVars/BindVariable in variables.ts — shared by inference and
+  validation, so the two environments cannot diverge); `$lookup.let`
+  enters it via Pipeline's `Env` generic.
+  `InferVariableReference`/`ValidateVariableReference` resolve `"$$name"`
+  and dotted `"$$name.path"`; unlisted/unbound names brand with
+  `UnknownSystemVariableError`. `SystemVariableReferences<Schema>` (static)
+  and `VariableReferences<Vars>` (user) are the finite acceptance
+  vocabularies. The env-merge types (BindLetVars/BindVariable — also the
+  lookup-let sub-pipeline's `Env`) are ONE mapped type each
+  with lazy values — Omit/Prettify spellings stack instantiation layers at
+  the deepest point of lookup-lambda checking and tripped TS2589.
+- The validation kernel's binder-interior (forgiving) branches — taken
+  only by operands that reference a USER variable (`UserVariableOperand`);
+  operands using only system variables stay strict — run the Vars-blind
+  registry relation as FAST-ACCEPT ONLY, then walk. The
+  fast-accept doubles as the cycle breaker: without it, exploration with
+  the registry's own wide shapes recurses registry→operand-union→registry
+  until TS's depth limiter (TS2589 at every lookup-let sub-pipeline
+  stage). The user-variable scan is non-distributive for the same reason:
+  TS instantiates it with the registry's recursive operand unions while
+  contextually typing a call. The user-variable gate sits AHEAD of the
+  `string extends keyof Schema` guard and the schema relation: both stay
+  deferred for a generic schema, which would reject generic helpers that
+  use bound variables.
+- ValidateArrayInputValue walks literal arrays element-wise, but an
+  expression input RELATES against the registry's input operand; do NOT
+  "improve" that into a ValidateNestedValue re-entry — `$filter` is a
+  member of ArrayProducingExpression (hence of every ArrayOperand), and
+  walking the registry's own `$filter` shape re-enters its `input` forever
+  (TS2589 on unrelated `.set()` call sites). Only a binder-shaped input
+  whose own `input` is a string or literal array (and `$let`, whose
+  inferred result must be an array), or an input that references a user
+  variable, is routed to a walk; those guards are what exclude the
+  registry shape.
+- Registry binder bodies (`in`/`cond`) are `unknown`, so the relation
+  passes ANY value nesting a binder. `ValidateNestedBinders` walks such
+  values BEFORE the relation, gated on `ContainsBinder`. Do NOT move it
+  into the relation's true branch: for a generic schema TS explores that
+  branch with V as a substitution type (V & registry shape) and walks the
+  registry (+1.2M instantiations from two generic-helper pins).
+- The key-filtered wrappers (`ValidateNestedRecord`, `ValidateGroupQuery`,
+  `ValidateBindings`) are DISTRIBUTIVE over the query (`Q extends unknown`).
+  For the parameter's still-generic Q, TS then resolves the wide-query
+  guard through Q's constraint; a non-distributive guard makes TS walk the
+  constraint's value unions once per schema (~25% of whole-project
+  instantiations).
 
 ## Gotchas
 

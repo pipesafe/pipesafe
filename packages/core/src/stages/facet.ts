@@ -9,12 +9,18 @@ import type {
 /**
  * Input type for $facet — a record of named sub-pipelines.
  * Each key maps to a PipelineBuilder that transforms Schema into some output type.
- * Sub-pipelines are constrained to FacetAllowedStages.
+ * Sub-pipelines are constrained to FacetAllowedStages. `Env` propagates the
+ * enclosing pipeline's lookup-let bindings into the sub-builders (facet
+ * processes the SAME documents, so the enclosing variables stay in scope).
  */
 export type FacetQuery<
   Schema extends Document,
   Mode extends LookupMode,
-> = Record<string, PipelineBuilder<Schema, Document, Mode, FacetAllowedStages>>;
+  Env extends Document = {},
+> = Record<
+  string,
+  PipelineBuilder<Schema, Document, Mode, FacetAllowedStages, Env>
+>;
 
 /**
  * Resolve the output type of a $facet stage.
@@ -27,11 +33,12 @@ export type FacetQuery<
  */
 export type ResolveFacetOutput<
   Schema extends Document,
-  F extends FacetQuery<Schema, any>,
+  F extends FacetQuery<Schema, any, any>,
 > = PassThrough<
   Schema,
   Prettify<{
-    [K in keyof F]: F[K] extends PipelineBuilder<any, infer O, any, any> ? O[]
+    [K in keyof F]: F[K] extends PipelineBuilder<any, infer O, any, any, any> ?
+      O[]
     : never;
   }>
 >;

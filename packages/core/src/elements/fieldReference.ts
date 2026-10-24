@@ -2,7 +2,9 @@ import { Document, NonExpandableTypes, Prettify } from "../utils/objects";
 import { Join, DollarPrefixed, WithoutDollar } from "../utils/strings";
 import { PipeSafeError, UnknownFieldError } from "../utils/errors";
 import { HasOperatorKey } from "../utils/dispatch";
+import { RemoveNeverFields } from "../utils/updates";
 import { InferExpression } from "./expressions";
+import { InferVariableReference } from "./variables";
 
 // Types related to field referencees
 // These are used as part of values within expressions
@@ -133,21 +135,27 @@ export type FieldReferencesThatInferTo<Schema extends Document, DesiredType> =
  * InferNestedFieldReference<{ count: number }, ['$count', 5, 'literal']> // [number, 5, 'literal']
  * InferNestedFieldReference<{ timestamp: Date }, { date: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } } }>
  * // { date: string }
+ *
+ * `Vars` is the USER variable environment (binder/lookup-let bindings),
+ * threaded through every recursive arm so `"$$total"` deep inside a
+ * binder's `in` still resolves; system variables resolve statically beside
+ * it (InferVariableReference's second tier).
  */
-export type InferNestedFieldReference<Schema extends Document, Obj> =
+export type InferNestedFieldReference<
+  Schema extends Document,
+  Obj,
+  Vars extends Document = {},
+> =
   Obj extends FieldReference<Schema> ? InferFieldReference<Schema, Obj>
-  : // Nested `$$REMOVE` deletes the field: `never` here is load-bearing —
-  // RemoveNeverFields (utils/updates.ts) strips the key from the output.
-  Obj extends "$$REMOVE" ? never
-  : // Other `$$`-system variables ($$NOW, $$ROOT, ...) are valid MongoDB
-  // whose inference is not modeled: degrade to `unknown`, never to a
-  // dropped field (validation accepts them, so `never` would silently
-  // erase the key from the output schema).
-  Obj extends `$$${string}` ? unknown
+  : // `$$REMOVE`'s `never` is load-bearing — RemoveNeverFields
+  // (utils/updates.ts) strips the key; everything unresolvable degrades to
+  // `unknown`, never to a dropped field (validation owns rejection).
+  Obj extends `$$${string}` ? InferVariableReference<Schema, Obj, Vars>
   : // Unknown single-`$` refs: validation brands them at the call site, so
   // inference must not invent a type for them.
   Obj extends `$${string}` ? never
-  : Obj extends unknown[] ? InferNestedFieldReferenceArray<Schema, Obj>
+  : Obj extends readonly unknown[] ?
+    InferNestedFieldReferenceArray<Schema, Obj, Vars>
   : Obj extends object ?
     Obj extends NonExpandableTypes ? Obj
     : // Only objects carrying a `$`-prefixed key are candidates for
@@ -157,28 +165,46 @@ export type InferNestedFieldReference<Schema extends Document, Obj> =
     // here). InferExpression is forgiving: malformed operands keep the
     // operator's declared result type while the operand brand reports the
     // error at the input position.
-    HasOperatorKey<Obj> extends true ? InferExpression<Schema, Obj>
-    : InferNestedFieldReferenceObject<Schema, Obj>
+    HasOperatorKey<Obj> extends true ? InferExpression<Schema, Obj, Vars>
+    : InferNestedFieldReferenceObject<Schema, Obj, Vars>
   : Obj; // Handles literals (string, number, boolean, null, undefined, etc.)
+
+/**
+ * An array element as MongoDB stores it: a missing or `$$REMOVE`d value is
+ * null, and `$$REMOVE`d fields of element objects are dropped (no $set
+ * merge reaches inside arrays).
+ */
+export type ArrayElementValue<T> =
+  [T] extends [never] ? null
+  : RemoveNeverFields<undefined extends T ? Exclude<T, undefined> | null : T>;
 
 /**
  * Helper type for resolving field references in arrays
  * Handles both tuple types and regular arrays
  */
-type InferNestedFieldReferenceArray<Schema extends Document, Arr> =
-  Arr extends [] ? []
-  : Arr extends [infer First, ...infer Rest] ?
+type InferNestedFieldReferenceArray<
+  Schema extends Document,
+  Arr,
+  Vars extends Document,
+> =
+  Arr extends readonly [] ? []
+  : Arr extends readonly [infer First, ...infer Rest] ?
     [
-      InferNestedFieldReference<Schema, First>,
-      ...InferNestedFieldReferenceArray<Schema, Rest>,
+      ArrayElementValue<InferNestedFieldReference<Schema, First, Vars>>,
+      ...InferNestedFieldReferenceArray<Schema, Rest, Vars>,
     ]
-  : Arr extends (infer Item)[] ? InferNestedFieldReference<Schema, Item>[]
+  : Arr extends readonly (infer Item)[] ?
+    ArrayElementValue<InferNestedFieldReference<Schema, Item, Vars>>[]
   : never;
 
 /**
  * Helper type for resolving field references in objects
  * Preserves object structure while resolving any field references
  */
-type InferNestedFieldReferenceObject<Schema extends Document, Obj> = Prettify<{
-  [K in keyof Obj]: InferNestedFieldReference<Schema, Obj[K]>;
+type InferNestedFieldReferenceObject<
+  Schema extends Document,
+  Obj,
+  Vars extends Document,
+> = Prettify<{
+  [K in keyof Obj]: InferNestedFieldReference<Schema, Obj[K], Vars>;
 }>;

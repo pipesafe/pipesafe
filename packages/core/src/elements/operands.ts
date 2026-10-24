@@ -23,6 +23,7 @@
 import { PipeSafeError } from "../utils/errors";
 import { Document } from "../utils/objects";
 import { FieldReferencesThatInferTo } from "./fieldReference";
+import { SystemVariablesThatInferTo } from "./variables";
 
 /**
  * Field-position check: the field's resolved type `T` must satisfy `Allowed`;
@@ -33,10 +34,20 @@ export type FieldOperand<T, Allowed, Msg extends string, Result = T> =
   [T] extends [Allowed] ? Result : PipeSafeError<Msg>;
 
 /**
+ * `$`-refs and `$$`-variables whose resolved type satisfies `T`. System
+ * variables join by ACCURATE type (SystemVariableSpec): a Date target
+ * accepts "$$NOW", a numeric one doesn't — both finite unions, so
+ * completion safety holds.
+ */
+export type ReferencesInferringTo<Schema extends Document, T> =
+  | FieldReferencesThatInferTo<Schema, T>
+  | SystemVariablesThatInferTo<Schema, T>;
+
+/**
  * Expression-position set: acceptable literals/refs for a target type, with
  * the brand arm for hover messaging.
  */
 export type ExpressionOperand<Schema extends Document, T, Msg extends string> =
   | T
-  | FieldReferencesThatInferTo<Schema, T>
+  | ReferencesInferringTo<Schema, T>
   | PipeSafeError<Msg>;

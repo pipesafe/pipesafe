@@ -12,6 +12,7 @@
  */
 
 import { Pipeline } from "./Pipeline";
+import { Collection } from "../collection/Collection";
 import { Document } from "../utils/objects";
 
 type User = {
@@ -113,19 +114,36 @@ const _set_bad_typo_op_nested = new Pipeline<User>().set({
 const _set_generic_helper_ok = <D extends Document>(p: Pipeline<D, D>): void =>
   void p.set({ x: { $toUpper: "$y" }, y: { $add: [1, 2] } });
 
-// set — `$$`-system variables are not field references; they are accepted.
+// set — `$$`-variable references are accepted, dotted paths included; a
+// bad dotted path rejects at the constraint (finite union).
 const _set_system_var_ok = new Pipeline<User>().set({
   a: { b: "$$REMOVE" },
   now: "$$NOW",
+  rootName: "$$ROOT.name",
+  currentAge: "$$CURRENT.age",
 });
 
-// set — $concat operands are validated ELEMENT-WISE (ValidateConcatValue):
-// plain strings of any shape (separators NoDollarString can't cover),
-// valid string refs, and `$$`-system variables pass; typo'd `$`-refs brand
-// with the Field message; refs to non-string fields and non-string
-// literals brand with the operator's RequiresMsg.
+const _set_bad_sysvar_path_top = new Pipeline<User>().set({
+  // @ts-expect-error  '$$ROOT.naem' is not in the environment's vocabulary
+  x: "$$ROOT.naem",
+});
+
+// set — $concat operands validate ELEMENT-WISE: plain strings, valid
+// string refs, and string-RESOLVING `$$`-references ("$$ROOT.name") pass;
+// typo'd refs get the Field brand; non-string refs/literals/variables
+// ("$$NOW" is a Date) get the operator's RequiresMsg.
 const _set_concat_ok = new Pipeline<User>().set({
-  greeting: { $concat: ["Hello ", "$name", " - ", "(", "", "$$NOW"] },
+  greeting: { $concat: ["Hello ", "$name", " - ", "(", "", "$$ROOT.name"] },
+});
+
+const _set_concat_nonstring_sysvar = new Pipeline<User>().set({
+  greeting: {
+    $concat: [
+      "Now: ",
+      // @ts-expect-error  '$$NOW' is a Date; $concat requires a string operand
+      "$$NOW",
+    ],
+  },
 });
 
 const _set_concat_bad_ref = new Pipeline<User>().set({
@@ -158,12 +176,325 @@ const _set_concat_bad_literal = new Pipeline<User>().set({
   },
 });
 
+// set — nested expressions in $concat must RESOLVE to string.
+const _set_concat_expression_ok = new Pipeline<User>().set({
+  label: { $concat: ["Age: ", { $toString: "$age" }] },
+  hashTags: {
+    $map: { input: "$tags", in: { $concat: ["#", { $toUpper: "$$this" }] } },
+  },
+});
+
+const _set_concat_bad_expression = new Pipeline<User>().set({
+  greeting: {
+    $concat: [
+      "n = ",
+      // @ts-expect-error  $add resolves to a number; $concat requires a string
+      { $add: [1, 2] },
+    ],
+  },
+});
+
 // set — allow-listed valid-but-unmodeled operators (here: trigonometry,
 // MongoDB 4.2+) are accepted by NAME; only names outside registry +
 // allow-list brand as typos.
 const _set_trig_allowlisted_ok = new Pipeline<User>().set({
   angleRad: { $degreesToRadians: "$age" },
   angleDeg: { $radiansToDegrees: "$age" },
+});
+
+// set — system variables are accepted in TYPED operand positions by their
+// ACCURATE type (SystemVariablesThatInferTo): a Date-target operand takes
+// "$$NOW".
+const _set_sysvar_operand_ok = new Pipeline<User>().set({
+  expiry: { $dateAdd: { startDate: "$$NOW", unit: "day", amount: 30 } },
+});
+
+// Every typed reference position takes dotted `$$ROOT` rewrites, not only
+// ExpressionOperand-built ones.
+const _set_sysvar_dotted_operands_ok = new Pipeline<User>().set({
+  later: {
+    $dateAdd: { startDate: "$$NOW", unit: "day", amount: "$$ROOT.age" },
+  },
+  firstTag: { $arrayElemAt: ["$$ROOT.tags", "$$CURRENT.age"] },
+});
+
+const _set_sysvar_dotted_operand_bad = new Pipeline<User>().set({
+  // @ts-expect-error  $$ROOT.name is a string; $arrayElemAt's index is numeric
+  firstTag: { $arrayElemAt: ["$tags", "$$ROOT.name"] },
+});
+
+// set — $let interiors validate WITH the block's bindings: bound `$$`-vars
+// pass (dotted paths included), `vars` values check in the OUTER scope,
+// unknown `$$`-names inside `in` still brand.
+const _set_let_ok = new Pipeline<User>().set({
+  agePlus: { $let: { vars: { t: "$age" }, in: { $add: ["$$t", 1] } } },
+  viaRoot: { $let: { vars: { r: "$$ROOT" }, in: "$$r.age" } },
+});
+
+const _set_let_bad_vars_ref = new Pipeline<User>().set({
+  x: {
+    $let: {
+      vars: {
+        // @ts-expect-error  '$naem' is not on the schema
+        t: "$naem",
+      },
+      in: "$$t",
+    },
+  },
+});
+
+const _set_let_unknown_var = new Pipeline<User>().set({
+  x: {
+    $let: {
+      vars: { t: "$age" },
+      // @ts-expect-error  '$$typo' is not a recognized system variable
+      in: "$$typo",
+    },
+  },
+});
+
+// set — $map/$filter bind the element under `as` (default "this"); the
+// bound variable resolves inside `in`/`cond` and an unbound `$$`-name
+// brands.
+const _set_map_ok = new Pipeline<User>().set({
+  hashTags: {
+    $map: { input: "$tags", as: "t", in: { $concat: ["#", "$$t"] } },
+  },
+});
+
+const _set_filter_ok = new Pipeline<User>().set({
+  activeTags: {
+    $filter: { input: "$tags", cond: { $ne: ["$$this", "inactive"] } },
+  },
+});
+
+const _set_filter_bad_cond_var = new Pipeline<User>().set({
+  t: {
+    $filter: {
+      input: "$tags",
+      // @ts-expect-error  '$$item' is not bound here (the element is $$this)
+      cond: { $eq: ["$$item", "x"] },
+    },
+  },
+});
+
+// set — the binder walks still re-check the sibling operand keys against
+// the registry (`limit` is a number, `as` a string).
+const _set_filter_bad_limit = new Pipeline<User>().set({
+  t: {
+    $filter: {
+      input: "$tags",
+      cond: true,
+      // @ts-expect-error  $filter's limit must be a number
+      limit: "abc",
+    },
+  },
+});
+
+const _set_filter_bad_as = new Pipeline<User>().set({
+  t: {
+    $filter: {
+      input: "$tags",
+      // @ts-expect-error  $filter's as must be a string
+      as: 5,
+      cond: true,
+    },
+  },
+});
+
+const _set_map_bad_as = new Pipeline<User>().set({
+  t: {
+    // @ts-expect-error  $map's as must be a string
+    $map: { input: "$tags", as: 5, in: 1 },
+  },
+});
+
+const _set_filter_limit_ok = new Pipeline<User>().set({
+  t: { $filter: { input: "$tags", as: "t", cond: true, limit: 2 } },
+});
+
+// set — a binder nested inside another operator's operand is walked too
+// (the registry types binder bodies `unknown`).
+const _set_nested_binder_bad = new Pipeline<User>().set({
+  n: {
+    $size: {
+      $filter: {
+        input: "$tags",
+        // @ts-expect-error  '$$tpyo' is not bound here (the element is $$this)
+        cond: { $eq: ["$$tpyo", "a"] },
+      },
+    },
+  },
+});
+
+const _group_nested_binder_bad = new Pipeline<User>().group({
+  _id: null,
+  // @ts-expect-error  '$naem' is not on the schema
+  names: { $push: { $map: { input: "$tags", in: "$naem" } } },
+});
+
+const _set_map_of_map_ok = new Pipeline<User>().set({
+  t: {
+    $map: {
+      input: { $map: { input: [1, 2, 3], as: "y", in: "$$y" } },
+      as: "x",
+      in: "$$x",
+    },
+  },
+});
+
+// set — a binder-shaped `input` gets its own interior walk.
+const _set_filter_bad_map_input = new Pipeline<User>().set({
+  t: {
+    $filter: {
+      // @ts-expect-error  '$naem' is not on the schema
+      input: { $map: { input: "$tags", in: "$naem" } },
+      cond: true,
+    },
+  },
+});
+
+// set — user variable names must begin lowercase (MongoDB rejects the rest,
+// and an uppercase name would shadow a system variable).
+const _set_let_bad_var_name = new Pipeline<User>().set({
+  x: {
+    $let: {
+      vars: {
+        // @ts-expect-error  'NOW' is not a valid user variable name
+        NOW: "$name",
+      },
+      in: "$$NOW",
+    },
+  },
+});
+
+const _set_let_bad_var_chars = new Pipeline<User>().set({
+  x: {
+    $let: {
+      vars: {
+        // @ts-expect-error  'my-var' is not a valid user variable name
+        "my-var": "$name",
+      },
+      in: 1,
+    },
+  },
+});
+
+const _set_let_control_char_name = new Pipeline<User>().set({
+  x: {
+    $let: {
+      vars: {
+        // @ts-expect-error  a tab is not valid in a user variable name
+        "a\tb": 1,
+      },
+      in: 1,
+    },
+  },
+});
+
+// Unchecked accumulators still resolve `$$`-variable operands.
+const _group_push_unknown_var = new Pipeline<User>().group({
+  _id: null,
+  // @ts-expect-error  '$$nope' is not a recognized system variable
+  all: { $push: "$$nope" },
+  root: { $first: "$$ROOT" },
+  latest: { $max: "$$CLUSTER_TIME" },
+});
+
+const _set_let_numeric_name = new Pipeline<User>().set({
+  x: {
+    $let: {
+      vars: {
+        // @ts-expect-error  '1' is not a valid user variable name
+        1: "$name",
+      },
+      in: 1,
+    },
+  },
+});
+
+// Expression inputs bind the same element type for validation as for
+// inference ($$this is a number here, so $concat rejects it).
+const _set_map_expr_input_bad = new Pipeline<User>().set({
+  x: {
+    $map: {
+      input: { $filter: { input: [1, 2], cond: true } },
+      in: {
+        $concat: [
+          // @ts-expect-error  $$this is a number
+          "$$this",
+        ],
+      },
+    },
+  },
+});
+
+// A binder input that references a user variable is walked: unknown
+// names inside it brand.
+const _set_binder_input_unknown_var = new Pipeline<User>().set({
+  x: {
+    $map: {
+      input: "$tags",
+      in: {
+        $map: {
+          input: {
+            $concatArrays: [
+              ["$$this"],
+              // @ts-expect-error  '$$tpyo' is not bound
+              "$$tpyo",
+            ],
+          },
+          as: "t",
+          in: "$$t",
+        },
+      },
+    },
+  },
+});
+
+const _set_user_roles_path_ok = new Pipeline<User>().set({
+  n: { $size: "$$USER_ROLES.role" },
+});
+
+// Literal-array inputs are walked element-wise ("" and null are valid
+// elements), and `$literal` content is data, not a binder.
+const _set_literal_inputs_ok = new Pipeline<User>().set({
+  v: { $map: { input: ["", null, "-"], in: "$$this" } },
+  f: { $filter: { input: [" - "], cond: true } },
+  t: { $literal: { $map: "placeholder" } },
+});
+
+// Nested $map inputs accept any literal array; a $let input must yield an
+// array.
+const _set_nested_map_inputs_ok = new Pipeline<User>().set({
+  s: { $sum: { $map: { input: [null, 1], as: "e", in: 1 } } },
+  n: { $size: { $map: { input: ["", "a"], in: "$$this" } } },
+  l: { $map: { input: { $let: { vars: {}, in: "$tags" } }, in: "$$this" } },
+});
+
+const _set_let_input_not_array = new Pipeline<User>().set({
+  m: {
+    $map: {
+      // @ts-expect-error  a $let input must resolve to an array
+      input: { $let: { vars: {}, in: "$name" } },
+      in: "$$this",
+    },
+  },
+});
+
+// Generic-schema helpers compile with binders over bound variables (the
+// user-variable walk runs ahead of the deferred schema-dependent arms).
+const _set_generic_binder_ok = <D extends Document>(p: Pipeline<D, D>): void =>
+  void p.set({
+    x: { $let: { vars: { a: 1 }, in: { $add: ["$$a", 1] } } },
+    y: { $map: { input: [1, 2], as: "v", in: { $add: ["$$v", 1] } } },
+  });
+
+const _set_map_bad_as_name = new Pipeline<User>().set({
+  t: {
+    // @ts-expect-error  '_t' is not a valid user variable name
+    $map: { input: "$tags", as: "_t", in: "$$_t" },
+  },
 });
 
 // group — accumulator operand brands fire at the chained call site via
@@ -216,14 +547,28 @@ const _group_min_underscore_ok = new Pipeline<User>().group({
   m: { $min: "_pending" },
 });
 
-// group — `$$`-system variables are valid MongoDB in _id and in ANY
-// accumulator position (`$max: "$$NOW"`, `$push: "$$ROOT"`): they must not
-// hit the comparable/numeric operand brands.
+// group — `$$`-variables are valid in _id and ANY accumulator position
+// (they must not hit the comparable/numeric operand brands); dotted paths
+// resolve, bad paths get the Field brand.
 const _group_system_vars_ok = new Pipeline<User>().group({
   _id: "$$NOW",
   latest: { $max: "$$NOW" },
-  total: { $sum: "$$NOW" },
+  total: { $sum: "$$ROOT.age" },
   docs: { $push: "$$ROOT" },
+  newest: { $max: "$$ROOT.joinedAt" },
+  first: { $min: "$$ROOT.name" },
+});
+
+const _group_bad_sysvar_sum = new Pipeline<User>().group({
+  _id: null,
+  // @ts-expect-error  $$NOW is a Date; $sum requires a numeric operand
+  total: { $sum: "$$NOW" },
+});
+
+const _group_bad_sysvar_path = new Pipeline<User>().group({
+  _id: null,
+  // @ts-expect-error  'naem' is not on the schema
+  latest: { $max: "$$ROOT.naem" },
 });
 
 // group — an accumulator key mixed with plain keys is malformed (MongoDB:
@@ -341,6 +686,103 @@ const _facet_bad = new Pipeline<User>().facet({
   bad: (p) => p.sort({ naem: 1 }),
 });
 
+// ---------------------------------------------------------------------------
+// lookup `let` — bindings validate against the OUTER schema/environment and
+// enter the sub-pipeline's environment (Pipeline's Env generic).
+// ---------------------------------------------------------------------------
+
+type Order = { _id: string; sku: string; qty: number };
+declare const _ordersColl: Collection<Order>;
+
+const _lookup_let_ok = new Pipeline<User>().lookup({
+  from: _ordersColl,
+  as: "orders",
+  let: { userName: "$name", minQty: 2, rootAge: "$$ROOT.age" },
+  pipeline: (p) =>
+    p
+      .match({ $expr: { $eq: ["$sku", "$$userName"] } })
+      .set({
+        forUser: "$$userName",
+        boosted: { $add: ["$$minQty", "$qty"] },
+        viaForeignRoot: "$$ROOT.qty",
+      })
+      .group({ _id: "$sku", total: { $sum: "$qty" } }),
+});
+
+const _lookup_let_bad_var_name = new Pipeline<User>().lookup({
+  from: _ordersColl,
+  as: "orders",
+  let: {
+    // @ts-expect-error  'ROOT' is not a valid user variable name
+    ROOT: "$name",
+  },
+  pipeline: (p) => p.limit(1),
+});
+
+const _lookup_let_bad_outer_ref = new Pipeline<User>().lookup({
+  from: _ordersColl,
+  as: "orders",
+  let: {
+    // @ts-expect-error  '$naem' is not on the OUTER schema
+    u: "$naem",
+  },
+  pipeline: (p) => p.limit(1),
+});
+
+// An Env'd Pipeline accepts its bindings at string-value positions and
+// rejects out-of-scope names.
+declare const _envPipeline: Pipeline<
+  Order,
+  Order,
+  "runtime",
+  never,
+  { u: string }
+>;
+const _lookup_let_env_binding_ok = _envPipeline.set({ ok: "$$u" });
+
+const _lookup_let_env_unknown_var = _envPipeline.set({
+  // @ts-expect-error  '$$typo' is not bound in this environment
+  bad: "$$typo",
+});
+
+// Operand type checks stay strict in a bound environment unless the operand
+// references a user variable (the registry relation is Vars-blind).
+const _lookup_let_env_bad_operand = _envPipeline.set({
+  // @ts-expect-error  $add requires numeric operands; sku is a string
+  bad: { $add: ["$sku", 1] },
+});
+
+const _lookup_let_env_bad_sysvar_operand = _envPipeline.set({
+  // @ts-expect-error  $add requires numeric operands; sku is a string
+  bad: { $add: ["$$NOW", "$sku"] },
+});
+
+const _lookup_let_env_bad_accumulator = _envPipeline.group({
+  _id: null,
+  // @ts-expect-error  $sum requires a numeric operand; sku is a string
+  s: { $sum: "$sku" },
+});
+
+const _lookup_let_env_bad_bound_accumulator = _envPipeline.group({
+  _id: null,
+  // @ts-expect-error  $$u is bound to a string; $sum requires a numeric operand
+  s: { $sum: "$$u" },
+});
+
+const _set_map_bad_operand = new Pipeline<User>().set({
+  t: {
+    // @ts-expect-error  $multiply requires numeric operands; name is a string
+    $map: { input: "$tags", in: { $multiply: ["$name", 2] } },
+  },
+});
+
+const _set_map_bad_sysvar_operand = new Pipeline<User>().set({
+  t: {
+    // @ts-expect-error  $add requires numeric/date operands; name is a string
+    $map: { input: "$tags", in: { $add: ["$$NOW", "$name"] } },
+  },
+});
+
 export {
   _match_bad,
   _sort_bad,
@@ -360,8 +802,43 @@ export {
   _set_concat_bad_ref,
   _set_concat_nonstring_ref,
   _set_concat_bad_literal,
+  _set_concat_expression_ok,
+  _set_concat_bad_expression,
+  _set_concat_nonstring_sysvar,
   _set_trig_allowlisted_ok,
+  _set_sysvar_operand_ok,
+  _set_sysvar_dotted_operands_ok,
+  _set_sysvar_dotted_operand_bad,
+  _set_let_ok,
+  _set_let_bad_vars_ref,
+  _set_let_unknown_var,
+  _set_map_ok,
+  _set_filter_ok,
+  _set_filter_bad_limit,
+  _set_filter_bad_as,
+  _set_map_bad_as,
+  _set_filter_limit_ok,
+  _set_filter_bad_map_input,
+  _set_nested_binder_bad,
+  _group_nested_binder_bad,
+  _set_map_of_map_ok,
+  _set_let_bad_var_chars,
+  _set_let_numeric_name,
+  _set_let_control_char_name,
+  _group_push_unknown_var,
+  _set_map_expr_input_bad,
+  _set_binder_input_unknown_var,
+  _set_user_roles_path_ok,
+  _set_nested_map_inputs_ok,
+  _set_let_input_not_array,
+  _set_literal_inputs_ok,
+  _set_generic_binder_ok,
+  _set_let_bad_var_name,
+  _set_map_bad_as_name,
+  _set_filter_bad_cond_var,
   _group_system_vars_ok,
+  _group_bad_sysvar_path,
+  _group_bad_sysvar_sum,
   _unset_bad,
   _group_bad_sum,
   _group_min_string_ok,
@@ -385,4 +862,16 @@ export {
   _replaceRoot_bad,
   _unwind_bad,
   _facet_bad,
+  _set_bad_sysvar_path_top,
+  _lookup_let_ok,
+  _lookup_let_bad_var_name,
+  _lookup_let_bad_outer_ref,
+  _lookup_let_env_binding_ok,
+  _lookup_let_env_unknown_var,
+  _lookup_let_env_bad_operand,
+  _lookup_let_env_bad_sysvar_operand,
+  _lookup_let_env_bad_accumulator,
+  _lookup_let_env_bad_bound_accumulator,
+  _set_map_bad_operand,
+  _set_map_bad_sysvar_operand,
 };

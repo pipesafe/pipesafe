@@ -73,8 +73,15 @@ export {
 } from "./elements/expressions";
 export type { ExpressionCategory, OpsInCategory } from "./elements/expressions";
 export { ACCUMULATOR_OPERATORS } from "./stages/group";
-export { SYSTEM_VARIABLES } from "./elements/literals";
-export type { SystemVariable } from "./elements/literals";
+export { SYSTEM_VARIABLES } from "./elements/variables";
+export type {
+  SystemVariable,
+  SystemVariableSpec,
+  SystemVariableReferences,
+  SystemVariablesThatInferTo,
+  VariableReferences,
+  InferVariableReference,
+} from "./elements/variables";
 
 // Stage type re-exports for advanced usage
 export type { LimitQuery, ResolveLimitOutput } from "./stages/limit";

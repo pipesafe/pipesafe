@@ -122,20 +122,22 @@ type MergeSetValue<BaseValue, UpdateValue> =
 // Handles both required never fields and optional never fields (never | undefined)
 // Recursively removes never fields from nested objects, with early exits for
 // arrays and non-object types.
-type RemoveNeverFields<T> =
+export type RemoveNeverFields<T> =
   T extends object ?
-    T extends any[] ?
+    T extends readonly unknown[] ?
       T // Early exit: arrays are preserved as-is
     : {
         [K in keyof T as [T[K]] extends [never] ? never
         : [Exclude<T[K], undefined>] extends [never] ? never
         : K]: T[K] extends object ?
+          // Per-member `U`, not `T[K]`: the true branch narrows `T[K]` to
+          // `T[K] & object`, which leaks into the output for tuples.
           T[K] extends infer U ?
-            U extends any[] ?
-              T[K] // Preserve arrays
+            U extends readonly unknown[] ?
+              U // Preserve arrays
             : IsPlainObject<U> extends true ?
               RemoveNeverFields<U> // Recursively remove never fields from nested objects
-            : T[K]
+            : U
           : T[K]
         : T[K];
       }

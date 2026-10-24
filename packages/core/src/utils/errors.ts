@@ -94,9 +94,14 @@ export type UnknownFieldError<Path extends string> =
 
 /**
  * An unlisted `$$`-variable — not one of the enumerated SYSTEM_VARIABLES
- * (elements/literals.ts) and not bound by an enclosing `$let`/`$map`/
- * `$filter` (whose interiors are `unknown`-typed and skip validation).
+ * (elements/variables.ts) and not bound in the `Vars` environment the
+ * enclosing `$let`/`$map`/`$filter` walks thread down
+ * (ValidateVariableReference, elements/variables.ts).
  * Aggregation-command-level `let` variables are not modeled yet.
  */
 export type UnknownSystemVariableError<Name extends string> =
   PipeSafeError<`Variable '${Name}' is not a recognized system variable.`>;
+
+/** A user variable name MongoDB rejects (ValidateVariableName). */
+export type InvalidVariableNameError<Name extends string> =
+  PipeSafeError<`Variable '$$${Name}' is not a valid user variable name.`>;

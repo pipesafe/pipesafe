@@ -1,10 +1,9 @@
-import {
-  FieldReference,
-  InferNestedFieldReference,
-} from "../elements/fieldReference";
+import { InferNestedFieldReference } from "../elements/fieldReference";
 import { Expression } from "../elements/expressions";
-import { AnyLiteral, SystemVariable } from "../elements/literals";
+import { AnyLiteral } from "../elements/literals";
+import { ReferenceValue } from "../elements/variables";
 import { Document, Prettify } from "../utils/objects";
+import { RemoveNeverFields } from "../utils/updates";
 import { PassThrough } from "../utils/errors";
 
 /**
@@ -13,15 +12,18 @@ import { PassThrough } from "../utils/errors";
  * Replaces the input document with the specified document.
  * The newRoot can be:
  * - A field reference: "$someField"
- * - An enumerated `$$`-system variable: "$$ROOT", "$$CURRENT", ...
+ * - A `$$`-variable reference from the environment: "$$ROOT",
+ *   "$$ROOT.shipping", a lookup-let binding, ...
  * - An expression: { $add: ["$field1", "$field2"] }
  * - A nested object with field references and expressions
  * - A literal value
  */
-export type ReplaceRootQuery<Schema extends Document> = {
+export type ReplaceRootQuery<
+  Schema extends Document,
+  Vars extends Document = {},
+> = {
   newRoot:
-    | FieldReference<Schema>
-    | SystemVariable
+    | ReferenceValue<Schema, Vars>
     | Expression<Schema>
     | AnyLiteral<Schema>
     | Document; // For nested objects with field references and expressions
@@ -38,9 +40,18 @@ export type ReplaceRootQuery<Schema extends Document> = {
 export type ResolveReplaceRootOutput<
   Schema extends Document,
   Query,
+  Vars extends Document = {},
 > = PassThrough<
   Schema,
   Query extends { newRoot: infer NewRoot } ?
-    Prettify<InferNestedFieldReference<Schema, NewRoot>>
+    // Wide query (non-literal, or the constraint-failure fallback): skip
+    // inference. The empty literal `{}` is not wide.
+    Document extends NewRoot ?
+      [NewRoot] extends [Record<string, never>] ?
+        {}
+      : Document
+    : Prettify<
+        RemoveNeverFields<InferNestedFieldReference<Schema, NewRoot, Vars>>
+      >
   : never
 >;
