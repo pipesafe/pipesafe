@@ -25,8 +25,10 @@ describe("Connection and query options", async () => {
     // CollectionOptions, which accepts the { level } shorthand)
     const db = new Database({
       client,
-      databaseName: DBName,
-      options: { readConcern: new ReadConcern("majority") },
+      db: {
+        name: DBName,
+        options: { readConcern: new ReadConcern("majority") },
+      },
     });
     const collection = db.collection<TestDoc>("docs", {
       readPreference: "secondaryPreferred",
@@ -42,18 +44,14 @@ describe("Connection and query options", async () => {
     const collectionOptions = { readPreference: "secondaryPreferred" } as const;
     const collection = new Collection<TestDoc>({
       client,
-      databaseName: DBName,
-      collectionName: "inherit_docs",
-      dbOptions,
-      collectionOptions,
+      db: { name: DBName, options: dbOptions },
+      collection: { name: "inherit_docs", options: collectionOptions },
     });
 
     const dbSpy = vi.spyOn(MongoClient.prototype, "db");
     const collectionSpy = vi.spyOn(Db.prototype, "collection");
     try {
-      // Cursor is lazy, so no server round-trip happens here. Each layer's
-      // options are set where the layer is created and flow down —
-      // execute() takes only the aggregation's own AggregateOptions.
+      // Cursor is lazy, so no server round-trip happens here
       collection.aggregate().execute();
 
       expect(dbSpy).toHaveBeenLastCalledWith(DBName, dbOptions);
@@ -70,10 +68,14 @@ describe("Connection and query options", async () => {
   it("replaces a layer's inherited options when execute re-targets it", () => {
     const collection = new Collection<TestDoc>({
       client,
-      databaseName: DBName,
-      collectionName: "inherit_docs",
-      dbOptions: { readConcern: new ReadConcern("majority") },
-      collectionOptions: { readPreference: "secondaryPreferred" },
+      db: {
+        name: DBName,
+        options: { readConcern: new ReadConcern("majority") },
+      },
+      collection: {
+        name: "inherit_docs",
+        options: { readPreference: "secondaryPreferred" },
+      },
     });
 
     const dbSpy = vi.spyOn(MongoClient.prototype, "db");
@@ -96,9 +98,8 @@ describe("Connection and query options", async () => {
     const collectionOptions = { readPreference: "secondaryPreferred" } as const;
     const collection = new Collection<TestDoc>({
       client,
-      collectionName: "accessor_docs",
-      dbOptions,
-      collectionOptions,
+      db: { name: DBName, options: dbOptions },
+      collection: { name: "accessor_docs", options: collectionOptions },
     });
 
     // Consumers reading a Collection through the Source interface (e.g.
@@ -110,8 +111,8 @@ describe("Connection and query options", async () => {
   it("passes AggregateOptions through Pipeline.execute", async () => {
     const collection = new Collection<TestDoc>({
       client,
-      databaseName: DBName,
-      collectionName: "agg_docs",
+      db: { name: DBName },
+      collection: { name: "agg_docs" },
     });
     await collection.insertMany(docs);
 
@@ -143,8 +144,8 @@ describe("Connection and query options", async () => {
     await client.db(DBName).createCollection("txn_docs");
     const collection = new Collection<TestDoc>({
       client,
-      databaseName: DBName,
-      collectionName: "txn_docs",
+      db: { name: DBName },
+      collection: { name: "txn_docs" },
     });
 
     const session = client.startSession();

@@ -251,7 +251,7 @@ type CategorySchema = {
 };
 
 const categoriesCollection = new Collection<CategorySchema>({
-  collectionName: "categories",
+  collection: { name: "categories" },
 });
 
 // Find all ancestor categories for each post's category

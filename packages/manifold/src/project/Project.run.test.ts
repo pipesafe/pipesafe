@@ -47,7 +47,7 @@ describe("Project.run()", async () => {
   // ==========================================================================
 
   const sourceCollection = new Collection<RawDoc>({
-    collectionName: "raw_docs",
+    collection: { name: "raw_docs" },
   });
 
   const stagingModel = new Model({
@@ -81,11 +81,11 @@ describe("Project.run()", async () => {
   // ==========================================================================
 
   const ordersSource = new Collection<Order>({
-    collectionName: "orders",
+    collection: { name: "orders" },
   });
 
   const usersSource = new Collection<User>({
-    collectionName: "users",
+    collection: { name: "users" },
   });
 
   const stgOrders = new Model({
@@ -104,7 +104,7 @@ describe("Project.run()", async () => {
 
   // User groups for testing chained lookup dependencies
   const userGroupsSource = new Collection<{ _id: string; groupName: string }>({
-    collectionName: "user_groups",
+    collection: { name: "user_groups" },
   });
 
   const stgUserGroups = new Model({
@@ -188,7 +188,7 @@ describe("Project.run()", async () => {
   };
 
   const employeesSource = new Collection<EmployeeDoc>({
-    collectionName: "employees",
+    collection: { name: "employees" },
   });
 
   const sampleEmployees: EmployeeDoc[] = [
@@ -426,9 +426,11 @@ describe("Project.run()", async () => {
 
       const majority = new ReadConcern("majority");
       const optionedSource = new Collection<RawDoc>({
-        collectionName: "raw_docs_opts",
-        dbOptions: { readConcern: majority },
-        collectionOptions: { readPreference: "secondaryPreferred" },
+        db: { name: db.databaseName, options: { readConcern: majority } },
+        collection: {
+          name: "raw_docs_opts",
+          options: { readPreference: "secondaryPreferred" },
+        },
       });
       const optionedModel = new Model({
         name: "staging_opts",

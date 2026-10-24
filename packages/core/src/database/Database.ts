@@ -6,32 +6,25 @@ import {
   RenameOptions,
   DbStatsOptions,
   RunCommandOptions,
-  DbOptions,
   CollectionOptions,
 } from "mongodb";
 import { Document } from "../utils/objects";
 import { Collection } from "../collection/Collection";
 import { pipesafe } from "../singleton/pipesafe";
 import { tagClient } from "../singleton/tagClient";
+import type { DbConfig } from "./config";
 
 export class Database {
   private client: MongoClient | undefined;
-  private databaseName: string;
-  private dbOptions: DbOptions | undefined;
-  constructor(args: {
-    client?: MongoClient | undefined;
-    databaseName: string;
-    /** Driver `DbOptions` (read/write concern, read preference, etc.) */
-    options?: DbOptions | undefined;
-  }) {
+  private db: DbConfig;
+  constructor(args: { client?: MongoClient | undefined; db: DbConfig }) {
     this.client = args.client;
-    this.databaseName = args.databaseName;
-    this.dbOptions = args.options;
+    this.db = args.db;
     tagClient(this.client);
   }
 
   getDatabaseName(): string {
-    return this.databaseName;
+    return this.db.name;
   }
 
   collection<Schema extends Document>(
@@ -40,10 +33,9 @@ export class Database {
   ): Collection<Schema> {
     return new Collection<Schema>({
       client: this.client,
-      databaseName: this.databaseName,
-      collectionName,
-      dbOptions: this.dbOptions,
-      collectionOptions: options,
+      db: this.db,
+      collection:
+        options ? { name: collectionName, options } : { name: collectionName },
     });
   }
 
@@ -61,7 +53,7 @@ export class Database {
 
   private getDatabase() {
     const client = this.getClient();
-    return client.db(this.databaseName, this.dbOptions);
+    return client.db(this.db.name, this.db.options);
   }
 
   // Collection Management

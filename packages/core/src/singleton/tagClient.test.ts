@@ -23,8 +23,8 @@ describe("tagClient", () => {
   it("is idempotent: wrapping the same client multiple times only tags once", () => {
     const client = makeFakeClient();
 
-    new Collection({ client, collectionName: "c" });
-    new Database({ client, databaseName: "d" });
+    new Collection({ client, collection: { name: "c" } });
+    new Database({ client, db: { name: "d" } });
     new Pipeline({ client });
     tagClient(client);
 

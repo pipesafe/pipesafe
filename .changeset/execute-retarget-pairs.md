@@ -2,4 +2,6 @@
 "@pipesafe/core": major
 ---
 
-`Pipeline.execute()` re-targets with name/options pairs: `databaseName` and `collectionName` are replaced by `db: { name, options? }` and `collection: { name, options? }`. Each pair replaces that layer's inherited name and options. Migrate `execute({ databaseName: "d", collectionName: "c" })` to `execute({ db: { name: "d" }, collection: { name: "c" } })`.
+`Collection`, `Database` and `Pipeline.execute()` address databases and collections with name/options pairs (`DbConfig` / `CollectionConfig`, both exported): `db: { name, options? }` and `collection: { name, options? }` replace `databaseName` / `collectionName` (and the `dbOptions` / `collectionOptions` / `options` arguments). In `execute()`, each pair replaces that layer's inherited name and options.
+
+Migrate `new Collection({ databaseName: "d", collectionName: "c" })` to `new Collection({ db: { name: "d" }, collection: { name: "c" } })`, `new Database({ databaseName: "d" })` to `new Database({ db: { name: "d" } })`, and `execute({ databaseName: "d", collectionName: "c" })` to `execute({ db: { name: "d" }, collection: { name: "c" } })`.

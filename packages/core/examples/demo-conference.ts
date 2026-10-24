@@ -48,9 +48,11 @@ type Speaker = {
 // Collections — the only place a string name is allowed
 // ============================================================================
 
-const attendees = new Collection<Attendee>({ collectionName: "attendees" });
-const talks = new Collection<Talk>({ collectionName: "talks" });
-const speakers = new Collection<Speaker>({ collectionName: "speakers" });
+const attendees = new Collection<Attendee>({
+  collection: { name: "attendees" },
+});
+const talks = new Collection<Talk>({ collection: { name: "talks" } });
+const speakers = new Collection<Speaker>({ collection: { name: "speakers" } });
 
 // ============================================================================
 // The pipeline from slide 3 — fixed, typed end-to-end

@@ -43,14 +43,9 @@ import { ResolveSampleOutput, SampleQuery } from "../stages/sample";
 import { CountQuery, ResolveCountOutput } from "../stages/count";
 import { OutQuery } from "../stages/out";
 import { MergeQuery } from "../stages/merge";
-import {
-  AggregateOptions,
-  AggregationCursor,
-  CollectionOptions,
-  DbOptions,
-  MongoClient,
-} from "mongodb";
+import { AggregateOptions, AggregationCursor, MongoClient } from "mongodb";
 import { type Source, type InferSourceType } from "../source/Source";
+import type { CollectionConfig, DbConfig } from "../database/config";
 
 // ============================================================================
 // Lookup Mode - Controls what sources can be used in lookup/unionWith
@@ -161,29 +156,21 @@ export class Pipeline<
   }
 
   private client: MongoClient | undefined;
-  private databaseName: string | undefined;
-  private collectionName: string | undefined;
-  private dbOptions: DbOptions | undefined;
-  private collectionOptions: CollectionOptions | undefined;
+  private db: DbConfig | undefined;
+  private collection: CollectionConfig | undefined;
 
   constructor(
     args: {
       pipeline?: Document[] | undefined;
       client?: MongoClient | undefined;
-      collectionName?: string | undefined;
-      databaseName?: string | undefined;
-      /** Driver `DbOptions` applied when resolving the database */
-      dbOptions?: DbOptions | undefined;
-      /** Driver `CollectionOptions` applied when resolving the collection */
-      collectionOptions?: CollectionOptions | undefined;
+      db?: DbConfig | undefined;
+      collection?: CollectionConfig | undefined;
     } = {}
   ) {
     this.pipeline = args.pipeline ?? [];
     this.client = args.client;
-    this.collectionName = args.collectionName;
-    this.databaseName = args.databaseName;
-    this.dbOptions = args.dbOptions;
-    this.collectionOptions = args.collectionOptions;
+    this.db = args.db;
+    this.collection = args.collection;
     tagClient(this.client);
   }
 
@@ -200,10 +187,8 @@ export class Pipeline<
     >({
       pipeline: [...this.pipeline, ...newStages],
       client: this.client,
-      collectionName: this.collectionName,
-      databaseName: this.databaseName,
-      dbOptions: this.dbOptions,
-      collectionOptions: this.collectionOptions,
+      db: this.db,
+      collection: this.collection,
     });
     next._ancestorsFromStages.push(
       ...this._ancestorsFromStages,
@@ -312,7 +297,7 @@ export class Pipeline<
       pipeline ?
         (pipeline as PipelineBuilder<any, any, any, any>)(
           new Pipeline<InferSourceType<C>, InferSourceType<C>, Mode, never>({
-            collectionName,
+            collection: { name: collectionName },
           })
         )
       : undefined;
@@ -728,8 +713,8 @@ export class Pipeline<
   execute(
     args: {
       client?: MongoClient;
-      db?: { name: string; options?: DbOptions };
-      collection?: { name: string; options?: CollectionOptions };
+      db?: DbConfig;
+      collection?: CollectionConfig;
       /** Driver `AggregateOptions` (e.g. `session`, `maxTimeMS`, `allowDiskUse`) */
       aggregateOptions?: AggregateOptions;
     } = {}
@@ -738,15 +723,12 @@ export class Pipeline<
     if (!client) throw new Error("Not connected");
     tagClient(client);
 
-    const db = args.db ?? { name: this.databaseName, options: this.dbOptions };
-    const collection = args.collection ?? {
-      name: this.collectionName,
-      options: this.collectionOptions,
-    };
-    if (!collection.name) throw new Error("No collection name provided");
+    const db = args.db ?? this.db;
+    const collection = args.collection ?? this.collection;
+    if (!collection) throw new Error("No collection name provided");
 
     return client
-      .db(db.name, db.options)
+      .db(db?.name, db?.options)
       .collection(collection.name, collection.options)
       .aggregate(this.getPipeline(), args.aggregateOptions);
   }

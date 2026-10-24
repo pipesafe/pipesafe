@@ -29,6 +29,7 @@ import {
   CollectionOptions,
 } from "mongodb";
 import { Pipeline } from "../pipeline/Pipeline";
+import type { CollectionConfig, DbConfig } from "../database/config";
 import { Document } from "../utils/objects";
 import { pipesafe } from "../singleton/pipesafe";
 import { tagClient } from "../singleton/tagClient";
@@ -41,48 +42,40 @@ export class Collection<Docs extends Document> implements Source<Docs> {
   readonly __outputType!: Docs;
 
   private client: MongoClient | undefined;
-  private databaseName: string | undefined;
-  private collectionName: string;
-  private dbOptions: DbOptions | undefined;
-  private collectionOptions: CollectionOptions | undefined;
+  private db: DbConfig | undefined;
+  private collection: CollectionConfig;
 
   constructor(args: {
     client?: MongoClient | undefined;
-    databaseName?: string | undefined;
-    collectionName: string;
-    /** Driver `DbOptions` applied when resolving the database */
-    dbOptions?: DbOptions | undefined;
-    /** Driver `CollectionOptions` (read/write concern, read preference, etc.) */
-    collectionOptions?: CollectionOptions | undefined;
+    db?: DbConfig | undefined;
+    collection: CollectionConfig;
   }) {
     this.client = args.client;
-    this.databaseName = args.databaseName;
-    this.collectionName = args.collectionName;
-    this.dbOptions = args.dbOptions;
-    this.collectionOptions = args.collectionOptions;
+    this.db = args.db;
+    this.collection = args.collection;
     tagClient(this.client);
   }
 
   // Accessors
 
   getCollectionName(): string {
-    return this.collectionName;
+    return this.collection.name;
   }
 
   getOutputCollectionName(): string {
-    return this.collectionName;
+    return this.collection.name;
   }
 
   getOutputDatabase(): string | undefined {
-    return this.databaseName;
+    return this.db?.name;
   }
 
   getOutputDbOptions(): DbOptions | undefined {
-    return this.dbOptions;
+    return this.db?.options;
   }
 
   getOutputCollectionOptions(): CollectionOptions | undefined {
-    return this.collectionOptions;
+    return this.collection.options;
   }
 
   private getClient() {
@@ -97,13 +90,13 @@ export class Collection<Docs extends Document> implements Source<Docs> {
 
   private getDatabase() {
     const client = this.getClient();
-    return client.db(this.databaseName, this.dbOptions);
+    return client.db(this.db?.name, this.db?.options);
   }
 
   private getCollection(): MongoCollection<Docs> {
     return this.getDatabase().collection<Docs>(
-      this.collectionName,
-      this.collectionOptions
+      this.collection.name,
+      this.collection.options
     );
   }
 
@@ -112,10 +105,8 @@ export class Collection<Docs extends Document> implements Source<Docs> {
   aggregate(): Pipeline<Docs, Docs> {
     return new Pipeline<Docs, Docs>({
       client: this.client,
-      databaseName: this.databaseName,
-      collectionName: this.collectionName,
-      dbOptions: this.dbOptions,
-      collectionOptions: this.collectionOptions,
+      db: this.db,
+      collection: this.collection,
     });
   }
 
@@ -296,7 +287,7 @@ export class Collection<Docs extends Document> implements Source<Docs> {
 
   async createCollection(options?: CreateCollectionOptions) {
     return this.getDatabase().createCollection<Docs>(
-      this.collectionName,
+      this.collection.name,
       options
     );
   }

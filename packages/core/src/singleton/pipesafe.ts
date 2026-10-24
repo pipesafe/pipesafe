@@ -45,8 +45,7 @@ class PipeSafe {
     if (!dbName) throw new Error("Db name required");
     return new Database({
       client: this.client,
-      databaseName: dbName,
-      options,
+      db: options ? { name: dbName, options } : { name: dbName },
     });
   }
 }

@@ -229,7 +229,7 @@ import { Pipeline } from "../pipeline/Pipeline";
 import { Collection } from "../collection/Collection";
 
 const employees = new Collection<Employee>({
-  collectionName: "employees",
+  collection: { name: "employees" },
 });
 
 type DocWithParts = {
@@ -363,7 +363,7 @@ type MixedEmployee =
   | { _id: string; name: string; managerId: string | null; type: "intern" };
 
 const mixedEmployees = new Collection<MixedEmployee>({
-  collectionName: "mixed_employees",
+  collection: { name: "mixed_employees" },
 });
 
 const _narrowedPipeline = new Pipeline<{

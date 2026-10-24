@@ -177,10 +177,10 @@ type ProductSchema = {
 };
 
 const products = new Collection<ProductSchema>({
-  collectionName: "products",
+  collection: { name: "products" },
 });
 const categories = new Collection<CategorySchema>({
-  collectionName: "categories",
+  collection: { name: "categories" },
 });
 
 // For each order, lookup all products and within each product
@@ -274,7 +274,7 @@ type StoreInventory = {
 };
 
 const storeInventory = new Collection<StoreInventory>({
-  collectionName: "storeInventory",
+  collection: { name: "storeInventory" },
 });
 
 const combinedInventoryPipeline = new Pipeline<WarehouseInventory>()

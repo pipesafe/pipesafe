@@ -25,7 +25,7 @@ type RawEvent = {
 };
 
 const RawEventsCollection = new Collection<RawEvent>({
-  collectionName: "raw_events",
+  collection: { name: "raw_events" },
 });
 
 type User = {
@@ -37,7 +37,7 @@ type User = {
 };
 
 const UsersCollection = new Collection<User>({
-  collectionName: "users",
+  collection: { name: "users" },
 });
 
 // ============================================================================

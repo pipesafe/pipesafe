@@ -11,7 +11,7 @@ type RawEvent = {
 };
 
 const RawEventsCollection = new Collection<RawEvent>({
-  collectionName: "raw_events",
+  collection: { name: "raw_events" },
 });
 
 const stgEvents = new Model({

@@ -242,7 +242,7 @@ type EmployeeSchema = {
 };
 
 const employeesCollection = new Collection<EmployeeSchema>({
-  collectionName: "employees",
+  collection: { name: "employees" },
 });
 
 // For each employee, find their full management chain up to the CEO
