@@ -604,16 +604,41 @@ type _SetDifferenceInfer = InferExpression<
 >;
 type _Assert_SetDifferenceInfer = Assert<Equal<_SetDifferenceInfer, number[]>>;
 
-// $setUnion/$setIntersection over an OPTIONAL array field must infer the
-// element type, NOT the unsound `never[]`: `maybeTags?: string[]` resolves to
-// `string[] | undefined`, which fails a bare `extends (infer T)[]` and would
-// collapse to `never`. The null-strip in GetArrayElement keeps it an array.
+// A null or missing input makes the array operators return null.
 type _SetUnionOptionalFieldInfer = InferExpression<
   SetSchema,
   { $setUnion: ["$maybeTags"] }
 >;
 type _Assert_SetUnionOptionalFieldInfer = Assert<
-  Equal<_SetUnionOptionalFieldInfer, string[]>
+  Equal<_SetUnionOptionalFieldInfer, string[] | null>
+>;
+type _SetDifferenceOptionalSecondInfer = InferExpression<
+  SetSchema,
+  { $setDifference: ["$tags", "$maybeTags"] }
+>;
+type _Assert_SetDifferenceOptionalSecondInfer = Assert<
+  Equal<_SetDifferenceOptionalSecondInfer, string[] | null>
+>;
+type _ConcatArraysOptionalFieldInfer = InferExpression<
+  SetSchema,
+  { $concatArrays: ["$tags", "$maybeTags"] }
+>;
+type _Assert_ConcatArraysOptionalFieldInfer = Assert<
+  Equal<_ConcatArraysOptionalFieldInfer, string[] | null>
+>;
+type _MapOptionalInputInfer = InferExpression<
+  SetSchema,
+  { $map: { input: "$maybeTags"; in: "$$this" } }
+>;
+type _Assert_MapOptionalInputInfer = Assert<
+  Equal<_MapOptionalInputInfer, string[] | null>
+>;
+type _ReduceOptionalInputInfer = InferExpression<
+  SetSchema,
+  { $reduce: { input: "$maybeTags"; initialValue: ""; in: "$$this" } }
+>;
+type _Assert_ReduceOptionalInputInfer = Assert<
+  Equal<_ReduceOptionalInputInfer, string | null>
 >;
 
 // ----------------------------------------------------------------------------
@@ -842,6 +867,10 @@ export type {
   _Assert_ReduceSetDifferenceInfer,
   _Assert_IfNullArrayLiteralRefInfer,
   _Assert_MapUntrackedSetUnionInfer,
+  _Assert_SetDifferenceOptionalSecondInfer,
+  _Assert_ConcatArraysOptionalFieldInfer,
+  _Assert_MapOptionalInputInfer,
+  _Assert_ReduceOptionalInputInfer,
 };
 
 // The literal-dependent set is DERIVED from `returns`-omission on registry

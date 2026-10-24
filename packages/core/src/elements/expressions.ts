@@ -1256,6 +1256,17 @@ type UnionIfNullOperandTypes<
     InferIfNullOperand<Schema, First> | UnionIfNullOperandTypes<Schema, Rest>
   : never;
 
+/** `null` when a field-ref operand can be null or missing: MongoDB's array
+ *  operators then return null. */
+type NullIfNullableRef<Schema extends Document, Operand> =
+  Operand extends FieldReference<Schema> ?
+    [Extract<InferFieldReference<Schema, Operand>, null | undefined>] extends (
+      [never]
+    ) ?
+      never
+    : null
+  : never;
+
 /**
  * Hand-written inference arms for the literal-dependent operators — the only
  * per-operator inference code left after the registry rebuild.
@@ -1269,18 +1280,20 @@ type UnionIfNullOperandTypes<
 type InferDependentExpression<Schema extends Document, Expr> =
   Expr extends { $concatArrays: infer Arrays } ?
     Arrays extends readonly unknown[] ?
-      UnionArrayElements<Schema, Arrays>[]
+      | UnionArrayElements<Schema, Arrays>[]
+      | NullIfNullableRef<Schema, Arrays[number]>
     : never
   : Expr extends { $arrayElemAt: readonly [infer ArraySource, unknown] } ?
     InferArrayElementType<Schema, ArraySource>
   : Expr extends { $filter: { input: infer ArraySource } } ?
     InferArrayElementType<Schema, ArraySource>[]
   : Expr extends { $map: { input: infer ArraySource; in: infer In } } ?
-    InferScopedExpression<
-      Schema,
-      MapScopeVars<Expr, InferArrayElementType<Schema, ArraySource>>,
-      In
-    >[]
+    | InferScopedExpression<
+        Schema,
+        MapScopeVars<Expr, InferArrayElementType<Schema, ArraySource>>,
+        In
+      >[]
+    | NullIfNullableRef<Schema, ArraySource>
   : Expr extends (
     {
       $reduce: {
@@ -1290,7 +1303,8 @@ type InferDependentExpression<Schema extends Document, Expr> =
       };
     }
   ) ?
-    InferReduceExpression<Schema, ArraySource, Init, In>
+    | InferReduceExpression<Schema, ArraySource, Init, In>
+    | NullIfNullableRef<Schema, ArraySource>
   : Expr extends (
     { $setUnion: infer Operands } | { $setIntersection: infer Operands }
   ) ?
@@ -1298,11 +1312,13 @@ type InferDependentExpression<Schema extends Document, Expr> =
     // union of operand element types); intersection is an over-approximation
     // that never widens past the union, same as union.
     Operands extends readonly unknown[] ?
-      UnionArrayElements<Schema, Operands>[]
+      | UnionArrayElements<Schema, Operands>[]
+      | NullIfNullableRef<Schema, Operands[number]>
     : never
-  : Expr extends { $setDifference: readonly [infer First, unknown] } ?
+  : Expr extends { $setDifference: readonly [infer First, infer Second] } ?
     // Removing elements never widens: the FIRST operand's element type.
-    InferArrayElementType<Schema, First>[]
+    | InferArrayElementType<Schema, First>[]
+    | NullIfNullableRef<Schema, First | Second>
   : Expr extends { $ifNull: infer Operands } ?
     Operands extends readonly unknown[] ?
       UnionIfNullOperandTypes<Schema, Operands>
