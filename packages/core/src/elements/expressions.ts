@@ -33,48 +33,23 @@ import { AnyLiteral } from "./literals";
 // ----------------------------------------------------------------------------
 
 /**
- * Array operand — accepts a field reference to an array field, an array
- * literal of any element type, or an array-producing expression
- * ($concatArrays/$arrayElemAt/$filter/$map — e.g. `$size: { $filter: … }`).
- * The branded `PipeSafeError` arm surfaces in IDE hovers when a user passes
- * a non-array value (e.g. a string field reference) where an array is
- * required. Specialized rather than an `ExpressionOperand` one-liner
- * because the literal arm is `AnyLiteral[]` while the reference arm targets
- * `unknown[]`.
+ * Array operand — a field reference to an array field, an array literal, an
+ * array-producing expression (`ArrayResultOps`), or a `$$`-system/`let`
+ * variable (untyped: element inference degrades to `unknown`). The branded
+ * arm surfaces in IDE hovers when a non-array value is passed.
  */
 type ArrayOperand<Schema extends Document, Op extends string> =
-  | FieldReferencesThatInferTo<Schema, unknown[]>
-  | readonly AnyLiteral<Schema>[]
-  | ArrayProducingExpression<Schema>
-  | MapExpression<Schema>
+  | ArrayValue<Schema>
   | PipeSafeError<RequiresMsg<"Operator", Op, "an array operand">>;
 
-/**
- * Set-operator operand — everything `ArrayOperand` accepts plus the
- * array-producing operators that commonly feed set operators but sit
- * outside `ArrayProducingExpression`'s circularity-avoiding core:
- * `$reduce` (accumulate-then-dedupe), `$ifNull` (defaulting an optional
- * array field to `[]`), and the set operators THEMSELVES — each resolves to
- * an array, so `$setUnion: [{ $setIntersection: [...] }, ...]` is valid
- * MongoDB. The mutual recursion (a set operator's operand references
- * `SetOperand`, which references the set operators) is safe because
- * `ExpressionSpec` is an interface and resolves lazily. Plus
- * `$$`-system/`let`-variable references (`$setUnion: ["$labels",
- * "$$localTags"]` inside a $lookup-let sub-pipeline is valid MongoDB;
- * element inference degrades to `unknown`). The branded arm comes from
- * `ArrayOperand` with the set operator's own name.
- */
-type SetOperand<Schema extends Document, Op extends string> =
-  | ArrayOperand<Schema, Op>
-  | ExpressionFor<
-      Schema,
-      | "$reduce"
-      | "$ifNull"
-      | "$setUnion"
-      | "$setIntersection"
-      | "$setDifference"
-    >
+type ArrayValue<Schema extends Document> =
+  | FieldReferencesThatInferTo<Schema, unknown[]>
+  | readonly AnyLiteral<Schema>[]
+  | ExpressionFor<Schema, ArrayResultOps>
   | `$$${string}`;
+
+/** Operators whose result is (or can be) an array. */
+type ArrayResultOps = Exclude<ArrayOps, "$size" | "$sum"> | "$ifNull";
 
 /**
  * Date operand for $dateToString.date, $dateTrunc.date, $dateAdd.startDate,
@@ -186,27 +161,6 @@ export type DateUnit =
   | "second"
   | "millisecond";
 
-/**
- * Array-producing expressions that can be used as input to $map, $filter, etc.
- * Excludes $map and $sum to avoid circular references.
- */
-export type ArrayProducingExpression<Schema extends Document> = ExpressionFor<
-  Schema,
-  "$concatArrays" | "$arrayElemAt" | "$filter"
->;
-
-/**
- * Valid inputs for array operations: field references, literals,
- * expressions, or `$$`-system/`let`-variable references (`$map`/`$reduce`
- * over `"$$localTags"` inside a $lookup-let sub-pipeline is valid MongoDB;
- * element inference degrades to `unknown`).
- */
-export type ArrayInput<Schema extends Document> =
-  | FieldReferencesThatInferTo<Schema, unknown[]>
-  | ArrayProducingExpression<Schema>
-  | unknown[]
-  | `$$${string}`;
-
 // ----------------------------------------------------------------------------
 // THE registry
 // ----------------------------------------------------------------------------
@@ -276,7 +230,7 @@ export interface ExpressionSpec<Schema extends Document> {
    * unresolvable `in` shapes degrade to unknown, never to a wrong type.
    */
   $map: {
-    operand: { input: ArrayInput<Schema>; as?: string; in: unknown };
+    operand: { input: ArrayOperand<Schema, "$map">; as?: string; in: unknown };
   };
   /**
    * Folds an array into a single value: `in` is evaluated per element with
@@ -287,32 +241,31 @@ export interface ExpressionSpec<Schema extends Document> {
    */
   $reduce: {
     operand: {
-      input: ArrayInput<Schema>;
+      input: ArrayOperand<Schema, "$reduce">;
       initialValue: unknown;
       in: unknown;
     };
   };
   /** Distinct elements appearing in ANY of the input arrays. */
   $setUnion: {
-    operand: readonly SetOperand<Schema, "$setUnion">[];
+    operand: readonly ArrayOperand<Schema, "$setUnion">[];
   };
   /** Distinct elements appearing in ALL of the input arrays. */
   $setIntersection: {
-    operand: readonly SetOperand<Schema, "$setIntersection">[];
+    operand: readonly ArrayOperand<Schema, "$setIntersection">[];
   };
   /** Elements of the FIRST array that do not appear in the second. */
   $setDifference: {
     operand: readonly [
-      SetOperand<Schema, "$setDifference">,
-      SetOperand<Schema, "$setDifference">,
+      ArrayOperand<Schema, "$setDifference">,
+      ArrayOperand<Schema, "$setDifference">,
     ];
   };
   /** Sums numeric values in an array ($group accumulation lives in group.ts). */
   $sum: {
     operand:
       | FieldReferencesThatInferTo<Schema, number[]>
-      | ArrayProducingExpression<Schema>
-      | MapExpression<Schema>
+      | ExpressionFor<Schema, ArrayResultOps>
       | readonly number[];
     returns: number;
   };

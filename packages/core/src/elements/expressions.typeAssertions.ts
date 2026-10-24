@@ -461,6 +461,13 @@ type _Assert_FilterBrand = Assert<
 type _Assert_SizeAcceptsArrayRef = Assert<
   Equal<"$tags" extends SizeOperand<ArithSchema> ? true : false, true>
 >;
+// Every array-producing operator is an array operand (distinct-count idiom).
+type _Assert_SizeAcceptsSetUnion = Assert<
+  Equal<
+    { $setUnion: ["$tags"] } extends SizeOperand<ArithSchema> ? true : false,
+    true
+  >
+>;
 
 // ----------------------------------------------------------------------------
 // Set operators — $setUnion / $setIntersection / $setDifference
@@ -1030,4 +1037,5 @@ export type {
   _Assert_ArrayElemAtBrand,
   _Assert_FilterBrand,
   _Assert_SizeAcceptsArrayRef,
+  _Assert_SizeAcceptsSetUnion,
 };

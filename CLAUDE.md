@@ -179,7 +179,7 @@ The type system is organized into modular building blocks located in `packages/c
   consumer back to `` `$$${string}` ``); `$let`/`$map`/`$filter`-bound USER
   variables live in `unknown`-typed operand interiors instead, and
   aggregation-command-level `let` variables are not modeled yet. One
-  exception: array operands (`ArrayInput`/`SetOperand` in expressions.ts)
+  exception: array operands (`ArrayOperand` in expressions.ts)
   accept untyped `` `$$${string}` `` so `$lookup`-`let` variables work there
   until `let` scopes are typed
 
