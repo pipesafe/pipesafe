@@ -1,6 +1,15 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  // core's `#loader` maps to dist via package.json `imports`; run on source
+  resolve: {
+    alias: {
+      "#loader": fileURLToPath(
+        new URL("./packages/core/src/utils/loader.node.ts", import.meta.url)
+      ),
+    },
+  },
   test: {
     // Run-owned temp dir for mongodb-memory-server dbPaths; the teardown
     // deterministically removes that one directory (see the file's doc).

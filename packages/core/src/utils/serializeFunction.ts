@@ -1,4 +1,4 @@
-import type { parse as AcornParse } from "acorn";
+import { parseScript, requireOptional } from "#loader";
 import { Document } from "./objects";
 import { MONGO_SERVER_GLOBALS } from "./mongoServerGlobals";
 import { ServerFunctionRef } from "../elements/expressions";
@@ -20,55 +20,6 @@ import { ServerFunctionRef } from "../elements/expressions";
  * on load, tsc compiles ahead of time, Node's type-stripping blanks
  * annotations).
  */
-
-// ---------------------------------------------------------------------------
-// Lazy Node/acorn loading
-// ---------------------------------------------------------------------------
-//
-// `acorn` and Node's `module` builtin are needed ONLY when a $function body
-// is actually serialized. Importing them statically would drag `node:module`
-// (and acorn) into the module graph of `@pipesafe/core`, breaking
-// browser/edge bundling even for consumers that never use $function. Both are
-// therefore obtained lazily, synchronously, through a `require` acquired
-// without any static `node:module` import.
-
-type NodeRequire = (id: string) => unknown;
-
-let cachedRequire: NodeRequire | undefined;
-let cachedParse: typeof AcornParse | undefined;
-
-function nodeRequire(): NodeRequire {
-  if (cachedRequire) return cachedRequire;
-  // `process.getBuiltinModule` (Node >= 20.16 / 22.3) returns the `module`
-  // builtin synchronously and — unlike a static `import "node:module"` — is
-  // invisible to bundlers, so it never forces Node builtins into a browser
-  // build. Referenced through `globalThis` so this file has no compile-time
-  // dependency on Node globals.
-  const proc = (
-    globalThis as {
-      process?: { getBuiltinModule?: (id: string) => unknown };
-    }
-  ).process;
-  const mod = proc?.getBuiltinModule?.("module") as
-    | { createRequire?: (url: string | URL) => NodeRequire }
-    | undefined;
-  if (!mod?.createRequire) {
-    throw new Error(
-      "PipeSafe: serializing a $function body requires a Node.js runtime " +
-        "(>= 20.16). Server-side function bodies are a Node-only feature."
-    );
-  }
-  cachedRequire = mod.createRequire(import.meta.url);
-  return cachedRequire;
-}
-
-function acornParse(code: string): unknown {
-  if (!cachedParse) {
-    cachedParse = (nodeRequire()("acorn") as { parse: typeof AcornParse })
-      .parse;
-  }
-  return cachedParse(code, { ecmaVersion: "latest" });
-}
 
 /**
  * Visit every child ESTree node of `node` (arrays and single slots),
@@ -466,7 +417,7 @@ function visitExpression(
 function parseFunctionExpression(src: string): { node: AnyNode; emit: string } {
   const tryParse = (code: string): AnyNode | undefined => {
     try {
-      const program = acornParse(code) as AnyNode;
+      const program = parseScript(code) as AnyNode;
       const stmt = (program.body as AnyNode[])[0];
       if (stmt && stmt.type === "ExpressionStatement")
         return stmt.expression as AnyNode;
@@ -621,7 +572,7 @@ let cachedBundler: FunctionBundler | undefined;
 function loadBundler(): FunctionBundler {
   if (!cachedBundler) {
     try {
-      cachedBundler = nodeRequire()(
+      cachedBundler = requireOptional(
         "@pipesafe/function-bundler"
       ) as FunctionBundler;
     } catch (error) {

@@ -35,6 +35,20 @@
       "require": "./dist/eslint-plugin/index.cjs"
     }
   },
+  "imports": {
+    "#loader": {
+      "node": {
+        "types": "./dist/utils/loader.node.d.mts",
+        "import": "./dist/utils/loader.node.mjs",
+        "require": "./dist/utils/loader.node.cjs"
+      },
+      "default": {
+        "types": "./dist/utils/loader.default.d.mts",
+        "import": "./dist/utils/loader.default.mjs",
+        "require": "./dist/utils/loader.default.cjs"
+      }
+    }
+  },
   "files": [
     "dist",
     "LICENSE"

@@ -5,7 +5,10 @@
     "outDir": "./dist",
     "composite": true,
     "allowJs": false,
-    "checkJs": false
+    "checkJs": false,
+    "paths": {
+      "#loader": ["./src/utils/loader.node.ts"]
+    }
   },
   "include": ["src/**/*.ts"],
   "exclude": ["dist", "**/*.test.ts"]

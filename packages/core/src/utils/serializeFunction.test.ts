@@ -65,9 +65,7 @@ describe("serializeFunctionBody", () => {
   });
 
   it("does not add the `__name` shim to bodies that do not need it", () => {
-    expect(serializeFunctionBody((a: number) => a * 2)).not.toContain(
-      "__name"
-    );
+    expect(serializeFunctionBody((a: number) => a * 2)).not.toContain("__name");
   });
 
   it("rejects console — not available in the server's JS engine", () => {
