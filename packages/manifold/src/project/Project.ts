@@ -16,7 +16,7 @@ import { Model, isModel } from "../model/Model";
 export type ProjectConfig = {
   name: string;
   models: Model<any, any, any, any>[];
-  defaultDb?: DbConfig;
+  defaultDb?: DbConfig | undefined;
 };
 
 export type RunOptions = {
@@ -29,13 +29,14 @@ export type RunOptions = {
   /** MongoDB client (falls back to pipesafe singleton) */
   client?: MongoClient;
   /** Default database for models (falls back to the project's `defaultDb`) */
-  db?: DbConfig;
+  db?: DbConfig | undefined;
   /**
    * Driver `AggregateOptions` applied to every collection-mode model's
    * aggregation (e.g. `maxTimeMS`, `allowDiskUse`, `comment`).
    * View and time-series DDL runs no aggregation and only takes `session`.
+   * `$out`/`$merge` cannot run inside a transaction.
    */
-  aggregateOptions?: AggregateOptions;
+  aggregateOptions?: AggregateOptions | undefined;
   /** Callbacks */
   onModelStart?: (name: string) => void;
   onModelComplete?: (name: string, stats: ModelRunStats) => void;
@@ -375,17 +376,24 @@ export class Project {
     defaultDb: DbConfig | undefined,
     aggregateOptions: AggregateOptions | undefined
   ): Promise<void> {
-    // Build pipeline with output stage
-    const pipeline = model.buildPipeline();
     const ddlOptions =
       aggregateOptions?.session ? { session: aggregateOptions.session } : {};
 
     const source = model.getSource();
+    const sourceDb = source.getOutputDb() ?? defaultDb;
     const outputDb = model.getOutputDb() ?? defaultDb;
+    const defaultDbName = client.db().databaseName;
+    const outputDbName = outputDb?.name ?? defaultDbName;
 
     // Handle view creation separately
     if (model.materialize.type === "view") {
       const viewName = model.name;
+      const sourceDbName = sourceDb?.name ?? defaultDbName;
+      if (sourceDbName !== outputDbName) {
+        throw new Error(
+          `View '${viewName}' must be in its source's database '${sourceDbName}', not '${outputDbName}'.`
+        );
+      }
       const viewDb = client.db(outputDb?.name, outputDb?.options);
 
       // Drop existing view if exists
@@ -433,10 +441,10 @@ export class Project {
     }
 
     // Read from the source; the output stage writes to the model's db
-    await new Pipeline({ pipeline })
+    await new Pipeline({ pipeline: model.buildPipeline(outputDbName) })
       .execute({
         client,
-        db: source.getOutputDb() ?? defaultDb,
+        db: sourceDb,
         collection: source.getOutputCollection(),
         aggregateOptions,
       })

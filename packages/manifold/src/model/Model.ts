@@ -201,9 +201,8 @@ export class Model<
   }
 
   getOutputDb(): DbConfig | undefined {
-    return "db" in this.materialize && this.materialize.db ?
-        { name: this.materialize.db }
-      : undefined;
+    const { db } = this.materialize;
+    return db === undefined ? undefined : { name: db };
   }
 
   getOutputCollection(): CollectionConfig {
@@ -244,7 +243,7 @@ export class Model<
    * Delegates to `Pipeline#out` / `Pipeline#merge` so the emitted output
    * document goes through the same builders users would call.
    */
-  buildPipeline(): Document[] {
+  buildPipeline(outputDb = this.materialize.db): Document[] {
     const userPipeline = this._buildPipeline();
 
     if (this.materialize.type === "view") {
@@ -254,10 +253,8 @@ export class Model<
 
     if (this.materialize.type === "collection") {
       const mode = this.materialize.mode;
-      const outputCollection = this.name;
-      const outputDb = this.getOutputDb()?.name;
       const target =
-        outputDb ? { db: outputDb, coll: outputCollection } : outputCollection;
+        outputDb === undefined ? this.name : { db: outputDb, coll: this.name };
 
       if ("$out" in mode) {
         return userPipeline.out(target).getPipeline();

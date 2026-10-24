@@ -419,6 +419,40 @@ describe("Project.run()", async () => {
     });
   });
 
+  describe("database targeting", () => {
+    it("writes model outputs where downstream models read them", async () => {
+      const rawDb = client.db("raw_source_db");
+      await rawDb.collection<RawDoc>("raw_docs").insertMany(sampleDocs);
+
+      const rawSource = new Collection<RawDoc>({
+        db: { name: "raw_source_db" },
+        collection: { name: "raw_docs" },
+      });
+      const staging = new Model({
+        name: "staging_xdb",
+        from: rawSource,
+        pipeline: (p) => p.match({ active: true }),
+        materialize: { type: "collection", mode: Model.Mode.Replace },
+      });
+      const downstream = new Model({
+        name: "downstream_xdb",
+        from: staging,
+        pipeline: (p) => p.match({}),
+        materialize: { type: "collection", mode: Model.Mode.Replace },
+      });
+
+      const db = client.db();
+      const result = await new Project({
+        name: "xdb_project",
+        models: [downstream],
+      }).run({ client, db: { name: db.databaseName } });
+
+      expect(result.success).toBe(true);
+      expect(await db.collection("staging_xdb").countDocuments()).toBe(2);
+      expect(await db.collection("downstream_xdb").countDocuments()).toBe(2);
+    });
+  });
+
   describe("source driver options", () => {
     it("honors the source Collection's db/collection options when reading", async () => {
       const db = client.db();
