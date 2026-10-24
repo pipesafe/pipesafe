@@ -157,6 +157,13 @@ const _customMerge = samplePipeline.custom<SimpleDoc>([
   { $merge: { into: "metrics", on: "_id" } },
 ]);
 
+// Test 18: unknown option keys are rejected at the .merge() call site
+samplePipeline.merge({
+  into: "x",
+  // @ts-expect-error - "whenMatch" is not a $merge option
+  whenMatch: "merge",
+});
+
 // ============================================================================
 // Satisfy linting
 // ============================================================================

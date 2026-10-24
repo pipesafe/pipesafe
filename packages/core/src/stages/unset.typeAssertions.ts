@@ -431,6 +431,58 @@ type RemoveMixedOptionalTest = Assert<
   Equal<RemoveMixedOptionalResult, RemoveMixedOptionalExpected>
 >;
 
+// ============================================================================
+// Parent Optionality (Equal only tells `a?: T` from `a?: T | undefined` on
+// TypeScript 6+, so the 6.x/7.x CI lanes enforce these)
+// ============================================================================
+
+type ParentDoc = { b: number; c: string };
+type ExplicitUndefinedParentSchema = { _id: string; a?: ParentDoc | undefined };
+type RequiredUndefinedParentSchema = { _id: string; r: ParentDoc | undefined };
+
+// Test 19: A declared `| undefined` on an optional parent survives
+type ExplicitUndefinedParentTest = Assert<
+  Equal<
+    ResolveUnsetOutput<ExplicitUndefinedParentSchema, "a.b">,
+    { _id: string; a?: { c: string } | undefined }
+  >
+>;
+
+// Test 20: A required `X | undefined` parent stays required
+type RequiredUndefinedParentTest = Assert<
+  Equal<
+    ResolveUnsetOutput<RequiredUndefinedParentSchema, "r.b">,
+    { _id: string; r: { c: string } | undefined }
+  >
+>;
+
+// Test 21: The array form removes from an optional parent
+type ArrayOptionalParentTest = Assert<
+  Equal<
+    ResolveUnsetOutput<OptionalParentSchema, ["nested.b"]>,
+    { required: string; nested?: { a: string } }
+  >
+>;
+
+// Test 22: The array form keeps a declared `| undefined` on an optional parent
+type ArrayExplicitUndefinedParentTest = Assert<
+  Equal<
+    ResolveUnsetOutput<ExplicitUndefinedParentSchema, ["_id", "a.b"]>,
+    { a?: { c: string } | undefined }
+  >
+>;
+
+// Test 23: The array form leaves an untouched `X | undefined` field required
+type ArrayUntouchedRequiredUndefinedTest = Assert<
+  Equal<
+    ResolveUnsetOutput<
+      RequiredUndefinedParentSchema & { m: ParentDoc },
+      ["m.b"]
+    >,
+    { _id: string; r: ParentDoc | undefined; m: { c: string } }
+  >
+>;
+
 // Satisfy linting by exporting all test types
 export type {
   RemoveSingleFieldTest,
@@ -451,4 +503,9 @@ export type {
   RemoveAllButOneTest,
   EmptyArrayTest,
   RemoveMixedOptionalTest,
+  ExplicitUndefinedParentTest,
+  RequiredUndefinedParentTest,
+  ArrayOptionalParentTest,
+  ArrayExplicitUndefinedParentTest,
+  ArrayUntouchedRequiredUndefinedTest,
 };

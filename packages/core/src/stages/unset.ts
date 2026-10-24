@@ -24,9 +24,8 @@ type RemoveAtSegments<Schema extends Document, Segs extends readonly string[]> =
         NestedValue extends Document ?
           {
             [K in keyof Schema]: K extends Head ?
-              // Optional keys keep `?`; only required ones re-add undefined
-              {} extends Pick<Schema, K> ? RemoveAtSegments<NestedValue, Rest>
-              : undefined extends Schema[K] ?
+              // `?` carries over; only a declared `undefined` is re-added
+              undefined extends Required<Pick<Schema, K>>[K] ?
                 RemoveAtSegments<NestedValue, Rest> | undefined
               : RemoveAtSegments<NestedValue, Rest>
             : Schema[K];
@@ -105,16 +104,15 @@ type BatchRemoveNestedByParent<
 > = {
   [K in keyof Schema]: HasNestedPaths<K & string, Paths> extends true ?
     // This key has nested removals - batch process them
-    Schema[K] extends Document ?
-      undefined extends Schema[K] ?
-        // Optional field - preserve optionality
+    Exclude<Schema[K], undefined> extends infer NestedValue extends Document ?
+      undefined extends Required<Pick<Schema, K>>[K] ?
         | RemoveFieldPaths<
-            Exclude<Schema[K], undefined>,
+            NestedValue,
             ExtractNestedPathsForParent<K & string, Paths>
           >
         | undefined
       : RemoveFieldPaths<
-          Schema[K],
+          NestedValue,
           ExtractNestedPathsForParent<K & string, Paths>
         >
     : Schema[K]
@@ -148,25 +146,6 @@ type RemoveFieldPaths<
     BatchRemoveNestedByParent<Omit<Schema, Keys & keyof Schema>, Paths>
   : BatchRemoveNestedByParent<Schema, Paths>;
 
-// Preserve optionality when removing nested fields from optional parents
-// Optimization: Avoid Prettify wrapper to reduce depth
-// Key insight: If original field was optional, preserve its optionality when removing nested fields
-type PreserveOptionality<Schema extends Document, Result extends Document> = {
-  // Required fields from result
-  [K in keyof Result as K extends keyof Schema ?
-    undefined extends Schema[K] ?
-      never // Optional fields handled below
-    : K
-  : K]: Result[K];
-} & {
-  // Optional fields from result (preserve optionality)
-  [K in keyof Result as K extends keyof Schema ?
-    undefined extends Schema[K] ?
-      K
-    : never
-  : never]?: Result[K];
-};
-
 // No outer `Query extends UnsetQuery<Schema>` re-check: it would
 // re-enumerate FieldPath<Schema> per call even though the method's
 // parameter position already validated the query. The cheap string/array
@@ -179,11 +158,7 @@ export type ResolveUnsetOutput<Schema extends Document, Query> = PassThrough<
       RemoveFieldPath<Schema, Query>
     : Query extends readonly string[] ?
       // Array of field paths
-      AllTopLevelPaths<Query> extends true ?
-        // All top-level - batched Omit result
-        RemoveFieldPaths<Schema, Query>
-      : // Has nested paths - PreserveOptionality needed to flatten intersection
-        PreserveOptionality<Schema, RemoveFieldPaths<Schema, Query>>
+      RemoveFieldPaths<Schema, Query>
     : never
   >
 >;
