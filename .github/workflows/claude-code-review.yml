@@ -1,10 +1,10 @@
 name: Claude Code Review
 
-# Runs .claude/commands/code-review.md once per PR; use @claude for follow-up passes.
+# Runs .claude/skills/pr-review: a full review first, then incremental re-reviews on each push.
 
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, synchronize]
 
 concurrency:
   group: claude-code-review-${{ github.event.pull_request.number }}
@@ -29,6 +29,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt: "/code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment"
+          prompt: "/pr-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment"
           claude_args: |
-            --allowedTools "Task,Agent,TodoWrite,mcp__github_inline_comment__create_inline_comment,Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"
+            --model opus
+            --allowedTools "Agent,Task,mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh pr list:*),Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh search:*),Bash(gh api:*)"
