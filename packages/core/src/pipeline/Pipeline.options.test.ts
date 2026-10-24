@@ -67,6 +67,30 @@ describe("Connection and query options", async () => {
     }
   });
 
+  it("replaces a layer's inherited options when execute re-targets it", () => {
+    const collection = new Collection<TestDoc>({
+      client,
+      databaseName: DBName,
+      collectionName: "inherit_docs",
+      dbOptions: { readConcern: new ReadConcern("majority") },
+      collectionOptions: { readPreference: "secondaryPreferred" },
+    });
+
+    const dbSpy = vi.spyOn(MongoClient.prototype, "db");
+    const collectionSpy = vi.spyOn(Db.prototype, "collection");
+    try {
+      collection.aggregate().execute({ collection: { name: "other_docs" } });
+
+      expect(dbSpy).toHaveBeenLastCalledWith(DBName, {
+        readConcern: expect.any(ReadConcern),
+      });
+      expect(collectionSpy).toHaveBeenLastCalledWith("other_docs", undefined);
+    } finally {
+      dbSpy.mockRestore();
+      collectionSpy.mockRestore();
+    }
+  });
+
   it("exposes configured options through the Source accessors", () => {
     const dbOptions = { readConcern: new ReadConcern("majority") };
     const collectionOptions = { readPreference: "secondaryPreferred" } as const;

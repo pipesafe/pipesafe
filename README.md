@@ -174,7 +174,7 @@ const collection = new Collection<{ test: string }>({
 });
 const cursor = await collection.aggregate().execute({
   client,
-  databaseName: "my_database",
+  db: { name: "my_database" },
 });
 const results = await cursor.toArray();
 
@@ -182,8 +182,8 @@ const results = await cursor.toArray();
 const pipeline = new Pipeline<{ test: string }>();
 const cursor2 = await pipeline.execute({
   client,
-  databaseName: "my_database",
-  collectionName: "my_collection",
+  db: { name: "my_database" },
+  collection: { name: "my_collection" },
 });
 const results2 = await cursor2.toArray();
 ```

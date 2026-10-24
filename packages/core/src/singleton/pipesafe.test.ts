@@ -96,8 +96,8 @@ describe("Connections", async () => {
       const pipeline = new Pipeline<{ test: string }>();
       const cursor = await pipeline.execute({
         client,
-        databaseName: DBName,
-        collectionName: CollectionName,
+        db: { name: DBName },
+        collection: { name: CollectionName },
       });
       const results = await cursor.toArray();
       expect(results).toEqual(exampleDocs);

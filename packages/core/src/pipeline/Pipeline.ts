@@ -715,34 +715,21 @@ export class Pipeline<
   /**
    * Run the aggregation and return the driver cursor.
    *
-   * `aggregateOptions` are the driver's `AggregateOptions` — the options
-   * that belong to this execution itself: per-query tuning (`maxTimeMS`,
-   * `allowDiskUse`, `hint`, `comment`, ...) and transaction support via
-   * `session`.
-   *
-   * Db/collection-level options are configured where those layers are
-   * created (`pipesafe.db()`, `Database.collection()`, or the
-   * `Collection`/`Pipeline` constructors) and flow down — execute()
-   * cannot override a parent layer's configuration.
-   *
-   * `client`/`databaseName`/`collectionName` are ADDRESSING, not
-   * configuration, and are deliberately execute-time: a standalone
-   * pipeline built without a target is reusable across databases and
-   * collections, re-targeted per execution.
+   * `db` / `collection` re-target the execution: each pairs a name with its
+   * driver options and replaces that layer's inherited name and options.
    *
    * @example
    * .execute({ aggregateOptions: { session, maxTimeMS: 5000 } })
    *
-   * @example // Reuse one pipeline across targets
+   * @example
    * const active = new Pipeline<User>().match({ active: true });
-   * active.execute({ client, databaseName: "eu", collectionName: "users" });
-   * active.execute({ client, databaseName: "us", collectionName: "users" });
+   * active.execute({ client, db: { name: "eu" }, collection: { name: "users" } });
    */
   execute(
     args: {
       client?: MongoClient;
-      databaseName?: string;
-      collectionName?: string;
+      db?: { name: string; options?: DbOptions };
+      collection?: { name: string; options?: CollectionOptions };
       /** Driver `AggregateOptions` (e.g. `session`, `maxTimeMS`, `allowDiskUse`) */
       aggregateOptions?: AggregateOptions;
     } = {}
@@ -751,14 +738,16 @@ export class Pipeline<
     if (!client) throw new Error("Not connected");
     tagClient(client);
 
-    const db = args.databaseName ?? this.databaseName;
-
-    const collection = args.collectionName ?? this.collectionName;
-    if (!collection) throw new Error("No collection name provided");
+    const db = args.db ?? { name: this.databaseName, options: this.dbOptions };
+    const collection = args.collection ?? {
+      name: this.collectionName,
+      options: this.collectionOptions,
+    };
+    if (!collection.name) throw new Error("No collection name provided");
 
     return client
-      .db(db, this.dbOptions)
-      .collection(collection, this.collectionOptions)
+      .db(db.name, db.options)
+      .collection(collection.name, collection.options)
       .aggregate(this.getPipeline(), args.aggregateOptions);
   }
 }
