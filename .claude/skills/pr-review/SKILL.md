@@ -35,7 +35,7 @@ Launch these agents in parallel. Give each the PR title, description and the CLA
 
 - **CLAUDE.md compliance (sonnet).** A CLAUDE.md applies to a file only if it sits in the file's directory or a parent. Launch one agent for the root CLAUDE.md and, when nested CLAUDE.md files apply, a second for those. The root CLAUDE.md has hard rules that are easy to check in a diff, for example:
   - a `// prettier-ignore` or `// eslint-disable*` comment added anywhere
-  - a public API change to `@pipesafe/core` or `@pipesafe/manifold` with no `.changeset/*.md` file in the PR
+  - a public API change to a package changesets publishes (any workspace package that is not `private` or ignored in `.changeset/config.json`) without a `.changeset/*.md` entry for that package at the right bump level, such as a breaking change marked `minor`
   - a `@ts-expect-error` removed from, or an assertion weakened in, `Pipeline.callSite.typeAssertions.ts` or `stages.contract.typeAssertions.ts` without replacement coverage
   - a completion ideal in `packages/core-completions-tests` weakened to make a test pass, rather than marked `it.fails`
   - a wide template such as `` `$${string}` `` added to an operator allow-list or value union
