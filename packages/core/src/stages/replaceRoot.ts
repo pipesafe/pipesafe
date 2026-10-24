@@ -54,6 +54,9 @@ export type ResolveReplaceRootOutput<
 > = PassThrough<
   Schema,
   Query extends { newRoot: infer NewRoot } ?
-    Prettify<InferNestedFieldReference<Schema, NewRoot, Vars>>
+    // Wide query (non-literal, or the constraint-failure fallback): skip inference.
+    Document extends NewRoot ?
+      Document
+    : Prettify<InferNestedFieldReference<Schema, NewRoot, Vars>>
   : never
 >;

@@ -441,21 +441,25 @@ export type ResolveGroupOutput<
   Vars extends Document = {},
 > = PassThrough<
   Schema,
-  Prettify<
-    {
-      _id: InferNestedFieldReference<Schema, G["_id"], Vars> extends infer Id ?
-        Id extends object ?
-          Id extends Date | unknown[] ?
-            Id // Don't flatten Date/array _id (e.g. tuples from $dateToParts)
-          : Prettify<Id>
-        : Id // Primitive _id (string, number, null) — pass through
-      : never;
-    } & {
-      [key in Exclude<keyof G, "_id">]: ResolveAccumulatorFunction<
-        Schema,
-        G[key],
-        Vars
-      >;
-    }
-  >
+  // Wide query (non-literal, or the constraint-failure fallback): skip inference.
+  string extends keyof G ? Document
+  : Prettify<
+      {
+        _id: InferNestedFieldReference<Schema, G["_id"], Vars> extends (
+          infer Id
+        ) ?
+          Id extends object ?
+            Id extends Date | unknown[] ?
+              Id // Don't flatten Date/array _id (e.g. tuples from $dateToParts)
+            : Prettify<Id>
+          : Id // Primitive _id (string, number, null) — pass through
+        : never;
+      } & {
+        [key in Exclude<keyof G, "_id">]: ResolveAccumulatorFunction<
+          Schema,
+          G[key],
+          Vars
+        >;
+      }
+    >
 >;

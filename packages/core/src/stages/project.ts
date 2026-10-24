@@ -406,7 +406,9 @@ export type ResolveProjectOutput<
   Exc extends boolean = HasExclusionsNonId<Query>,
 > = PassThrough<
   Schema,
-  Inc extends true ?
+  // Wide query (non-literal, or the constraint-failure fallback): skip inference.
+  string extends keyof Query ? Document
+  : Inc extends true ?
     Exc extends true ?
       MixedProjectionError
     : // Inclusion mode

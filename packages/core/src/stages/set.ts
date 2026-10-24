@@ -112,5 +112,7 @@ export type ResolveSetOutput<
   Vars extends Document = {},
 > = PassThrough<
   Schema,
-  ResolveSetOutputInner<Schema, ResolveSetInlineSchema<Schema, Query, Vars>>
+  // Wide query (non-literal, or the constraint-failure fallback): skip inference.
+  string extends keyof Query ? Document
+  : ResolveSetOutputInner<Schema, ResolveSetInlineSchema<Schema, Query, Vars>>
 >;
