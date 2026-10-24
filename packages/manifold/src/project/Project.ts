@@ -33,8 +33,7 @@ export type RunOptions = {
   /**
    * Driver `AggregateOptions` applied to every collection-mode model's
    * aggregation (e.g. `maxTimeMS`, `allowDiskUse`, `hint`, `comment`).
-   * View materialization is DDL (`createCollection`) and runs no
-   * aggregation, so these options do not apply to it.
+   * View and time-series DDL runs no aggregation and only takes `session`.
    */
   aggregateOptions?: AggregateOptions;
   /** Callbacks */
@@ -379,6 +378,8 @@ export class Project {
   ): Promise<void> {
     // Build pipeline with output stage
     const pipeline = model.buildPipeline();
+    const ddlOptions =
+      aggregateOptions?.session ? { session: aggregateOptions.session } : {};
 
     // Get source collection
     const sourceCollection = model.getSourceCollectionName();
@@ -391,7 +392,7 @@ export class Project {
 
       // Drop existing view if exists
       try {
-        await viewDb.dropCollection(viewName);
+        await viewDb.dropCollection(viewName, ddlOptions);
       } catch {
         // View might not exist
       }
@@ -400,6 +401,7 @@ export class Project {
       await viewDb.createCollection(viewName, {
         viewOn: sourceCollection,
         pipeline: model.getPipelineStages(),
+        ...ddlOptions,
       });
 
       return;
@@ -416,7 +418,7 @@ export class Project {
 
       // Check if collection exists
       const collections = await db
-        .listCollections({ name: collName })
+        .listCollections({ name: collName }, ddlOptions)
         .toArray();
       if (collections.length === 0) {
         // Create time-series collection
@@ -427,6 +429,7 @@ export class Project {
             granularity: model.materialize.timeseries.granularity,
           },
           expireAfterSeconds: model.materialize.timeseries.expireAfterSeconds,
+          ...ddlOptions,
         });
       }
     }

@@ -385,6 +385,38 @@ describe("Project.run()", async () => {
         aggregateSpy.mockRestore();
       }
     });
+
+    it("passes aggregateOptions.session to view DDL", async () => {
+      const viewModel = new Model({
+        name: "active_view",
+        from: sourceCollection,
+        pipeline: (p) => p.match({ active: true }),
+        materialize: { type: "view" },
+      });
+      const viewProject = new Project({
+        name: "view_project",
+        models: [viewModel],
+      });
+
+      const createSpy = vi.spyOn(Db.prototype, "createCollection");
+      const session = client.startSession();
+      try {
+        const result = await viewProject.run({
+          client,
+          databaseName: client.db().databaseName,
+          aggregateOptions: { session },
+        });
+
+        expect(result.success).toBe(true);
+        expect(createSpy).toHaveBeenCalledWith(
+          "active_view",
+          expect.objectContaining({ session })
+        );
+      } finally {
+        createSpy.mockRestore();
+        await session.endSession();
+      }
+    });
   });
 
   describe("source driver options", () => {
