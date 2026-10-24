@@ -420,6 +420,52 @@ describe("Project.run()", async () => {
   });
 
   describe("database targeting", () => {
+    it("uses the project's defaultDb when run() names no db", async () => {
+      const dbName = "default_db_target";
+      await client
+        .db(dbName)
+        .collection<RawDoc>("raw_docs")
+        .insertMany(sampleDocs);
+
+      const result = await new Project({
+        name: "default_db_project",
+        models: [stagingModel],
+        defaultDb: { name: dbName },
+      }).run({ client });
+
+      expect(result.success).toBe(true);
+      expect(
+        await client.db(dbName).collection("staging").countDocuments()
+      ).toBe(2);
+    });
+
+    it("rejects a view in another db before running any model", async () => {
+      const stagingSpy = vi.fn();
+      const crossDbView = new Model({
+        name: "cross_db_view",
+        from: new Collection<RawDoc>({
+          db: { name: "raw_source_db" },
+          collection: { name: "raw_docs" },
+        }),
+        pipeline: (p) => p.match({ active: true }),
+        materialize: { type: "view" },
+      });
+
+      await expect(
+        new Project({
+          name: "cross_db_view_project",
+          models: [stagingModel, crossDbView],
+        }).run({
+          client,
+          db: { name: client.db().databaseName },
+          onModelStart: stagingSpy,
+        })
+      ).rejects.toThrow(
+        "View 'cross_db_view' must be in its source's database 'raw_source_db'"
+      );
+      expect(stagingSpy).not.toHaveBeenCalled();
+    });
+
     it("writes model outputs where downstream models read them", async () => {
       const rawDb = client.db("raw_source_db");
       await rawDb.collection<RawDoc>("raw_docs").insertMany(sampleDocs);

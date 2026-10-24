@@ -5,7 +5,7 @@
  * and executes them in topological order.
  */
 
-import { AggregateOptions, MongoClient } from "mongodb";
+import { AggregateOptions, MongoClient, MongoServerError } from "mongodb";
 import { DbConfig, Pipeline, pipesafe, tagClient } from "@pipesafe/core";
 import { Model, isModel } from "../model/Model";
 
@@ -311,6 +311,20 @@ export class Project {
     tagClient(mongoClient);
 
     const defaultDb = db ?? this.defaultDb;
+    const dbName = (config: DbConfig | undefined) =>
+      config?.name ?? defaultDb?.name ?? mongoClient.db().databaseName;
+
+    // Views cannot span databases: check them all before anything is written
+    for (const modelName of executionPlan.stages.flat()) {
+      const model = this.models.get(modelName)!;
+      const sourceDbName = dbName(model.getSource().getOutputDb());
+      const viewDbName = dbName(model.getOutputDb());
+      if (model.materialize.type === "view" && sourceDbName !== viewDbName) {
+        throw new Error(
+          `View '${modelName}' must be in its source's database '${sourceDbName}', not '${viewDbName}'.`
+        );
+      }
+    }
 
     // Execute stages sequentially, models within a stage in parallel
     for (const stage of executionPlan.stages) {
@@ -326,6 +340,7 @@ export class Project {
               model,
               mongoClient,
               defaultDb,
+              dbName(model.getOutputDb()),
               aggregateOptions
             );
 
@@ -374,6 +389,7 @@ export class Project {
     model: Model<any, any, any, any>,
     client: MongoClient,
     defaultDb: DbConfig | undefined,
+    outputDbName: string,
     aggregateOptions: AggregateOptions | undefined
   ): Promise<void> {
     const ddlOptions =
@@ -382,25 +398,18 @@ export class Project {
     const source = model.getSource();
     const sourceDb = source.getOutputDb() ?? defaultDb;
     const outputDb = model.getOutputDb() ?? defaultDb;
-    const defaultDbName = client.db().databaseName;
-    const outputDbName = outputDb?.name ?? defaultDbName;
 
     // Handle view creation separately
     if (model.materialize.type === "view") {
       const viewName = model.name;
-      const sourceDbName = sourceDb?.name ?? defaultDbName;
-      if (sourceDbName !== outputDbName) {
-        throw new Error(
-          `View '${viewName}' must be in its source's database '${sourceDbName}', not '${outputDbName}'.`
-        );
-      }
       const viewDb = client.db(outputDb?.name, outputDb?.options);
 
-      // Drop existing view if exists
       try {
         await viewDb.dropCollection(viewName, ddlOptions);
-      } catch {
-        // View might not exist
+      } catch (error) {
+        const namespaceNotFound =
+          error instanceof MongoServerError && error.code === 26;
+        if (!namespaceNotFound) throw error;
       }
 
       // Create view
