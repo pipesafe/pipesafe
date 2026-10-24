@@ -32,7 +32,7 @@ One-page list of what to avoid, what to prefer, and what doesn't actually fix TS
 - Adding one more `.lookup()` to an already-long chain produces TS2589 at the next step.
 - A test in `*.typeAssertions.ts` starts failing because an `Expect<...>` resolved to `any` instead of the expected shape.
 
-When you see these, run `bun run depth-blame <name> <file>` proactively — even before TS2589 fires. The trace will show which type is consuming the budget so you can fix it _before_ the next operator pushes you over the cliff.
+When you see these, run `bun run depth-blame <name> <file>` proactively — even before TS2589 fires. The per-call depth and count against each ceiling show which call is consuming the budget so you can fix it _before_ the next operator pushes you over the cliff.
 
 ## Don't reach for
 

@@ -14,12 +14,12 @@ This guide gets you from "the build is red" to "the build is green and I underst
 
 Don't try to fix TS2589 in a 500-line user file. The failing call alone is plenty.
 
-1. Make a scratch file (e.g. `packages/core/scratch.ts`, gitignored or just unused).
+1. Make a scratch file under `packages/core/examples/` (e.g. `scratch.ts`, unused), so a source-resolved tsconfig includes it.
 2. Copy in the smallest expression that produces the error. Schema declarations + the failing chained call.
 3. Confirm the error reproduces on `bun run build`. If it doesn't, the cost is coming from elsewhere in the original file (likely an upstream chain). Add the prior calls back one at a time until it reappears.
 4. Save the file path and the variable name. You'll feed both to the tool in step 2.
 
-**Note:** TypeScript's `instantiationCount` resets per top-level statement. If your scratch repro has the failing call at the top level, you're seeing the worst case. If it's nested in a function body, it's also fine — the limit applies to that function's check unit.
+**Note:** TypeScript's `instantiationCount` resets on entry to every checked expression and statement, so the 5,000,000 ceiling applies to one call's own resolution, not the whole chain.
 
 ---
 
@@ -29,7 +29,7 @@ Don't try to fix TS2589 in a 500-line user file. The failing call alone is plent
 bun run depth-blame <name> <filePath>
 ```
 
-`<name>` is the `const`, `type` or `function` declared in `<filePath>`. The tool traces only that file, through the tsconfig that includes it (the viewer's source-resolved coverage/stress configs first), with the depth-stats-patched tsc.
+`<name>` is the `const` or `function` declared in `<filePath>`. The tool traces only that file, through the tsconfig that includes it (the viewer's source-resolved coverage/stress configs first), with the depth-stats-patched tsc.
 
 What you get:
 
@@ -69,7 +69,7 @@ Read the top three offenders. The fix depends on _what they are_, not just _how 
 
 ### C. The offender appears many times with similar arguments
 
-**Tells:** ranked list shows the same alias dozens of times with similar (or identical) instantiations; counter tripped is `instantiationCount`.
+**Tells:** one alias dominates the ceiling-hit list with a large hit count; counter tripped is `instantiationCount`.
 
 **Fix:** pull the repeated computation into a named alias so the type-alias cache works. See [§2.4](./limits.md#24-cached-intermediate-aliases). This is the highest-leverage refactor in the toolbox — single named alias can cut counts 5–20×.
 
@@ -87,9 +87,9 @@ Read the top three offenders. The fix depends on _what they are_, not just _how 
 
 ### F. The offender is internal (e.g. lib.es5)
 
-**Tells:** the top frames live in `lib.es*.d.ts` or `mongodb` types, not under `packages/`.
+**Tells:** depth-blame reports ceiling hits on types outside PipeSafe and few or none on PipeSafe types.
 
-**Fix:** the cost is being _passed in_ to those types from one of ours. Look upstream. depth-blame lists only PipeSafe-owned types at a ceiling; the top one is the responsible alias.
+**Fix:** the cost is being _passed in_ to those types from one of ours. Look upstream: the call that tripped the ceiling names the stage, and that stage's PipeSafe signature is the responsible alias.
 
 ---
 
