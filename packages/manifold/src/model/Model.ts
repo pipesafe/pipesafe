@@ -119,7 +119,7 @@ export function isModel(value: unknown): value is Model {
     typeof value === "object" &&
     value !== null &&
     "sourceType" in value &&
-    (value as { sourceType: unknown }).sourceType === "model"
+    value.sourceType === "model"
   );
 }
 
@@ -167,10 +167,8 @@ export class Model<
     config: ModelConfig<TName, Source<TInput>, TOutput, TMaterializeConfig>
   ) {
     this.name = config.name;
-    this._from = config.from as Source<TInput>;
-    this._pipelineFn = config.pipeline as (
-      p: Pipeline<TInput, TInput, "model">
-    ) => Pipeline<TInput, TOutput, "model">;
+    this._from = config.from;
+    this._pipelineFn = config.pipeline;
     this.materialize = config.materialize;
   }
 

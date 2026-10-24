@@ -92,9 +92,6 @@
     "typescript/no-unnecessary-condition": {
       "count": 1
     },
-    "typescript/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "typescript/no-unsafe-type-assertion": {
       "count": 1
     },
@@ -257,9 +254,6 @@
   "packages/core/src/singleton/pipesafe.test.ts": {
     "max-lines-per-function": {
       "count": 1
-    },
-    "typescript/require-await": {
-      "count": 6
     }
   },
   "packages/core/src/singleton/pipesafe.ts": {
@@ -472,9 +466,6 @@
     },
     "unicorn/no-useless-undefined": {
       "count": 1
-    },
-    "unicorn/prefer-at": {
-      "count": 4
     }
   },
   "packages/manifold/src/model/Model.ts": {
@@ -487,11 +478,8 @@
     "typescript/no-unnecessary-type-arguments": {
       "count": 3
     },
-    "typescript/no-unnecessary-type-assertion": {
-      "count": 3
-    },
     "typescript/no-unsafe-type-assertion": {
-      "count": 2
+      "count": 1
     },
     "typescript/strict-boolean-expressions": {
       "count": 1
@@ -534,9 +522,6 @@
       "count": 26
     },
     "typescript/no-non-null-assertion": {
-      "count": 1
-    },
-    "typescript/no-unnecessary-type-assertion": {
       "count": 1
     },
     "typescript/no-unsafe-argument": {

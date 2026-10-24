@@ -29,7 +29,7 @@ describe("Connections", async () => {
       .insertMany(exampleDocs);
   });
 
-  describe("Singleton", async () => {
+  describe("Singleton", () => {
     beforeAll(() => {
       pipesafe.connect(memoryMongoUri);
     });
@@ -40,16 +40,16 @@ describe("Connections", async () => {
       await pipesafe.close();
     });
 
-    it("should create a client when connected", async () => {
+    it("should create a client when connected", () => {
       expect(pipesafe.client).toBeDefined();
     });
 
-    it("should pass that client to child databases", async () => {
+    it("should pass that client to child databases", () => {
       const db = pipesafe.db(DBName);
       expect(db["client"]).toBeDefined();
     });
 
-    it("should pass that client to child databases then collections", async () => {
+    it("should pass that client to child databases then collections", () => {
       const collection = pipesafe
         .db(DBName)
         .collection<{ test: string }>("my_collection");
@@ -66,7 +66,7 @@ describe("Connections", async () => {
     });
   });
 
-  describe("Chained", async () => {
+  describe("Chained", () => {
     it("from DB", async () => {
       const db = new Database({
         client,
@@ -89,7 +89,7 @@ describe("Connections", async () => {
     });
   });
 
-  describe("On execution", async () => {
+  describe("On execution", () => {
     it("Collection's pipeline can be passed a client", async () => {
       const collection = new Collection<{ test: string }>({
         collectionName: CollectionName,

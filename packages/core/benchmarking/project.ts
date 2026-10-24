@@ -178,7 +178,7 @@ const _benchmarkPipeline = new Pipeline<TestSchema>()`;
         !Array.isArray(value)
       ) {
         // Nested object
-        const nestedFields = Object.entries(value as Record<string, unknown>)
+        const nestedFields = Object.entries(value)
           .map(([nk, nv]) => `      ${nk}: ${JSON.stringify(nv)}`)
           .join(",\n");
         return `${key}: {\n${nestedFields}\n    }`;
