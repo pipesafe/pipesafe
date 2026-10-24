@@ -1,6 +1,5 @@
 ---
 "@pipesafe/core": major
-"@pipesafe/manifold": major
 ---
 
 Type-system standardisation. Every stage now follows one convention —
