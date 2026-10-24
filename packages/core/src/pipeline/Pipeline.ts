@@ -42,7 +42,7 @@ import { SkipQuery, ResolveSkipOutput } from "../stages/skip";
 import { ResolveSampleOutput, SampleQuery } from "../stages/sample";
 import { CountQuery, ResolveCountOutput } from "../stages/count";
 import { OutQuery } from "../stages/out";
-import { MergeQuery } from "../stages/merge";
+import { MergeQuery, ValidateMergeQuery } from "../stages/merge";
 import { AggregationCursor, MongoClient } from "mongodb";
 import { type Source, type InferSourceType } from "../source/Source";
 
@@ -690,8 +690,8 @@ export class Pipeline<
    *
    * @see https://www.mongodb.com/docs/manual/reference/operator/aggregation/merge/
    */
-  merge(
-    $merge: MergeQuery<PreviousStageDocs>
+  merge<const M extends MergeQuery<PreviousStageDocs>>(
+    $merge: M & ValidateMergeQuery<PreviousStageDocs, M>
   ): Pipeline<StartingDocs, never, Mode, UsedStages | "$merge"> {
     return this._chain<never, "$merge">([{ $merge }]);
   }

@@ -1,4 +1,5 @@
 import { Document } from "../utils/objects";
+import { PipeSafeError } from "../utils/errors";
 import { FieldSelector, TopLevelField } from "../elements/fieldSelector";
 
 /**
@@ -33,4 +34,16 @@ export type MergeQuery<Schema extends Document> = {
    * Passed through unchanged to MongoDB.
    */
   let?: Record<string, unknown>;
+};
+
+/**
+ * Key-filtered validation wrapper for `Pipeline.merge`. The method is generic
+ * so `Pipeline` stays assignable across schemas on TypeScript 7, which turns
+ * off excess-property checks; unknown option keys brand here instead.
+ */
+export type ValidateMergeQuery<Schema extends Document, Q> = {
+  [K in Exclude<
+    keyof Q,
+    keyof MergeQuery<Schema>
+  >]: PipeSafeError<`Stage '$merge' has no option '${K & string}'.`>;
 };

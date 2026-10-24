@@ -35,10 +35,13 @@ const budget = JSON.parse(readFileSync(budgetFile, "utf-8")) as {
 // the CI gate and the suite always measure the same configuration.
 clearTSCache();
 
+// CI's TypeScript matrix points TSC at each lane's compiler.
+const tsc = process.env["TSC"] ?? "npx tsc";
+
 let output: string;
 try {
   output = execSync(
-    "npx tsc --noEmit --project tsconfig.benchmark.json --extendedDiagnostics 2>&1",
+    `${tsc} --noEmit --project tsconfig.benchmark.json --extendedDiagnostics 2>&1`,
     { encoding: "utf-8", cwd: PACKAGE_ROOT, maxBuffer: 10 * 1024 * 1024 }
   );
 } catch (error) {
