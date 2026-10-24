@@ -60,7 +60,7 @@ describe("Connections", async () => {
       const collection = new Collection<{ test: string }>({
         collectionName: CollectionName,
       });
-      const cursor = await collection.aggregate().execute();
+      const cursor = collection.aggregate().execute();
       const results = await cursor.toArray();
       expect(results).toEqual(exampleDocs);
     });
@@ -73,7 +73,7 @@ describe("Connections", async () => {
         databaseName: DBName,
       });
       const collection = db.collection<{ test: string }>(CollectionName);
-      const cursor = await collection.aggregate().execute();
+      const cursor = collection.aggregate().execute();
       const results = await cursor.toArray();
       expect(results).toEqual(exampleDocs);
     });
@@ -83,7 +83,7 @@ describe("Connections", async () => {
         client,
         collectionName: CollectionName,
       });
-      const cursor = await collection.aggregate().execute();
+      const cursor = collection.aggregate().execute();
       const results = await cursor.toArray();
       expect(results).toEqual(exampleDocs);
     });
@@ -94,7 +94,7 @@ describe("Connections", async () => {
       const collection = new Collection<{ test: string }>({
         collectionName: CollectionName,
       });
-      const cursor = await collection.aggregate().execute({
+      const cursor = collection.aggregate().execute({
         client,
       });
       const results = await cursor.toArray();
@@ -103,7 +103,7 @@ describe("Connections", async () => {
 
     it("Pipeline can be executed directly", async () => {
       const pipeline = new Pipeline<{ test: string }>();
-      const cursor = await pipeline.execute({
+      const cursor = pipeline.execute({
         client,
         databaseName: DBName,
         collectionName: CollectionName,

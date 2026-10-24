@@ -258,9 +258,6 @@
     "max-lines-per-function": {
       "count": 1
     },
-    "typescript/await-thenable": {
-      "count": 5
-    },
     "typescript/require-await": {
       "count": 6
     }
@@ -285,9 +282,6 @@
     },
     "typescript/no-unsafe-type-assertion": {
       "count": 2
-    },
-    "typescript/unbound-method": {
-      "count": 3
     },
     "unicorn/no-useless-undefined": {
       "count": 1
