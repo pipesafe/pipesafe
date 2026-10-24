@@ -85,8 +85,10 @@ and`VariableReferences<Vars>` (user) are the finite acceptance
   (ResolveLookupLetEnv/BindLetVars/BindVariable) are ONE mapped type each
   with lazy values — Omit/Prettify spellings stack instantiation layers at
   the deepest point of lookup-lambda checking and tripped TS2589.
-- The validation kernel's binder-interior (forgiving) branches run the
-  Vars-blind registry relation as FAST-ACCEPT ONLY, then walk. The
+- The validation kernel's binder-interior (forgiving) branches — taken
+  only by operands that contain a `$$`-reference (`ContainsVariableRef`);
+  variable-free operands stay strict — run the Vars-blind registry
+  relation as FAST-ACCEPT ONLY, then walk. The
   fast-accept doubles as the cycle breaker: without it, exploration with
   the registry's own wide shapes recurses registry→operand-union→registry
   until TS's depth limiter (TS2589 at every lookup-let sub-pipeline

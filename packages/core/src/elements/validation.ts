@@ -28,10 +28,10 @@
  *
  * `Vars` is the USER variable environment (bound names WITHOUT the `$$`
  * prefix → their inferred types), threaded through every helper by the
- * binder walks below. Inside a binder interior the Vars-blind registry
- * operand relation demotes to a fast-accept and the operand tree is walked
- * for ref/variable/operator-name errors; operand TYPE errors there are
- * runtime MongoDB's to report.
+ * binder walks below. The registry operand relation is Vars-blind, so an
+ * operand that references a variable inside a binder interior falls back
+ * to the ref/variable/operator-name walk; its operand TYPE errors are
+ * runtime MongoDB's to report. Variable-free operands stay strict.
  */
 
 import { Document, NonExpandableTypes } from "../utils/objects";
@@ -99,41 +99,42 @@ export type ValidateExpressionValue<
       : [OperatorKeyOf<V>] extends ["$map"] ? ValidateMapValue<Schema, V, Vars>
       : ValidateFilterValue<Schema, V, Vars>
     : [OperatorKeyOf<V>] extends [keyof ExpressionSpec<Schema>] ?
-      HasUserBindings<Vars> extends false ?
-        // Schema-FREE fast-accept (mirrors group's ValidateAccumulatorValue):
-        // an operand valid against the EMPTY schema is valid against any
-        // schema — the ref arms collapse to `never` under `{}`, so only
-        // schema-independent operands (literals, nested literal expressions)
-        // pass here. Besides skipping the Schema-parameterized operand types
-        // for the common literal case, this arm RESOLVES for generic-schema
-        // helpers, where the guarded check below stays deferred.
-        [V] extends [ExpressionFor<{}, OperatorKeyOf<V>>] ? never
-        : string extends keyof Schema ?
-          never // schema-dependent operand check is meaningless on a wide schema
-        : // Readonly-tolerant WITHOUT per-literal transformation: the
-        // registry's operand array positions are `readonly`, so mutable and
-        // `as const` operands both relate directly.
-        [V] extends [ExpressionFor<Schema, OperatorKeyOf<V>>] ? never
-        : ExpressionFor<Schema, OperatorKeyOf<V>>
-      : // Binder interior: the Vars-blind relation demotes to FAST-ACCEPT
-      // (it must not REJECT — bound `$$vars` fail it) and leftovers get
-      // the operand-tree walk, so bad refs/variables/operator names still
-      // brand. The fast-accepts are ALSO the wide-shape cycle breaker —
-      // removing them recurses registry→operand-union→registry to TS's
-      // depth limit (see elements/CLAUDE.md). $literal interiors are
-      // verbatim values, never walked.
+      // Schema-FREE fast-accept (mirrors group's ValidateAccumulatorValue):
+      // an operand valid against the EMPTY schema is valid against any
+      // schema — the ref arms collapse to `never` under `{}`, so only
+      // schema-independent operands (literals, nested literal expressions)
+      // pass here. Besides skipping the Schema-parameterized operand types
+      // for the common literal case, this arm RESOLVES for generic-schema
+      // helpers, where the guarded check below stays deferred. The
+      // fast-accepts are ALSO the wide-shape cycle breaker for the binder
+      // walk below (see elements/CLAUDE.md).
       [V] extends [ExpressionFor<{}, OperatorKeyOf<V>>] ? never
-      : [V] extends [ExpressionFor<Schema, OperatorKeyOf<V>>] ? never
-      : [OperatorKeyOf<V>] extends ["$literal"] ? never
-      : ValidateNestedValue<
-        Schema,
-        V[OperatorKeyOf<V> & keyof V],
-        Vars
-      > extends infer R ?
-        [R] extends [never] ?
-          never
-        : { [K in OperatorKeyOf<V> & string]: R }
-      : never
+      : string extends keyof Schema ?
+        never // schema-dependent operand check is meaningless on a wide schema
+      : // Readonly-tolerant WITHOUT per-literal transformation: the
+      // registry's operand array positions are `readonly`, so mutable and
+      // `as const` operands both relate directly.
+      [V] extends [ExpressionFor<Schema, OperatorKeyOf<V>>] ? never
+      : // The relation is Vars-blind, so bound `$$vars` fail it: only an
+      // operand that references a variable inside a binder/lookup-let
+      // interior falls back to the ref/variable/operator-name walk.
+      // $literal interiors are verbatim values, never walked.
+      (
+        HasUserBindings<Vars> extends true ?
+          ContainsVariableRef<V>
+        : false
+      ) extends true ?
+        [OperatorKeyOf<V>] extends ["$literal"] ? never
+        : ValidateNestedValue<
+          Schema,
+          V[OperatorKeyOf<V> & keyof V],
+          Vars
+        > extends infer R ?
+          [R] extends [never] ?
+            never
+          : { [K in OperatorKeyOf<V> & string]: R }
+        : never
+      : ExpressionFor<Schema, OperatorKeyOf<V>>
     : [OperatorKeyOf<V>] extends [UnimplementedExpressionOps] ?
       never // allow-listed: valid MongoDB the registry doesn't model yet
     : // Schema-INDEPENDENT (like the multi-operator check), so it runs
@@ -276,12 +277,16 @@ type ValidateArrayInputValue<
   // for generic-schema helpers and skips the Schema operand types for
   // literal inputs.
   [Input] extends [RegistryArrayInputOperand<{}, Op>] ? never
-  : HasUserBindings<Vars> extends false ?
-    string extends keyof Schema ?
-      never // operand checks are meaningless on a wide/index-signature schema
-    : [Input] extends [RegistryArrayInputOperand<Schema, Op>] ? never
-    : PipeSafeError<RequiresMsg<"Operator", Op, "an array operand">>
-  : never; // binder interior — the relation is Vars-blind; skip
+  : string extends keyof Schema ?
+    never // operand checks are meaningless on a wide/index-signature schema
+  : [Input] extends [RegistryArrayInputOperand<Schema, Op>] ? never
+  : (
+    HasUserBindings<Vars> extends true ?
+      ContainsVariableRef<Input>
+    : false
+  ) extends true ?
+    never // the relation is Vars-blind; a bound variable fails it
+  : PipeSafeError<RequiresMsg<"Operator", Op, "an array operand">>;
 
 /**
  * The binder walks' sibling-key re-check (`as`, `limit`): each key other
@@ -417,6 +422,19 @@ type ValidateFilterValue<
       : never
     : ExpressionFor<Schema, "$filter"> // malformed operand → expected shape
   : ExpressionFor<Schema, "$filter">;
+
+/** `true` when a literal value tree holds a `$$`-variable reference. */
+export type ContainsVariableRef<V> =
+  V extends `$$${string}` ? true
+  : V extends readonly unknown[] ?
+    true extends ContainsVariableRef<V[number]> ?
+      true
+    : false
+  : V extends object ?
+    V extends NonExpandableTypes ? false
+    : true extends ContainsVariableRef<V[keyof V]> ? true
+    : false
+  : false;
 
 /**
  * Recursive walk over a literal value tree. `$$`-strings resolve through

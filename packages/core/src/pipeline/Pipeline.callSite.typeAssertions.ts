@@ -495,9 +495,7 @@ const _lookup_let_bad_outer_ref = new Pipeline<User>().lookup({
 
 // An Env'd Pipeline accepts its bindings at string-value positions. The
 // out-of-scope rejection ("$$typo") is pinned type-level in
-// validation.typeAssertions.ts instead of via a call: first-time failure
-// elaboration at a call site can trip TS's depth limiter with a spurious
-// TS2589 (pre-existing — see the Known limitations note in CLAUDE.md).
+// validation.typeAssertions.ts.
 declare const _envPipeline: Pipeline<
   Order,
   Order,
@@ -506,6 +504,26 @@ declare const _envPipeline: Pipeline<
   { u: string }
 >;
 const _lookup_let_env_binding_ok = _envPipeline.set({ ok: "$$u" });
+
+// Operand type checks stay strict in a bound environment unless the operand
+// references a variable (the registry relation is Vars-blind).
+const _lookup_let_env_bad_operand = _envPipeline.set({
+  // @ts-expect-error  $add requires numeric operands; sku is a string
+  bad: { $add: ["$sku", 1] },
+});
+
+const _lookup_let_env_bad_accumulator = _envPipeline.group({
+  _id: null,
+  // @ts-expect-error  $sum requires a numeric operand; sku is a string
+  s: { $sum: "$sku" },
+});
+
+const _set_map_bad_operand = new Pipeline<User>().set({
+  t: {
+    // @ts-expect-error  $multiply requires numeric operands; name is a string
+    $map: { input: "$tags", in: { $multiply: ["$name", 2] } },
+  },
+});
 
 export {
   _match_bad,
@@ -568,4 +586,7 @@ export {
   _lookup_let_ok,
   _lookup_let_bad_outer_ref,
   _lookup_let_env_binding_ok,
+  _lookup_let_env_bad_operand,
+  _lookup_let_env_bad_accumulator,
+  _set_map_bad_operand,
 };

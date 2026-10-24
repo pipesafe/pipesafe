@@ -3,7 +3,10 @@ import {
   FieldReferencesThatInferTo,
   InferNestedFieldReference,
 } from "../elements/fieldReference";
-import { ValidateNestedValue } from "../elements/validation";
+import {
+  ContainsVariableRef,
+  ValidateNestedValue,
+} from "../elements/validation";
 import {
   AnyLiteral,
   ExpressionShaped,
@@ -337,10 +340,15 @@ type ValidateAccumulatorValue<
             never
           : { [K in Op & string]: Err }
         : never
-      : HasUserBindings<Vars> extends true ?
-        // Binder/lookup-let interior: mirrors ValidateExpressionValue's
-        // forgiving branch — Vars-blind relation as fast-accept (and
-        // wide-shape cycle breaker), operand-tree walk for the leftovers.
+      : (
+        HasUserBindings<Vars> extends true ?
+          ContainsVariableRef<A>
+        : false
+      ) extends true ?
+        // A variable reference inside a binder/lookup-let interior: mirrors
+        // ValidateExpressionValue's forgiving branch — Vars-blind relation
+        // as fast-accept (and wide-shape cycle breaker), operand-tree walk
+        // for the leftovers.
         [A] extends [AccumulatorFor<{}, Op>] ? never
         : [A] extends [AccumulatorFor<Schema, Op>] ? never
         : ValidateNestedValue<Schema, A[Op & keyof A], Vars> extends infer R ?
