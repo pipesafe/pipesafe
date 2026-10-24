@@ -618,11 +618,12 @@ function loadBundler(): FunctionBundler {
       cachedBundler = nodeRequire()(
         "@pipesafe/function-bundler"
       ) as FunctionBundler;
-    } catch {
+    } catch (error) {
       throw new Error(
         "PipeSafe: file-based $function bodies require the optional " +
           "'@pipesafe/function-bundler' package. Install it with " +
-          "'bun add @pipesafe/function-bundler' (or npm/pnpm/yarn equivalent)."
+          "'bun add @pipesafe/function-bundler' (or npm/pnpm/yarn equivalent).",
+        { cause: error }
       );
     }
   }
