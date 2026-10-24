@@ -34,6 +34,8 @@ describe("no-impure-function-body", () => {
         `register({ body: (a) => a * TAX });`,
         // serverFn refs are not function literals — ignored
         `p.set({ x: { $function: { body: serverFn(applyTax, url), args: ["$p"], lang: "js" } } });`,
+        // Outer TYPE references are erased at runtime — not closures
+        `interface Order { total: number } type Money = number; p.set({ x: { $function: { body: (o: Order): Money => o.total, args: ["$o"], lang: "js" } } });`,
         // A named function expression's self-reference is NOT outer scope
         `p.set({ x: { $function: { body: function fib(n: number): number { return n < 2 ? n : fib(n - 1) + fib(n - 2); }, args: ["$n"], lang: "js" } } });`,
       ],

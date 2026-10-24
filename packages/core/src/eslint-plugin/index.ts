@@ -45,6 +45,8 @@ interface AstNode {
 
 interface ScopeReference {
   identifier: { name: string; loc: unknown };
+  // typescript-eslint only; erased type annotations are not closures
+  isValueReference?: boolean;
   resolved: {
     name: string;
     scope?: { block?: unknown; type?: string };
@@ -234,7 +236,7 @@ const noImpureFunctionBody = {
         const reported = new Set<string>();
         for (const ref of scope.through) {
           const name = ref.identifier.name;
-          if (reported.has(name)) continue;
+          if (reported.has(name) || ref.isValueReference === false) continue;
           const resolved = ref.resolved;
           // A named function expression's self-reference resolves in the
           // wrapper function-expression-name scope, whose block is the
