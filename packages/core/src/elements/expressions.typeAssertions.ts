@@ -633,6 +633,21 @@ type _MapOptionalInputInfer = InferExpression<
 type _Assert_MapOptionalInputInfer = Assert<
   Equal<_MapOptionalInputInfer, string[] | null>
 >;
+// Nested array operators over nullable inputs keep their element type.
+type _NestedNullableSetUnionInfer = InferExpression<
+  SetSchema,
+  { $setUnion: [{ $setUnion: ["$maybeTags"] }, "$tags"] }
+>;
+type _Assert_NestedNullableSetUnionInfer = Assert<
+  Equal<_NestedNullableSetUnionInfer, string[] | null>
+>;
+type _NestedNullableElemAtInfer = InferExpression<
+  SetSchema,
+  { $arrayElemAt: [{ $concatArrays: ["$maybeTags", ["x"]] }, 0] }
+>;
+type _Assert_NestedNullableElemAtInfer = Assert<
+  Equal<_NestedNullableElemAtInfer, string>
+>;
 type _ReduceOptionalInputInfer = InferExpression<
   SetSchema,
   { $reduce: { input: "$maybeTags"; initialValue: ""; in: "$$this" } }
@@ -871,6 +886,8 @@ export type {
   _Assert_ConcatArraysOptionalFieldInfer,
   _Assert_MapOptionalInputInfer,
   _Assert_ReduceOptionalInputInfer,
+  _Assert_NestedNullableSetUnionInfer,
+  _Assert_NestedNullableElemAtInfer,
 };
 
 // The literal-dependent set is DERIVED from `returns`-omission on registry

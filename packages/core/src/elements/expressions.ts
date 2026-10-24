@@ -972,11 +972,9 @@ type GetArrayElement<Schema extends Document, Item> =
     // route through the single dispatch and unwrap. Without this arm the
     // item's elements silently vanished from the result — a WRONG type,
     // violating the degrade-to-widest contract.
-    InferExpression<Schema, Item> extends infer R ?
-      R extends (infer T)[] ?
-        T
-      : unknown
-    : never
+    NonNullable<InferExpression<Schema, Item>> extends (infer T)[] ?
+      T
+    : unknown
   : never;
 
 /**
@@ -998,11 +996,11 @@ type InferArrayElementType<Schema extends Document, ArraySource> =
     // Nested array-producing expression source ($map inside $reduce.input,
     // $filter inside $map.input, ...): route through the single dispatch
     // and unwrap; non-array results degrade to unknown.
-    InferExpression<Schema, ArraySource> extends infer R ?
-      R extends readonly (infer T)[] ?
-        T
-      : unknown
-    : never
+    NonNullable<InferExpression<Schema, ArraySource>> extends (
+      readonly (infer T)[]
+    ) ?
+      T
+    : unknown
   : unknown;
 
 // ============================================================================
@@ -1256,15 +1254,15 @@ type UnionIfNullOperandTypes<
     InferIfNullOperand<Schema, First> | UnionIfNullOperandTypes<Schema, Rest>
   : never;
 
-/** `null` when a field-ref operand can be null or missing: MongoDB's array
- *  operators then return null. */
-type NullIfNullableRef<Schema extends Document, Operand> =
+type NullIn<T> = [Extract<T, null | undefined>] extends [never] ? never : null;
+
+/** `null` when an operand can be null or missing: MongoDB's array operators
+ *  then return null. */
+type NullIfNullable<Schema extends Document, Operand> =
   Operand extends FieldReference<Schema> ?
-    [Extract<InferFieldReference<Schema, Operand>, null | undefined>] extends (
-      [never]
-    ) ?
-      never
-    : null
+    NullIn<InferFieldReference<Schema, Operand>>
+  : HasOperatorKey<Operand> extends true ?
+    NullIn<InferExpression<Schema, Operand>>
   : never;
 
 /**
@@ -1281,7 +1279,7 @@ type InferDependentExpression<Schema extends Document, Expr> =
   Expr extends { $concatArrays: infer Arrays } ?
     Arrays extends readonly unknown[] ?
       | UnionArrayElements<Schema, Arrays>[]
-      | NullIfNullableRef<Schema, Arrays[number]>
+      | NullIfNullable<Schema, Arrays[number]>
     : never
   : Expr extends { $arrayElemAt: readonly [infer ArraySource, unknown] } ?
     InferArrayElementType<Schema, ArraySource>
@@ -1293,7 +1291,7 @@ type InferDependentExpression<Schema extends Document, Expr> =
         MapScopeVars<Expr, InferArrayElementType<Schema, ArraySource>>,
         In
       >[]
-    | NullIfNullableRef<Schema, ArraySource>
+    | NullIfNullable<Schema, ArraySource>
   : Expr extends (
     {
       $reduce: {
@@ -1304,7 +1302,7 @@ type InferDependentExpression<Schema extends Document, Expr> =
     }
   ) ?
     | InferReduceExpression<Schema, ArraySource, Init, In>
-    | NullIfNullableRef<Schema, ArraySource>
+    | NullIfNullable<Schema, ArraySource>
   : Expr extends (
     { $setUnion: infer Operands } | { $setIntersection: infer Operands }
   ) ?
@@ -1313,12 +1311,12 @@ type InferDependentExpression<Schema extends Document, Expr> =
     // that never widens past the union, same as union.
     Operands extends readonly unknown[] ?
       | UnionArrayElements<Schema, Operands>[]
-      | NullIfNullableRef<Schema, Operands[number]>
+      | NullIfNullable<Schema, Operands[number]>
     : never
   : Expr extends { $setDifference: readonly [infer First, infer Second] } ?
     // Removing elements never widens: the FIRST operand's element type.
     | InferArrayElementType<Schema, First>[]
-    | NullIfNullableRef<Schema, First | Second>
+    | NullIfNullable<Schema, First | Second>
   : Expr extends { $ifNull: infer Operands } ?
     Operands extends readonly unknown[] ?
       UnionIfNullOperandTypes<Schema, Operands>
