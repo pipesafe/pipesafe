@@ -66,6 +66,15 @@ type DateOperand<
 >;
 
 /**
+ * Operand of the date-part operators ($hour, $dayOfWeek, $month, ...), which
+ * MongoDB accepts either as a bare date expression or as the
+ * `{ date, timezone }` object form.
+ */
+type DatePartOperand<Schema extends Document, Op extends string> =
+  | DateOperand<Schema, Op>
+  | { date: DateOperand<Schema, Op>; timezone?: string };
+
+/**
  * Arithmetic expression operands — numbers, field references to numbers, or
  * nested expressions. The branded `PipeSafeError` arm surfaces in IDE hovers
  * when a user passes a non-numeric field reference (e.g. `'$stringField'`)
@@ -187,9 +196,11 @@ export type ArrayInput<Schema extends Document> =
  *   cannot be stored in a registry entry; the hand-written arm is the
  *   irreducible per-operator inference code. A missing arm degrades to
  *   `unknown`, never to a wrong type or a dropped field.
- * - `category`: the operator's category — the category key sets and
- *   unions (`ArrayExpression`, ...) are DERIVED from this field, so the
- *   category is declared exactly once (pinned by `_EveryOpCategorized`).
+ * The operator's CATEGORY is declared by membership in the matching
+ * `*_EXPRESSION_OPERATORS` const array (below the registry). Those arrays
+ * are AUTHORITATIVE — this registry must carry an entry for every listed
+ * operator (the composed list's `satisfies` surfaces a missing entry at
+ * the array declaration); the category unions derive from the arrays.
  *
  * Being an interface, members resolve lazily and mutual recursion with the
  * derived `Expression` union is safe.
@@ -205,13 +216,11 @@ export interface ExpressionSpec<Schema extends Document> {
   /** Concatenates arrays. Result element type depends on the literal args. */
   $concatArrays: {
     operand: readonly ArrayOperand<Schema, "$concatArrays">[];
-    category: "array";
   };
   /** Returns the size of an array. */
   $size: {
     operand: ArrayOperand<Schema, "$size">;
     returns: number;
-    category: "array";
   };
   /** Element at index (0-based; negative counts from the end). */
   $arrayElemAt: {
@@ -219,7 +228,6 @@ export interface ExpressionSpec<Schema extends Document> {
       ArrayOperand<Schema, "$arrayElemAt">,
       number | FieldReferencesThatInferTo<Schema, number>,
     ];
-    category: "array";
   };
   /** Filters an array by a condition (cond uses $$var references; `as`
    *  defaults to `$$this` in MongoDB, so it is optional). */
@@ -230,7 +238,6 @@ export interface ExpressionSpec<Schema extends Document> {
       cond: unknown;
       limit?: number;
     };
-    category: "array";
   };
   /**
    * Transforms each element. `in` needs $$variable tracking we don't have,
@@ -239,7 +246,6 @@ export interface ExpressionSpec<Schema extends Document> {
   $map: {
     operand: { input: ArrayInput<Schema>; as: string; in: unknown };
     returns: unknown[];
-    category: "array";
   };
   /** Sums numeric values in an array ($group accumulation lives in group.ts). */
   $sum: {
@@ -249,7 +255,6 @@ export interface ExpressionSpec<Schema extends Document> {
       | MapExpression<Schema>
       | readonly number[];
     returns: number;
-    category: "array";
   };
 
   // --- Date operators -------------------------------------------------------
@@ -262,7 +267,6 @@ export interface ExpressionSpec<Schema extends Document> {
       onNull?: unknown;
     };
     returns: string;
-    category: "date";
   };
   /** Truncates a date to a unit. */
   $dateTrunc: {
@@ -281,7 +285,6 @@ export interface ExpressionSpec<Schema extends Document> {
         | "sunday";
     };
     returns: Date;
-    category: "date";
   };
   /** Adds an amount of units to a date. */
   $dateAdd: {
@@ -292,7 +295,6 @@ export interface ExpressionSpec<Schema extends Document> {
       timezone?: string;
     };
     returns: Date;
-    category: "date";
   };
   /** Subtracts an amount of units from a date. */
   $dateSubtract: {
@@ -303,40 +305,69 @@ export interface ExpressionSpec<Schema extends Document> {
       timezone?: string;
     };
     returns: Date;
-    category: "date";
   };
   /** Converts a Unix-ms number (or numeric expression) to a Date. */
   $toDate: {
     operand: ArithmeticOperand<Schema, "$toDate">;
     returns: Date;
-    category: "date";
+  };
+  /**
+   * The date-part family. Thirteen operators with one operand shape and one
+   * result type between them, so they are registered as a block rather than
+   * as thirteen paragraphs that would each say the same thing.
+   */
+  $year: { operand: DatePartOperand<Schema, "$year">; returns: number };
+  $month: { operand: DatePartOperand<Schema, "$month">; returns: number };
+  $dayOfMonth: {
+    operand: DatePartOperand<Schema, "$dayOfMonth">;
+    returns: number;
+  };
+  $dayOfWeek: {
+    operand: DatePartOperand<Schema, "$dayOfWeek">;
+    returns: number;
+  };
+  $dayOfYear: {
+    operand: DatePartOperand<Schema, "$dayOfYear">;
+    returns: number;
+  };
+  $hour: { operand: DatePartOperand<Schema, "$hour">; returns: number };
+  $minute: { operand: DatePartOperand<Schema, "$minute">; returns: number };
+  $second: { operand: DatePartOperand<Schema, "$second">; returns: number };
+  $millisecond: {
+    operand: DatePartOperand<Schema, "$millisecond">;
+    returns: number;
+  };
+  $week: { operand: DatePartOperand<Schema, "$week">; returns: number };
+  $isoDayOfWeek: {
+    operand: DatePartOperand<Schema, "$isoDayOfWeek">;
+    returns: number;
+  };
+  $isoWeek: { operand: DatePartOperand<Schema, "$isoWeek">; returns: number };
+  $isoWeekYear: {
+    operand: DatePartOperand<Schema, "$isoWeekYear">;
+    returns: number;
   };
 
   // --- Arithmetic operators (all return number) -----------------------------
   $add: {
     operand: readonly ArithmeticOperand<Schema, "$add">[];
     returns: number;
-    category: "arithmetic";
   };
   $subtract: {
     operand: ArithmeticPair<Schema, "$subtract">;
     returns: number;
-    category: "arithmetic";
   };
   $multiply: {
     operand: readonly ArithmeticOperand<Schema, "$multiply">[];
     returns: number;
-    category: "arithmetic";
   };
   $divide: {
     operand: ArithmeticPair<Schema, "$divide">;
     returns: number;
-    category: "arithmetic";
   };
   $mod: {
     operand: ArithmeticPair<Schema, "$mod">;
     returns: number;
-    category: "arithmetic";
   };
 
   // --- String operators ------------------------------------------------------
@@ -344,7 +375,6 @@ export interface ExpressionSpec<Schema extends Document> {
   $concat: {
     operand: readonly StringOperand<Schema, "$concat">[];
     returns: string;
-    category: "string";
   };
 
   // --- Conditional operators (results depend on the literal args) -----------
@@ -355,7 +385,6 @@ export interface ExpressionSpec<Schema extends Document> {
       ConditionalOperand<Schema>,
       ...ConditionalOperand<Schema>[],
     ];
-    category: "conditional";
   };
   /** Ternary: [condition, thenValue, elseValue]. */
   $cond: {
@@ -364,7 +393,6 @@ export interface ExpressionSpec<Schema extends Document> {
       ConditionalOperand<Schema>,
       ConditionalOperand<Schema>,
     ];
-    category: "conditional";
   };
 
   // --- Variable binding ------------------------------------------------------
@@ -372,48 +400,40 @@ export interface ExpressionSpec<Schema extends Document> {
   $let: {
     operand: { vars: Record<string, unknown>; in: unknown };
     returns: unknown;
-    category: "variable";
   };
 
   // --- Literal ----------------------------------------------------------------
   /** Returns the value without parsing; result is the literal's own type. */
-  $literal: { operand: unknown; category: "literal" };
+  $literal: { operand: unknown };
 
   // --- Comparison operators (all return boolean) ------------------------------
   $in: {
     operand: ComparisonPair<Schema>;
     returns: boolean;
-    category: "comparison";
   };
   $eq: {
     operand: ComparisonPair<Schema>;
     returns: boolean;
-    category: "comparison";
   };
   $ne: {
     operand: ComparisonPair<Schema>;
     returns: boolean;
-    category: "comparison";
   };
   $gt: {
     operand: ComparisonPair<Schema>;
     returns: boolean;
-    category: "comparison";
   };
   $gte: {
     operand: ComparisonPair<Schema>;
     returns: boolean;
-    category: "comparison";
   };
   $lt: {
     operand: ComparisonPair<Schema>;
     returns: boolean;
-    category: "comparison";
   };
   $lte: {
     operand: ComparisonPair<Schema>;
     returns: boolean;
-    category: "comparison";
   };
 }
 
@@ -494,19 +514,6 @@ export type UnimplementedExpressionOps =
   | "$dateFromParts"
   | "$dateFromString"
   | "$dateToParts"
-  | "$dayOfMonth"
-  | "$dayOfWeek"
-  | "$dayOfYear"
-  | "$hour"
-  | "$isoDayOfWeek"
-  | "$isoWeek"
-  | "$isoWeekYear"
-  | "$millisecond"
-  | "$minute"
-  | "$month"
-  | "$second"
-  | "$week"
-  | "$year"
   // Miscellaneous
   | "$getField"
   | "$rand"
@@ -613,14 +620,98 @@ export type ExpressionsReturning<Schema extends Document, T> = ExpressionFor<
   OpsReturning<Schema, T>
 >;
 
-// Category key sets — DERIVED from the registry's per-entry `category`
-// field, so an operator's category is declared exactly once, on its entry.
-// Schema-free by construction: entry keys and categories don't depend on
-// Schema, so the filter runs once against `ExpressionSpec<Document>` and is
-// alias-cached globally. `_EveryOpCategorized`
-// (expressions.typeAssertions.ts) pins that no entry omits its category.
+// ---------------------------------------------------------------------------
+// Runtime operator-name lists — AUTHORITATIVE. The pattern, used throughout
+// the package: declare a const array, infer its string union right next to
+// it (`(typeof X)[number]`), compose bigger lists by spreading, and use
+// `Record<Union, V>` where an object-shaped view is needed. The registry
+// conforms to these lists, not the other way around: the `satisfies` on the
+// composed list is the cheapest compile-time tie, and an error there reads
+// "the registry is missing an entry for this operator" — not doubt about
+// the list. (A registry key absent from the lists is caught by the
+// completions suite's exact-match ideals.) Never keep the two sides in sync
+// with assertion pins.
+// ---------------------------------------------------------------------------
 
-/** Closed set of registry categories — every entry declares exactly one. */
+export const ARRAY_EXPRESSION_OPERATORS = [
+  "$concatArrays",
+  "$size",
+  "$arrayElemAt",
+  "$filter",
+  "$map",
+  "$sum",
+] as const;
+type ArrayOps = (typeof ARRAY_EXPRESSION_OPERATORS)[number];
+
+export const DATE_EXPRESSION_OPERATORS = [
+  "$dateToString",
+  "$dateTrunc",
+  "$dateAdd",
+  "$dateSubtract",
+  "$toDate",
+  "$year",
+  "$month",
+  "$dayOfMonth",
+  "$dayOfWeek",
+  "$dayOfYear",
+  "$hour",
+  "$minute",
+  "$second",
+  "$millisecond",
+  "$week",
+  "$isoDayOfWeek",
+  "$isoWeek",
+  "$isoWeekYear",
+] as const;
+type DateOps = (typeof DATE_EXPRESSION_OPERATORS)[number];
+
+export const ARITHMETIC_EXPRESSION_OPERATORS = [
+  "$add",
+  "$subtract",
+  "$multiply",
+  "$divide",
+  "$mod",
+] as const;
+type ArithmeticOps = (typeof ARITHMETIC_EXPRESSION_OPERATORS)[number];
+
+export const STRING_EXPRESSION_OPERATORS = ["$concat"] as const;
+type StringOps = (typeof STRING_EXPRESSION_OPERATORS)[number];
+
+export const CONDITIONAL_EXPRESSION_OPERATORS = ["$ifNull", "$cond"] as const;
+type ConditionalOps = (typeof CONDITIONAL_EXPRESSION_OPERATORS)[number];
+
+export const VARIABLE_EXPRESSION_OPERATORS = ["$let"] as const;
+type VariableOps = (typeof VARIABLE_EXPRESSION_OPERATORS)[number];
+
+// No derived union: nothing consumes a literal-category operator type.
+export const LITERAL_EXPRESSION_OPERATORS = ["$literal"] as const;
+
+export const COMPARISON_EXPRESSION_OPERATORS = [
+  "$in",
+  "$eq",
+  "$ne",
+  "$gt",
+  "$gte",
+  "$lt",
+  "$lte",
+] as const;
+type ComparisonOps = (typeof COMPARISON_EXPRESSION_OPERATORS)[number];
+
+/** Every registered expression operator — the per-category lists spread
+ * together. */
+export const EXPRESSION_OPERATORS = [
+  ...ARRAY_EXPRESSION_OPERATORS,
+  ...DATE_EXPRESSION_OPERATORS,
+  ...ARITHMETIC_EXPRESSION_OPERATORS,
+  ...STRING_EXPRESSION_OPERATORS,
+  ...CONDITIONAL_EXPRESSION_OPERATORS,
+  ...VARIABLE_EXPRESSION_OPERATORS,
+  ...LITERAL_EXPRESSION_OPERATORS,
+  ...COMPARISON_EXPRESSION_OPERATORS,
+] as const satisfies readonly (keyof ExpressionSpec<Document>)[];
+type ExpressionOperator = (typeof EXPRESSION_OPERATORS)[number];
+
+/** Closed set of registry categories. */
 export type ExpressionCategory =
   | "array"
   | "date"
@@ -631,22 +722,21 @@ export type ExpressionCategory =
   | "literal"
   | "comparison";
 
-/** Registry keys whose entry declares `category: C`. */
-export type OpsInCategory<C extends ExpressionCategory> = {
-  [K in keyof ExpressionSpec<Document>]: ExpressionSpec<Document>[K] extends (
-    { category: C }
-  ) ?
-    K
-  : never;
-}[keyof ExpressionSpec<Document>];
+/** Object-shaped view of the lists: category → its operator array. */
+export const EXPRESSION_OPERATORS_BY_CATEGORY = {
+  array: ARRAY_EXPRESSION_OPERATORS,
+  date: DATE_EXPRESSION_OPERATORS,
+  arithmetic: ARITHMETIC_EXPRESSION_OPERATORS,
+  string: STRING_EXPRESSION_OPERATORS,
+  conditional: CONDITIONAL_EXPRESSION_OPERATORS,
+  variable: VARIABLE_EXPRESSION_OPERATORS,
+  literal: LITERAL_EXPRESSION_OPERATORS,
+  comparison: COMPARISON_EXPRESSION_OPERATORS,
+} as const satisfies Record<ExpressionCategory, readonly ExpressionOperator[]>;
 
-type ArrayOps = OpsInCategory<"array">;
-type DateOps = OpsInCategory<"date">;
-type ArithmeticOps = OpsInCategory<"arithmetic">;
-type StringOps = OpsInCategory<"string">;
-type ConditionalOps = OpsInCategory<"conditional">;
-type VariableOps = OpsInCategory<"variable">;
-type ComparisonOps = OpsInCategory<"comparison">;
+/** Registry keys filed under category `C` — derived from the lists. */
+export type OpsInCategory<C extends ExpressionCategory> =
+  (typeof EXPRESSION_OPERATORS_BY_CATEGORY)[C][number];
 
 // Per-operator expression types (public API, derived).
 export type ConcatArraysExpression<Schema extends Document> = ExpressionFor<

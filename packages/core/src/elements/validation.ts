@@ -32,6 +32,7 @@ import {
   PipeSafeError,
   RequiresMsg,
   UnknownOperatorError,
+  UnknownSystemVariableError,
 } from "../utils/errors";
 import {
   HasOperatorKey,
@@ -44,6 +45,7 @@ import {
   UnimplementedExpressionOps,
 } from "./expressions";
 import { GetFieldTypeWithoutArrays } from "./fieldReference";
+import { SystemVariable } from "./literals";
 import { WithoutDollar } from "../utils/strings";
 
 /**
@@ -125,7 +127,8 @@ type ValidateConcatValue<Schema extends Document, V> =
   : never;
 
 type ValidateConcatElement<Schema extends Document, E> =
-  E extends `$$${string}` ? never
+  E extends SystemVariable ? never
+  : E extends `$$${string}` ? UnknownSystemVariableError<E>
   : E extends `$${string}` ?
     string extends keyof Schema ?
       never // ref resolution is meaningless on a wide/index-signature schema
@@ -139,16 +142,19 @@ type ValidateConcatElement<Schema extends Document, E> =
 
 /**
  * Recursive walk over a literal value tree. `$$`-prefixed strings are
- * MongoDB SYSTEM VARIABLES ($$NOW, $$ROOT, $$REMOVE, $$this, ...), not
- * field references — they are accepted as-is (rejecting them would reject
- * valid MongoDB; their inference is not yet modeled). Single-`$` strings
- * are field references and resolve through the same authority inference
- * uses. Arrays walk their elements (a bad ref inside an array literal is
- * as wrong as one outside it); non-expandable objects (Date, ObjectId,
- * RegExp, ...) are always valid.
+ * MongoDB variable references, not field references: the enumerated
+ * SYSTEM_VARIABLES pass; any other `$$`-name brands as an unknown system
+ * variable (`$let`/`$map`/`$filter`-bound USER variables never reach this
+ * walk — the interiors that bind them are `unknown`-typed in the registry
+ * and skip validation; aggregation-command-level `let` variables are not
+ * modeled yet). Single-`$` strings are field references and resolve
+ * through the same authority inference uses. Arrays walk their elements
+ * (a bad ref inside an array literal is as wrong as one outside it);
+ * non-expandable objects (Date, ObjectId, RegExp, ...) are always valid.
  */
 export type ValidateNestedValue<Schema extends Document, V> =
-  V extends `$$${string}` ? never
+  V extends SystemVariable ? never
+  : V extends `$$${string}` ? UnknownSystemVariableError<V>
   : V extends `$${string}` ?
     string extends keyof Schema ?
       never // ref resolution is meaningless on a wide/index-signature schema

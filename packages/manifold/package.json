@@ -40,7 +40,7 @@
   },
   "peerDependencies": {
     "@pipesafe/core": ">=2.0.0 <3.0.0",
-    "mongodb": "^6.17.0"
+    "mongodb": ">=6.0.0"
   },
   "devDependencies": {
     "@pipesafe/core": "workspace:*",
