@@ -9,14 +9,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 
 // ---------------------------------------------------------------------------
@@ -73,6 +66,10 @@ interface DepthLimitHit {
 // ---------------------------------------------------------------------------
 
 const REPO_ROOT = resolve(import.meta.dir, "..");
+const TRACE_DIR = resolve(
+  REPO_ROOT,
+  "tools/depth-viewer/.cache/depth-blame-trace"
+);
 const PIPESAFE_OWNED_PREFIXES = [
   resolve(REPO_ROOT, "packages/core/src") + "/",
   resolve(REPO_ROOT, "packages/manifold/src") + "/",
@@ -170,13 +167,12 @@ function generateTrace(targetFile: string): {
   traceDir: string;
   stderr: string;
   stdout: string;
-  workDir: string;
   exitCode: number | null;
   owningTsconfig: string;
 } {
-  const workDir = mkdtempSync(join(tmpdir(), "depth-blame-"));
-  const traceDir = join(workDir, "trace");
-  mkdirSync(traceDir, { recursive: true });
+  // Only the latest trace is kept.
+  rmSync(TRACE_DIR, { recursive: true, force: true });
+  mkdirSync(TRACE_DIR, { recursive: true });
 
   const owningTsconfig = findOwningTsconfig(targetFile);
 
@@ -185,17 +181,6 @@ function generateTrace(targetFile: string): {
   // only fires when a Program is built that the file participates in, which
   // requires the include/references context the parent project provides.
   const tsc = findTscBin();
-  // Clear the project's incremental cache before invoking tsc.
-  //
-  // Why: `composite: true` in the project tsconfig implies `incremental: true`,
-  // which writes `tsconfig.tsbuildinfo` next to the config. The next run reads
-  // that file as a cache hit and skips type-checking entirely — producing an
-  // empty trace. Running depth-blame after a normal `bun run build` would
-  // silently no-op without this.
-  const buildInfoPath = join(dirname(owningTsconfig), "tsconfig.tsbuildinfo");
-  if (existsSync(buildInfoPath)) {
-    rmSync(buildInfoPath);
-  }
   const result = spawnSync(
     tsc,
     [
@@ -203,8 +188,14 @@ function generateTrace(targetFile: string): {
       owningTsconfig,
       "--noEmit",
       "--generateTrace",
-      traceDir,
+      TRACE_DIR,
       "--extendedDiagnostics",
+      // A composite project's tsbuildinfo would turn the run into a cache hit
+      // with an empty trace; disable incrementality instead of deleting it.
+      "--composite",
+      "false",
+      "--incremental",
+      "false",
     ],
     {
       cwd: REPO_ROOT,
@@ -214,10 +205,9 @@ function generateTrace(targetFile: string): {
   );
 
   return {
-    traceDir,
+    traceDir: TRACE_DIR,
     stderr: result.stderr ?? "",
     stdout: result.stdout ?? "",
-    workDir,
     exitCode: result.status,
     owningTsconfig,
   };
@@ -636,14 +626,13 @@ function main(): void {
     `Generating trace via owning tsconfig of ${shortPath(targetFile)}...`
   );
 
-  const { traceDir, stdout, stderr, workDir, exitCode, owningTsconfig } =
+  const { traceDir, stdout, stderr, exitCode, owningTsconfig } =
     generateTrace(targetFile);
 
   if (!existsSync(join(traceDir, "trace.json"))) {
     console.error(`tsc failed before writing the trace (exit=${exitCode}).`);
     if (stderr.trim()) console.error(stderr);
     if (stdout.trim()) console.error(stdout);
-    rmSync(workDir, { recursive: true, force: true });
     process.exit(4);
   }
 
@@ -652,7 +641,6 @@ function main(): void {
   const offenders = aggregateOffenders(events, types);
   const hits = aggregateDepthLimitHits(events, types);
   printReport(targetFile, diag, offenders, hits, traceDir, owningTsconfig);
-  // Don't delete workDir — the user needs the trace files for the viewer.
 }
 
 main();

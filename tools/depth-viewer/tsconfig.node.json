@@ -19,6 +19,7 @@
     "build.ts",
     "patch-tsc.ts",
     "patch-tsc.test.ts",
-    "query.ts"
+    "query.ts",
+    "src/types.ts"
   ]
 }

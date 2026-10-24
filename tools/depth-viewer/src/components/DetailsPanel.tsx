@@ -159,7 +159,7 @@ export function DetailsPanel({ data, file, symbol }: Props) {
                             className={`chain-depth${isTrigger && step.hitCountLimit ? " depth-limit" : ""}`}
                             title={
                               isTrigger && step.hitCountLimit ?
-                                `This step hit the instantiation-count ceiling (${COUNT_CEILING.toLocaleString()}) — the genuine failure, which collapses the whole type to \`any\`. tsc bails at the ceiling, so the exact total is unknown; it had reached ${step.maxCount.toLocaleString()} when it stopped.`
+                                `This step hit the instantiation-count ceiling (${COUNT_CEILING.toLocaleString()}) — the genuine failure, which collapses the whole type to \`any\`. tsc bails at the ceiling, so the exact total is unknown; the checker's counter had reached ${(step.peakCount ?? step.maxCount).toLocaleString()} when it stopped.`
                               : `Marginal instantiations this step performed (ceiling ${COUNT_CEILING.toLocaleString()} collapses the whole type to \`any\`): ${step.maxCount.toLocaleString()}.`
                             }
                           >

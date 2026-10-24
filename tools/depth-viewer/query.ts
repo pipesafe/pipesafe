@@ -36,70 +36,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import type { Meta, SymbolStats } from "./src/types";
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = resolve(HERE, "public/data");
-
-interface SymbolReference {
-  name: string;
-  line: number;
-}
-
-interface ChainStep {
-  label: string;
-  member?: string;
-  declaredReturnType?: string;
-  declaredAt?: { file: string; line: number };
-  resolvedType: string;
-  callLine: number;
-  maxDepth?: number;
-  ownDepth?: number;
-  maxTail?: number;
-  maxCount?: number;
-  hitDepthLimit?: boolean;
-  hitTailLimit?: boolean;
-  hitCountLimit?: boolean;
-  depthInferred?: boolean;
-}
-
-interface InferredTypeInfo {
-  display: string;
-  truncated: boolean;
-  depth?: number;
-  hitDepthLimit: boolean;
-  tail?: number;
-  hitTailLimit: boolean;
-  count?: number;
-  hitCountLimit: boolean;
-  errored: boolean;
-  walkLimited: boolean;
-  uniqueTypes: number;
-  referencedNames: { name: string; count: number }[];
-  chain?: ChainStep[];
-}
-
-interface SymbolStats {
-  name: string;
-  kind: string;
-  file: string;
-  startLine: number;
-  endLine: number;
-  startPos: number;
-  endPos: number;
-  references: SymbolReference[];
-  entriesCreated: number;
-  entriesByKind: Record<string, number>;
-  callSites: number;
-  inferred?: InferredTypeInfo;
-}
-
-interface Meta {
-  project: string;
-  generatedAt: string;
-  totalEntries: number;
-  ownedEntries: number;
-  totalSymbols: number;
-  ceilings: Record<string, number>;
-}
 
 type Index = Record<string, SymbolStats[]>;
 

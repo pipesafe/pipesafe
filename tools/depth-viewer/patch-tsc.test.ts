@@ -84,6 +84,7 @@ const NUMERIC_DEPTH_FIELDS = [
   "spanPeakTail",
   "selfPeakTail",
   "selfCount",
+  "spanPeakCount",
   "enterTotalCount",
   "exitTotalCount",
 ] as const;
@@ -194,6 +195,11 @@ describe("patched tsc trace (integration)", () => {
     ).toBe(true);
   });
 
+  it("records the checker's own instantiationCount peak", () => {
+    const steps = depthSteps(patched);
+    expect(steps.some((s) => Number(s.spanPeakCount) > 0)).toBe(true);
+  });
+
   it("emits depthStep via the unsampled instant ('I') path", () => {
     // Instant events are written unconditionally — unlike the 10ms-sampled X
     // spans — so they must all be ph:'I'.
@@ -236,6 +242,7 @@ describe("indexDepthSteps (dedup of re-checked nodes)", () => {
     spanPeakTail: 0,
     selfPeakTail: 0,
     selfCount: 100,
+    spanPeakCount: 100,
     enterTotalCount: 0,
     exitTotalCount: 100,
   };
@@ -249,6 +256,7 @@ describe("indexDepthSteps (dedup of re-checked nodes)", () => {
         enterTotalCount: 900,
         exitTotalCount: 1300,
         selfCount: 7,
+        spanPeakCount: 400,
       }),
       rec({ spanPeakDepth: 12, enterTotalCount: 5000, exitTotalCount: 9999 }),
     ]);
@@ -259,6 +267,7 @@ describe("indexDepthSteps (dedup of re-checked nodes)", () => {
     expect(r.enterTotalCount).toBe(900);
     expect(r.exitTotalCount).toBe(1300);
     expect(r.selfCount).toBe(7);
+    expect(r.spanPeakCount).toBe(400);
   });
 
   it("breaks spanPeakDepth ties by the larger exitTotalCount, deterministically", () => {

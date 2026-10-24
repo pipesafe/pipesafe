@@ -78,7 +78,7 @@ const REPO_ROOT = resolve(HERE, "../..");
  * Bump when the patch logic below changes so previously-cached bundles are
  * invalidated even when the underlying _tsc.js is byte-identical.
  */
-export const PATCH_VERSION = 6;
+export const PATCH_VERSION = 7;
 
 /** Injected into the source so a patched bundle is recognisable + idempotent. */
 export const MARKER = "/*__DEPTH_PATCH__*/";
@@ -170,7 +170,7 @@ const EDITS: Edit[] = [
     name: "depth-counters",
     anchor: "var instantiationDepth = 0;",
     mode: "after",
-    text: `\n  ${MARKER} var __dvSpanPeak = 0, __dvSelfPeak = 0, __dvTailSpan = 0, __dvTailSelf = 0, __dvSelfCount = 0;`,
+    text: `\n  ${MARKER} var __dvSpanPeak = 0, __dvSelfPeak = 0, __dvTailSpan = 0, __dvTailSelf = 0, __dvSelfCount = 0, __dvCountSpan = 0;`,
   },
 
   // 2. The single instantiation site (in instantiateTypeWithAlias). Fold the
@@ -184,7 +184,7 @@ const EDITS: Edit[] = [
     anchor:
       "totalInstantiationCount++;\n    instantiationCount++;\n    instantiationDepth++;",
     mode: "after",
-    text: ` ${MARKER} if (instantiationDepth > __dvSpanPeak) __dvSpanPeak = instantiationDepth; if (instantiationDepth > __dvSelfPeak) __dvSelfPeak = instantiationDepth; __dvSelfCount++;`,
+    text: ` ${MARKER} if (instantiationDepth > __dvSpanPeak) __dvSpanPeak = instantiationDepth; if (instantiationDepth > __dvSelfPeak) __dvSelfPeak = instantiationDepth; __dvSelfCount++; if (instantiationCount > __dvCountSpan) __dvCountSpan = instantiationCount;`,
   },
 
   // 3. The single tail-recursion-count increment site (in getConditionalType).
@@ -208,7 +208,7 @@ const EDITS: Edit[] = [
     mode: "replace",
     text:
       '(_a = tracing) == null ? void 0 : _a.push(tracing.Phase.Check, "checkExpression", { kind: node.kind, pos: node.pos, end: node.end, path: node.tracingPath });\n' +
-      `    ${MARKER} const __dvSaveSpan = __dvSpanPeak, __dvSaveSelf = __dvSelfPeak, __dvSaveTailSpan = __dvTailSpan, __dvSaveTailSelf = __dvTailSelf, __dvSaveSelfCount = __dvSelfCount, __dvEnterTotal = totalInstantiationCount, __dvEnterDepth = instantiationDepth; __dvSpanPeak = instantiationDepth; __dvSelfPeak = instantiationDepth; __dvTailSpan = 0; __dvTailSelf = 0; __dvSelfCount = 0;\n` +
+      `    ${MARKER} const __dvSaveSpan = __dvSpanPeak, __dvSaveSelf = __dvSelfPeak, __dvSaveTailSpan = __dvTailSpan, __dvSaveTailSelf = __dvTailSelf, __dvSaveSelfCount = __dvSelfCount, __dvSaveCountSpan = __dvCountSpan, __dvEnterTotal = totalInstantiationCount, __dvEnterDepth = instantiationDepth; __dvSpanPeak = instantiationDepth; __dvSelfPeak = instantiationDepth; __dvTailSpan = 0; __dvTailSelf = 0; __dvSelfCount = 0; __dvCountSpan = 0;\n` +
       "    const saveCurrentNode = currentNode;",
   },
 
@@ -228,7 +228,7 @@ const EDITS: Edit[] = [
     mode: "replace",
     text:
       "currentNode = saveCurrentNode;\n" +
-      `    ${MARKER} { const __dvNodeSpan = __dvSpanPeak, __dvNodeSelf = __dvSelfPeak, __dvNodeTailSpan = __dvTailSpan, __dvNodeTailSelf = __dvTailSelf, __dvNodeSelfCount = __dvSelfCount; __dvSpanPeak = __dvSaveSpan > __dvNodeSpan ? __dvSaveSpan : __dvNodeSpan; __dvSelfPeak = __dvSaveSelf; __dvTailSpan = __dvSaveTailSpan > __dvNodeTailSpan ? __dvSaveTailSpan : __dvNodeTailSpan; __dvTailSelf = __dvSaveTailSelf; __dvSelfCount = __dvSaveSelfCount; if (tracing && (node.kind === ${CALL_KIND} || node.kind === ${NEW_KIND}) && (totalInstantiationCount > __dvEnterTotal || __dvNodeSpan > __dvEnterDepth)) { tracing.instant(tracing.Phase.Check, ${JSON.stringify(DEPTH_STEP_EVENT)}, { kind: node.kind, pos: node.pos, end: node.end, path: node.tracingPath, enterDepth: __dvEnterDepth, spanPeakDepth: __dvNodeSpan, selfPeakDepth: __dvNodeSelf, spanPeakTail: __dvNodeTailSpan, selfPeakTail: __dvNodeTailSelf, selfCount: __dvNodeSelfCount, enterTotalCount: __dvEnterTotal, exitTotalCount: totalInstantiationCount }); } }\n` +
+      `    ${MARKER} { const __dvNodeSpan = __dvSpanPeak, __dvNodeSelf = __dvSelfPeak, __dvNodeTailSpan = __dvTailSpan, __dvNodeTailSelf = __dvTailSelf, __dvNodeSelfCount = __dvSelfCount, __dvNodeCountSpan = __dvCountSpan; __dvSpanPeak = __dvSaveSpan > __dvNodeSpan ? __dvSaveSpan : __dvNodeSpan; __dvSelfPeak = __dvSaveSelf; __dvTailSpan = __dvSaveTailSpan > __dvNodeTailSpan ? __dvSaveTailSpan : __dvNodeTailSpan; __dvTailSelf = __dvSaveTailSelf; __dvSelfCount = __dvSaveSelfCount; __dvCountSpan = __dvSaveCountSpan > __dvNodeCountSpan ? __dvSaveCountSpan : __dvNodeCountSpan; if (tracing && (node.kind === ${CALL_KIND} || node.kind === ${NEW_KIND}) && (totalInstantiationCount > __dvEnterTotal || __dvNodeSpan > __dvEnterDepth)) { tracing.instant(tracing.Phase.Check, ${JSON.stringify(DEPTH_STEP_EVENT)}, { kind: node.kind, pos: node.pos, end: node.end, path: node.tracingPath, enterDepth: __dvEnterDepth, spanPeakDepth: __dvNodeSpan, selfPeakDepth: __dvNodeSelf, spanPeakTail: __dvNodeTailSpan, selfPeakTail: __dvNodeTailSelf, selfCount: __dvNodeSelfCount, spanPeakCount: __dvNodeCountSpan, enterTotalCount: __dvEnterTotal, exitTotalCount: totalInstantiationCount }); } }\n` +
       "    (_b = tracing) == null ? void 0 : _b.pop();\n    return type;",
   },
 ];

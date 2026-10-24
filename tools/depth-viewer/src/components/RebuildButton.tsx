@@ -15,6 +15,7 @@ interface Props {
 const TARGETS: { value: RebuildTarget["target"]; label: string }[] = [
   { value: "coverage", label: "coverage (full)" },
   { value: "sample", label: "sample (fast)" },
+  { value: "stress", label: "stress fixtures" },
 ];
 
 /**
@@ -59,7 +60,7 @@ export function RebuildButton({
           type="button"
           className="rebuild-btn"
           disabled={active}
-          onClick={() => onTrigger({ target, patch: target === "coverage" })}
+          onClick={() => onTrigger({ target, patch: target !== "sample" })}
         >
           {active ?
             <>

@@ -333,7 +333,7 @@ These are the types most likely to cause the next TS2589 incident. Each entry: f
 
 ## 5. Known TS2589 sites
 
-There is currently no known intentional TS2589 site in the shipped sources. (The old `$naem` case in `Pipeline.callSite.typeAssertions.ts` used to trip the depth limit; since the typed compile-time-errors work it fails with a clean `Field 'naem' is not on the schema.` brand instead.) The generated stress fixtures (`bun run tsx tools/gen-stress-pipeline.ts` → `packages/core/examples/_stress-pipelines.ts`) trip all three ceilings on purpose; they are excluded from every typecheck/lint/format surface and exist only as depth-viewer trace fodder.
+There is currently no known intentional TS2589 site in the shipped sources. (The old `$naem` case in `Pipeline.callSite.typeAssertions.ts` used to trip the depth limit; since the typed compile-time-errors work it fails with a clean `Field 'naem' is not on the schema.` brand instead.) The generated stress fixtures (`bun run tsx tools/gen-stress-pipeline.ts` → `tools/depth-viewer/fixtures/stress-pipelines.ts`) trip all three ceilings on purpose. They sit outside every typecheck/lint/format surface and the default dataset; build them with the viewer's `stress` target or `bun run tools/depth-viewer/build.ts --project tools/depth-viewer/tsconfig.stress.json`.
 
 The benchmarking harness (`packages/core/benchmarking/benchmark.ts`) parses `tsc` output for `ts(2589)` and `"possibly infinite"` and surfaces a `hasDepthError` flag (lines ~177, 200, 201). That's the existing safety net at the suite level. The new `bun run depth-blame` CLI is the per-expression counterpart for interactive debugging.
 

@@ -45,7 +45,7 @@ export interface RebuildSnapshot {
 }
 
 /** How the browser names a build target; maps to a --project argument. */
-type Target = "coverage" | "sample" | string;
+type Target = "coverage" | "sample" | "stress" | string;
 
 const LOG_TAIL = 200;
 
@@ -68,6 +68,8 @@ function argsForTarget(target: Target, patch: boolean): string[] {
   const args = ["run", join(HERE, "build.ts")];
   if (target === "sample") {
     args.push("--project", "tools/depth-viewer/sample/tsconfig.json");
+  } else if (target === "stress") {
+    args.push("--project", "tools/depth-viewer/tsconfig.stress.json");
   } else if (target !== "coverage") {
     // Treat anything else as an explicit tsconfig path (relative to repo root).
     args.push("--project", target);

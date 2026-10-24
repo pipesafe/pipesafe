@@ -18,7 +18,7 @@ export interface RebuildSnapshot {
 }
 
 export interface RebuildTarget {
-  target: "coverage" | "sample";
+  target: "coverage" | "sample" | "stress";
   patch: boolean;
 }
 

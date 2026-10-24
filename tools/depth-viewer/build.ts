@@ -30,22 +30,28 @@ import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import ts from "typescript";
 
 import { DEPTH_STEP_EVENT, materializePatchedTsc } from "./patch-tsc";
+import type {
+  ChainStep,
+  InferredTypeInfo,
+  SymbolKind,
+  SymbolReference,
+  SymbolStats,
+} from "./src/types";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, "../..");
 const DATA_DIR = resolve(HERE, "public/data");
+const TRACE_DIR = resolve(HERE, ".cache/trace");
 
 // Run the trace through a depth-stats-patched copy of tsc by default (see
 // patch-tsc.ts) so every trace event carries instantiation-depth stats. Set
@@ -102,6 +108,11 @@ interface RawDepthStep {
    * single step crossing 5,000,000 is what collapses the type to `any` (TS2589).
    */
   selfCount: number;
+  /**
+   * Peak of the checker's own `instantiationCount` over this node's subtree —
+   * the value TS compares against 5,000,000.
+   */
+  spanPeakCount: number;
   /** Monotonic totalInstantiationCount bracketing this node's subtree. */
   enterTotalCount: number;
   exitTotalCount: number;
@@ -118,130 +129,9 @@ interface DepthRecord {
   spanPeakTail: number;
   selfPeakTail: number;
   selfCount: number;
+  spanPeakCount: number;
   enterTotalCount: number;
   exitTotalCount: number;
-}
-
-type SymbolKind =
-  | "const"
-  | "let"
-  | "var"
-  | "type"
-  | "interface"
-  | "function"
-  | "class";
-
-interface SymbolReference {
-  name: string;
-  line: number; // 1-indexed
-}
-
-interface ChainStep {
-  label: string;
-  member?: string;
-  declaredReturnType?: string;
-  declaredAt?: { file: string; line: number };
-  resolvedType: string;
-  callLine: number;
-  /**
-   * Peak instantiation depth the checker reached while computing this step's
-   * type, from the patched tsc trace (NOT walked from the resolved type). The
-   * peak over the step's whole subtree; post-processed to a running max along
-   * the chain so it never reads as shallower than a step nested inside it, and
-   * saturates at 100 when TS2589's depth ceiling fires. Absent only if no trace
-   * record matched and no earlier step had one.
-   */
-  maxDepth?: number;
-  /**
-   * Depth this step's OWN signature/return resolution added — the self peak
-   * (reset on every nested expression) minus the ambient entry depth. A subtle
-   * marginal, surfaced in the tooltip only; absent for inferred steps.
-   */
-  ownDepth?: number;
-  /**
-   * Peak tail-recursive conditional-type elaboration count for this step. A
-   * separate TS2589 trigger (ceiling 1000) that fires with low instantiation
-   * depth, so a step can be healthy on {@link maxDepth} yet trip here. 0 if no
-   * tail recursion ran.
-   */
-  maxTail?: number;
-  /**
-   * Peak per-unit instantiationCount for this step. The third TS2589 trigger
-   * (ceiling 5,000,000); this is what collapses the whole accumulated type to
-   * the error type (`any`) when one step's resolution does millions of
-   * instantiations. Climbs along the chain with the accumulated type's size.
-   */
-  maxCount?: number;
-  /** True when {@link maxDepth} reached the 100 instantiation-depth ceiling. */
-  hitDepthLimit?: boolean;
-  /** True when {@link maxTail} reached the 1000 tail-recursion ceiling. */
-  hitTailLimit?: boolean;
-  /** True when {@link maxCount} reached the 5,000,000 instantiation-count ceiling. */
-  hitCountLimit?: boolean;
-  /**
-   * True when this step carried no trace record and its peaks were derived from
-   * the steps nested inside it (the outermost step short-circuits after an inner
-   * step trips TS2589). The peak is a valid lower bound; `ownDepth` is not
-   * measured for it.
-   */
-  depthInferred?: boolean;
-}
-
-interface InferredTypeInfo {
-  display: string;
-  truncated: boolean;
-  /**
-   * Max instantiation depth reached anywhere in this declaration, sourced from
-   * the patched tsc trace (the peak `instantiationDepth`, not a structural walk
-   * of the resolved type). `undefined` when no Call/New expression in the
-   * declaration produced a trace record (e.g. a plain object-literal const).
-   */
-  depth?: number;
-  /** True when {@link depth} reached the 100 ceiling (TS2589 territory). */
-  hitDepthLimit: boolean;
-  /**
-   * Max tail-recursive conditional-type elaboration count across the
-   * declaration, from the trace. A separate TS2589 trigger (ceiling 1000).
-   * `undefined` when no Call/New step produced a trace record.
-   */
-  tail?: number;
-  /** True when {@link tail} reached the 1000 tail-recursion ceiling. */
-  hitTailLimit: boolean;
-  /**
-   * Max per-unit instantiationCount across the declaration, from the trace. The
-   * third TS2589 trigger (ceiling 5,000,000) — the one that collapses the whole
-   * type to `any`. `undefined` when no Call/New step produced a trace record.
-   */
-  count?: number;
-  /** True when {@link count} reached the 5,000,000 instantiation-count ceiling. */
-  hitCountLimit: boolean;
-  /**
-   * True when the checker handed back an error type for this declaration —
-   * typically the TS2589 "excessively deep" bail. The resolved type is then
-   * meaningless, so `uniqueTypes`/`display` should be read with that in mind.
-   */
-  errored: boolean;
-  /** Whether the structural walk (used only for uniqueTypes) hit its cap. */
-  walkLimited: boolean;
-  /** Number of distinct ts.Type instances visited while walking (coverage only). */
-  uniqueTypes: number;
-  referencedNames: { name: string; count: number }[];
-  chain?: ChainStep[];
-}
-
-interface SymbolStats {
-  name: string;
-  kind: SymbolKind;
-  file: string;
-  startLine: number;
-  endLine: number;
-  startPos: number;
-  endPos: number;
-  references: SymbolReference[];
-  entriesCreated: number;
-  entriesByKind: Record<string, number>;
-  callSites: number;
-  inferred?: InferredTypeInfo;
 }
 
 // ---------------------------------------------------------------------------
@@ -281,12 +171,9 @@ function findTscBin(): string {
 }
 
 function generateTrace(): string {
-  const workDir = mkdtempSync(join(tmpdir(), "depth-viewer-"));
-  const traceDir = join(workDir, "trace");
-  mkdirSync(traceDir, { recursive: true });
-
-  const buildInfo = join(dirname(tsconfigPath), "tsconfig.tsbuildinfo");
-  if (existsSync(buildInfo)) rmSync(buildInfo);
+  // Only the latest trace is kept; a coverage trace runs to gigabytes.
+  rmSync(TRACE_DIR, { recursive: true, force: true });
+  mkdirSync(TRACE_DIR, { recursive: true });
 
   // Resolve the compiler. By default a depth-stats-patched copy of tsc, run via
   // the current node, so the trace carries per-event instantiation-depth stats.
@@ -318,18 +205,23 @@ function generateTrace(): string {
       tsconfigPath,
       "--noEmit",
       "--generateTrace",
-      traceDir,
+      TRACE_DIR,
       "--extendedDiagnostics",
+      // Force a full check without reading or writing the project's tsbuildinfo.
+      "--composite",
+      "false",
+      "--incremental",
+      "false",
     ],
     { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 200 * 1024 * 1024 }
   );
 
-  if (!existsSync(join(traceDir, "types.json"))) {
+  if (!existsSync(join(TRACE_DIR, "types.json"))) {
     console.error(`tsc failed to write types.json (exit=${result.status}).`);
     if (result.stderr.trim()) console.error(result.stderr);
     process.exit(3);
   }
-  return traceDir;
+  return TRACE_DIR;
 }
 
 function parseJsonArray<T>(path: string): T[] {
@@ -381,6 +273,7 @@ export function indexDepthSteps(records: RawDepthStep[]): DepthIndex {
         spanPeakTail: a.spanPeakTail,
         selfPeakTail: a.selfPeakTail,
         selfCount: a.selfCount,
+        spanPeakCount: a.spanPeakCount,
         enterTotalCount: a.enterTotalCount,
         exitTotalCount: a.exitTotalCount,
       });
@@ -626,7 +519,8 @@ function buildInitializerChain(
       // Marginal instantiations THIS step performed (not inherited). Spikes at
       // the culprit step and is ~0 once the type has collapsed to `any`.
       step.maxCount = rec.selfCount;
-      step.hitCountLimit = rec.selfCount >= COUNT_CEILING;
+      step.peakCount = rec.spanPeakCount;
+      step.hitCountLimit = rec.spanPeakCount >= COUNT_CEILING;
     }
     out.push(step);
   }
@@ -893,9 +787,11 @@ function computeInferredType(
       if (step.maxTail !== undefined) {
         tail = tail === undefined ? step.maxTail : Math.max(tail, step.maxTail);
       }
-      if (step.maxCount !== undefined) {
+      if (step.peakCount !== undefined) {
         count =
-          count === undefined ? step.maxCount : Math.max(count, step.maxCount);
+          count === undefined ?
+            step.peakCount
+          : Math.max(count, step.peakCount);
       }
     }
   }

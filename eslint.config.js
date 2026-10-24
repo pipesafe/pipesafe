@@ -9,7 +9,7 @@ const ignorePatterns = [
   "benchmarks/**/*",
   "**/.cache/**/*",
   // Generated depth-viewer stress fixtures (huge, deliberately trip TS2589).
-  "packages/core/examples/_*.ts",
+  "tools/depth-viewer/fixtures/**/*",
 ];
 
 export default defineConfig([

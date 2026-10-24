@@ -45,7 +45,7 @@ export interface InferredTypeInfo {
   /** True when {@link tail} hit the 1000 tail-recursion ceiling (TS2589). */
   hitTailLimit: boolean;
   /**
-   * Max per-unit instantiationCount across the declaration, from the trace —
+   * Max of the checker's own instantiationCount across the declaration's steps —
    * the third TS2589 trigger (ceiling 5,000,000), the one that collapses the
    * whole type to `any`. `undefined` when no Call/New step produced a record.
    */
@@ -112,11 +112,16 @@ export interface ChainStep {
    * the whole type to `any`; reads ~0 on steps whose type is already `any`.
    */
   maxCount?: number;
+  /**
+   * Peak of the checker's own `instantiationCount` over this step's subtree —
+   * the value TS compares against the 5,000,000 ceiling.
+   */
+  peakCount?: number;
   /** True when {@link maxDepth} reached the 100 ceiling. */
   hitDepthLimit?: boolean;
   /** True when {@link maxTail} reached the 1000 ceiling. */
   hitTailLimit?: boolean;
-  /** True when {@link maxCount} reached the 5,000,000 ceiling. */
+  /** True when {@link peakCount} reached the 5,000,000 ceiling. */
   hitCountLimit?: boolean;
   /**
    * True when this step had no trace record and its depth/tail were derived
