@@ -40,7 +40,13 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "mongodb": ">=6.0.0"
+    "mongodb": ">=6.0.0",
+    "typescript": ">=5.3.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "typescript": "^5.9.3"

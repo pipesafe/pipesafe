@@ -66,6 +66,7 @@ jobs:
         run: bun run format
 
   typecheck:
+    name: typecheck (${{ matrix.typescript }})
     runs-on: ubuntu-latest
 
     strategy:
@@ -74,6 +75,11 @@ jobs:
         # 5.9.3 is the repo's TypeScript; eslint and tsdown stay on it until
         # they support the 7.x API.
         typescript: ["5.9.3", "6.0.3", "7.0.2", "7.1.0-beta"]
+        include:
+          # The floor of core's typescript peer range. The repo's compiler
+          # options need 5.6+, so this lane checks the examples only.
+          - typescript: "5.3.3"
+            floor: true
 
     steps:
       - name: Checkout code
@@ -95,10 +101,15 @@ jobs:
       # *.typeAssertions.ts regression net (manifold type-checks against the
       # core dist built above).
       - name: Type check on TypeScript ${{ matrix.typescript }}
+        if: ${{ !matrix.floor }}
         run: |
           npx -y -p typescript@${{ matrix.typescript }} tsc --noEmit -p tsconfig.json
           npx -y -p typescript@${{ matrix.typescript }} tsc --noEmit -p packages/core
           npx -y -p typescript@${{ matrix.typescript }} tsc --noEmit -p packages/manifold
+
+      - name: Type check examples on TypeScript ${{ matrix.typescript }}
+        if: ${{ matrix.floor }}
+        run: npx -y -p typescript@${{ matrix.typescript }} tsc -p tsconfig.consumer.json
 
       # The assertion files pin type-system SEMANTICS; this pins COST. A
       # reintroduced full-union dispatch keeps every assertion green while
@@ -106,6 +117,7 @@ jobs:
       # the budget is the only automatic enforcement of plan §3.4's rule.
       # TypeScript 7 counts grow with the checker count, so 7.x lanes run one.
       - name: Instantiation budget (perf gate)
+        if: ${{ !matrix.floor }}
         run: bun run budget:check
         env:
           TSC: npx -y -p typescript@${{ matrix.typescript }} tsc ${{ startsWith(matrix.typescript, '7.') && '--checkers 1' || '' }}
