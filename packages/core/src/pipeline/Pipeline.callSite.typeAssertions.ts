@@ -191,6 +191,20 @@ const _set_sysvar_operand_ok = new Pipeline<User>().set({
   expiry: { $dateAdd: { startDate: "$$NOW", unit: "day", amount: 30 } },
 });
 
+// Every typed reference position takes dotted `$$ROOT` rewrites, not only
+// ExpressionOperand-built ones.
+const _set_sysvar_dotted_operands_ok = new Pipeline<User>().set({
+  later: {
+    $dateAdd: { startDate: "$$NOW", unit: "day", amount: "$$ROOT.age" },
+  },
+  firstTag: { $arrayElemAt: ["$$ROOT.tags", "$$CURRENT.age"] },
+});
+
+const _set_sysvar_dotted_operand_bad = new Pipeline<User>().set({
+  // @ts-expect-error  $$ROOT.name is a string; $arrayElemAt's index is numeric
+  firstTag: { $arrayElemAt: ["$tags", "$$ROOT.name"] },
+});
+
 // set — $let interiors validate WITH the block's bindings: bound `$$`-vars
 // pass (dotted paths included), `vars` values check in the OUTER scope,
 // unknown `$$`-names inside `in` still brand.
@@ -547,6 +561,8 @@ export {
   _set_concat_nonstring_sysvar,
   _set_trig_allowlisted_ok,
   _set_sysvar_operand_ok,
+  _set_sysvar_dotted_operands_ok,
+  _set_sysvar_dotted_operand_bad,
   _set_let_ok,
   _set_let_bad_vars_ref,
   _set_let_unknown_var,

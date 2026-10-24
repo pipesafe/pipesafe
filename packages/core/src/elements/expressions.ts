@@ -10,11 +10,10 @@ import {
   NotAnExpression,
   OperatorKeyOf,
 } from "../utils/dispatch";
-import { ExpressionOperand } from "./operands";
+import { ExpressionOperand, ReferencesInferringTo } from "./operands";
 import {
   FieldReference,
   InferFieldReference,
-  FieldReferencesThatInferTo,
   InferNestedFieldReference,
 } from "./fieldReference";
 import { AnyLiteral, ExpressionShaped } from "./literals";
@@ -24,8 +23,6 @@ import {
   BoundAsName,
   InferVariableReference,
   ReferenceValue,
-  SystemVariableReferences,
-  SystemVariablesThatInferTo,
 } from "./variables";
 
 // ============================================================================
@@ -54,8 +51,7 @@ import {
  * `unknown[]`.
  */
 type ArrayOperand<Schema extends Document, Op extends string> =
-  | FieldReferencesThatInferTo<Schema, unknown[]>
-  | SystemVariablesThatInferTo<Schema, readonly unknown[]>
+  | ReferencesInferringTo<Schema, unknown[]>
   | readonly AnyLiteral<Schema>[]
   | ArrayProducingExpression<Schema>
   | MapExpression<Schema>
@@ -136,8 +132,7 @@ type ArithmeticPair<Schema extends Document, Op extends string> = readonly [
 type ConditionalOperand<Schema extends Document> =
   | null
   | AnyLiteral<Schema>
-  | FieldReference<Schema>
-  | SystemVariableReferences<Schema>
+  | ReferenceValue<Schema>
   | Expression<Schema>;
 
 /**
@@ -148,8 +143,7 @@ type ConditionalOperand<Schema extends Document> =
 type ComparisonOperand<Schema extends Document> =
   | null
   | AnyLiteral<Schema>
-  | FieldReference<Schema>
-  | SystemVariableReferences<Schema>
+  | ReferenceValue<Schema>
   | ArrayExpression<Schema>
   | DateExpression<Schema>
   | ArithmeticExpression<Schema>
@@ -190,8 +184,7 @@ export type ArrayProducingExpression<Schema extends Document> = ExpressionFor<
  * variables ("$$USER_ROLES"), literals, or expressions
  */
 export type ArrayInput<Schema extends Document> =
-  | FieldReferencesThatInferTo<Schema, unknown[]>
-  | SystemVariablesThatInferTo<Schema, readonly unknown[]>
+  | ReferencesInferringTo<Schema, unknown[]>
   | ArrayProducingExpression<Schema>
   | unknown[];
 
@@ -244,7 +237,7 @@ export interface ExpressionSpec<Schema extends Document> {
   $arrayElemAt: {
     operand: readonly [
       ArrayOperand<Schema, "$arrayElemAt">,
-      number | FieldReferencesThatInferTo<Schema, number>,
+      number | ReferencesInferringTo<Schema, number>,
     ];
   };
   /** Filters an array by a condition. `cond` sees the element bound as
@@ -267,7 +260,7 @@ export interface ExpressionSpec<Schema extends Document> {
   /** Sums numeric values in an array ($group accumulation lives in group.ts). */
   $sum: {
     operand:
-      | FieldReferencesThatInferTo<Schema, number[]>
+      | ReferencesInferringTo<Schema, number[]>
       | ArrayProducingExpression<Schema>
       | MapExpression<Schema>
       | readonly number[];
@@ -308,7 +301,7 @@ export interface ExpressionSpec<Schema extends Document> {
     operand: {
       startDate: DateOperand<Schema, "$dateAdd">;
       unit: DateUnit;
-      amount: number | FieldReferencesThatInferTo<Schema, number>;
+      amount: number | ReferencesInferringTo<Schema, number>;
       timezone?: string;
     };
     returns: Date;
@@ -318,7 +311,7 @@ export interface ExpressionSpec<Schema extends Document> {
     operand: {
       startDate: DateOperand<Schema, "$dateSubtract">;
       unit: DateUnit;
-      amount: number | FieldReferencesThatInferTo<Schema, number>;
+      amount: number | ReferencesInferringTo<Schema, number>;
       timezone?: string;
     };
     returns: Date;

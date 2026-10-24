@@ -32,8 +32,7 @@ import { InferVariableReference, ReferenceValue } from "../elements/variables";
  * - Expression operators: { newField: { $size: "$arrayField" } }
  * - Nested reshaping: { nested: { a: "$field1", b: "$field2" } }
  */
-// The value union for a $project assignment. `Vars` is the stage's
-// variable environment (Pipeline threads lookup-let bindings through it).
+// The value union for a $project assignment.
 type ProjectValue<Schema extends Document, Vars extends Document = {}> =
   // Inclusion/exclusion flags (1/0/true/false). `number | boolean` IS the
   // literal set: TS normalizes `1 | 0 | number` to `number` and
@@ -46,14 +45,9 @@ type ProjectValue<Schema extends Document, Vars extends Document = {}> =
   // TS2589).
   | number
   | boolean
-  // FINITE `$`-string arms (mirrors stages/set.ts): the schema-derived
-  // FieldReference union plus the enumerated SYSTEM_VARIABLES — both
-  // autocomplete, neither absorbs the other, and neither leaks
-  // String.prototype into object-literal completions (finite literals are
-  // primitive-flagged). A wide `` `$${string}` `` template here is provably
-  // unusable: it erases the ref literals from completions, and its
-  // `` & {} `` spelling leaks String.prototype. A typo'd ref or unlisted
-  // `$$var` now rejects at the constraint with a "Did you mean" hint.
+  // FINITE `$`-string arms (see the root CLAUDE.md completion-safety
+  // invariants): a typo'd ref or out-of-scope `$$var` rejects at the
+  // constraint with a "Did you mean" hint.
   | ReferenceValue<Schema, Vars>
   // Plain string values are valid MongoDB literal assignments in $project
   // (only numeric/boolean literals require $literal).

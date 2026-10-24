@@ -57,18 +57,22 @@ export interface SystemVariableSpec<Schema extends Document> {
 }
 
 /**
+ * A variable name plus its dotted paths into `T`. Wide-keyed `T`
+ * contributes no dotted arm (a `${string}` template is completion-banned).
+ */
+type NameAndDottedPaths<Name extends string, T> =
+  | Name
+  | (string extends FieldPath<T> ? never : `${Name}.${FieldPath<T>}`);
+
+/**
  * The finite `$$` acceptance vocabulary of the USER environment (lookup-let
  * bindings): each entry's exact name plus dotted paths into its type
  * ("$$order.qty"). Unioned with SystemVariableReferences at top-level value
  * positions, so in-scope variables autocomplete and out-of-scope ones
- * reject at the constraint. Wide-keyed entries contribute no dotted arm
- * (a `${string}` template there is completion-banned).
+ * reject at the constraint.
  */
 export type VariableReferences<Vars extends Document> = {
-  [K in keyof Vars & string]:
-    | `$$${K}`
-    | (string extends FieldPath<Vars[K]> ? never
-      : `$$${K}.${FieldPath<Vars[K]>}`);
+  [K in keyof Vars & string]: NameAndDottedPaths<`$$${K}`, Vars[K]>;
 }[keyof Vars & string];
 
 /**
@@ -79,10 +83,7 @@ export type VariableReferences<Vars extends Document> = {
  * elements/CLAUDE.md).
  */
 export type SystemVariableReferences<Schema extends Document> = {
-  [K in SystemVariable]:
-    | K
-    | (string extends FieldPath<SystemVariableSpec<Schema>[K]> ? never
-      : `${K}.${FieldPath<SystemVariableSpec<Schema>[K]>}`);
+  [K in SystemVariable]: NameAndDottedPaths<K, SystemVariableSpec<Schema>[K]>;
 }[SystemVariable];
 
 /**
@@ -184,8 +185,7 @@ export type SystemVariablesThatInferTo<Schema extends Document, T> =
       : SystemVariableSpec<Schema>[K] extends T ? K
       : never;
     }[SystemVariable]
-  | `$$ROOT.${WithoutDollar<FieldReferencesThatInferTo<Schema, T> & string>}`
-  | `$$CURRENT.${WithoutDollar<FieldReferencesThatInferTo<Schema, T> & string>}`;
+  | `${"$$ROOT" | "$$CURRENT"}.${WithoutDollar<FieldReferencesThatInferTo<Schema, T> & string>}`;
 
 /**
  * The `as` name a $map/$filter binds its element under (MongoDB defaults to

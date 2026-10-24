@@ -16,9 +16,6 @@ import { PassThrough } from "../utils/errors";
  * - An expression: { $add: ["$field1", "$field2"] }
  * - A nested object with field references and expressions
  * - A literal value
- *
- * `Vars` is the stage's variable environment (Pipeline threads lookup-let
- * bindings through it; system variables resolve statically beside it).
  */
 export type ReplaceRootQuery<
   Schema extends Document,

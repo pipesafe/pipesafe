@@ -12,10 +12,7 @@ import {
   ExpressionShaped,
   LiteralOrFieldReferenceInferringTo,
 } from "../elements/literals";
-import {
-  ReferenceValue,
-  ValidateVariableReference,
-} from "../elements/variables";
+import { ReferenceValue } from "../elements/variables";
 import {
   Expression,
   ConditionalExpression,
@@ -327,15 +324,7 @@ type ValidateAccumulatorValue<
       // paths get the Variable/Field brand instead of a misleading operand
       // message.
       A[Op & keyof A] extends `$$${string}` ?
-        ValidateVariableReference<
-          Schema,
-          A[Op & keyof A] & string,
-          Vars
-        > extends infer Err ?
-          [Err] extends [never] ?
-            never
-          : { [K in Op & string]: Err }
-        : never
+        ValidateOperandTree<Schema, A, Op, Vars>
       : BoundVariableOperand<Vars, A> extends true ?
         // Vars-blind relation as fast-accept (and wide-shape cycle
         // breaker), operand-tree walk for the leftovers.

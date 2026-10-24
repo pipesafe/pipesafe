@@ -28,15 +28,11 @@ Accurate types for `$$`-system variables and `$let`/`$map`/`$filter` bound varia
   and `$cond`/`$ifNull`/comparison operands accept the enumerated system
   variables (`$gte: ["$expiresAt", "$$NOW"]`).
 - `$map.as` is now optional (MongoDB defaults the binding to `$$this`).
-- ONE pair of variable resolvers with two-tier lookup: the threaded `Vars`
-  USER environment (binder and lookup-let bindings) first, then the static
-  `SystemVariableSpec` — dotted-path resolution, forgiveness, and branding
-  are shared code either way. (Seeding the system variables into every
-  `Vars` default was measured at ~270k extra whole-project type
-  instantiations for zero behavior change, so the spec stays a static
-  tier.) `SystemVariableReferences<Schema>` and `VariableReferences<Vars>`
-  derive the finite `$$` acceptance vocabularies, so dotted variable paths
-  are first-class at top-level value positions and in completions:
+- `$$`-references resolve through the bound `Vars` environment (binder and
+  lookup-let bindings) first, then `SystemVariableSpec`, with the same
+  dotted-path handling either way. `SystemVariableReferences<Schema>` and
+  `VariableReferences<Vars>` are the finite `$$` vocabularies, so dotted
+  variable paths are accepted and autocomplete at top-level value positions:
   `$set: { n: "$$ROOT.name" }`,
   `$group: { latest: { $max: "$$ROOT.joinedAt" } }`, and typed operands
   accept `"$$ROOT.price"`-style dotted rewrites.
@@ -44,7 +40,7 @@ Accurate types for `$$`-system variables and `$let`/`$map`/`$filter` bound varia
   against the OUTER schema/environment, the bindings become the
   sub-pipeline builder's environment (`Pipeline`'s new `Env` generic), and
   every sub-pipeline stage reseeds `$$ROOT`/`$$CURRENT` to the FOREIGN
-  schema — matching MongoDB's scoping, verified against a real server.
+  schema, matching MongoDB's scoping.
   Bound names autocomplete inside the sub-pipeline (`"$$order_qty"`),
   resolve to accurate types, and out-of-scope `$$`-names reject.
   Nested lookups inherit outer bindings; `$unionWith`/`$facet`

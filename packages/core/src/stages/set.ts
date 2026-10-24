@@ -8,34 +8,20 @@ import { FlattenDotSet, HasDottedKeys } from "../utils/paths";
 import { ApplySetUpdates } from "../utils/updates";
 
 /**
- * The value union for a `$set` assignment — the shared computed-value
- * union (see ExpressionValue, elements/expressions.ts): `$`-keyed objects
- * accepted structurally and re-checked by ValidateSetQuery; `$`-strings
- * are finite unions that autocomplete and reject typos at the constraint.
- */
-type SetValue<
-  Schema extends Document,
-  Vars extends Document = {},
-> = ExpressionValue<Schema, Vars>;
-
-/**
  * `$set` query. The `[k: string]` index signature keeps arbitrary new keys
  * (including brand-new dotted paths) legal AND governs value acceptance
- * (`SetValue<Schema>`); the intersected `FieldSelectorKeys` is an
+ * (`ExpressionValue`, re-checked by ValidateSetQuery); the intersected `FieldSelectorKeys` is an
  * AUTOCOMPLETE-ONLY hint that surfaces the schema's existing field selectors
  * as key suggestions. Its value type is `unknown` on purpose — key
  * completion does not depend on it, and instantiating the deep
- * `SetValue<Schema>` union once per field-selector key (as the reviewed
+ * `ExpressionValue` union once per field-selector key (as the reviewed
  * design first spelled it) blows the whole-project typecheck from ~7s to a
- * multi-minute hang. `unknown & SetValue<Schema>` (the effective type at a
- * known-selector key, via the index signature) is still `SetValue<Schema>`,
+ * multi-minute hang. `unknown & ExpressionValue` (the effective type at a
+ * known-selector key, via the index signature) is still `ExpressionValue`,
  * so acceptance and value completions are unchanged.
- *
- * `Vars` is the stage's variable environment (Pipeline threads lookup-let
- * bindings through it; system variables resolve statically beside it).
  */
 export type SetQuery<Schema extends Document, Vars extends Document = {}> = {
-  [k: string]: SetValue<Schema, Vars>;
+  [k: string]: ExpressionValue<Schema, Vars>;
 } & FieldSelectorKeys<Schema, unknown>;
 
 /**
@@ -55,11 +41,10 @@ export type ResolveSetQueryValueType<
   Key extends keyof Query,
   Vars extends Document = {},
 > =
-  Query[Key] extends "$$REMOVE" ? never
-  : // InferNestedFieldReference key-dispatches expressions internally; a
-    // structural `extends Expression<Schema>` pre-check here would
-    // instantiate the full expression union per value.
-    InferNestedFieldReference<Schema, Query[Key], Vars>;
+  // InferNestedFieldReference key-dispatches expressions internally; a
+  // structural `extends Expression<Schema>` pre-check here would
+  // instantiate the full expression union per value.
+  InferNestedFieldReference<Schema, Query[Key], Vars>;
 
 // COLLECTION SCHEMA // SET STAGE ==> OUTPUT SCHEMA
 // { a?: string | undefined } // { $set: { a: 'hello' }} ==> { a: string }

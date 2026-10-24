@@ -185,10 +185,8 @@ The type system is organized into modular building blocks located in `packages/c
   environment first (binder and lookup-let bindings; `$let`/`$map`/`$filter`
   arms extend it via
   BindLetVars/BindVariable, `$lookup.let` enters it through Pipeline's
-  `Env` generic), then the STATIC spec. System variables are deliberately
-  NOT seeded into every `Vars` default — that unified-seed design was
-  measured at ~270k extra whole-project instantiations for zero behavior
-  change. `SystemVariableReferences<Schema>` (static) +
+  `Env` generic), then the STATIC spec (never seeded into `Vars`; see
+  elements/CLAUDE.md). `SystemVariableReferences<Schema>` (static) +
   `VariableReferences<Vars>` (user) derive the finite acceptance
   vocabularies (`ReferenceValue<Schema, Vars>` = both plus field refs, the
   `$`-string arm of every top-level value union), and
