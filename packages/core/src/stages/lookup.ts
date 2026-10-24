@@ -20,15 +20,9 @@ import { ApplySetUpdates } from "../utils/updates";
  * documents; the sub-pipeline reads them as `$$variableName` references,
  * typically inside a `$match` stage's `$expr`.
  *
- * Mirrors `$set`'s value union (a `let` binding is a $set-value-shaped
- * expression over the local docs): `$`-keyed OBJECTS are accepted
- * STRUCTURALLY (`ExpressionShaped`) and re-checked by
- * `ValidateLookupLetQuery`, while every `$`-STRING arm is FINITE
- * (`FieldReference<Schema>`, `SystemVariable`) so local refs autocomplete
- * and a typo'd ref rejects at the constraint with TS2820. No wide
- * `` `$${string}` `` template: it would absorb the finite ref literals out
- * of autocomplete. `Expression<Schema>` is autocomplete-only, subsumed by
- * `ExpressionShaped` for checking.
+ * Mirrors `$set`'s value union: `$`-keyed objects are accepted
+ * structurally and re-checked by `ValidateLookupLetQuery`; string arms are
+ * finite so local refs autocomplete (see `SetValue` in set.ts).
  */
 export type LookupLet<Schema extends Document> = {
   [variableName: string]:

@@ -730,6 +730,57 @@ type _Assert_ReduceCondScopedInfer = Assert<
   Equal<_ReduceCondScopedInfer, number>
 >;
 
+// The object form of $cond resolves scoped operands too.
+type _MapCondObjectScopedInfer = InferExpression<
+  SetSchema,
+  {
+    $map: {
+      input: "$items";
+      in: { $cond: { if: true; then: "$$this.id"; else: 0 } };
+    };
+  }
+>;
+type _Assert_MapCondObjectScopedInfer = Assert<
+  Equal<_MapCondObjectScopedInfer, (string | 0)[]>
+>;
+
+// $reduce dedupe pattern: set operators resolve `$$value`/`$$this` operands.
+type _ReduceSetUnionInfer = InferExpression<
+  SetSchema,
+  {
+    $reduce: {
+      input: "$wrappers";
+      initialValue: [];
+      in: { $setUnion: ["$$value", "$$this.ids"] };
+    };
+  }
+>;
+type _Assert_ReduceSetUnionInfer = Assert<
+  Equal<_ReduceSetUnionInfer, string[]>
+>;
+type _ReduceSetDifferenceInfer = InferExpression<
+  SetSchema,
+  {
+    $reduce: {
+      input: "$wrappers";
+      initialValue: [];
+      in: { $setDifference: ["$$this.ids", "$$value"] };
+    };
+  }
+>;
+type _Assert_ReduceSetDifferenceInfer = Assert<
+  Equal<_ReduceSetDifferenceInfer, string[]>
+>;
+
+// Array-literal fallbacks resolve element-wise, not as literal "$name".
+type _IfNullArrayLiteralRefInfer = InferExpression<
+  SetSchema,
+  { $ifNull: ["$maybeTags", ["$name"]] }
+>;
+type _Assert_IfNullArrayLiteralRefInfer = Assert<
+  Equal<_IfNullArrayLiteralRefInfer, string[] | [string]>
+>;
+
 // A set operator is a valid operand of ANOTHER set operator: each resolves to
 // an array, so `$setUnion: [{ $setIntersection: [...] }, ...]` is valid
 // MongoDB (the mutual recursion is safe — `ExpressionSpec` is an interface).
@@ -777,6 +828,10 @@ export type {
   _Assert_ReduceCondScopedInfer,
   _Assert_SetUnionAcceptsNestedSetOp,
   _Assert_NestedSetOpInfer,
+  _Assert_MapCondObjectScopedInfer,
+  _Assert_ReduceSetUnionInfer,
+  _Assert_ReduceSetDifferenceInfer,
+  _Assert_IfNullArrayLiteralRefInfer,
 };
 
 // The literal-dependent set is DERIVED from `returns`-omission on registry

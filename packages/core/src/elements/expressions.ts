@@ -1086,9 +1086,10 @@ type UnionScopedArrayElements<
  * ($map's or $reduce's `in`). `$$var` / `$$var.path` references resolve
  * through `Vars`; single-`$` references resolve against the ROOT schema (a
  * `$path` inside $map/$reduce still reads the root document in MongoDB);
- * `$ifNull` / `$concatArrays` / `$cond` recurse WITH the scope (the
- * array-shaping and branching operators `$$`-references realistically flow
- * through — `$cond` in particular is a hot shape inside `in`, and its
+ * `$ifNull` / `$concatArrays` / the set operators / `$cond` recurse WITH
+ * the scope (the array-shaping and branching operators `$$`-references
+ * realistically flow through — `$cond` in particular is a hot shape inside
+ * `in`, and its
  * scope-free branch would resolve a bare `$$this`/`$$value` operand as a
  * LITERAL string, leaking `"$$this"` into the result rather than degrading
  * to the element type). Any other operator routes to the scope-free
@@ -1139,6 +1140,21 @@ type InferScopedExpression<
     Expr extends { $cond: readonly [unknown, infer TrueVal, infer FalseVal] } ?
       | InferScopedExpression<Schema, Vars, TrueVal>
       | InferScopedExpression<Schema, Vars, FalseVal>
+    : Expr extends { $cond: { then: infer TrueVal; else: infer FalseVal } } ?
+      | InferScopedExpression<Schema, Vars, TrueVal>
+      | InferScopedExpression<Schema, Vars, FalseVal>
+    : unknown
+  : [OperatorKeyOf<Expr>] extends ["$setUnion" | "$setIntersection"] ?
+    Expr extends (
+      { $setUnion: infer Operands } | { $setIntersection: infer Operands }
+    ) ?
+      Operands extends readonly unknown[] ?
+        UnionScopedArrayElements<Schema, Vars, Operands>[]
+      : unknown
+    : never
+  : [OperatorKeyOf<Expr>] extends ["$setDifference"] ?
+    Expr extends { $setDifference: readonly [infer First, unknown] } ?
+      ElementOfArray<InferScopedExpression<Schema, Vars, First>>[]
     : unknown
   : InferExpression<Schema, Expr>;
 
@@ -1205,12 +1221,9 @@ type InferConditionalOperandValue<
       NonNullable<InferFieldReference<Schema, Operand>>
     : InferFieldReference<Schema, Operand> // $cond keeps the field's null
   : Operand extends readonly unknown[] ?
-    // Array literal: the branch/replacement is returned VERBATIM by
-    // MongoDB, so the operand contributes the ARRAY type — extracting the
-    // element type here produced a wrong scalar contribution (e.g.
-    // `$ifNull: ["$tags", ["none"]]` inferred `"none"` where the runtime
-    // value is `["none"]`).
-    Operand
+    // Array literal: contributes the array type, elements resolved
+    // member-wise (`["$name"]` is `[string]`).
+    InferScopedExpression<Schema, {}, Operand>
   : InferExpression<Schema, Operand> extends infer R ?
     [R] extends [NotAnExpression] ?
       Operand // Not an expression, treat as literal
