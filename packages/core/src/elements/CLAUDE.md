@@ -69,8 +69,8 @@ before touching any Query/operand union.
 - `Vars` threads the USER environment only (binder and lookup-let
   bindings, names without the `$$` prefix; default `{}`); system variables
   resolve through the resolvers' STATIC second tier (SystemVariableSpec,
-  which carries each variable's ACCURATE type: $$NOW → Date, $$ROOT →
-  Schema, $$REMOVE → the load-bearing `never`). Do NOT re-unify by seeding
+  which carries each variable's ACCURATE type: `$$NOW` → Date, `$$ROOT` →
+  Schema, `$$REMOVE` → the load-bearing `never`). Do NOT re-unify by seeding
   the spec into the `Vars` defaults — the seeded-env design was measured
   at ~270k extra whole-project instantiations for zero behavior change.
   MongoDB user variables must begin lowercase, so the tiers cannot
@@ -78,11 +78,12 @@ before touching any Query/operand union.
   (BindLetVars/BindVariable in expressions.ts — shared by inference and
   validation, so the two environments cannot diverge); `$lookup.let`
   enters it via Pipeline's `Env` generic.
-  `InferVariableReference`/`ValidateVariableReference` resolve `"$$name"`and dotted`"$$name.path"`; unlisted/unbound names brand with
-`UnknownSystemVariableError`. `SystemVariableReferences<Schema>`(static)
-and`VariableReferences<Vars>` (user) are the finite acceptance
-  vocabularies. The env-merge types
-  (ResolveLookupLetEnv/BindLetVars/BindVariable) are ONE mapped type each
+  `InferVariableReference`/`ValidateVariableReference` resolve `"$$name"`
+  and dotted `"$$name.path"`; unlisted/unbound names brand with
+  `UnknownSystemVariableError`. `SystemVariableReferences<Schema>` (static)
+  and `VariableReferences<Vars>` (user) are the finite acceptance
+  vocabularies. The env-merge types (BindLetVars/BindVariable — also the
+  lookup-let sub-pipeline's `Env`) are ONE mapped type each
   with lazy values — Omit/Prettify spellings stack instantiation layers at
   the deepest point of lookup-lambda checking and tripped TS2589.
 - The validation kernel's binder-interior (forgiving) branches — taken

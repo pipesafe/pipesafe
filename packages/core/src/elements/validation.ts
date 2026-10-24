@@ -34,7 +34,11 @@
  * runtime MongoDB's to report. Variable-free operands stay strict.
  */
 
-import { Document, NonExpandableTypes } from "../utils/objects";
+import {
+  Document,
+  NonExpandableTypes,
+  OmitNeverValues,
+} from "../utils/objects";
 import {
   IsPipeSafeError,
   MultiOperatorError,
@@ -467,6 +471,26 @@ export type ValidateNestedValue<
     : HasOperatorKey<V> extends true ? ValidateExpressionValue<Schema, V, Vars>
     : ValidateObjectValue<Schema, V, Vars>
   : never;
+
+/**
+ * Key-filtered wrapper for `[key: string]` value records (`$set`,
+ * `$lookup.let`), wired as `Q & ValidateNestedRecord<Schema, Q>`:
+ * OmitNeverValues drops valid keys, so a fully-valid record validates
+ * against `{}` and only offending keys survive, mapped to the kernel's
+ * replacement (TS2322 at the offending value). Wide-QUERY guard: on
+ * constraint failure TS re-instantiates the wrapper with the wide query
+ * type itself — walking its value unions would brand valid keys and
+ * overflow the instantiation depth on top of the real error.
+ */
+export type ValidateNestedRecord<
+  Schema extends Document,
+  Q,
+  Vars extends Document = {},
+> =
+  string extends keyof Q ? {}
+  : OmitNeverValues<{
+      [K in keyof Q]: ValidateNestedValue<Schema, Q[K], Vars>;
+    }>;
 
 /**
  * Plain-object arm of the walk: if ANY child is invalid, produce a

@@ -11,13 +11,16 @@ import {
   FieldReferencesThatInferTo,
   GetFieldTypeWithoutArrays,
 } from "../elements/fieldReference";
-import { Expression, InferExpression } from "../elements/expressions";
+import {
+  BindLetVars,
+  Expression,
+  InferExpression,
+} from "../elements/expressions";
 import { Collection } from "../collection/Collection";
 import {
   ResolveLookupOutput,
   LookupForeignFieldOrError,
   LookupLetQuery,
-  ResolveLookupLetEnv,
   ValidateLookupLet,
 } from "../stages/lookup";
 import { ResolveGraphLookupOutput } from "../stages/graphLookup";
@@ -290,7 +293,7 @@ export class Pipeline<
             Foreign,
             Mode,
             LookupAllowedStages,
-            ResolveLookupLetEnv<PreviousStageDocs, Let, Env, Env>
+            BindLetVars<PreviousStageDocs, Let, Env>
           >;
         }
       | {
@@ -302,7 +305,7 @@ export class Pipeline<
             Foreign,
             Mode,
             LookupAllowedStages,
-            ResolveLookupLetEnv<PreviousStageDocs, Let, Env, Env>
+            BindLetVars<PreviousStageDocs, Let, Env>
           >;
         }
   ): Pipeline<
