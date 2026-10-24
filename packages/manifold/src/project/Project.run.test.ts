@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
+import {
+  Collection as MongoCollection,
+  Db,
+  MongoClient,
+  ReadConcern,
+} from "mongodb";
 import { Collection } from "@pipesafe/core";
-import { useMemoryMongo } from "../../../core/src/utils/useMemoryMongo";
+import { useMemoryMongo } from "@pipesafe/test-utils";
 import { Model } from "../model/Model";
 import { Project } from "./Project";
 // ============================================================================
@@ -41,7 +47,7 @@ describe("Project.run()", async () => {
   // ==========================================================================
 
   const sourceCollection = new Collection<RawDoc>({
-    collectionName: "raw_docs",
+    collection: { name: "raw_docs" },
   });
 
   const stagingModel = new Model({
@@ -75,11 +81,11 @@ describe("Project.run()", async () => {
   // ==========================================================================
 
   const ordersSource = new Collection<Order>({
-    collectionName: "orders",
+    collection: { name: "orders" },
   });
 
   const usersSource = new Collection<User>({
-    collectionName: "users",
+    collection: { name: "users" },
   });
 
   const stgOrders = new Model({
@@ -98,7 +104,7 @@ describe("Project.run()", async () => {
 
   // User groups for testing chained lookup dependencies
   const userGroupsSource = new Collection<{ _id: string; groupName: string }>({
-    collectionName: "user_groups",
+    collection: { name: "user_groups" },
   });
 
   const stgUserGroups = new Model({
@@ -182,7 +188,7 @@ describe("Project.run()", async () => {
   };
 
   const employeesSource = new Collection<EmployeeDoc>({
-    collectionName: "employees",
+    collection: { name: "employees" },
   });
 
   const sampleEmployees: EmployeeDoc[] = [
@@ -219,7 +225,7 @@ describe("Project.run()", async () => {
 
       const result = await simpleProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
       });
 
       expect(result.success).toBe(true);
@@ -247,7 +253,7 @@ describe("Project.run()", async () => {
 
       const result = await complexProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
       });
 
       expect(result.success).toBe(true);
@@ -289,7 +295,7 @@ describe("Project.run()", async () => {
 
       const result = await simpleProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
         dryRun: true,
       });
 
@@ -315,7 +321,7 @@ describe("Project.run()", async () => {
 
       await simpleProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
         onModelStart,
       });
 
@@ -332,7 +338,7 @@ describe("Project.run()", async () => {
 
       await simpleProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
         onModelComplete,
       });
 
@@ -348,6 +354,202 @@ describe("Project.run()", async () => {
     });
   });
 
+  describe("aggregate options", () => {
+    it("passes aggregateOptions to every model aggregation", async () => {
+      const db = client.db();
+      await db.collection<RawDoc>("raw_docs").insertMany(sampleDocs);
+
+      const aggregateSpy = vi.spyOn(MongoCollection.prototype, "aggregate");
+      try {
+        const result = await simpleProject.run({
+          client,
+          db: { name: db.databaseName },
+          aggregateOptions: {
+            allowDiskUse: true,
+            comment: "project-run-options",
+          },
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.modelsRun).toEqual(["staging", "aggregate"]);
+
+        // One aggregation per model, each receiving the options
+        expect(aggregateSpy).toHaveBeenCalledTimes(2);
+        for (const call of aggregateSpy.mock.calls) {
+          expect(call[1]).toMatchObject({
+            allowDiskUse: true,
+            comment: "project-run-options",
+          });
+        }
+      } finally {
+        aggregateSpy.mockRestore();
+      }
+    });
+
+    it("passes aggregateOptions.session to view DDL", async () => {
+      const viewModel = new Model({
+        name: "active_view",
+        from: sourceCollection,
+        pipeline: (p) => p.match({ active: true }),
+        materialize: { type: "view" },
+      });
+      const viewProject = new Project({
+        name: "view_project",
+        models: [viewModel],
+      });
+
+      const createSpy = vi.spyOn(Db.prototype, "createCollection");
+      const session = client.startSession();
+      try {
+        const result = await viewProject.run({
+          client,
+          db: { name: client.db().databaseName },
+          aggregateOptions: { session },
+        });
+
+        expect(result.success).toBe(true);
+        expect(createSpy).toHaveBeenCalledWith(
+          "active_view",
+          expect.objectContaining({ session })
+        );
+      } finally {
+        createSpy.mockRestore();
+        await session.endSession();
+      }
+    });
+  });
+
+  describe("database targeting", () => {
+    it("uses the project's defaultDb when run() names no db", async () => {
+      const dbName = "default_db_target";
+      await client
+        .db(dbName)
+        .collection<RawDoc>("raw_docs")
+        .insertMany(sampleDocs);
+
+      const result = await new Project({
+        name: "default_db_project",
+        models: [stagingModel],
+        defaultDb: { name: dbName },
+      }).run({ client });
+
+      expect(result.success).toBe(true);
+      expect(
+        await client.db(dbName).collection("staging").countDocuments()
+      ).toBe(2);
+    });
+
+    it("rejects a view in another db before running any model", async () => {
+      const stagingSpy = vi.fn();
+      const crossDbView = new Model({
+        name: "cross_db_view",
+        from: new Collection<RawDoc>({
+          db: { name: "raw_source_db" },
+          collection: { name: "raw_docs" },
+        }),
+        pipeline: (p) => p.match({ active: true }),
+        materialize: { type: "view" },
+      });
+
+      await expect(
+        new Project({
+          name: "cross_db_view_project",
+          models: [stagingModel, crossDbView],
+        }).run({
+          client,
+          db: { name: client.db().databaseName },
+          onModelStart: stagingSpy,
+        })
+      ).rejects.toThrow(
+        "View 'cross_db_view' must be in its source's database 'raw_source_db'"
+      );
+      expect(stagingSpy).not.toHaveBeenCalled();
+    });
+
+    it("writes model outputs where downstream models read them", async () => {
+      const rawDb = client.db("raw_source_db");
+      await rawDb.collection<RawDoc>("raw_docs").insertMany(sampleDocs);
+
+      const rawSource = new Collection<RawDoc>({
+        db: { name: "raw_source_db" },
+        collection: { name: "raw_docs" },
+      });
+      const staging = new Model({
+        name: "staging_xdb",
+        from: rawSource,
+        pipeline: (p) => p.match({ active: true }),
+        materialize: { type: "collection", mode: Model.Mode.Replace },
+      });
+      const downstream = new Model({
+        name: "downstream_xdb",
+        from: staging,
+        pipeline: (p) => p.match({}),
+        materialize: { type: "collection", mode: Model.Mode.Replace },
+      });
+
+      const db = client.db();
+      const result = await new Project({
+        name: "xdb_project",
+        models: [downstream],
+      }).run({ client, db: { name: db.databaseName } });
+
+      expect(result.success).toBe(true);
+      expect(await db.collection("staging_xdb").countDocuments()).toBe(2);
+      expect(await db.collection("downstream_xdb").countDocuments()).toBe(2);
+    });
+  });
+
+  describe("source driver options", () => {
+    it("honors the source Collection's db/collection options when reading", async () => {
+      const db = client.db();
+      await db.collection<RawDoc>("raw_docs_opts").insertMany(sampleDocs);
+
+      const majority = new ReadConcern("majority");
+      const optionedSource = new Collection<RawDoc>({
+        db: { name: db.databaseName, options: { readConcern: majority } },
+        collection: {
+          name: "raw_docs_opts",
+          options: { readPreference: "secondaryPreferred" },
+        },
+      });
+      const optionedModel = new Model({
+        name: "staging_opts",
+        from: optionedSource,
+        pipeline: (p) => p.match({ active: true }),
+        materialize: { type: "collection", mode: Model.Mode.Replace },
+      });
+      const project = new Project({
+        name: "options_project",
+        models: [optionedModel],
+      });
+
+      const dbSpy = vi.spyOn(MongoClient.prototype, "db");
+      const collectionSpy = vi.spyOn(Db.prototype, "collection");
+      try {
+        const result = await project.run({
+          client,
+          db: { name: db.databaseName },
+        });
+
+        expect(result.success).toBe(true);
+        // The source read resolves the db/collection with the options the
+        // Collection was configured with — same as aggregate().execute()
+        expect(dbSpy).toHaveBeenCalledWith(db.databaseName, {
+          readConcern: majority,
+        });
+        expect(collectionSpy).toHaveBeenCalledWith("raw_docs_opts", {
+          readPreference: "secondaryPreferred",
+        });
+      } finally {
+        dbSpy.mockRestore();
+        collectionSpy.mockRestore();
+      }
+
+      const stagingDocs = await db.collection("staging_opts").find().toArray();
+      expect(stagingDocs).toHaveLength(2);
+    });
+  });
+
   describe("target selection", () => {
     it("should run only specified targets and their dependencies", async () => {
       const db = client.db();
@@ -355,7 +557,7 @@ describe("Project.run()", async () => {
 
       const result = await simpleProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
         targets: ["aggregate"],
       });
 
@@ -371,7 +573,7 @@ describe("Project.run()", async () => {
 
       const result = await simpleProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
         exclude: ["aggregate"],
       });
 
@@ -388,7 +590,7 @@ describe("Project.run()", async () => {
 
       await simpleProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
       });
 
       const stagingDocs = await db
@@ -411,7 +613,7 @@ describe("Project.run()", async () => {
 
       await simpleProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
       });
 
       const aggregateDocs = await db.collection("aggregate").find().toArray();
@@ -428,7 +630,7 @@ describe("Project.run()", async () => {
 
       await complexProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
       });
 
       const enrichedDocs = await db
@@ -468,7 +670,7 @@ describe("Project.run()", async () => {
 
       await complexProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
       });
 
       const summaryDocs = await db.collection("order_summary").find().toArray();
@@ -486,7 +688,7 @@ describe("Project.run()", async () => {
 
       await facetProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
       });
 
       const facetDocs = await db.collection("faceted_orders").find().toArray();
@@ -511,7 +713,7 @@ describe("Project.run()", async () => {
 
       await graphLookupProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
       });
 
       const orgDocs = await db

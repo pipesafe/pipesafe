@@ -25,7 +25,7 @@ type RawEvent = {
 };
 
 const RawEventsCollection = new Collection<RawEvent>({
-  collectionName: "raw_events",
+  collection: { name: "raw_events" },
 });
 
 type User = {
@@ -37,7 +37,7 @@ type User = {
 };
 
 const UsersCollection = new Collection<User>({
-  collectionName: "users",
+  collection: { name: "users" },
 });
 
 // ============================================================================
@@ -181,7 +181,7 @@ console.log();
 
 // Inspect individual models
 console.log("Model: stgEvents");
-console.log("  Output collection:", stgEvents.getOutputCollectionName());
+console.log("  Output collection:", stgEvents.getOutputCollection().name);
 console.log(
   "  Pipeline stages:",
   JSON.stringify(stgEvents.getPipelineStages(), null, 2)
@@ -189,7 +189,7 @@ console.log(
 console.log();
 
 console.log("Model: dailyMetrics");
-console.log("  Output collection:", dailyMetrics.getOutputCollectionName());
+console.log("  Output collection:", dailyMetrics.getOutputCollection().name);
 console.log("  Depends on model:", dailyMetrics.sourceIsModel());
 console.log(
   "  Full pipeline:",
@@ -200,7 +200,7 @@ console.log();
 console.log("Model: enrichedUserActivity (with lookup)");
 console.log(
   "  Output collection:",
-  enrichedUserActivity.getOutputCollectionName()
+  enrichedUserActivity.getOutputCollection().name
 );
 console.log("  Depends on model:", enrichedUserActivity.sourceIsModel());
 console.log(
@@ -211,5 +211,5 @@ console.log();
 
 // To actually run (requires MongoDB connection):
 // await pipesafe.connect("mongodb://localhost:27017");
-// const result = await analyticsProject.run({ databaseName: "analytics_db" });
+// const result = await analyticsProject.run({ db: { name: "analytics_db" } });
 // console.log("Run result:", result);

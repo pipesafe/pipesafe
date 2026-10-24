@@ -11,7 +11,7 @@ type RawEvent = {
 };
 
 const RawEventsCollection = new Collection<RawEvent>({
-  collectionName: "raw_events",
+  collection: { name: "raw_events" },
 });
 
 const stgEvents = new Model({
@@ -56,13 +56,17 @@ const dailyMetrics = new Model({
 describe("Model", () => {
   describe("Model Configuration", () => {
     it("should return correct output collection name", () => {
-      expect(stgEvents.getOutputCollectionName()).toBe("stg_events");
-      expect(dailyMetrics.getOutputCollectionName()).toBe("daily_metrics");
+      expect(stgEvents.getOutputCollection().name).toBe("stg_events");
+      expect(dailyMetrics.getOutputCollection().name).toBe("daily_metrics");
     });
 
     it("should return correct source collection name", () => {
-      expect(stgEvents.getSourceCollectionName()).toBe("raw_events");
-      expect(dailyMetrics.getSourceCollectionName()).toBe("stg_events");
+      expect(stgEvents.getSource().getOutputCollection().name).toBe(
+        "raw_events"
+      );
+      expect(dailyMetrics.getSource().getOutputCollection().name).toBe(
+        "stg_events"
+      );
     });
 
     it("should identify source model vs collection", () => {
@@ -76,7 +80,7 @@ describe("Model", () => {
     });
 
     it("should return undefined for output database when not specified", () => {
-      expect(stgEvents.getOutputDatabase()).toBeUndefined();
+      expect(stgEvents.getOutputDb()).toBeUndefined();
     });
 
     it("should return output database when specified", () => {
@@ -90,7 +94,7 @@ describe("Model", () => {
           mode: Model.Mode.Replace,
         },
       });
-      expect(modelWithDb.getOutputDatabase()).toBe("analytics");
+      expect(modelWithDb.getOutputDb()?.name).toBe("analytics");
     });
 
     it("should expose source via getSource()", () => {

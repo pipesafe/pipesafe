@@ -6,7 +6,7 @@ import { Project } from "./Project";
 type Doc = { _id: string; value: number };
 
 const sourceCollection = new Collection<Doc>({
-  collectionName: "source",
+  collection: { name: "source" },
 });
 
 describe("Project", () => {

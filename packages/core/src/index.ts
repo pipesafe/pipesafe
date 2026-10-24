@@ -22,6 +22,7 @@ export type {
 } from "./pipeline/Pipeline";
 export type { InferCollectionType } from "./collection/Collection";
 export type { Source, InferSourceType } from "./source/Source";
+export type { DbConfig, CollectionConfig } from "./database/config";
 export type { Document, Prettify } from "./utils/objects";
 export type {
   PipeSafeError,

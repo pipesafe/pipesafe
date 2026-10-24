@@ -1,0 +1,11 @@
+// Shared type-gate options for each package's tsconfig.typecheck.json, which
+// re-includes the *.test.ts files the build tsconfig excludes.
+{
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    // keeps .d.ts-portability diagnostics (TS2742/TS4023) on under --noEmit
+    "declaration": true,
+    "declarationMap": false
+  }
+}

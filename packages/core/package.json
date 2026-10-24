@@ -37,12 +37,13 @@
   "scripts": {
     "build": "tsdown",
     "build:watch": "tsdown --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit --project tsconfig.typecheck.json"
   },
   "peerDependencies": {
     "mongodb": ">=6.0.0"
   },
   "devDependencies": {
+    "@pipesafe/test-utils": "workspace:*",
     "typescript": "^5.9.3"
   }
 }

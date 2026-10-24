@@ -90,7 +90,7 @@ const results = await cursor.toArray();
 
 // Collections without explicit client also use singleton
 const anotherCollection = new Collection<{ test: string }>({
-  collectionName: "my_collection",
+  collection: { name: "my_collection" },
 });
 const cursor2 = await anotherCollection.aggregate().execute();
 ```
@@ -109,7 +109,7 @@ await client.connect();
 // Option A: Start from Database
 const db = new Database({
   client,
-  databaseName: "my_database",
+  db: { name: "my_database" },
 });
 const collection = db.collection<{ test: string }>("my_collection");
 const cursor = await collection.aggregate().execute();
@@ -118,7 +118,7 @@ const results = await cursor.toArray();
 // Option B: Start from Collection
 const collection2 = new Collection<{ test: string }>({
   client,
-  collectionName: "my_collection",
+  collection: { name: "my_collection" },
 });
 const cursor2 = await collection2.aggregate().execute();
 const results2 = await cursor2.toArray();
@@ -137,11 +137,11 @@ await client.connect();
 
 // Option A: Collection with client passed to execute()
 const collection = new Collection<{ test: string }>({
-  collectionName: "my_collection",
+  collection: { name: "my_collection" },
 });
 const cursor = await collection.aggregate().execute({
   client,
-  databaseName: "my_database",
+  db: { name: "my_database" },
 });
 const results = await cursor.toArray();
 
@@ -149,8 +149,8 @@ const results = await cursor.toArray();
 const pipeline = new Pipeline<{ test: string }>();
 const cursor2 = await pipeline.execute({
   client,
-  databaseName: "my_database",
-  collectionName: "my_collection",
+  db: { name: "my_database" },
+  collection: { name: "my_collection" },
 });
 const results2 = await cursor2.toArray();
 ```

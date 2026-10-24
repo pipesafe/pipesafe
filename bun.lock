@@ -27,6 +27,7 @@
       "name": "@pipesafe/core",
       "version": "1.1.0",
       "devDependencies": {
+        "@pipesafe/test-utils": "workspace:*",
         "typescript": "^5.9.3",
       },
       "peerDependencies": {
@@ -47,11 +48,20 @@
       "version": "1.0.0",
       "devDependencies": {
         "@pipesafe/core": "workspace:*",
+        "@pipesafe/test-utils": "workspace:*",
         "typescript": "^5.9.3",
       },
       "peerDependencies": {
         "@pipesafe/core": ">=2.0.0 <3.0.0",
         "mongodb": ">=6.0.0",
+      },
+    },
+    "packages/test-utils": {
+      "name": "@pipesafe/test-utils",
+      "version": "0.0.0",
+      "peerDependencies": {
+        "mongodb": ">=6.0.0",
+        "vitest": "^4.0.15",
       },
     },
     "website": {
@@ -269,6 +279,8 @@
     "@pipesafe/core-completions-tests": ["@pipesafe/core-completions-tests@workspace:packages/core-completions-tests"],
 
     "@pipesafe/manifold": ["@pipesafe/manifold@workspace:packages/manifold"],
+
+    "@pipesafe/test-utils": ["@pipesafe/test-utils@workspace:packages/test-utils"],
 
     "@pipesafe/website": ["@pipesafe/website@workspace:website"],
 

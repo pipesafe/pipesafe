@@ -27,6 +27,7 @@ import {
   DropCollectionOptions,
 } from "mongodb";
 import { Pipeline } from "../pipeline/Pipeline";
+import type { CollectionConfig, DbConfig } from "../database/config";
 import { Document } from "../utils/objects";
 import { pipesafe } from "../singleton/pipesafe";
 import { tagClient } from "../singleton/tagClient";
@@ -39,32 +40,32 @@ export class Collection<Docs extends Document> implements Source<Docs> {
   readonly __outputType!: Docs;
 
   private client: MongoClient | undefined;
-  private databaseName: string | undefined;
-  private collectionName: string;
+  private db: DbConfig | undefined;
+  private collection: CollectionConfig;
 
   constructor(args: {
     client?: MongoClient | undefined;
-    databaseName?: string | undefined;
-    collectionName: string;
+    db?: DbConfig | undefined;
+    collection: CollectionConfig;
   }) {
     this.client = args.client;
-    this.databaseName = args.databaseName;
-    this.collectionName = args.collectionName;
+    this.db = args.db;
+    this.collection = args.collection;
     tagClient(this.client);
   }
 
   // Accessors
 
   getCollectionName(): string {
-    return this.collectionName;
+    return this.collection.name;
   }
 
-  getOutputCollectionName(): string {
-    return this.collectionName;
+  getOutputDb(): DbConfig | undefined {
+    return this.db;
   }
 
-  getOutputDatabase(): string | undefined {
-    return this.databaseName;
+  getOutputCollection(): CollectionConfig {
+    return this.collection;
   }
 
   private getClient() {
@@ -79,11 +80,14 @@ export class Collection<Docs extends Document> implements Source<Docs> {
 
   private getDatabase() {
     const client = this.getClient();
-    return this.databaseName ? client.db(this.databaseName) : client.db();
+    return client.db(this.db?.name, this.db?.options);
   }
 
   private getCollection(): MongoCollection<Docs> {
-    return this.getDatabase().collection<Docs>(this.collectionName);
+    return this.getDatabase().collection<Docs>(
+      this.collection.name,
+      this.collection.options
+    );
   }
 
   // Aggregation
@@ -91,8 +95,8 @@ export class Collection<Docs extends Document> implements Source<Docs> {
   aggregate(): Pipeline<Docs, Docs> {
     return new Pipeline<Docs, Docs>({
       client: this.client,
-      databaseName: this.databaseName,
-      collectionName: this.collectionName,
+      db: this.db,
+      collection: this.collection,
     });
   }
 
@@ -273,7 +277,7 @@ export class Collection<Docs extends Document> implements Source<Docs> {
 
   async createCollection(options?: CreateCollectionOptions) {
     return this.getDatabase().createCollection<Docs>(
-      this.collectionName,
+      this.collection.name,
       options
     );
   }

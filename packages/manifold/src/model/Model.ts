@@ -15,6 +15,8 @@ import {
   FieldSelectorsThatInferTo,
   TopLevelField,
   MergeQuery,
+  DbConfig,
+  CollectionConfig,
 } from "@pipesafe/core";
 
 // ============================================================================
@@ -198,35 +200,13 @@ export class Model<
     return undefined;
   }
 
-  /**
-   * Get the source collection name.
-   */
-  getSourceCollectionName(): string {
-    return this._from.getOutputCollectionName();
+  getOutputDb(): DbConfig | undefined {
+    const { db } = this.materialize;
+    return db === undefined ? undefined : { name: db };
   }
 
-  /**
-   * Get the source database name.
-   */
-  getSourceDatabase(): string | undefined {
-    return this._from.getOutputDatabase();
-  }
-
-  /**
-   * Get the output collection name (where this model materializes).
-   */
-  getOutputCollectionName(): string {
-    return this.name;
-  }
-
-  /**
-   * Get the database name for output (if specified).
-   */
-  getOutputDatabase(): string | undefined {
-    if ("db" in this.materialize) {
-      return this.materialize.db;
-    }
-    return undefined;
+  getOutputCollection(): CollectionConfig {
+    return { name: this.name };
   }
 
   /**
@@ -263,7 +243,7 @@ export class Model<
    * Delegates to `Pipeline#out` / `Pipeline#merge` so the emitted output
    * document goes through the same builders users would call.
    */
-  buildPipeline(): Document[] {
+  buildPipeline(outputDb = this.materialize.db): Document[] {
     const userPipeline = this._buildPipeline();
 
     if (this.materialize.type === "view") {
@@ -273,10 +253,8 @@ export class Model<
 
     if (this.materialize.type === "collection") {
       const mode = this.materialize.mode;
-      const outputCollection = this.getOutputCollectionName();
-      const outputDb = this.getOutputDatabase();
       const target =
-        outputDb ? { db: outputDb, coll: outputCollection } : outputCollection;
+        outputDb === undefined ? this.name : { db: outputDb, coll: this.name };
 
       if ("$out" in mode) {
         return userPipeline.out(target).getPipeline();

@@ -43,8 +43,9 @@ import { ResolveSampleOutput, SampleQuery } from "../stages/sample";
 import { CountQuery, ResolveCountOutput } from "../stages/count";
 import { OutQuery } from "../stages/out";
 import { MergeQuery } from "../stages/merge";
-import { AggregationCursor, MongoClient } from "mongodb";
+import { AggregateOptions, AggregationCursor, MongoClient } from "mongodb";
 import { type Source, type InferSourceType } from "../source/Source";
+import type { CollectionConfig, DbConfig } from "../database/config";
 
 // ============================================================================
 // Lookup Mode - Controls what sources can be used in lookup/unionWith
@@ -155,21 +156,21 @@ export class Pipeline<
   }
 
   private client: MongoClient | undefined;
-  private databaseName: string | undefined;
-  private collectionName: string | undefined;
+  private db: DbConfig | undefined;
+  private collection: CollectionConfig | undefined;
 
   constructor(
     args: {
       pipeline?: Document[] | undefined;
       client?: MongoClient | undefined;
-      collectionName?: string | undefined;
-      databaseName?: string | undefined;
+      db?: DbConfig | undefined;
+      collection?: CollectionConfig | undefined;
     } = {}
   ) {
     this.pipeline = args.pipeline ?? [];
     this.client = args.client;
-    this.collectionName = args.collectionName;
-    this.databaseName = args.databaseName;
+    this.db = args.db;
+    this.collection = args.collection;
     tagClient(this.client);
   }
 
@@ -186,8 +187,8 @@ export class Pipeline<
     >({
       pipeline: [...this.pipeline, ...newStages],
       client: this.client,
-      collectionName: this.collectionName,
-      databaseName: this.databaseName,
+      db: this.db,
+      collection: this.collection,
     });
     next._ancestorsFromStages.push(
       ...this._ancestorsFromStages,
@@ -290,14 +291,12 @@ export class Pipeline<
     const { from, pipeline, ...$lookupRest } = $lookup;
 
     // Get collection name from source
-    const collectionName = (from as Source<any>).getOutputCollectionName();
+    const collectionName = (from as Source<any>).getOutputCollection().name;
 
     const resolvedPipeline =
       pipeline ?
         (pipeline as PipelineBuilder<any, any, any, any>)(
-          new Pipeline<InferSourceType<C>, InferSourceType<C>, Mode, never>({
-            collectionName,
-          })
+          new Pipeline<InferSourceType<C>, InferSourceType<C>, Mode, never>()
         )
       : undefined;
 
@@ -379,7 +378,7 @@ export class Pipeline<
   > {
     const { from, ...rest } = $graphLookup;
 
-    const collectionName = (from as Source<any>).getOutputCollectionName();
+    const collectionName = (from as Source<any>).getOutputCollection().name;
 
     return this._chain<
       ResolveGraphLookupOutput<
@@ -604,7 +603,7 @@ export class Pipeline<
     const { coll, pipeline } = $unionWith;
 
     // Get collection name from source
-    const collectionName = (coll as Source<any>).getOutputCollectionName();
+    const collectionName = (coll as Source<any>).getOutputCollection().name;
 
     const resolvedPipeline =
       pipeline ?
@@ -696,23 +695,40 @@ export class Pipeline<
     return this._chain<never, "$merge">([{ $merge }]);
   }
 
+  /**
+   * Run the aggregation and return the driver cursor.
+   *
+   * `db` / `collection` re-target the execution: each pairs a name with its
+   * driver options and replaces that layer's inherited name and options.
+   *
+   * @example
+   * .execute({ aggregateOptions: { session, maxTimeMS: 5000 } })
+   *
+   * @example
+   * const active = new Pipeline<User>().match({ active: true });
+   * active.execute({ client, db: { name: "eu" }, collection: { name: "users" } });
+   */
   execute(
     args: {
-      client?: MongoClient;
-      databaseName?: string;
-      collectionName?: string;
+      client?: MongoClient | undefined;
+      db?: DbConfig | undefined;
+      collection?: CollectionConfig | undefined;
+      /** Driver `AggregateOptions` (e.g. `session`, `maxTimeMS`, `allowDiskUse`) */
+      aggregateOptions?: AggregateOptions | undefined;
     } = {}
   ): AggregationCursor<PreviousStageDocs> {
     const client = args.client ?? this.client ?? pipesafe.client;
     if (!client) throw new Error("Not connected");
     tagClient(client);
 
-    const db = args.databaseName ?? this.databaseName;
-
-    const collection = args.collectionName ?? this.collectionName;
+    const db = args.db ?? this.db;
+    const collection = args.collection ?? this.collection;
     if (!collection) throw new Error("No collection name provided");
 
-    return client.db(db).collection(collection).aggregate(this.getPipeline());
+    return client
+      .db(db?.name, db?.options)
+      .collection(collection.name, collection.options)
+      .aggregate(this.getPipeline(), args.aggregateOptions);
   }
 }
 

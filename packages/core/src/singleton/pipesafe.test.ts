@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { useMemoryMongo } from "../utils/useMemoryMongo";
+import { useMemoryMongo } from "@pipesafe/test-utils";
 import { Collection } from "../collection/Collection";
 import { Pipeline } from "../pipeline/Pipeline";
 import { Database } from "../database/Database";
@@ -58,7 +58,7 @@ describe("Connections", async () => {
 
     it("uses a singleton client for collection aggregations", async () => {
       const collection = new Collection<{ test: string }>({
-        collectionName: CollectionName,
+        collection: { name: CollectionName },
       });
       const cursor = await collection.aggregate().execute();
       const results = await cursor.toArray();
@@ -70,7 +70,7 @@ describe("Connections", async () => {
     it("from DB", async () => {
       const db = new Database({
         client,
-        databaseName: DBName,
+        db: { name: DBName },
       });
       const collection = db.collection<{ test: string }>(CollectionName);
       const cursor = await collection.aggregate().execute();
@@ -81,7 +81,7 @@ describe("Connections", async () => {
     it("from collection", async () => {
       const collection = new Collection<{ test: string }>({
         client,
-        collectionName: CollectionName,
+        collection: { name: CollectionName },
       });
       const cursor = await collection.aggregate().execute();
       const results = await cursor.toArray();
@@ -92,7 +92,7 @@ describe("Connections", async () => {
   describe("On execution", async () => {
     it("Collection's pipeline can be passed a client", async () => {
       const collection = new Collection<{ test: string }>({
-        collectionName: CollectionName,
+        collection: { name: CollectionName },
       });
       const cursor = await collection.aggregate().execute({
         client,
@@ -105,8 +105,8 @@ describe("Connections", async () => {
       const pipeline = new Pipeline<{ test: string }>();
       const cursor = await pipeline.execute({
         client,
-        databaseName: DBName,
-        collectionName: CollectionName,
+        db: { name: DBName },
+        collection: { name: CollectionName },
       });
       const results = await cursor.toArray();
       expect(results).toEqual(exampleDocs);
