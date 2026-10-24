@@ -6,7 +6,6 @@ on:
 
 env:
   BUN_VERSION: 1.2.17
-  TS7_VERSION: 7.0.2
 
 jobs:
   lint:
@@ -101,8 +100,13 @@ jobs:
       - name: Instantiation budget (perf gate)
         run: bun run budget:check
 
-  typecheck-ts7:
+  typecheck-ts:
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        typescript: ["6.0.3", "7.0.2", "7.1.0-beta"]
 
     steps:
       - name: Checkout code
@@ -119,13 +123,13 @@ jobs:
       - name: Build packages
         run: bun run build
 
-      # typescript@latest is 7.x; eslint and tsdown stay on the repo's TS until
-      # they support the 7.x API.
-      - name: Type check on TypeScript 7
+      # The typecheck job covers the repo's TypeScript; eslint and tsdown stay
+      # on it until they support the 7.x API.
+      - name: Type check on TypeScript ${{ matrix.typescript }}
         run: |
-          npx -y -p typescript@${{ env.TS7_VERSION }} tsc --noEmit -p packages/core
-          npx -y -p typescript@${{ env.TS7_VERSION }} tsc --noEmit -p packages/manifold
-          npx -y -p typescript@${{ env.TS7_VERSION }} tsc --noEmit -p tsconfig.json
+          npx -y -p typescript@${{ matrix.typescript }} tsc --noEmit -p packages/core
+          npx -y -p typescript@${{ matrix.typescript }} tsc --noEmit -p packages/manifold
+          npx -y -p typescript@${{ matrix.typescript }} tsc --noEmit -p tsconfig.json
 
   changeset:
     runs-on: ubuntu-latest
