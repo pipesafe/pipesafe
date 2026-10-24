@@ -176,6 +176,24 @@ const _set_concat_bad_literal = new Pipeline<User>().set({
   },
 });
 
+// set — nested expressions in $concat must RESOLVE to string.
+const _set_concat_expression_ok = new Pipeline<User>().set({
+  label: { $concat: ["Age: ", { $toString: "$age" }] },
+  hashTags: {
+    $map: { input: "$tags", in: { $concat: ["#", { $toUpper: "$$this" }] } },
+  },
+});
+
+const _set_concat_bad_expression = new Pipeline<User>().set({
+  greeting: {
+    $concat: [
+      "n = ",
+      // @ts-expect-error  $add resolves to a number; $concat requires a string
+      { $add: [1, 2] },
+    ],
+  },
+});
+
 // set — allow-listed valid-but-unmodeled operators (here: trigonometry,
 // MongoDB 4.2+) are accepted by NAME; only names outside registry +
 // allow-list brand as typos.
@@ -295,6 +313,36 @@ const _set_filter_limit_ok = new Pipeline<User>().set({
   t: { $filter: { input: "$tags", as: "t", cond: true, limit: 2 } },
 });
 
+// set — a binder nested inside another operator's operand is walked too
+// (the registry types binder bodies `unknown`).
+const _set_nested_binder_bad = new Pipeline<User>().set({
+  n: {
+    $size: {
+      $filter: {
+        input: "$tags",
+        // @ts-expect-error  '$$tpyo' is not bound here (the element is $$this)
+        cond: { $eq: ["$$tpyo", "a"] },
+      },
+    },
+  },
+});
+
+const _group_nested_binder_bad = new Pipeline<User>().group({
+  _id: null,
+  // @ts-expect-error  '$naem' is not on the schema
+  names: { $push: { $map: { input: "$tags", in: "$naem" } } },
+});
+
+const _set_map_of_map_ok = new Pipeline<User>().set({
+  t: {
+    $map: {
+      input: { $map: { input: [1, 2, 3], as: "y", in: "$$y" } },
+      as: "x",
+      in: "$$x",
+    },
+  },
+});
+
 // set — a binder-shaped `input` gets its own interior walk.
 const _set_filter_bad_map_input = new Pipeline<User>().set({
   t: {
@@ -316,6 +364,18 @@ const _set_let_bad_var_name = new Pipeline<User>().set({
         NOW: "$name",
       },
       in: "$$NOW",
+    },
+  },
+});
+
+const _set_let_bad_var_chars = new Pipeline<User>().set({
+  x: {
+    $let: {
+      vars: {
+        // @ts-expect-error  'my-var' is not a valid user variable name
+        "my-var": "$name",
+      },
+      in: 1,
     },
   },
 });
@@ -632,6 +692,8 @@ export {
   _set_concat_bad_ref,
   _set_concat_nonstring_ref,
   _set_concat_bad_literal,
+  _set_concat_expression_ok,
+  _set_concat_bad_expression,
   _set_concat_nonstring_sysvar,
   _set_trig_allowlisted_ok,
   _set_sysvar_operand_ok,
@@ -647,6 +709,10 @@ export {
   _set_map_bad_as,
   _set_filter_limit_ok,
   _set_filter_bad_map_input,
+  _set_nested_binder_bad,
+  _group_nested_binder_bad,
+  _set_map_of_map_ok,
+  _set_let_bad_var_chars,
   _set_let_bad_var_name,
   _set_map_bad_as_name,
   _set_filter_bad_cond_var,

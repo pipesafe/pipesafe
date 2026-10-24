@@ -179,15 +179,6 @@ export type ArrayProducingExpression<Schema extends Document> = ExpressionFor<
   "$concatArrays" | "$arrayElemAt" | "$filter"
 >;
 
-/**
- * Valid inputs for array operations: field references, array-typed system
- * variables ("$$USER_ROLES"), literals, or expressions
- */
-export type ArrayInput<Schema extends Document> =
-  | ReferencesInferringTo<Schema, unknown[]>
-  | ArrayProducingExpression<Schema>
-  | unknown[];
-
 // ----------------------------------------------------------------------------
 // THE registry
 // ----------------------------------------------------------------------------
@@ -255,7 +246,7 @@ export interface ExpressionSpec<Schema extends Document> {
    *  (or the `as` name, optional in MongoDB); the result is the inferred
    *  `in` type lifted to an array — literal-dependent, so no `returns`. */
   $map: {
-    operand: { input: ArrayInput<Schema>; as?: string; in: unknown };
+    operand: { input: ArrayOperand<Schema, "$map">; as?: string; in: unknown };
   };
   /** Sums numeric values in an array ($group accumulation lives in group.ts). */
   $sum: {
@@ -960,10 +951,11 @@ type InferConditionalOperandValue<
     SwallowsNull extends true ?
       NonNullable<InferFieldReference<Schema, Operand>>
     : InferFieldReference<Schema, Operand> // $cond keeps the field's null
+  : Operand extends "$$REMOVE" ?
+    undefined // the field is absent when this branch is taken
   : Operand extends `$$${string}` ?
-    // `$$`-variable branch ($$NOW, "$$REMOVE" for conditional removal, a
-    // bound "$$var"): resolve through the same authority as the rest of
-    // inference. $$REMOVE's `never` union-absorbs, which IS its semantics.
+    // `$$`-variable branch ($$NOW, a bound "$$var"): resolve through the
+    // same authority as the rest of inference.
     SwallowsNull extends true ?
       NonNullable<InferVariableReference<Schema, Operand, Vars>>
     : InferVariableReference<Schema, Operand, Vars>

@@ -73,9 +73,9 @@ before touching any Query/operand union.
   which carries each variable's ACCURATE type: `$$NOW` → Date, `$$ROOT` →
   Schema, `$$REMOVE` → the load-bearing `never`). Do NOT re-unify by seeding
   the spec into the `Vars` defaults — that costs ~270k whole-project
-  instantiations for no behavior change. User variable names must begin
-  lowercase (`ValidateVariableName` brands the rest, as MongoDB does), so
-  the tiers cannot collide. `$let`/`$map`/`$filter` binding arms extend the user env
+  instantiations for no behavior change. User variable names must start
+  with a lowercase letter or non-ASCII character (`ValidateVariableName`
+  brands the rest, as MongoDB does), so the tiers cannot collide. `$let`/`$map`/`$filter` binding arms extend the user env
   (BindLetVars/BindVariable in variables.ts — shared by inference and
   validation, so the two environments cannot diverge); `$lookup.let`
   enters it via Pipeline's `Env` generic.
@@ -99,12 +99,24 @@ before touching any Query/operand union.
   contextually typing a call.
 - ValidateArrayInputValue's non-`$`-string arm RELATES against the
   registry's input operand; do NOT "improve" it into a ValidateNestedValue
-  re-entry — $filter is a member of ArrayProducingExpression (hence of
-  every ArrayOperand), and walking the registry's own `$filter`shape
-re-enters its`input`forever (TS2589 on unrelated`.set()`call sites).
-Only a binder-shaped input whose own`input`is a string (and`$let`)
-  is routed to its interior walk; that guard is what excludes the
-  registry shape.
+  re-entry — `$filter` is a member of ArrayProducingExpression (hence of
+  every ArrayOperand), and walking the registry's own `$filter` shape
+  re-enters its `input` forever (TS2589 on unrelated `.set()` call sites).
+  Only a binder-shaped input whose own `input` is a string or literal
+  array (and `$let`) is routed to its interior walk; that guard is what
+  excludes the registry shape.
+- Registry binder bodies (`in`/`cond`) are `unknown`, so the relation
+  passes ANY value nesting a binder. `ValidateNestedBinders` walks such
+  values BEFORE the relation, gated on `ContainsBinder`. Do NOT move it
+  into the relation's true branch: for a generic schema TS explores that
+  branch with V as a substitution type (V & registry shape) and walks the
+  registry (+1.2M instantiations from two generic-helper pins).
+- The key-filtered wrappers (`ValidateNestedRecord`, `ValidateGroupQuery`,
+  `ValidateBindings`) are DISTRIBUTIVE over the query (`Q extends unknown`).
+  For the parameter's still-generic Q, TS then resolves the wide-query
+  guard through Q's constraint; a non-distributive guard makes TS walk the
+  constraint's value unions once per schema (~25% of whole-project
+  instantiations).
 
 ## Gotchas
 

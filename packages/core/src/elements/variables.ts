@@ -191,14 +191,25 @@ export type SystemVariablesThatInferTo<Schema extends Document, T> =
     }[SystemVariable]
   | `${"$$ROOT" | "$$CURRENT"}.${WithoutDollar<FieldReferencesThatInferTo<Schema, T> & string>}`;
 
+type CharsOf<S extends string> =
+  S extends `${infer C}${infer Rest}` ? C | CharsOf<Rest> : never;
+
+/** The ASCII characters MongoDB rejects anywhere in a user variable name. */
+type InvalidVariableNameChar = CharsOf<" !\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~">;
+
 /**
  * Kernel contract for a user variable name (`$let.vars`/`$lookup.let` keys,
- * `$map`/`$filter` `as`): MongoDB requires a lowercase first letter (or a
- * non-ASCII character), which also keeps user names clear of the system
- * tier in LookupVariable.
+ * `$map`/`$filter` `as`): MongoDB requires a non-empty name of
+ * `[_a-zA-Z0-9]` and non-ASCII characters, starting with a lowercase
+ * letter or a non-ASCII character — which also keeps user names clear of
+ * the system tier in LookupVariable.
  */
 export type ValidateVariableName<Name> =
-  Name extends `${UpperAlphabet | Digit | "_"}${string}` ?
+  Name extends (
+    | ""
+    | `${UpperAlphabet | Digit | "_"}${string}`
+    | `${string}${InvalidVariableNameChar}${string}`
+  ) ?
     InvalidVariableNameError<Name>
   : never;
 
@@ -234,9 +245,13 @@ export type BindLetVars<
   Schema extends Document,
   LetVars,
   Vars extends Document,
-> = {
-  [K in (keyof LetVars & string) | keyof Vars]: K extends keyof LetVars ?
-    InferNestedFieldReference<Schema, LetVars[K], Vars>
-  : K extends keyof Vars ? Vars[K]
-  : never;
-};
+> =
+  // A wide (non-literal) block binds nothing: its index signature would
+  // shadow every name, system variables included.
+  string extends keyof LetVars ? Vars
+  : {
+      [K in (keyof LetVars & string) | keyof Vars]: K extends keyof LetVars ?
+        InferNestedFieldReference<Schema, LetVars[K], Vars>
+      : K extends keyof Vars ? Vars[K]
+      : never;
+    };

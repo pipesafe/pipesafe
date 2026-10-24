@@ -153,6 +153,29 @@ type _LookupEndingInGroupOutput = Assert<
 >;
 
 // =============================================================================
+// Test: $$REMOVE — a conditional branch types the field as possibly absent;
+// $project drops a removed field outright.
+// =============================================================================
+declare const _flag: boolean;
+const _condRemove = _p.set({
+  maybeName: { $cond: [_flag, "$name", "$$REMOVE"] },
+});
+type _CondRemoveOutput = Assert<
+  Equal<InferOutputType<typeof _condRemove>["maybeName"], string | undefined>
+>;
+const _projectRemove = _p.project({
+  name: 1,
+  gone: "$$REMOVE",
+  nested: { kept: "$name", gone: "$$REMOVE" },
+});
+type _ProjectRemoveOutput = Assert<
+  Equal<
+    InferOutputType<typeof _projectRemove>,
+    { _id: string; name: string; nested: { readonly kept: string } }
+  >
+>;
+
+// =============================================================================
 // Test: .group() then .set() - reference aggregated fields
 // =============================================================================
 const _groupThenSet = _p
@@ -185,6 +208,8 @@ const _projectThenMatch = _p
 export {
   _lookupWithLet,
   _lookupEndingInGroup,
+  _condRemove,
+  _projectRemove,
   _setThenSet,
   _setThenMatch,
   _setThenUnset,
@@ -253,6 +278,8 @@ type _ValidNoLeakAssert = Assert<Equal<_ValidNoLeak, { x: number; y: string }>>;
 export type {
   _LookupLetSubOutput,
   _LookupEndingInGroupOutput,
+  _CondRemoveOutput,
+  _ProjectRemoveOutput,
   _MatchPassthrough,
   _SetPassthrough,
   _ProjectPassthrough,

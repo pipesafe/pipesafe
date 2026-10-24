@@ -201,7 +201,8 @@ type ResolveNestedProjection<
   Obj extends Document,
   Vars extends Document = {},
 > = {
-  [K in keyof Obj]: InferNestedFieldReference<Schema, Obj[K], Vars>;
+  [K in keyof Obj as Obj[K] extends "$$REMOVE" ? never
+  : K]: InferNestedFieldReference<Schema, Obj[K], Vars>;
 };
 
 // Helper: Resolve a single field value (handles both regular and dotted keys)
@@ -327,7 +328,7 @@ type ResolveInclusionMode<
         // values can't reach the fallthrough because genuine mixing already
         // branded at dispatch.
         [K in keyof NonDottedKeys<Query> as K extends "_id" ? never
-        : Query[K] extends 0 | false ? never
+        : Query[K] extends 0 | false | "$$REMOVE" ? never
         : K]: ResolveFieldValue<Schema, Query[K], K & string, Vars>;
       } & ExpandDottedProjection<Schema, Query>
     >
@@ -366,6 +367,7 @@ type ResolveExclusionMode<
     // FieldReference/Expression union membership tests; ResolveFieldValue
     // does the real dispatch and brands invalid values.
     [K in keyof Query as K extends "_id" ? never
+    : Query[K] extends "$$REMOVE" ? never
     : Query[K] extends `$${string}` ? K
     : Query[K] extends Document ? K
     : never]: ResolveFieldValue<Schema, Query[K], K & string, Vars>;

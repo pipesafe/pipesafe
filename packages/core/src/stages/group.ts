@@ -1,6 +1,7 @@
 import { InferNestedFieldReference } from "../elements/fieldReference";
 import {
   UserVariableOperand,
+  ValidateNestedBinders,
   ValidateNestedValue,
   ValidateOperandTree,
   ValidateRefResolvesTo,
@@ -32,6 +33,20 @@ import {
 } from "../utils/errors";
 import { ExpressionOperand, ReferencesInferringTo } from "../elements/operands";
 
+/** The BSON-comparable values $min/$max are modeled over. */
+type Comparable = number | Date | string | boolean;
+
+/**
+ * The value type each checked accumulator's operand must resolve to — the
+ * one spelling its operand union and its `$$`-variable check share.
+ */
+type AccumulatorTarget = {
+  $sum: number;
+  $avg: number;
+  $min: Comparable;
+  $max: Comparable;
+};
+
 /**
  * Numeric operand for accumulators like $sum, $avg — an ExpressionOperand
  * kernel set (numbers, field references to numbers, brand) extended with the
@@ -39,34 +54,37 @@ import { ExpressionOperand, ReferencesInferringTo } from "../elements/operands";
  * when the operand is incompatible (e.g. a string field reference passed to
  * $sum) — instead of a structural-mismatch wall.
  */
-type NumericAccumulatorOperand<Schema extends Document, Op extends string> =
+type NumericAccumulatorOperand<
+  Schema extends Document,
+  Op extends "$sum" | "$avg",
+> =
   | ExpressionOperand<
       Schema,
-      number,
+      AccumulatorTarget[Op],
       RequiresMsg<"Accumulator", Op, "a numeric operand">
     >
   // Any registry expression whose declared result is numeric ($size,
   // arithmetic, $toDate arithmetic chains, ...) — derived, so new numeric
   // operators join automatically. ConditionalExpression stays explicit:
   // $ifNull/$cond results are literal-dependent (no declared `returns`).
-  | ExpressionsReturning<Schema, number>
+  | ExpressionsReturning<Schema, AccumulatorTarget[Op]>
   | ConditionalExpression<Schema>;
-
-/** The BSON-comparable values $min/$max are modeled over. */
-type Comparable = number | Date | string | boolean;
 
 /**
  * Operand for $min/$max. MongoDB defines them over BSON-comparable values —
  * numbers, dates, AND strings (lexicographic) are the ones this library
  * models; `$min: "$name"` is valid MongoDB and must compile.
  */
-type MinMaxAccumulatorOperand<Schema extends Document, Op extends string> =
+type MinMaxAccumulatorOperand<
+  Schema extends Document,
+  Op extends "$min" | "$max",
+> =
   | ExpressionOperand<
       Schema,
       // The ref side accepts every modeled comparable; the LITERAL string
       // arm is narrowed to NoDollarString below — a bare `string` here
       // would swallow `$`-typo refs and make the brand unreachable.
-      number | Date | boolean,
+      Exclude<AccumulatorTarget[Op], string>,
       RequiresMsg<
         "Accumulator",
         Op,
@@ -75,7 +93,7 @@ type MinMaxAccumulatorOperand<Schema extends Document, Op extends string> =
     >
   | NoDollarString
   | ReferencesInferringTo<Schema, string>
-  | ExpressionsReturning<Schema, Comparable>
+  | ExpressionsReturning<Schema, AccumulatorTarget[Op]>
   | ConditionalExpression<Schema>;
 
 /**
@@ -294,14 +312,6 @@ type BrandedAccumulatorFor<
   Op extends CheckedAccumulatorOps,
 > = { [K in Op]: AccumulatorBrand<Schema, K> };
 
-/** What a `$$`-variable operand must resolve to, per checked accumulator. */
-type AccumulatorVariableTarget = {
-  $sum: number;
-  $avg: number;
-  $min: Comparable;
-  $max: Comparable;
-};
-
 type ValidateAccumulatorValue<
   Schema extends Document,
   A,
@@ -334,7 +344,7 @@ type ValidateAccumulatorValue<
         ValidateRefResolvesTo<
           Schema,
           Ref,
-          AccumulatorVariableTarget[Op],
+          AccumulatorTarget[Op],
           AccumulatorBrand<Schema, Op>,
           Vars
         > extends infer E ?
@@ -386,7 +396,11 @@ type ValidateGroupValue<
     : [OperatorKeyOf<V>] extends [never] ? ValidateNestedValue<Schema, V, Vars>
     : HasSingleOperatorKey<V> extends false ? MultiOperatorError
     : [Exclude<keyof V & string, `$${string}`>] extends [never] ?
-      ValidateAccumulatorValue<Schema, V, Vars>
+      ValidateNestedBinders<Schema, V, Vars> extends infer B ?
+        [B] extends [never] ?
+          ValidateAccumulatorValue<Schema, V, Vars>
+        : B
+      : never
     : // Accumulator key mixed with plain keys — MongoDB: "The field must
       // specify one accumulator" (mirrors ValidateExpressionValue's guard).
       MultiOperatorError
@@ -411,7 +425,7 @@ type ValidateGroupValue<
  * index signature makes `keyof Q` include `string`), and without the guard
  * the walk misfires on the wide value unions — branding the user's VALID
  * keys and overflowing the instantiation depth on top of the real
- * constraint error.
+ * constraint error. Distributive over Q, as ValidateNestedRecord.
  */
 export type ValidateGroupQuery<
   Schema extends Document,
@@ -423,10 +437,13 @@ export type ValidateGroupQuery<
   // checks guard themselves (ValidateAccumulatorValue / the kernel's
   // ref/operand arms), so shape checks still run on index-signature
   // schemas.
-  string extends keyof Q ? {}
-  : OmitNeverValues<{
-      [K in keyof Q]: ValidateGroupValue<Schema, K, Q[K], Vars>;
-    }>;
+  Q extends unknown ?
+    string extends keyof Q ?
+      {}
+    : OmitNeverValues<{
+        [K in keyof Q]: ValidateGroupValue<Schema, K, Q[K], Vars>;
+      }>
+  : never;
 
 export type ResolveGroupOutput<
   Schema extends Document,

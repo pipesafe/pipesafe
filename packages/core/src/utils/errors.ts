@@ -104,4 +104,4 @@ export type UnknownSystemVariableError<Name extends string> =
 
 /** A user variable name MongoDB rejects (ValidateVariableName). */
 export type InvalidVariableNameError<Name extends string> =
-  PipeSafeError<`Variable '$$${Name}' must begin with a lowercase letter.`>;
+  PipeSafeError<`Variable '$$${Name}' is not a valid user variable name.`>;
