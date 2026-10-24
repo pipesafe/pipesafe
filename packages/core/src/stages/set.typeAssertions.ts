@@ -1215,6 +1215,18 @@ type MapSetResult = ResolveSetOutput<
   {
     qtys: { $map: { input: "$items"; as: "item"; in: "$$item.qty" } };
     defaulted: { $map: { input: "$items"; in: "$$this.sku" } };
+    overFilter: {
+      $map: {
+        input: { $filter: { input: "$items"; cond: true } };
+        in: "$$this.qty";
+      };
+    };
+    filterOverMap: {
+      $filter: {
+        input: { $map: { input: "$items"; in: "$$this.sku" } };
+        cond: true;
+      };
+    };
   }
 >;
 type MapSetExpected = {
@@ -1222,6 +1234,8 @@ type MapSetExpected = {
   items: { qty: number; sku: string }[];
   qtys: number[];
   defaulted: string[];
+  overFilter: number[];
+  filterOverMap: string[];
 };
 type MapSetTest = Assert<Equal<MapSetResult, MapSetExpected>>;
 

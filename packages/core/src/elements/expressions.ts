@@ -975,6 +975,21 @@ export type InferArrayElementType<
   : unknown;
 
 /**
+ * $map/$filter element type, extended to expression inputs
+ * (`input: { $filter }`).
+ * Inference-only: the validation walk's shared InferArrayElementType must
+ * not recurse into InferExpression (TS2589 across the project).
+ */
+type InferInputElement<Schema extends Document, Input, Vars extends Document> =
+  HasOperatorKey<Input> extends true ?
+    InferExpression<Schema, Input, Vars> extends infer R ?
+      R extends readonly (infer T)[] ?
+        T
+      : unknown
+    : never
+  : InferArrayElementType<Schema, Input, Vars>;
+
+/**
  * Shared operand inference for the conditional operators. The only semantic
  * difference between $ifNull and $cond is null handling, captured by
  * `SwallowsNull`: $ifNull returns the first NON-null operand, so null
@@ -1101,7 +1116,7 @@ type InferDependentExpression<
   : Expr extends { $arrayElemAt: readonly [infer ArraySource, unknown] } ?
     InferArrayElementType<Schema, ArraySource, Vars>
   : Expr extends { $filter: { input: infer ArraySource } } ?
-    InferArrayElementType<Schema, ArraySource, Vars>[]
+    InferInputElement<Schema, ArraySource, Vars>[]
   : Expr extends { $map: infer MapOperand } ?
     MapOperand extends { input: infer Input; in: infer In } ?
       InferNestedFieldReference<
@@ -1110,7 +1125,7 @@ type InferDependentExpression<
         BindVariable<
           Vars,
           BoundAsName<MapOperand>,
-          InferArrayElementType<Schema, Input, Vars>
+          InferInputElement<Schema, Input, Vars>
         >
       >[]
     : unknown[] // malformed operand — keep the operator's array result kind
