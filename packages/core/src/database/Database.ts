@@ -34,8 +34,7 @@ export class Database {
     return new Collection<Schema>({
       client: this.client,
       db: this.db,
-      collection:
-        options ? { name: collectionName, options } : { name: collectionName },
+      collection: { name: collectionName, options },
     });
   }
 

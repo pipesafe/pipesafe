@@ -32,7 +32,7 @@ export type RunOptions = {
   databaseName?: string;
   /**
    * Driver `AggregateOptions` applied to every collection-mode model's
-   * aggregation (e.g. `maxTimeMS`, `allowDiskUse`, `hint`, `comment`).
+   * aggregation (e.g. `maxTimeMS`, `allowDiskUse`, `comment`).
    * View and time-series DDL runs no aggregation and only takes `session`.
    */
   aggregateOptions?: AggregateOptions;
@@ -436,9 +436,7 @@ export class Project {
 
     // Execute aggregation
     // Use source database for reading, output stage handles writing to correct db.
-    // Honor any driver options configured on the source (e.g. a Collection
-    // created with dbOptions/collectionOptions) so reads behave the same
-    // here as via source.aggregate().execute().
+    // Source db/collection options apply, matching source.aggregate().execute().
     const source = model.getSource();
     const sourceDb = model.getSourceDatabase() ?? dbName;
     const db = client.db(sourceDb, source.getOutputDbOptions());
