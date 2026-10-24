@@ -44,6 +44,7 @@
   },
   "devDependencies": {
     "@pipesafe/core": "workspace:*",
+    "@pipesafe/test-utils": "workspace:*",
     "typescript": "^5.9.3"
   }
 }

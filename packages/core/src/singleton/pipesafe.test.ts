@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { useMemoryMongo } from "../utils/useMemoryMongo";
+import { useMemoryMongo } from "@pipesafe/test-utils";
 import { Collection } from "../collection/Collection";
 import { Pipeline } from "../pipeline/Pipeline";
 import { Database } from "../database/Database";

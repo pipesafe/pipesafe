@@ -43,6 +43,7 @@
     "mongodb": ">=6.0.0"
   },
   "devDependencies": {
+    "@pipesafe/test-utils": "workspace:*",
     "typescript": "^5.9.3"
   }
 }

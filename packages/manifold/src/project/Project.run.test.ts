@@ -6,7 +6,7 @@ import {
   ReadConcern,
 } from "mongodb";
 import { Collection } from "@pipesafe/core";
-import { useMemoryMongo } from "../../../core/src/utils/useMemoryMongo";
+import { useMemoryMongo } from "@pipesafe/test-utils";
 import { Model } from "../model/Model";
 import { Project } from "./Project";
 // ============================================================================

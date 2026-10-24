@@ -5,7 +5,7 @@ import {
   MongoClient,
   ReadConcern,
 } from "mongodb";
-import { useMemoryMongo } from "../utils/useMemoryMongo";
+import { useMemoryMongo } from "@pipesafe/test-utils";
 import { Collection } from "../collection/Collection";
 import { Database } from "../database/Database";
 

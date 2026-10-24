@@ -16,7 +16,7 @@ pipesafe/
 │   │   │   ├── elements/        # Type system building blocks (+ operand kernel)
 │   │   │   ├── collection/      # Collection wrapper
 │   │   │   ├── source/          # Source interface
-│   │   │   ├── utils/           # errors/strings/objects/paths/dispatch/updates type utilities (+ test fixtures)
+│   │   │   ├── utils/           # errors/strings/objects/paths/dispatch/updates type utilities
 │   │   │   ├── singleton/       # Global pipesafe instance
 │   │   │   └── database/        # Database utilities
 │   │   ├── examples/            # Pipeline usage examples
@@ -30,8 +30,10 @@ pipesafe/
 │   │   ├── examples/            # DAG usage examples
 │   │   └── LICENSE              # Elastic License 2.0
 │   │
-│   └── core-completions-tests/  # IDE-autocomplete regression tests (private)
-│       └── src/                 # LanguageService harness + exact-ideal suite
+│   ├── core-completions-tests/  # IDE-autocomplete regression tests (private)
+│   │   └── src/                 # LanguageService harness + exact-ideal suite
+│   │
+│   └── test-utils/              # Shared test fixtures, e.g. useMemoryMongo (private)
 │
 └── package.json                 # Root workspace config (private)
 ```

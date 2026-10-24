@@ -1,7 +1,5 @@
-// rootDir widens to the repo root: tests import core's useMemoryMongo fixture
 {
   "extends": ["./tsconfig.json", "../../tsconfig.typecheck.base.json"],
   "include": ["src/**/*.ts"],
-  "exclude": ["dist", "node_modules"],
-  "compilerOptions": { "rootDir": "../.." }
+  "exclude": ["dist", "node_modules"]
 }
