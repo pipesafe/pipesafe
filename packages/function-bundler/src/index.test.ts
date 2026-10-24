@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { bundleServerFunction } from "./index";
 
@@ -43,6 +46,25 @@ describe("bundleServerFunction", () => {
     });
     const fn = new Function(`return (${body})`)() as (v: number) => number;
     expect(() => fn(1)).toThrow(/doesNotExist/);
+  });
+
+  it("resolves npm packages that only declare `main`", () => {
+    const dir = mkdtempSync(join(tmpdir(), "pipesafe-bundler-"));
+    const pkg = join(dir, "node_modules", "main-only");
+    mkdirSync(join(pkg, "lib"), { recursive: true });
+    writeFileSync(
+      join(pkg, "package.json"),
+      '{"name":"main-only","main":"lib/main.js"}'
+    );
+    writeFileSync(join(pkg, "lib", "main.js"), "exports.inc = (n) => n + 1;");
+    const entry = join(dir, "entry.ts");
+    writeFileSync(
+      entry,
+      'import { inc } from "main-only"; export default (n: number) => inc(n);'
+    );
+    const body = bundleServerFunction({ url: entry, exportName: "default" });
+    const fn = new Function(`return (${body})`)() as (v: number) => number;
+    expect(fn(1)).toBe(2);
   });
 
   it("fails loudly on unresolvable imports", () => {

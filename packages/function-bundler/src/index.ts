@@ -39,6 +39,8 @@ export function bundleServerFunction(ref: ServerFunctionModuleRef): string {
     format: "iife",
     globalName: "__pipesafe_fn",
     platform: "neutral",
+    // neutral's default is empty, which cannot resolve `main`-only packages
+    mainFields: ["module", "main"],
     // es2020 matches the MozJS (SpiderMonkey) engine in supported MongoDB
     // server versions
     target: "es2020",
