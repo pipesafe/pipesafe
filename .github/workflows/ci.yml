@@ -65,7 +65,7 @@ jobs:
       - name: Format check
         run: bun run format
 
-  typecheck:
+  typecheck-matrix:
     name: typecheck (${{ matrix.typescript }})
     runs-on: ubuntu-latest
 
@@ -78,7 +78,7 @@ jobs:
         include:
           # The floor of core's typescript peer range. The repo's compiler
           # options need 5.6+, so this lane checks the examples only.
-          - typescript: "5.3.3"
+          - typescript: "5.4.5"
             floor: true
 
     steps:
@@ -121,6 +121,16 @@ jobs:
         run: bun run budget:check
         env:
           TSC: npx -y -p typescript@${{ matrix.typescript }} tsc ${{ startsWith(matrix.typescript, '7.') && '--checkers 1' || '' }}
+
+  # The ruleset requires a check named `typecheck`.
+  typecheck:
+    needs: typecheck-matrix
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Require every TypeScript lane to pass
+        run: test "${{ needs.typecheck-matrix.result }}" = success
 
   changeset:
     runs-on: ubuntu-latest
