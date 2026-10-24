@@ -6,17 +6,11 @@
     "max-lines-per-function": {
       "count": 1
     },
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 2
-    },
     "unicorn/no-array-sort": {
       "count": 2
     }
   },
   "packages/core-completions-tests/src/harness.ts": {
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 5
-    },
     "unicorn/prefer-import-meta-properties": {
       "count": 1
     }
@@ -31,14 +25,8 @@
     "max-lines-per-function": {
       "count": 6
     },
-    "no-inline-comments": {
-      "count": 17
-    },
     "no-shadow": {
       "count": 1
-    },
-    "no-underscore-dangle": {
-      "count": 2
     },
     "require-unicode-regexp": {
       "count": 7
@@ -63,9 +51,6 @@
     },
     "typescript/prefer-nullish-coalescing": {
       "count": 15
-    },
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 28
     },
     "typescript/restrict-template-expressions": {
       "count": 10
@@ -104,9 +89,6 @@
     "max-lines-per-function": {
       "count": 1
     },
-    "no-inline-comments": {
-      "count": 2
-    },
     "typescript/no-unnecessary-condition": {
       "count": 1
     },
@@ -115,9 +97,6 @@
     },
     "typescript/no-unsafe-type-assertion": {
       "count": 1
-    },
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 2
     },
     "typescript/restrict-template-expressions": {
       "count": 1
@@ -131,9 +110,6 @@
   },
   "packages/core/benchmarking/unset.ts": {
     "max-lines-per-function": {
-      "count": 1
-    },
-    "no-inline-comments": {
       "count": 1
     },
     "typescript/strict-boolean-expressions": {
@@ -157,40 +133,18 @@
       "count": 3
     }
   },
-  "packages/core/examples/analytics-dashboard.ts": {
-    "no-inline-comments": {
-      "count": 2
-    }
-  },
   "packages/core/examples/content-management.ts": {
     "max-lines": {
-      "count": 1
-    },
-    "no-inline-comments": {
       "count": 1
     }
   },
   "packages/core/examples/ecommerce-analytics.ts": {
     "max-lines": {
       "count": 1
-    },
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 5
-    }
-  },
-  "packages/core/examples/typed-errors-showcase.ts": {
-    "no-inline-comments": {
-      "count": 1
-    },
-    "no-underscore-dangle": {
-      "count": 9
     }
   },
   "packages/core/examples/user-management.ts": {
     "max-lines": {
-      "count": 1
-    },
-    "no-inline-comments": {
       "count": 1
     }
   },
@@ -207,9 +161,6 @@
     "typescript/prefer-nullish-coalescing": {
       "count": 4
     },
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 48
-    },
     "typescript/strict-boolean-expressions": {
       "count": 1
     },
@@ -217,17 +168,9 @@
       "count": 1
     }
   },
-  "packages/core/src/database/Database.ts": {
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 9
-    }
-  },
   "packages/core/src/elements/expressions.ts": {
     "max-lines": {
       "count": 1
-    },
-    "no-inline-comments": {
-      "count": 14
     }
   },
   "packages/core/src/elements/expressions.typeAssertions.ts": {
@@ -235,27 +178,14 @@
       "count": 1
     }
   },
-  "packages/core/src/elements/fieldReference.ts": {
-    "no-inline-comments": {
-      "count": 12
-    }
-  },
   "packages/core/src/elements/fieldReference.typeAssertions.ts": {
     "max-lines": {
       "count": 1
-    },
-    "no-inline-comments": {
-      "count": 5
     },
     "typescript/no-empty-object-type": {
       "count": 2
     },
     "typescript/no-unnecessary-type-assertion": {
-      "count": 8
-    }
-  },
-  "packages/core/src/elements/fieldSelector.ts": {
-    "no-inline-comments": {
       "count": 8
     }
   },
@@ -276,9 +206,6 @@
     }
   },
   "packages/core/src/elements/validation.ts": {
-    "no-inline-comments": {
-      "count": 11
-    },
     "typescript/no-empty-object-type": {
       "count": 1
     }
@@ -291,17 +218,6 @@
   "packages/core/src/pipeline/Pipeline.callSite.typeAssertions.ts": {
     "max-lines": {
       "count": 1
-    },
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 3
-    }
-  },
-  "packages/core/src/pipeline/Pipeline.examples.ts": {
-    "no-inline-comments": {
-      "count": 1
-    },
-    "no-underscore-dangle": {
-      "count": 2
     }
   },
   "packages/core/src/pipeline/Pipeline.ts": {
@@ -310,9 +226,6 @@
     },
     "max-lines-per-function": {
       "count": 3
-    },
-    "no-underscore-dangle": {
-      "count": 22
     },
     "typescript/no-explicit-any": {
       "count": 34
@@ -329,17 +242,11 @@
     "typescript/no-unsafe-type-assertion": {
       "count": 1
     },
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 16
-    },
     "typescript/strict-boolean-expressions": {
       "count": 1
     }
   },
   "packages/core/src/pipeline/Pipeline.typeAssertions.ts": {
-    "no-inline-comments": {
-      "count": 15
-    },
     "typescript/no-empty-object-type": {
       "count": 1
     },
@@ -387,9 +294,6 @@
     }
   },
   "packages/core/src/singleton/tagClient.ts": {
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 2
-    },
     "typescript/strict-boolean-expressions": {
       "count": 1
     }
@@ -402,31 +306,19 @@
   "packages/core/src/stages/facet.typeAssertions.ts": {
     "typescript/no-unnecessary-type-arguments": {
       "count": 3
-    },
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 6
     }
   },
   "packages/core/src/stages/graphLookup.typeAssertions.ts": {
     "max-lines": {
       "count": 1
     },
-    "no-inline-comments": {
-      "count": 1
-    },
     "typescript/no-unnecessary-type-arguments": {
-      "count": 2
-    },
-    "typescript/prefer-readonly-parameter-types": {
       "count": 2
     }
   },
   "packages/core/src/stages/group.ts": {
     "max-lines": {
       "count": 1
-    },
-    "no-inline-comments": {
-      "count": 11
     },
     "typescript/no-empty-object-type": {
       "count": 3
@@ -453,25 +345,16 @@
     "max-lines": {
       "count": 1
     },
-    "no-inline-comments": {
-      "count": 1
-    },
     "typescript/no-explicit-any": {
       "count": 1
     },
     "typescript/no-unnecessary-type-arguments": {
       "count": 2
-    },
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 5
     }
   },
   "packages/core/src/stages/match.ts": {
     "max-lines": {
       "count": 1
-    },
-    "no-inline-comments": {
-      "count": 7
     },
     "typescript/no-unnecessary-type-constraint": {
       "count": 3
@@ -496,9 +379,6 @@
     "max-lines": {
       "count": 1
     },
-    "no-inline-comments": {
-      "count": 15
-    },
     "typescript/no-empty-object-type": {
       "count": 4
     },
@@ -514,15 +394,7 @@
       "count": 2
     }
   },
-  "packages/core/src/stages/replaceRoot.ts": {
-    "no-inline-comments": {
-      "count": 1
-    }
-  },
   "packages/core/src/stages/set.ts": {
-    "no-inline-comments": {
-      "count": 3
-    },
     "typescript/no-empty-object-type": {
       "count": 1
     }
@@ -531,9 +403,6 @@
     "max-lines": {
       "count": 1
     },
-    "no-inline-comments": {
-      "count": 15
-    },
     "typescript/no-redundant-type-constituents": {
       "count": 2
     }
@@ -541,16 +410,6 @@
   "packages/core/src/stages/stages.contract.typeAssertions.ts": {
     "typescript/no-redundant-type-constituents": {
       "count": 1
-    }
-  },
-  "packages/core/src/stages/unionWith.ts": {
-    "no-inline-comments": {
-      "count": 3
-    }
-  },
-  "packages/core/src/stages/unset.ts": {
-    "no-inline-comments": {
-      "count": 14
     }
   },
   "packages/core/src/stages/unset.typeAssertions.ts": {
@@ -569,9 +428,6 @@
     }
   },
   "packages/core/src/utils/objects.ts": {
-    "no-inline-comments": {
-      "count": 6
-    },
     "typescript/no-explicit-any": {
       "count": 3
     },
@@ -580,9 +436,6 @@
     }
   },
   "packages/core/src/utils/paths.ts": {
-    "no-inline-comments": {
-      "count": 2
-    },
     "typescript/no-empty-object-type": {
       "count": 2
     },
@@ -601,9 +454,6 @@
     }
   },
   "packages/core/src/utils/updates.ts": {
-    "no-inline-comments": {
-      "count": 12
-    },
     "typescript/no-empty-object-type": {
       "count": 3
     },
@@ -622,23 +472,9 @@
       "count": 1
     }
   },
-  "packages/manifold/examples/model-dag-example.ts": {
-    "no-inline-comments": {
-      "count": 5
-    },
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 5
-    }
-  },
   "packages/manifold/src/model/Model.test.ts": {
     "max-lines-per-function": {
       "count": 2
-    },
-    "no-inline-comments": {
-      "count": 3
-    },
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 7
     },
     "unicorn/no-useless-undefined": {
       "count": 1
@@ -648,9 +484,6 @@
     }
   },
   "packages/manifold/src/model/Model.ts": {
-    "no-underscore-dangle": {
-      "count": 11
-    },
     "typescript/no-explicit-any": {
       "count": 8
     },
@@ -666,9 +499,6 @@
     "typescript/no-unsafe-type-assertion": {
       "count": 2
     },
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 4
-    },
     "typescript/strict-boolean-expressions": {
       "count": 1
     }
@@ -679,9 +509,6 @@
     },
     "max-lines-per-function": {
       "count": 3
-    },
-    "no-inline-comments": {
-      "count": 2
     },
     "typescript/no-non-null-assertion": {
       "count": 2
@@ -694,9 +521,6 @@
     },
     "typescript/no-unsafe-member-access": {
       "count": 1
-    },
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 13
     },
     "typescript/strict-void-return": {
       "count": 2
@@ -736,9 +560,6 @@
     "typescript/prefer-nullish-coalescing": {
       "count": 1
     },
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 19
-    },
     "typescript/restrict-template-expressions": {
       "count": 4
     },
@@ -755,17 +576,6 @@
   "packages/manifold/src/project/Project.validation.test.ts": {
     "max-lines-per-function": {
       "count": 4
-    },
-    "no-inline-comments": {
-      "count": 1
-    },
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 21
-    }
-  },
-  "vitest.globalSetup.ts": {
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 1
     }
   },
   "website/src/App.tsx": {
@@ -779,51 +589,19 @@
     },
     "max-lines-per-function": {
       "count": 1
-    },
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 2
     }
   },
   "website/src/components/CompileTerminal/ErrorIfFiring.tsx": {
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 1
-    },
     "typescript/strict-boolean-expressions": {
-      "count": 1
-    }
-  },
-  "website/src/components/InstallBox/InstallBox.tsx": {
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 1
-    }
-  },
-  "website/src/components/ReplayButton/ReplayButton.tsx": {
-    "typescript/prefer-readonly-parameter-types": {
       "count": 1
     }
   },
   "website/src/components/RuntimeTerminal/RuntimeTerminal.tsx": {
     "max-lines-per-function": {
       "count": 1
-    },
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 1
-    }
-  },
-  "website/src/components/Terminal/MongoSyntax.tsx": {
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 5
-    }
-  },
-  "website/src/components/Terminal/Terminal.tsx": {
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 1
     }
   },
   "website/src/components/TypeTooltip/ErrorTooltipContent.tsx": {
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 1
-    },
     "typescript/strict-boolean-expressions": {
       "count": 1
     }
@@ -835,15 +613,7 @@
     "typescript/no-unsafe-type-assertion": {
       "count": 1
     },
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 3
-    },
     "typescript/strict-boolean-expressions": {
-      "count": 1
-    }
-  },
-  "website/src/components/TypeTooltip/StageTypeContent.tsx": {
-    "typescript/prefer-readonly-parameter-types": {
       "count": 1
     }
   },
@@ -853,9 +623,6 @@
     },
     "typescript/no-non-null-assertion": {
       "count": 1
-    },
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 2
     },
     "typescript/strict-boolean-expressions": {
       "count": 1
@@ -870,9 +637,6 @@
     },
     "typescript/no-confusing-void-expression": {
       "count": 1
-    },
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 3
     },
     "typescript/strict-void-return": {
       "count": 1
@@ -890,16 +654,8 @@
     "typescript/no-confusing-void-expression": {
       "count": 2
     },
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 1
-    },
     "unicorn/prefer-single-call": {
       "count": 1
-    }
-  },
-  "website/src/hooks/useIntersectionObserver.ts": {
-    "typescript/prefer-readonly-parameter-types": {
-      "count": 3
     }
   },
   "website/src/hooks/useTerminalAnimation.ts": {

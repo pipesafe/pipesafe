@@ -67,6 +67,12 @@
     "no-negated-condition": "off",
     "typescript/ban-types": "off",
 
+    // Style rules the repo's conventions break: `_`-prefixed names (see
+    // `no-unused-vars` below), mutable parameters, trailing comments.
+    "no-underscore-dangle": "off",
+    "typescript/prefer-readonly-parameter-types": "off",
+    "no-inline-comments": "off",
+
     // Use package imports ("@pipesafe/core") rather than relative paths
     // across package boundaries.
     "no-restricted-imports": [
@@ -83,13 +89,10 @@
   },
   "overrides": [
     {
-      // Assertion files pin types with `{} as T` and name their probes with a
-      // leading `_` (the `no-unused-vars` convention above). Both rules would
-      // reject the idiom these files exist to use, in every new pin.
+      // Assertion files pin types with `{} as T`.
       "files": ["**/*.typeAssertions.ts"],
       "rules": {
-        "typescript/no-unsafe-type-assertion": "off",
-        "no-underscore-dangle": "off"
+        "typescript/no-unsafe-type-assertion": "off"
       }
     }
   ]
