@@ -309,12 +309,20 @@ function visitFunction(
   const body = node.body as AnyNode;
   if (body.type === "BlockStatement") {
     hoistVarScoped(body, scope);
-    hoistLexical(body.body as AnyNode[], scope);
-    for (const stmt of body.body as AnyNode[])
-      visitExpression(stmt, scope, report);
+    visitStatements(body.body as AnyNode[], scope, report);
   } else {
     visitExpression(body, scope, report); // concise arrow body
   }
+}
+
+/** Hoist a statement list's block-scoped bindings into `scope`, then visit it. */
+function visitStatements(
+  statements: AnyNode[],
+  scope: Scope,
+  report: (name: string) => void
+): void {
+  hoistLexical(statements, scope);
+  for (const stmt of statements) visitExpression(stmt, scope, report);
 }
 
 /** Generic reference-collecting walker. */
@@ -351,10 +359,7 @@ function visitExpression(
         if (member.type === "StaticBlock") {
           const blockScope: Scope = { names: new Set(), parent: classScope };
           hoistVarScoped(member, blockScope);
-          hoistLexical(member.body as AnyNode[], blockScope);
-          for (const stmt of member.body as AnyNode[]) {
-            visitExpression(stmt, blockScope, report);
-          }
+          visitStatements(member.body as AnyNode[], blockScope, report);
           continue;
         }
         if (member.computed)
@@ -364,13 +369,13 @@ function visitExpression(
       }
       return;
     }
-    case "BlockStatement": {
-      const blockScope: Scope = { names: new Set(), parent: scope };
-      hoistLexical(node.body as AnyNode[], blockScope);
-      for (const stmt of node.body as AnyNode[])
-        visitExpression(stmt, blockScope, report);
+    case "BlockStatement":
+      visitStatements(
+        node.body as AnyNode[],
+        { names: new Set(), parent: scope },
+        report
+      );
       return;
-    }
     case "VariableDeclaration":
       for (const decl of node.declarations as AnyNode[]) {
         visitPatternExpressions(decl.id as AnyNode, scope, report);
@@ -394,10 +399,11 @@ function visitExpression(
         );
         visitPatternExpressions(node.param as AnyNode, catchScope, report);
       }
-      const body = node.body as AnyNode;
-      hoistLexical(body.body as AnyNode[], catchScope);
-      for (const stmt of body.body as AnyNode[])
-        visitExpression(stmt, catchScope, report);
+      visitStatements(
+        (node.body as AnyNode).body as AnyNode[],
+        catchScope,
+        report
+      );
       return;
     }
     case "ForStatement":
@@ -684,40 +690,34 @@ function resolveBody(body: unknown): unknown {
  */
 function walkValue(value: unknown): unknown {
   if (Array.isArray(value)) {
-    let changed = false;
-    const out = value.map((el) => {
-      const next = walkValue(el);
-      if (next !== el) changed = true;
-      return next;
-    });
-    return changed ? out : value;
+    const out = value.map(walkValue);
+    return out.some((el, i) => el !== value[i]) ? out : value;
   }
   if (!isPlainObject(value)) return value;
+  return mapEntries(value, (key, child) =>
+    key === "$function" && isPlainObject(child) ?
+      // `body` is serialized; `args` (which may nest $functions) and `lang`
+      // are walked normally
+      mapEntries(child, (k, v) =>
+        k === "body" ? resolveBody(v) : walkValue(v)
+      )
+    : walkValue(child)
+  );
+}
+
+/** Map an object's values, returning the SAME reference when none changed. */
+function mapEntries(
+  obj: Document,
+  fn: (key: string, value: unknown) => unknown
+): Document {
   let changed = false;
   const out: Document = {};
-  for (const [key, child] of Object.entries(value)) {
-    if (key === "$function" && isPlainObject(child)) {
-      // Walk the $function operand: `body` is serialized; other keys (`args`,
-      // which may nest further $functions, and `lang`) are walked normally.
-      // A $function object with no `body` key is left without one — never
-      // given a phantom `body: undefined`.
-      let specChanged = false;
-      const spec: Document = {};
-      for (const [k, v] of Object.entries(child)) {
-        const next = k === "body" ? resolveBody(v) : walkValue(v);
-        spec[k] = next;
-        if (next !== v) specChanged = true;
-      }
-      const nextChild = specChanged ? spec : child;
-      out[key] = nextChild;
-      if (nextChild !== child) changed = true;
-    } else {
-      const next = walkValue(child);
-      out[key] = next;
-      if (next !== child) changed = true;
-    }
+  for (const [key, value] of Object.entries(obj)) {
+    const next = fn(key, value);
+    out[key] = next;
+    if (next !== value) changed = true;
   }
-  return changed ? out : value;
+  return changed ? out : obj;
 }
 
 /**
