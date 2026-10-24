@@ -28,6 +28,23 @@ export type PathsIncludingArrayIndexes<T> =
 
 export type FieldSelector<S extends Document> = PathsIncludingArrayIndexes<S>;
 
+// AUTOCOMPLETE-ONLY — gives tsserver a contextual member-key list for stages
+// whose queries keep a permissive `[key: string]` index signature (`set`,
+// `project`). Intersected with that index signature, the optional mapped keys
+// are pure hint surface: they surface the schema's field selectors (dotted
+// paths quoted) as suggestions while arbitrary new keys — including brand-new
+// dotted paths — stay legal through the index signature.
+//
+// `V` should be a CHEAP type (callers pass `unknown`): key completion does
+// not depend on it, and the real value type is supplied by the intersected
+// index signature (`unknown & <IndexValue>` collapses to `<IndexValue>`).
+// Passing the stage's full value union here instantiates that deep union once
+// per field selector and blows the whole-project typecheck from seconds to
+// minutes.
+export type FieldSelectorKeys<Schema extends Document, V> = {
+  [K in FieldSelector<Schema>]?: V;
+};
+
 // NOTE (F7 asymmetry, deliberate): unknown paths resolve to `never` here,
 // while the field-reference twin (GetFieldTypeWithoutArrays) brands them with
 // PipeSafeError. The `never` is load-bearing for union narrowing internals

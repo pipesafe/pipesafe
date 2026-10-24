@@ -1,5 +1,10 @@
-import { Assert, AssertPipeSafeError, Equal } from "../utils/tests";
-import { ComparatorMatchers, ResolveMatchOutput } from "./match";
+import {
+  Assert,
+  AssertPipeSafeError,
+  Equal,
+  IsAssignable,
+} from "../utils/tests";
+import { ComparatorMatchers, Notted, ResolveMatchOutput } from "./match";
 
 /**
  * Type Resolution Behaviors for $match Stage:
@@ -553,11 +558,27 @@ type _ElemMatchOnNumberMsg = Assert<
   >
 >;
 
-// $elemMatch on number[] — compatible. Operand is the element type (number).
+// $elemMatch on number[] — compatible. The operand is now a match query
+// against the ELEMENT type (comparators + Notted), not the bare element type.
 type ElemMatchOnArrayOperand = NonNullable<
   ComparatorMatchers<number[]>["$elemMatch"]
 >;
-type _ElemMatchOnArrayValid = Assert<Equal<ElemMatchOnArrayOperand, number>>;
+type _ElemMatchOnArrayValid = Assert<
+  Equal<
+    ElemMatchOnArrayOperand,
+    ComparatorMatchers<number> | Notted<ComparatorMatchers<number>>
+  >
+>;
+// An element-level comparator (`{ $gte: 80 }`) is accepted...
+type _ElemMatchOnArrayAccepts = Assert<
+  IsAssignable<{ $gte: 80 }, ElemMatchOnArrayOperand>
+>;
+// ...but a wrong-typed operand for a known operator is not (an unknown element
+// key is rejected at the value position by excess-property checking, exercised
+// by the completions suite).
+type _ElemMatchOnArrayRejectsBadValue = Assert<
+  Equal<IsAssignable<{ $gte: "nope" }, ElemMatchOnArrayOperand>, false>
+>;
 
 export type {
   _GteOnStringArrayMsg,
@@ -571,4 +592,6 @@ export type {
   _AllOnArrayValid,
   _ElemMatchOnNumberMsg,
   _ElemMatchOnArrayValid,
+  _ElemMatchOnArrayAccepts,
+  _ElemMatchOnArrayRejectsBadValue,
 };
