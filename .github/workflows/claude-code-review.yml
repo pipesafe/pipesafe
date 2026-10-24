@@ -2,7 +2,8 @@ name: Claude Code Review
 
 # Runs .claude/skills/pr-review: a full review first, incremental re-reviews on
 # each push, and answers to replies on its threads that don't mention @claude
-# (those go to claude.yml). Tool permissions come from the skill's frontmatter.
+# (those go to claude.yml). Tool permissions come from the skill's frontmatter;
+# only replies get REPLY_TOOLS, so a review run can't edit or push.
 
 on:
   pull_request:
@@ -22,8 +23,10 @@ jobs:
       group: claude-code-review-${{ github.event.pull_request.number }}-${{ github.event.comment.in_reply_to_id }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
+    env:
+      REPLY_TOOLS: ",Edit,Write,Bash(git add *),Bash(git commit *),Bash(git push),Bash(bunx eslint *),Bash(bunx prettier *),Bash(bun run build),Bash(bun run typecheck:packages),Bash(bunx vitest run *)"
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
       issues: read
       id-token: write
@@ -41,7 +44,7 @@ jobs:
         if: steps.thread.outputs.skip != 'true'
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 1
 
       - name: Setup Bun
@@ -63,4 +66,4 @@ jobs:
           # The action only starts the inline-comment server when its tool is listed here.
           claude_args: |
             --model opus
-            --allowedTools "mcp__github_inline_comment__create_inline_comment"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment${{ github.event.comment.id && env.REPLY_TOOLS || '' }}"
