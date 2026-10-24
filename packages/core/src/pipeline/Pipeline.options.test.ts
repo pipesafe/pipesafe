@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { Db, MongoClient, ReadConcern } from "mongodb";
+import {
+  Collection as MongoCollection,
+  Db,
+  MongoClient,
+  ReadConcern,
+} from "mongodb";
 import { useMemoryMongo } from "../utils/useMemoryMongo";
 import { Collection } from "../collection/Collection";
 import { Database } from "../database/Database";
@@ -86,19 +91,27 @@ describe("Connection and query options", async () => {
     });
     await collection.insertMany(docs);
 
-    const results = await collection
-      .aggregate()
-      .match({ value: { $gte: 2 } })
-      .execute({
-        aggregateOptions: {
-          allowDiskUse: true,
-          maxTimeMS: 30_000,
-          comment: "pipesafe-options-test",
-        },
-      })
-      .toArray();
+    const aggregateOptions = {
+      allowDiskUse: true,
+      maxTimeMS: 30_000,
+      comment: "pipesafe-options-test",
+    };
+    const aggregateSpy = vi.spyOn(MongoCollection.prototype, "aggregate");
+    try {
+      const results = await collection
+        .aggregate()
+        .match({ value: { $gte: 2 } })
+        .execute({ aggregateOptions })
+        .toArray();
 
-    expect(results).toEqual([{ _id: "2", value: 2 }]);
+      expect(results).toEqual([{ _id: "2", value: 2 }]);
+      expect(aggregateSpy).toHaveBeenLastCalledWith(
+        expect.any(Array),
+        aggregateOptions
+      );
+    } finally {
+      aggregateSpy.mockRestore();
+    }
   });
 
   it("supports transactions via aggregateOptions.session", async () => {
