@@ -319,7 +319,7 @@ console.log(analyticsProject.toMermaid());
 // Run all models in dependency order
 await analyticsProject.run({
   client: mongoClient,
-  databaseName: "analytics_db",
+  db: { name: "analytics_db" },
 });
 ```
 

@@ -291,7 +291,7 @@ export class Pipeline<
     const { from, pipeline, ...$lookupRest } = $lookup;
 
     // Get collection name from source
-    const collectionName = (from as Source<any>).getOutputCollectionName();
+    const collectionName = (from as Source<any>).getOutputCollection().name;
 
     const resolvedPipeline =
       pipeline ?
@@ -380,7 +380,7 @@ export class Pipeline<
   > {
     const { from, ...rest } = $graphLookup;
 
-    const collectionName = (from as Source<any>).getOutputCollectionName();
+    const collectionName = (from as Source<any>).getOutputCollection().name;
 
     return this._chain<
       ResolveGraphLookupOutput<
@@ -605,7 +605,7 @@ export class Pipeline<
     const { coll, pipeline } = $unionWith;
 
     // Get collection name from source
-    const collectionName = (coll as Source<any>).getOutputCollectionName();
+    const collectionName = (coll as Source<any>).getOutputCollection().name;
 
     const resolvedPipeline =
       pipeline ?
@@ -713,10 +713,10 @@ export class Pipeline<
   execute(
     args: {
       client?: MongoClient;
-      db?: DbConfig;
-      collection?: CollectionConfig;
+      db?: DbConfig | undefined;
+      collection?: CollectionConfig | undefined;
       /** Driver `AggregateOptions` (e.g. `session`, `maxTimeMS`, `allowDiskUse`) */
-      aggregateOptions?: AggregateOptions;
+      aggregateOptions?: AggregateOptions | undefined;
     } = {}
   ): AggregationCursor<PreviousStageDocs> {
     const client = args.client ?? this.client ?? pipesafe.client;

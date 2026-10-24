@@ -6,7 +6,7 @@
  */
 
 import { AggregateOptions, MongoClient } from "mongodb";
-import { pipesafe, tagClient } from "@pipesafe/core";
+import { DbConfig, Pipeline, pipesafe, tagClient } from "@pipesafe/core";
 import { Model, isModel } from "../model/Model";
 
 // ============================================================================
@@ -16,7 +16,7 @@ import { Model, isModel } from "../model/Model";
 export type ProjectConfig = {
   name: string;
   models: Model<any, any, any, any>[];
-  defaultDatabase?: string;
+  defaultDb?: DbConfig;
 };
 
 export type RunOptions = {
@@ -28,8 +28,8 @@ export type RunOptions = {
   dryRun?: boolean;
   /** MongoDB client (falls back to pipesafe singleton) */
   client?: MongoClient;
-  /** Database name (falls back to project default) */
-  databaseName?: string;
+  /** Default database for models (falls back to the project's `defaultDb`) */
+  db?: DbConfig;
   /**
    * Driver `AggregateOptions` applied to every collection-mode model's
    * aggregation (e.g. `maxTimeMS`, `allowDiskUse`, `comment`).
@@ -111,13 +111,12 @@ export type ValidationWarning = {
  */
 export class Project {
   readonly name: string;
-  private readonly defaultDatabase: string | undefined;
+  private readonly defaultDb: DbConfig | undefined;
   private readonly models: Map<string, Model<any, any, any, any>>;
 
   constructor(config: ProjectConfig) {
     this.name = config.name;
-    this.defaultDatabase =
-      config.defaultDatabase !== undefined ? config.defaultDatabase : undefined;
+    this.defaultDb = config.defaultDb;
 
     // Build models map, auto-discovering all ancestors (including lookup and unionWith)
     this.models = new Map();
@@ -274,7 +273,7 @@ export class Project {
       exclude,
       dryRun = false,
       client,
-      databaseName,
+      db,
       aggregateOptions,
       onModelStart,
       onModelComplete,
@@ -310,7 +309,7 @@ export class Project {
     }
     tagClient(mongoClient);
 
-    const dbName = databaseName ?? this.defaultDatabase;
+    const defaultDb = db ?? this.defaultDb;
 
     // Execute stages sequentially, models within a stage in parallel
     for (const stage of executionPlan.stages) {
@@ -325,7 +324,7 @@ export class Project {
             await this.executeModel(
               model,
               mongoClient,
-              dbName,
+              defaultDb,
               aggregateOptions
             );
 
@@ -373,7 +372,7 @@ export class Project {
   private async executeModel(
     model: Model<any, any, any, any>,
     client: MongoClient,
-    dbName: string | undefined,
+    defaultDb: DbConfig | undefined,
     aggregateOptions: AggregateOptions | undefined
   ): Promise<void> {
     // Build pipeline with output stage
@@ -381,14 +380,13 @@ export class Project {
     const ddlOptions =
       aggregateOptions?.session ? { session: aggregateOptions.session } : {};
 
-    // Get source collection
-    const sourceCollection = model.getSourceCollectionName();
-    const outputDb = model.getOutputDatabase() ?? dbName;
+    const source = model.getSource();
+    const outputDb = model.getOutputDb() ?? defaultDb;
 
     // Handle view creation separately
     if (model.materialize.type === "view") {
-      const viewName = model.getOutputCollectionName();
-      const viewDb = client.db(outputDb);
+      const viewName = model.name;
+      const viewDb = client.db(outputDb?.name, outputDb?.options);
 
       // Drop existing view if exists
       try {
@@ -399,7 +397,7 @@ export class Project {
 
       // Create view
       await viewDb.createCollection(viewName, {
-        viewOn: sourceCollection,
+        viewOn: source.getOutputCollection().name,
         pipeline: model.getPipelineStages(),
         ...ddlOptions,
       });
@@ -413,8 +411,8 @@ export class Project {
       "timeseries" in model.materialize &&
       model.materialize.timeseries
     ) {
-      const collName = model.getOutputCollectionName();
-      const db = client.db(outputDb);
+      const collName = model.name;
+      const db = client.db(outputDb?.name, outputDb?.options);
 
       // Check if collection exists
       const collections = await db
@@ -434,19 +432,15 @@ export class Project {
       }
     }
 
-    // Execute aggregation
-    // Use source database for reading, output stage handles writing to correct db.
-    // Source db/collection options apply, matching source.aggregate().execute().
-    const source = model.getSource();
-    const sourceDb = model.getSourceDatabase() ?? dbName;
-    const db = client.db(sourceDb, source.getOutputDbOptions());
-    const collection = db.collection(
-      sourceCollection,
-      source.getOutputCollectionOptions()
-    );
-
-    const cursor = collection.aggregate(pipeline, aggregateOptions);
-    await cursor.toArray();
+    // Read from the source; the output stage writes to the model's db
+    await new Pipeline({ pipeline })
+      .execute({
+        client,
+        db: source.getOutputDb() ?? defaultDb,
+        collection: source.getOutputCollection(),
+        aggregateOptions,
+      })
+      .toArray();
   }
 
   /**

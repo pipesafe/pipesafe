@@ -104,8 +104,8 @@ describe("Connection and query options", async () => {
 
     // Consumers reading a Collection through the Source interface (e.g.
     // manifold's Project) rely on these to honor the configured options
-    expect(collection.getOutputDbOptions()).toBe(dbOptions);
-    expect(collection.getOutputCollectionOptions()).toBe(collectionOptions);
+    expect(collection.getOutputDb()?.options).toBe(dbOptions);
+    expect(collection.getOutputCollection().options).toBe(collectionOptions);
   });
 
   it("passes AggregateOptions through Pipeline.execute", async () => {

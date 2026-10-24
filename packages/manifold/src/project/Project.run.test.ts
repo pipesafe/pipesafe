@@ -225,7 +225,7 @@ describe("Project.run()", async () => {
 
       const result = await simpleProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
       });
 
       expect(result.success).toBe(true);
@@ -253,7 +253,7 @@ describe("Project.run()", async () => {
 
       const result = await complexProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
       });
 
       expect(result.success).toBe(true);
@@ -295,7 +295,7 @@ describe("Project.run()", async () => {
 
       const result = await simpleProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
         dryRun: true,
       });
 
@@ -321,7 +321,7 @@ describe("Project.run()", async () => {
 
       await simpleProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
         onModelStart,
       });
 
@@ -338,7 +338,7 @@ describe("Project.run()", async () => {
 
       await simpleProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
         onModelComplete,
       });
 
@@ -363,7 +363,7 @@ describe("Project.run()", async () => {
       try {
         const result = await simpleProject.run({
           client,
-          databaseName: db.databaseName,
+          db: { name: db.databaseName },
           aggregateOptions: {
             allowDiskUse: true,
             comment: "project-run-options",
@@ -403,7 +403,7 @@ describe("Project.run()", async () => {
       try {
         const result = await viewProject.run({
           client,
-          databaseName: client.db().databaseName,
+          db: { name: client.db().databaseName },
           aggregateOptions: { session },
         });
 
@@ -448,7 +448,7 @@ describe("Project.run()", async () => {
       try {
         const result = await project.run({
           client,
-          databaseName: db.databaseName,
+          db: { name: db.databaseName },
         });
 
         expect(result.success).toBe(true);
@@ -477,7 +477,7 @@ describe("Project.run()", async () => {
 
       const result = await simpleProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
         targets: ["aggregate"],
       });
 
@@ -493,7 +493,7 @@ describe("Project.run()", async () => {
 
       const result = await simpleProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
         exclude: ["aggregate"],
       });
 
@@ -510,7 +510,7 @@ describe("Project.run()", async () => {
 
       await simpleProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
       });
 
       const stagingDocs = await db
@@ -533,7 +533,7 @@ describe("Project.run()", async () => {
 
       await simpleProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
       });
 
       const aggregateDocs = await db.collection("aggregate").find().toArray();
@@ -550,7 +550,7 @@ describe("Project.run()", async () => {
 
       await complexProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
       });
 
       const enrichedDocs = await db
@@ -590,7 +590,7 @@ describe("Project.run()", async () => {
 
       await complexProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
       });
 
       const summaryDocs = await db.collection("order_summary").find().toArray();
@@ -608,7 +608,7 @@ describe("Project.run()", async () => {
 
       await facetProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
       });
 
       const facetDocs = await db.collection("faceted_orders").find().toArray();
@@ -633,7 +633,7 @@ describe("Project.run()", async () => {
 
       await graphLookupProject.run({
         client,
-        databaseName: db.databaseName,
+        db: { name: db.databaseName },
       });
 
       const orgDocs = await db

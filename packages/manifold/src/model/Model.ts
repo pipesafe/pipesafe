@@ -15,6 +15,8 @@ import {
   FieldSelectorsThatInferTo,
   TopLevelField,
   MergeQuery,
+  DbConfig,
+  CollectionConfig,
 } from "@pipesafe/core";
 
 // ============================================================================
@@ -198,47 +200,14 @@ export class Model<
     return undefined;
   }
 
-  /**
-   * Get the source collection name.
-   */
-  getSourceCollectionName(): string {
-    return this._from.getOutputCollectionName();
+  getOutputDb(): DbConfig | undefined {
+    return "db" in this.materialize && this.materialize.db ?
+        { name: this.materialize.db }
+      : undefined;
   }
 
-  /**
-   * Get the source database name.
-   */
-  getSourceDatabase(): string | undefined {
-    return this._from.getOutputDatabase();
-  }
-
-  /**
-   * Get the output collection name (where this model materializes).
-   */
-  getOutputCollectionName(): string {
-    return this.name;
-  }
-
-  /**
-   * Get the database name for output (if specified).
-   */
-  getOutputDatabase(): string | undefined {
-    if ("db" in this.materialize) {
-      return this.materialize.db;
-    }
-    return undefined;
-  }
-
-  /**
-   * A model's materialized output collection has no configured driver
-   * options — reads of it use driver defaults.
-   */
-  getOutputDbOptions(): undefined {
-    return undefined;
-  }
-
-  getOutputCollectionOptions(): undefined {
-    return undefined;
+  getOutputCollection(): CollectionConfig {
+    return { name: this.name };
   }
 
   /**
@@ -285,8 +254,8 @@ export class Model<
 
     if (this.materialize.type === "collection") {
       const mode = this.materialize.mode;
-      const outputCollection = this.getOutputCollectionName();
-      const outputDb = this.getOutputDatabase();
+      const outputCollection = this.name;
+      const outputDb = this.getOutputDb()?.name;
       const target =
         outputDb ? { db: outputDb, coll: outputCollection } : outputCollection;
 

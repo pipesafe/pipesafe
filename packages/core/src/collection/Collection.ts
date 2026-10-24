@@ -25,8 +25,6 @@ import {
   ListIndexesOptions,
   CreateCollectionOptions,
   DropCollectionOptions,
-  DbOptions,
-  CollectionOptions,
 } from "mongodb";
 import { Pipeline } from "../pipeline/Pipeline";
 import type { CollectionConfig, DbConfig } from "../database/config";
@@ -62,20 +60,12 @@ export class Collection<Docs extends Document> implements Source<Docs> {
     return this.collection.name;
   }
 
-  getOutputCollectionName(): string {
-    return this.collection.name;
+  getOutputDb(): DbConfig | undefined {
+    return this.db;
   }
 
-  getOutputDatabase(): string | undefined {
-    return this.db?.name;
-  }
-
-  getOutputDbOptions(): DbOptions | undefined {
-    return this.db?.options;
-  }
-
-  getOutputCollectionOptions(): CollectionOptions | undefined {
-    return this.collection.options;
+  getOutputCollection(): CollectionConfig {
+    return this.collection;
   }
 
   private getClient() {
