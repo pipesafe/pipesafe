@@ -1,0 +1,38 @@
+name: Claude Code Review
+
+# Automated PR review, replacing Graphite's AI reviewer. The review logic lives
+# in .claude/commands/code-review.md (derived from the code-review plugin in
+# anthropics/claude-code). It runs once per PR, when it opens or leaves draft;
+# the command skips PRs it has already reviewed. For a follow-up pass after new
+# pushes, mention @claude on the PR (handled by claude.yml).
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+concurrency:
+  group: claude-code-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude code review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: "/code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment"
+          claude_args: |
+            --allowedTools "Task,Agent,TodoWrite,mcp__github_inline_comment__create_inline_comment,Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"
