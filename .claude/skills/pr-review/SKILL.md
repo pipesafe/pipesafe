@@ -36,7 +36,7 @@ With `--reply <comment-id>`, follow [reply.md](reply.md) and skip the rest of th
 Launch these agents in parallel. Give each the PR title, description and the CLAUDE.md paths, and ask each to return issues with a description, the file and lines, and the reason (bug, or the exact CLAUDE.md rule).
 
 - **CLAUDE.md compliance (sonnet).** A CLAUDE.md applies to a file only if it sits in the file's directory or a parent. Launch one agent for the root CLAUDE.md and, when nested CLAUDE.md files apply, a second for those. The root CLAUDE.md has hard rules that are easy to check in a diff, for example:
-  - a `// prettier-ignore` or `// eslint-disable*` comment added anywhere
+  - an inline lint or format ignore/disable comment (`// oxlint-disable*`, `// oxfmt-ignore`, any spelling) added anywhere, or new entries in `oxlint-suppressions.json`
   - a public API change to a package changesets publishes (any workspace package that is not `private` or ignored in `.changeset/config.json`) without a `.changeset/*.md` entry for that package at the right bump level, such as a breaking change marked `minor`
   - a `@ts-expect-error` removed from, or an assertion weakened in, `Pipeline.callSite.typeAssertions.ts` or `stages.contract.typeAssertions.ts` without replacement coverage
   - a completion ideal in `packages/core-completions-tests` weakened to make a test pass, rather than marked `it.fails`
@@ -58,7 +58,7 @@ Do not flag (false positives):
 - something that looks like a bug but is correct
 - nitpicks a senior engineer would not raise, style or quality concerns, or subjective improvements
 - issues that depend on specific inputs or state
-- anything lint, prettier, the tests or `typecheck:packages` will catch, including type errors in `*.typeAssertions.ts` files (CI runs them all)
+- anything lint, the formatter, the tests or `typecheck:packages` will catch, including type errors in `*.typeAssertions.ts` files (CI runs them all)
 - general concerns such as test coverage unless CLAUDE.md requires it
 - issues silenced in the code, for example by a lint ignore comment
 
