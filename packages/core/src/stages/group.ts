@@ -1,11 +1,9 @@
+import { InferNestedFieldReference } from "../elements/fieldReference";
 import {
-  FieldReferencesThatInferTo,
-  InferNestedFieldReference,
-} from "../elements/fieldReference";
-import {
-  BoundVariableOperand,
+  UserVariableOperand,
   ValidateNestedValue,
   ValidateOperandTree,
+  ValidateRefResolvesTo,
 } from "../elements/validation";
 import {
   AnyLiteral,
@@ -32,7 +30,7 @@ import {
   RequiresMsg,
   UnknownAccumulatorError,
 } from "../utils/errors";
-import { ExpressionOperand } from "../elements/operands";
+import { ExpressionOperand, ReferencesInferringTo } from "../elements/operands";
 
 /**
  * Numeric operand for accumulators like $sum, $avg — an ExpressionOperand
@@ -54,6 +52,9 @@ type NumericAccumulatorOperand<Schema extends Document, Op extends string> =
   | ExpressionsReturning<Schema, number>
   | ConditionalExpression<Schema>;
 
+/** The BSON-comparable values $min/$max are modeled over. */
+type Comparable = number | Date | string | boolean;
+
 /**
  * Operand for $min/$max. MongoDB defines them over BSON-comparable values —
  * numbers, dates, AND strings (lexicographic) are the ones this library
@@ -73,8 +74,8 @@ type MinMaxAccumulatorOperand<Schema extends Document, Op extends string> =
       >
     >
   | NoDollarString
-  | FieldReferencesThatInferTo<Schema, string>
-  | ExpressionsReturning<Schema, number | Date | string | boolean>
+  | ReferencesInferringTo<Schema, string>
+  | ExpressionsReturning<Schema, Comparable>
   | ConditionalExpression<Schema>;
 
 /**
@@ -283,14 +284,22 @@ export type CheckedAccumulatorOps = {
  * NumericAccumulatorOperand/MinMaxAccumulatorOperand's RequiresMsg.
  */
 /** The registry operand's own brand, extracted — spelled once. */
+type AccumulatorBrand<
+  Schema extends Document,
+  Op extends CheckedAccumulatorOps,
+> = Extract<AccumulatorSpec<Schema>[Op]["operand"], PipeSafeError<string>>;
+
 type BrandedAccumulatorFor<
   Schema extends Document,
   Op extends CheckedAccumulatorOps,
-> = {
-  [K in Op]: Extract<
-    AccumulatorSpec<Schema>[K]["operand"],
-    PipeSafeError<string>
-  >;
+> = { [K in Op]: AccumulatorBrand<Schema, K> };
+
+/** What a `$$`-variable operand must resolve to, per checked accumulator. */
+type AccumulatorVariableTarget = {
+  $sum: number;
+  $avg: number;
+  $min: Comparable;
+  $max: Comparable;
 };
 
 type ValidateAccumulatorValue<
@@ -317,38 +326,39 @@ type ValidateAccumulatorValue<
     [keyof AccumulatorSpec<Schema> | UnimplementedAccumulators]
   ) ?
     OperatorKeyOf<A> extends infer Op extends CheckedAccumulatorOps ?
-      // `$$`-variables are valid MongoDB in any accumulator position —
-      // checked before the operand relation so they never reach the
-      // comparable/numeric brand. ValidateVariableReference passes exact
-      // names and valid dotted paths ("$$ROOT.age"); unknown names/bad
-      // paths get the Variable/Field brand instead of a misleading operand
-      // message.
-      A[Op & keyof A] extends `$$${string}` ?
-        ValidateOperandTree<Schema, A, Op, Vars>
-      : BoundVariableOperand<Vars, A> extends true ?
-        // Vars-blind relation as fast-accept (and wide-shape cycle
-        // breaker), operand-tree walk for the leftovers.
-        [A] extends [AccumulatorFor<Schema, Op>] ?
-          never
-        : ValidateOperandTree<Schema, A, Op, Vars>
+      // `$$`-variables resolve before the operand relation: unknown
+      // names/bad paths get the Variable/Field brand, a resolved type
+      // outside the accumulator's target the registry brand ("$$NOW" is a
+      // Date, so `$sum: "$$NOW"` rejects; "$$ROOT.age" passes).
+      A[Op & keyof A] extends infer Ref extends `$$${string}` ?
+        ValidateRefResolvesTo<
+          Schema,
+          Ref,
+          AccumulatorVariableTarget[Op],
+          AccumulatorBrand<Schema, Op>,
+          Vars
+        > extends infer E ?
+          [E] extends [never] ?
+            never
+          : { [K in Op]: E }
+        : never
       : string extends keyof Schema ?
         never // operand checks are meaningless on a wide/index-signature schema
-      : // $min/$max: ANY non-`$` string literal is a comparable. The union
-      // relation below can't express "string minus `$`-prefix" (NoDollarString
-      // only covers alphanumeric-leading strings, falsely rejecting "", "_x",
-      // "(none)"), so accept it here; `$`-strings fall through to the union,
-      // where the refs arm checks them against the schema.
-      Op extends "$min" | "$max" ?
-        A[Op & keyof A] extends `$${string}` ?
-          [A] extends [AccumulatorFor<Schema, Op>] ?
-            never
-          : BrandedAccumulatorFor<Schema, Op>
-        : A[Op & keyof A] extends string ? never
-        : [A] extends [AccumulatorFor<Schema, Op>] ? never
-        : BrandedAccumulatorFor<Schema, Op>
       : // Readonly-tolerant via the registry's readonly operand positions
-      // (see ExpressionSpec).
+      // (see ExpressionSpec). The relation runs first, so the
+      // user-variable gate only sees operands that fail it (mirrors
+      // ValidateExpressionValue).
       [A] extends [AccumulatorFor<Schema, Op>] ? never
+      : UserVariableOperand<Vars, A> extends true ?
+        ValidateOperandTree<Schema, A, Op, Vars>
+      : // $min/$max: ANY non-`$` string literal is a comparable. The union
+      // relation can't express "string minus `$`-prefix" (NoDollarString
+      // only covers alphanumeric-leading strings, falsely rejecting "", "_x",
+      // "(none)"), so accept it here.
+      Op extends "$min" | "$max" ?
+        A[Op & keyof A] extends `$${string}` ? BrandedAccumulatorFor<Schema, Op>
+        : A[Op & keyof A] extends string ? never
+        : BrandedAccumulatorFor<Schema, Op>
       : BrandedAccumulatorFor<Schema, Op>
     : never // registered-but-unchecked ($push, ...) or allow-listed:
   : // schema-free, so it RESOLVES for generic-schema helpers

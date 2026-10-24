@@ -101,3 +101,7 @@ export type UnknownFieldError<Path extends string> =
  */
 export type UnknownSystemVariableError<Name extends string> =
   PipeSafeError<`Variable '${Name}' is not a recognized system variable.`>;
+
+/** A user variable name MongoDB rejects (ValidateVariableName). */
+export type InvalidVariableNameError<Name extends string> =
+  PipeSafeError<`Variable '$$${Name}' must begin with a lowercase letter.`>;

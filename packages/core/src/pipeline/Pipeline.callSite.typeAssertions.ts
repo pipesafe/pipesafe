@@ -295,6 +295,38 @@ const _set_filter_limit_ok = new Pipeline<User>().set({
   t: { $filter: { input: "$tags", as: "t", cond: true, limit: 2 } },
 });
 
+// set — a binder-shaped `input` gets its own interior walk.
+const _set_filter_bad_map_input = new Pipeline<User>().set({
+  t: {
+    $filter: {
+      // @ts-expect-error  '$naem' is not on the schema
+      input: { $map: { input: "$tags", in: "$naem" } },
+      cond: true,
+    },
+  },
+});
+
+// set — user variable names must begin lowercase (MongoDB rejects the rest,
+// and an uppercase name would shadow a system variable).
+const _set_let_bad_var_name = new Pipeline<User>().set({
+  x: {
+    $let: {
+      vars: {
+        // @ts-expect-error  'NOW' is not a valid user variable name
+        NOW: "$name",
+      },
+      in: "$$NOW",
+    },
+  },
+});
+
+const _set_map_bad_as_name = new Pipeline<User>().set({
+  t: {
+    // @ts-expect-error  '_t' is not a valid user variable name
+    $map: { input: "$tags", as: "_t", in: "$$_t" },
+  },
+});
+
 // group — accumulator operand brands fire at the chained call site via
 // the key-filtered ValidateGroupQuery intersection (GroupQuery's
 // `[key: string]:` index signature suppresses the in-Query brands).
@@ -351,9 +383,16 @@ const _group_min_underscore_ok = new Pipeline<User>().group({
 const _group_system_vars_ok = new Pipeline<User>().group({
   _id: "$$NOW",
   latest: { $max: "$$NOW" },
-  total: { $sum: "$$NOW" },
+  total: { $sum: "$$ROOT.age" },
   docs: { $push: "$$ROOT" },
   newest: { $max: "$$ROOT.joinedAt" },
+  first: { $min: "$$ROOT.name" },
+});
+
+const _group_bad_sysvar_sum = new Pipeline<User>().group({
+  _id: null,
+  // @ts-expect-error  $$NOW is a Date; $sum requires a numeric operand
+  total: { $sum: "$$NOW" },
 });
 
 const _group_bad_sysvar_path = new Pipeline<User>().group({
@@ -490,11 +529,24 @@ const _lookup_let_ok = new Pipeline<User>().lookup({
   as: "orders",
   let: { userName: "$name", minQty: 2, rootAge: "$$ROOT.age" },
   pipeline: (p) =>
-    p.match({ $expr: { $eq: ["$sku", "$$userName"] } }).set({
-      forUser: "$$userName",
-      boosted: { $add: ["$$minQty", "$qty"] },
-      viaForeignRoot: "$$ROOT.qty",
-    }),
+    p
+      .match({ $expr: { $eq: ["$sku", "$$userName"] } })
+      .set({
+        forUser: "$$userName",
+        boosted: { $add: ["$$minQty", "$qty"] },
+        viaForeignRoot: "$$ROOT.qty",
+      })
+      .group({ _id: "$sku", total: { $sum: "$qty" } }),
+});
+
+const _lookup_let_bad_var_name = new Pipeline<User>().lookup({
+  from: _ordersColl,
+  as: "orders",
+  let: {
+    // @ts-expect-error  'ROOT' is not a valid user variable name
+    ROOT: "$name",
+  },
+  pipeline: (p) => p.limit(1),
 });
 
 const _lookup_let_bad_outer_ref = new Pipeline<User>().lookup({
@@ -507,9 +559,8 @@ const _lookup_let_bad_outer_ref = new Pipeline<User>().lookup({
   pipeline: (p) => p.limit(1),
 });
 
-// An Env'd Pipeline accepts its bindings at string-value positions. The
-// out-of-scope rejection ("$$typo") is pinned type-level in
-// validation.typeAssertions.ts.
+// An Env'd Pipeline accepts its bindings at string-value positions and
+// rejects out-of-scope names.
 declare const _envPipeline: Pipeline<
   Order,
   Order,
@@ -519,11 +570,21 @@ declare const _envPipeline: Pipeline<
 >;
 const _lookup_let_env_binding_ok = _envPipeline.set({ ok: "$$u" });
 
+const _lookup_let_env_unknown_var = _envPipeline.set({
+  // @ts-expect-error  '$$typo' is not bound in this environment
+  bad: "$$typo",
+});
+
 // Operand type checks stay strict in a bound environment unless the operand
-// references a variable (the registry relation is Vars-blind).
+// references a user variable (the registry relation is Vars-blind).
 const _lookup_let_env_bad_operand = _envPipeline.set({
   // @ts-expect-error  $add requires numeric operands; sku is a string
   bad: { $add: ["$sku", 1] },
+});
+
+const _lookup_let_env_bad_sysvar_operand = _envPipeline.set({
+  // @ts-expect-error  $add requires numeric operands; sku is a string
+  bad: { $add: ["$$NOW", "$sku"] },
 });
 
 const _lookup_let_env_bad_accumulator = _envPipeline.group({
@@ -532,10 +593,23 @@ const _lookup_let_env_bad_accumulator = _envPipeline.group({
   s: { $sum: "$sku" },
 });
 
+const _lookup_let_env_bad_bound_accumulator = _envPipeline.group({
+  _id: null,
+  // @ts-expect-error  $$u is bound to a string; $sum requires a numeric operand
+  s: { $sum: "$$u" },
+});
+
 const _set_map_bad_operand = new Pipeline<User>().set({
   t: {
     // @ts-expect-error  $multiply requires numeric operands; name is a string
     $map: { input: "$tags", in: { $multiply: ["$name", 2] } },
+  },
+});
+
+const _set_map_bad_sysvar_operand = new Pipeline<User>().set({
+  t: {
+    // @ts-expect-error  $add requires numeric/date operands; name is a string
+    $map: { input: "$tags", in: { $add: ["$$NOW", "$name"] } },
   },
 });
 
@@ -572,9 +646,13 @@ export {
   _set_filter_bad_as,
   _set_map_bad_as,
   _set_filter_limit_ok,
+  _set_filter_bad_map_input,
+  _set_let_bad_var_name,
+  _set_map_bad_as_name,
   _set_filter_bad_cond_var,
   _group_system_vars_ok,
   _group_bad_sysvar_path,
+  _group_bad_sysvar_sum,
   _unset_bad,
   _group_bad_sum,
   _group_min_string_ok,
@@ -600,9 +678,14 @@ export {
   _facet_bad,
   _set_bad_sysvar_path_top,
   _lookup_let_ok,
+  _lookup_let_bad_var_name,
   _lookup_let_bad_outer_ref,
   _lookup_let_env_binding_ok,
+  _lookup_let_env_unknown_var,
   _lookup_let_env_bad_operand,
+  _lookup_let_env_bad_sysvar_operand,
   _lookup_let_env_bad_accumulator,
+  _lookup_let_env_bad_bound_accumulator,
   _set_map_bad_operand,
+  _set_map_bad_sysvar_operand,
 };

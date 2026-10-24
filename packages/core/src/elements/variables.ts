@@ -1,7 +1,11 @@
 import { Timestamp } from "mongodb";
 import { Document } from "../utils/objects";
-import { WithoutDollar } from "../utils/strings";
-import { PipeSafeError, UnknownSystemVariableError } from "../utils/errors";
+import { Digit, UpperAlphabet, WithoutDollar } from "../utils/strings";
+import {
+  InvalidVariableNameError,
+  PipeSafeError,
+  UnknownSystemVariableError,
+} from "../utils/errors";
 import {
   FieldPath,
   FieldReference,
@@ -107,8 +111,8 @@ type KeepBrand<T> = [T] extends [PipeSafeError<string>] ? T : never;
 
 /**
  * THE two-tier name lookup (`Name` without the `$$` prefix): the `Vars`
- * USER environment first, then the static SystemVariableSpec — MongoDB
- * user variables must begin lowercase, so the tiers cannot collide.
+ * USER environment first, then the static SystemVariableSpec — user names
+ * must begin lowercase (ValidateVariableName), so the tiers cannot collide.
  * Returns `[type]` when bound (so `$$REMOVE`'s `never` survives), `[]`
  * when not.
  */
@@ -186,6 +190,17 @@ export type SystemVariablesThatInferTo<Schema extends Document, T> =
       : never;
     }[SystemVariable]
   | `${"$$ROOT" | "$$CURRENT"}.${WithoutDollar<FieldReferencesThatInferTo<Schema, T> & string>}`;
+
+/**
+ * Kernel contract for a user variable name (`$let.vars`/`$lookup.let` keys,
+ * `$map`/`$filter` `as`): MongoDB requires a lowercase first letter (or a
+ * non-ASCII character), which also keeps user names clear of the system
+ * tier in LookupVariable.
+ */
+export type ValidateVariableName<Name> =
+  Name extends `${UpperAlphabet | Digit | "_"}${string}` ?
+    InvalidVariableNameError<Name>
+  : never;
 
 /**
  * The `as` name a $map/$filter binds its element under (MongoDB defaults to

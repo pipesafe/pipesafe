@@ -115,7 +115,7 @@ const FIELD_REFS = [
 const NUMERIC_FIELD_REFS = ["$price", "$quantity"];
 
 /**
- * The environment's full `$$`-reference vocabulary (VariableReferences):
+ * The environment's full `$$`-reference vocabulary (SystemVariableReferences):
  * every system variable by name, plus dotted paths into the document-typed
  * ones — $$ROOT/$$CURRENT expose the fixture's field paths, $$USER_ROLES
  * its role-document element paths. $$SEARCH_META (wide-keyed) and the

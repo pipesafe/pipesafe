@@ -134,8 +134,7 @@ type _UnknownSystemVariable = Assert<
 // ---------------------------------------------------------------------------
 // The USER-environment vocabulary (VariableReferences): bindings accepted
 // by exact name and dotted path; out-of-scope `$$`-names are not in the
-// finite union. Pinned type-level — call-site failure elaboration can trip
-// TS's depth limiter (pre-existing; see CLAUDE.md).
+// finite union.
 // ---------------------------------------------------------------------------
 
 type _LetEnv = { u: string; order: { qty: number } };
@@ -236,8 +235,8 @@ type _FilterUnboundVarBrands = Assert<
     }
   >
 >;
-// A non-array input still gets the operator's array demand (the pre-walk
-// relation behavior, preserved by ValidateArrayInputValue's `$`-ref arm).
+// A non-array input still gets the operator's array demand
+// (ValidateArrayInputValue's `$`-ref arm).
 type _FilterNonArrayInput = Assert<
   Equal<
     ValidateNestedValue<

@@ -433,11 +433,14 @@ export class Pipeline<
   // position (compound `_id` expressions break under a bare mapped wrapper)
   // while ValidateGroupQuery re-checks accumulator operands — key-filtered,
   // so a fully-valid query validates against `{}` (see stages/group.ts).
+  // NoInfer: a sub-pipeline builder's contextual return type must not drive
+  // inference of G back through the resolver (TS2589 when a lookup or
+  // unionWith pipeline ends in group).
   group<const G extends GroupQuery<PreviousStageDocs, Env>>(
     $group: G & ValidateGroupQuery<PreviousStageDocs, G, Env>
   ): Pipeline<
     StartingDocs,
-    ResolveGroupOutput<PreviousStageDocs, G, Env>,
+    ResolveGroupOutput<PreviousStageDocs, NoInfer<G>, Env>,
     Mode,
     UsedStages | "$group",
     Env

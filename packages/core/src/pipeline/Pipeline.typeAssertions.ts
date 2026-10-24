@@ -136,6 +136,23 @@ type _LookupLetSubOutput = Assert<
 >;
 
 // =============================================================================
+// Test: a sub-pipeline that ENDS in .group() — the builder's contextual
+// return type must not drive inference of the group query.
+// =============================================================================
+const _lookupEndingInGroup = _p.lookup({
+  from: _otherCollection,
+  as: "counts",
+  let: { outerName: "$name" },
+  pipeline: (p) => p.group({ _id: "$refId", n: { $sum: 1 } }),
+});
+type _LookupEndingInGroupOutput = Assert<
+  Equal<
+    InferOutputType<typeof _lookupEndingInGroup>["counts"],
+    { _id: string; n: number }[]
+  >
+>;
+
+// =============================================================================
 // Test: .group() then .set() - reference aggregated fields
 // =============================================================================
 const _groupThenSet = _p
@@ -167,6 +184,7 @@ const _projectThenMatch = _p
 
 export {
   _lookupWithLet,
+  _lookupEndingInGroup,
   _setThenSet,
   _setThenMatch,
   _setThenUnset,
@@ -234,6 +252,7 @@ type _ValidNoLeakAssert = Assert<Equal<_ValidNoLeak, { x: number; y: string }>>;
 
 export type {
   _LookupLetSubOutput,
+  _LookupEndingInGroupOutput,
   _MatchPassthrough,
   _SetPassthrough,
   _ProjectPassthrough,

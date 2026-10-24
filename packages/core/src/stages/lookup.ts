@@ -2,7 +2,7 @@ import { Document, Prettify } from "../utils/objects";
 import { PassThrough, PipeSafeError } from "../utils/errors";
 import { FieldPathsThatInferToForLookup } from "../elements/fieldReference";
 import { ExpressionValue } from "../elements/expressions";
-import { ValidateNestedRecord } from "../elements/validation";
+import { ValidateBindings } from "../elements/validation";
 import { FlattenDotSet, IsDottedKey } from "../utils/paths";
 import { ApplySetUpdates } from "../utils/updates";
 
@@ -27,7 +27,7 @@ export type ValidateLookupLet<
   Schema extends Document,
   Let,
   Vars extends Document = {},
-> = ValidateNestedRecord<Schema, Let, Vars>;
+> = ValidateBindings<Schema, Let, Vars>;
 
 /**
  * A dotted `as` path NESTS in MongoDB — `as: "user.orders"` writes

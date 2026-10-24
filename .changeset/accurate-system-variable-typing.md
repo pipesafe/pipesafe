@@ -39,9 +39,14 @@ Accurate types for `$$`-system variables and `$let`/`$map`/`$filter` bound varia
 - `$lookup` supports `let`: binding values are validated and inferred
   against the OUTER schema/environment, the bindings become the
   sub-pipeline builder's environment (`Pipeline`'s new `Env` generic), and
-  every sub-pipeline stage reseeds `$$ROOT`/`$$CURRENT` to the FOREIGN
-  schema, matching MongoDB's scoping.
+  inside the sub-pipeline `$$ROOT`/`$$CURRENT` resolve to the FOREIGN
+  schema, matching MongoDB's scoping. Binding names (`let` and `$let.vars`
+  keys, `$map`/`$filter` `as`) must begin lowercase, as MongoDB requires.
   Bound names autocomplete inside the sub-pipeline (`"$$order_qty"`),
   resolve to accurate types, and out-of-scope `$$`-names reject.
   Nested lookups inherit outer bindings; `$unionWith`/`$facet`
   sub-builders propagate the environment.
+- `$sum`/`$avg`/`$min`/`$max` type-check `$$`-variable operands against
+  their resolved type (`$sum: "$$NOW"` brands; `$sum: "$$ROOT.qty"` passes).
+- A lookup or unionWith sub-pipeline that ends in `.group()` no longer
+  fails with "Type instantiation is excessively deep".

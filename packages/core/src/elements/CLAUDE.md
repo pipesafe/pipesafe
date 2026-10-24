@@ -72,10 +72,10 @@ before touching any Query/operand union.
   resolve through the resolvers' STATIC second tier (SystemVariableSpec,
   which carries each variable's ACCURATE type: `$$NOW` → Date, `$$ROOT` →
   Schema, `$$REMOVE` → the load-bearing `never`). Do NOT re-unify by seeding
-  the spec into the `Vars` defaults — the seeded-env design was measured
-  at ~270k extra whole-project instantiations for zero behavior change.
-  MongoDB user variables must begin lowercase, so the tiers cannot
-  collide. `$let`/`$map`/`$filter` binding arms extend the user env
+  the spec into the `Vars` defaults — that costs ~270k whole-project
+  instantiations for no behavior change. User variable names must begin
+  lowercase (`ValidateVariableName` brands the rest, as MongoDB does), so
+  the tiers cannot collide. `$let`/`$map`/`$filter` binding arms extend the user env
   (BindLetVars/BindVariable in variables.ts — shared by inference and
   validation, so the two environments cannot diverge); `$lookup.let`
   enters it via Pipeline's `Env` generic.
@@ -88,19 +88,23 @@ before touching any Query/operand union.
   with lazy values — Omit/Prettify spellings stack instantiation layers at
   the deepest point of lookup-lambda checking and tripped TS2589.
 - The validation kernel's binder-interior (forgiving) branches — taken
-  only by operands that contain a `$$`-reference (`ContainsVariableRef`);
-  variable-free operands stay strict — run the Vars-blind registry
-  relation as FAST-ACCEPT ONLY, then walk. The
+  only by operands that reference a USER variable (`UserVariableOperand`);
+  operands using only system variables stay strict — run the Vars-blind
+  registry relation as FAST-ACCEPT ONLY, then walk. The
   fast-accept doubles as the cycle breaker: without it, exploration with
   the registry's own wide shapes recurses registry→operand-union→registry
   until TS's depth limiter (TS2589 at every lookup-let sub-pipeline
-  stage).
+  stage). The user-variable scan is non-distributive for the same reason:
+  TS instantiates it with the registry's recursive operand unions while
+  contextually typing a call.
 - ValidateArrayInputValue's non-`$`-string arm RELATES against the
   registry's input operand; do NOT "improve" it into a ValidateNestedValue
   re-entry — $filter is a member of ArrayProducingExpression (hence of
-  every ArrayOperand), and the walk re-entry from that position measurably
-  blows TS's instantiation-depth budget (TS2589 on unrelated `.set()` call
-  sites).
+  every ArrayOperand), and walking the registry's own `$filter`shape
+re-enters its`input`forever (TS2589 on unrelated`.set()`call sites).
+Only a binder-shaped input whose own`input`is a string (and`$let`)
+  is routed to its interior walk; that guard is what excludes the
+  registry shape.
 
 ## Gotchas
 
