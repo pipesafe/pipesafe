@@ -11,7 +11,7 @@ class PipeSafe {
    * @param url MongoDB connection string
    * @param options Standard driver `MongoClientOptions` (timeouts, pool
    * sizing, TLS, etc.). PipeSafe's driver metadata is appended after any
-   * user-supplied `driverInfo`, never replacing it.
+   * user-supplied `driverInfo` (mongodb >= 6.18), never replacing it.
    */
   connect(url: string, options?: MongoClientOptions) {
     if (this.client) throw new Error("Already connected");

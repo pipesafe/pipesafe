@@ -712,7 +712,7 @@ export class Pipeline<
    */
   execute(
     args: {
-      client?: MongoClient;
+      client?: MongoClient | undefined;
       db?: DbConfig | undefined;
       collection?: CollectionConfig | undefined;
       /** Driver `AggregateOptions` (e.g. `session`, `maxTimeMS`, `allowDiskUse`) */

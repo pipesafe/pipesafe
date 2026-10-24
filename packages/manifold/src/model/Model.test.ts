@@ -80,7 +80,7 @@ describe("Model", () => {
     });
 
     it("should return undefined for output database when not specified", () => {
-      expect(stgEvents.getOutputDb()?.name).toBeUndefined();
+      expect(stgEvents.getOutputDb()).toBeUndefined();
     });
 
     it("should return output database when specified", () => {
