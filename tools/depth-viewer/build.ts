@@ -954,30 +954,21 @@ function aggregatePerSymbol(
   totals: { totalEntries: number; ownedEntries: number; totalSymbols: number };
 } {
   console.log("Attributing registry entries to symbols...");
-  // Per file, sort entries by start line for efficient range matching.
-  type LocatedEntry = {
-    file: string;
-    line: number;
-    endLine: number;
-    flag: string;
-  };
+  type LocatedEntry = { endLine: number; flag: string };
   const entriesByFile = new Map<string, LocatedEntry[]>();
   let ownedEntries = 0;
   for (const e of rawTypes) {
     if (!e.firstDeclaration) continue;
     const file = normalizeTracePath(e.firstDeclaration.path, caseMap);
     if (!file) continue;
-    const line = e.firstDeclaration.start.line + 1;
-    const endLine = e.firstDeclaration.end.line + 1;
     const bucket = entriesByFile.get(file) ?? [];
-    bucket.push({ file, line, endLine, flag: flagBucket(e.flags) });
+    bucket.push({
+      endLine: e.firstDeclaration.end.line,
+      flag: flagBucket(e.flags),
+    });
     entriesByFile.set(file, bucket);
     ownedEntries += 1;
   }
-  for (const list of entriesByFile.values()) {
-    list.sort((a, b) => a.line - b.line);
-  }
-
   // Project-wide call-sites map: head name → total TypeReferences pointing at
   // it. Used to fill SymbolStats.callSites for type/interface symbols.
   const callSiteMap = new Map<string, number>();
@@ -995,12 +986,11 @@ function aggregatePerSymbol(
     if (symbols.length === 0) continue;
     const fileEntries = entriesByFile.get(file) ?? [];
     const stats: SymbolStats[] = symbols.map((s) => {
-      // Filter raw entries whose firstDeclaration range overlaps the symbol.
-      // Interval overlap (not containment) — firstDeclaration.pos sits on
-      // leading trivia (JSDoc, blank lines), so a type often starts before
-      // the AST's `getStart()` line.
+      // Attribute by the entry's (1-based) end line: its start comes from
+      // node.pos, which includes leading trivia and so spills onto the
+      // previous statement's last line.
       const owned = fileEntries.filter(
-        (e) => e.endLine >= s.startLine && e.line <= s.endLine
+        (e) => e.endLine >= s.startLine && e.endLine <= s.endLine
       );
       const entriesByKind: Record<string, number> = {};
       for (const e of owned) {
