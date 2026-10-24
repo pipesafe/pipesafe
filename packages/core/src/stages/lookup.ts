@@ -1,8 +1,15 @@
 import { Document, OmitNeverValues, Prettify } from "../utils/objects";
 import { PassThrough, PipeSafeError } from "../utils/errors";
-import { FieldPathsThatInferToForLookup } from "../elements/fieldReference";
+import {
+  FieldPathsThatInferToForLookup,
+  FieldReference,
+} from "../elements/fieldReference";
 import { Expression } from "../elements/expressions";
-import { AnyLiteral, ExpressionShaped } from "../elements/literals";
+import {
+  AnyLiteral,
+  ExpressionShaped,
+  SystemVariable,
+} from "../elements/literals";
 import { ValidateNestedValue } from "../elements/validation";
 import { FlattenDotSet, IsDottedKey } from "../utils/paths";
 import { ApplySetUpdates } from "../utils/updates";
@@ -13,16 +20,22 @@ import { ApplySetUpdates } from "../utils/updates";
  * documents; the sub-pipeline reads them as `$$variableName` references,
  * typically inside a `$match` stage's `$expr`.
  *
- * `$`-shaped values are accepted STRUCTURALLY (mirroring `SetQuery` — a
- * `let` binding is a $set-value-shaped expression over the local docs) and
- * re-checked by `ValidateLookupLetQuery`; `Expression<Schema>` is
- * autocomplete-only, subsumed by `ExpressionShaped` for checking.
+ * Mirrors `$set`'s value union (a `let` binding is a $set-value-shaped
+ * expression over the local docs): `$`-keyed OBJECTS are accepted
+ * STRUCTURALLY (`ExpressionShaped`) and re-checked by
+ * `ValidateLookupLetQuery`, while every `$`-STRING arm is FINITE
+ * (`FieldReference<Schema>`, `SystemVariable`) so local refs autocomplete
+ * and a typo'd ref rejects at the constraint with TS2820. No wide
+ * `` `$${string}` `` template: it would absorb the finite ref literals out
+ * of autocomplete. `Expression<Schema>` is autocomplete-only, subsumed by
+ * `ExpressionShaped` for checking.
  */
 export type LookupLet<Schema extends Document> = {
   [variableName: string]:
     | AnyLiteral<Schema>
     | Expression<Schema>
-    | `$${string}`
+    | FieldReference<Schema>
+    | SystemVariable
     | ExpressionShaped
     | null;
 };
