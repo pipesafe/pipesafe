@@ -772,6 +772,15 @@ type _Assert_ReduceSetDifferenceInfer = Assert<
   Equal<_ReduceSetDifferenceInfer, string[]>
 >;
 
+// Untracked `$$` operands degrade to unknown elements, never drop to never.
+type _MapUntrackedSetUnionInfer = InferExpression<
+  SetSchema,
+  { $map: { input: "$tags"; as: "t"; in: { $setUnion: ["$$this"] } } }
+>;
+type _Assert_MapUntrackedSetUnionInfer = Assert<
+  Equal<_MapUntrackedSetUnionInfer, unknown[][]>
+>;
+
 // Array-literal fallbacks resolve element-wise, not as literal "$name".
 type _IfNullArrayLiteralRefInfer = InferExpression<
   SetSchema,
@@ -832,6 +841,7 @@ export type {
   _Assert_ReduceSetUnionInfer,
   _Assert_ReduceSetDifferenceInfer,
   _Assert_IfNullArrayLiteralRefInfer,
+  _Assert_MapUntrackedSetUnionInfer,
 };
 
 // The literal-dependent set is DERIVED from `returns`-omission on registry

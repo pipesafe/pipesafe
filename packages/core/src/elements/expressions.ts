@@ -1009,8 +1009,12 @@ type InferArrayElementType<Schema extends Document, ArraySource> =
 // Scoped variable inference ($$this / $$value inside $map and $reduce)
 // ============================================================================
 
-/** Extracts the element type of an array type; never for non-arrays. */
-type ElementOfArray<T> = T extends readonly (infer E)[] ? E : never;
+/** Extracts the element type of an array type; never for non-arrays,
+ *  unknown for untracked (`unknown`) operands. */
+type ElementOfArray<T> =
+  unknown extends T ? unknown
+  : T extends readonly (infer E)[] ? E
+  : never;
 
 /**
  * Resolves a `$$variable` or `$$variable.path` reference (without the `$$`
