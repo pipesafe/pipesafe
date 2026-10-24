@@ -1,10 +1,6 @@
 name: Claude Code Review
 
-# Automated PR review, replacing Graphite's AI reviewer. The review logic lives
-# in .claude/commands/code-review.md (derived from the code-review plugin in
-# anthropics/claude-code). It runs once per PR, when it opens or leaves draft;
-# the command skips PRs it has already reviewed. For a follow-up pass after new
-# pushes, mention @claude on the PR (handled by claude.yml).
+# Runs .claude/commands/code-review.md once per PR; use @claude for follow-up passes.
 
 on:
   pull_request:

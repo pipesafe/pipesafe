@@ -4,14 +4,7 @@ description: Code review a pull request
 argument-hint: "[owner/repo/pull/N] [--comment]"
 ---
 
-<!--
-Derived from the code-review plugin in anthropics/claude-code
-(plugins/code-review/commands/code-review.md), inlined here so the review
-logic is versioned with this repo. Run by .github/workflows/claude-code-review.yml
-on every PR that opens or becomes ready for review; run it locally with
-`/code-review` (terminal output) or `/code-review --comment` (post to the PR).
-Pipesafe-specific changes are marked "(pipesafe)".
--->
+<!-- Derived from anthropics/claude-code plugins/code-review. Local changes are marked "(pipesafe)". -->
 
 Provide a code review for the given pull request: $ARGUMENTS
 
