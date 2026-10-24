@@ -68,6 +68,13 @@ jobs:
   typecheck:
     runs-on: ubuntu-latest
 
+    strategy:
+      fail-fast: false
+      matrix:
+        # 5.9.3 is the repo's TypeScript; eslint and tsdown stay on it until
+        # they support the 7.x API.
+        typescript: ["5.9.3", "6.0.3", "7.0.2", "7.1.0-beta"]
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -83,53 +90,24 @@ jobs:
       - name: Build packages
         run: bun run build
 
-      - name: Type check
-        run: bun run typecheck
-
-      # The root typecheck resolves project references to built dist and does
-      # NOT re-check package sources — this step is what actually validates
-      # the *.typeAssertions.ts regression net (core needs no build; manifold
-      # type-checks against the core dist built above).
-      - name: Type check package sources (assertion gate)
-        run: bun run typecheck:packages
+      # The root project resolves references to built dist and does NOT
+      # re-check package sources — the package runs are what validate the
+      # *.typeAssertions.ts regression net (manifold type-checks against the
+      # core dist built above).
+      - name: Type check on TypeScript ${{ matrix.typescript }}
+        run: |
+          npx -y -p typescript@${{ matrix.typescript }} tsc --noEmit -p tsconfig.json
+          npx -y -p typescript@${{ matrix.typescript }} tsc --noEmit -p packages/core
+          npx -y -p typescript@${{ matrix.typescript }} tsc --noEmit -p packages/manifold
 
       # The assertion files pin type-system SEMANTICS; this pins COST. A
       # reintroduced full-union dispatch keeps every assertion green while
       # regressing instantiations (+8% measured in the PR #102 review) —
       # the budget is the only automatic enforcement of plan §3.4's rule.
+      # Counts differ across compiler versions, so it runs on the repo's.
       - name: Instantiation budget (perf gate)
+        if: matrix.typescript == '5.9.3'
         run: bun run budget:check
-
-  typecheck-ts:
-    runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        typescript: ["6.0.3", "7.0.2", "7.1.0-beta"]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build packages
-        run: bun run build
-
-      # The typecheck job covers the repo's TypeScript; eslint and tsdown stay
-      # on it until they support the 7.x API.
-      - name: Type check on TypeScript ${{ matrix.typescript }}
-        run: |
-          npx -y -p typescript@${{ matrix.typescript }} tsc --noEmit -p packages/core
-          npx -y -p typescript@${{ matrix.typescript }} tsc --noEmit -p packages/manifold
-          npx -y -p typescript@${{ matrix.typescript }} tsc --noEmit -p tsconfig.json
 
   changeset:
     runs-on: ubuntu-latest
