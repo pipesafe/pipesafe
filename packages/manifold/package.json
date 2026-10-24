@@ -1,7 +1,7 @@
 {
   "name": "@pipesafe/manifold",
   "version": "1.0.0",
-  "description": "PipeSafe Manifold - transformation layer for @pipesafe/core: batch DAG execution/materialization plus event-driven change-stream foundations",
+  "description": "PipeSafe Manifold - DAG composition and orchestration layer for @pipesafe/core",
   "author": "Ryan Peggs & Tim Vyas",
   "license": "Elastic-2.0",
   "repository": {
@@ -39,8 +39,8 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@pipesafe/core": ">=1.1.0 <3.0.0",
-    "mongodb": "^6.17.0"
+    "@pipesafe/core": ">=2.0.0 <3.0.0",
+    "mongodb": ">=6.0.0"
   },
   "devDependencies": {
     "@pipesafe/core": "workspace:*",
