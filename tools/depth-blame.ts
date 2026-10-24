@@ -313,28 +313,37 @@ function diagnoseDepthErrors(
   const matchCheck = stdout.match(/Check time:\s*([0-9.]+)\s*s/);
   if (matchCheck?.[1]) out.checkTimeMs = Number(matchCheck[1]) * 1000;
 
-  // Trace-side: count *_DepthLimit events.
+  // Trace-side: count *_DepthLimit events. `instantiateType_DepthLimit` fires
+  // for BOTH the depth (=== 100) and the count (>= 5,000,000) trigger — they
+  // share one guard in instantiateTypeWithAlias — so read the event's args to
+  // tell them apart.
+  let sawDepthTrip = false;
+  let sawCountTrip = false;
   for (const ev of events) {
     if (ev.name === "instantiateType_DepthLimit") {
       out.depthLimitHits += 1;
       const c = (ev.args?.["instantiationCount"] as number | undefined) ?? 0;
+      const d = (ev.args?.["instantiationDepth"] as number | undefined) ?? 0;
       if (c > out.peakInstantiationCount) out.peakInstantiationCount = c;
+      if (c >= 5_000_000) sawCountTrip = true;
+      if (d >= 100) sawDepthTrip = true;
     } else if (ev.name === "recursiveTypeRelatedTo_DepthLimit") {
       out.relatedToLimitHits += 1;
     }
   }
 
-  // Best-effort counter inference:
-  //   - explicit TS2589 + many DepthLimit events ⇒ depth
-  //   - explicit TS2589 + total near 5M ⇒ count
-  //   - explicit TS2589 + neither ⇒ likely tail
+  // Counter inference from the bail events:
+  //   - an event at instantiationCount >= 5M ⇒ count
+  //   - an event at instantiationDepth 100 (or with no readable args) ⇒ depth
+  //   - TS2589 with no instantiate bail event ⇒ tail (getConditionalType's
+  //     tailCount guard emits no trace event)
+  // The project-wide `Instantiations:` total is NOT used: the 5M ceiling is
+  // per check unit, so a large project's total says nothing about which
+  // counter tripped.
   if (out.hadError) {
-    if (
-      out.totalInstantiations !== undefined &&
-      out.totalInstantiations > 4_500_000
-    ) {
+    if (sawCountTrip) {
       out.inferredCounter = "count";
-    } else if (out.depthLimitHits > 0) {
+    } else if (sawDepthTrip || out.depthLimitHits > 0) {
       out.inferredCounter = "depth";
     } else {
       out.inferredCounter = "tail";
@@ -536,10 +545,10 @@ function printReport(
     console.log("  Healthy: no depth-limit events recorded.");
   }
   if (diag.totalInstantiations !== undefined) {
-    const pct = ((diag.totalInstantiations / 5_000_000) * 100).toFixed(2);
     console.log(
       `  Total instantiations: ${fmt(diag.totalInstantiations)} ` +
-        `(${pct}% of count ceiling, peak per-unit ${fmt(diag.peakInstantiationCount)})`
+        `(project-wide; the 5,000,000 ceiling is per check unit — ` +
+        `peak per-unit at a bail: ${fmt(diag.peakInstantiationCount)})`
     );
   }
   if (diag.checkTimeMs !== undefined) {

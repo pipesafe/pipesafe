@@ -103,6 +103,9 @@ describe("patchTscSource (unit)", () => {
     for (const name of EDIT_NAMES) expect(matched[name]).toBe(1);
     expect(code).toContain(MARKER);
     expect(code).not.toBe(stockSrc);
+    // The Call/New SyntaxKind placeholders were filled from the bundle's enum.
+    expect(code).not.toContain("__DV_");
+    expect(code).toMatch(/node\.kind === \d+ \|\| node\.kind === \d+/);
   });
 
   it("is idempotent — a patched source is returned unchanged", () => {

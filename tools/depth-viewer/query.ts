@@ -222,6 +222,11 @@ if (!Number.isInteger(limit) || limit < 1) {
 switch (command) {
   case "top": {
     const by = flag("by") ?? "entriesCreated";
+    const BY_VALUES = ["entriesCreated", "callSites", "depth", "uniqueTypes"];
+    if (!BY_VALUES.includes(by)) {
+      console.error(`--by must be one of ${BY_VALUES.join("|")}, got '${by}'`);
+      usage();
+    }
     const kind = flag("kind");
     const all = flatten(loadIndex()).filter((s) => !kind || s.kind === kind);
     const score = (s: SymbolStats): number => {

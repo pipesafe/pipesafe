@@ -89,6 +89,8 @@ export function rebuildPlugin(): Plugin {
     error: null,
   };
   let child: ChildProcess | null = null;
+  /** True between accepting a POST and spawning its build (body still being read). */
+  let pending = false;
   const clients = new Set<ServerResponse>();
 
   const broadcast = (): void => {
@@ -165,6 +167,11 @@ export function rebuildPlugin(): Plugin {
     name: "depth-viewer:rebuild",
     apply: "serve",
     configureServer(server) {
+      // Don't leave a multi-GB build running after the dev server stops.
+      server.httpServer?.on("close", () => {
+        child?.kill();
+      });
+
       // Serve the dataset JSON straight from disk. Vite's public/ static
       // middleware only picks up files that existed when the server started, so
       // a dataset the rebuild button just produced would otherwise fall through
@@ -219,12 +226,27 @@ export function rebuildPlugin(): Plugin {
 
           // Trigger a build (single-flight).
           if (req.method === "POST") {
-            if (job.running) {
+            // Only accept a JSON body. A cross-site page can send a no-cors
+            // "simple" request (text/plain, no preflight) to localhost; demanding
+            // application/json forces a CORS preflight, which Vite's dev server
+            // rejects for foreign origins.
+            const contentType = req.headers["content-type"] ?? "";
+            if (!contentType.startsWith("application/json")) {
+              res.statusCode = 415;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: "expected application/json" }));
+              return;
+            }
+            if (job.running || pending) {
               res.statusCode = 409;
               res.setHeader("Content-Type", "application/json");
               res.end(JSON.stringify({ error: "already running", job }));
               return;
             }
+            // Reserve the slot synchronously: the body is read asynchronously,
+            // and without this two POSTs landing together would both pass the
+            // check above and spawn concurrent builds.
+            pending = true;
             void readBody(req).then((body) => {
               let target: Target = "coverage";
               let patch = true;
@@ -240,6 +262,7 @@ export function rebuildPlugin(): Plugin {
                   // Ignore a malformed body and use defaults.
                 }
               }
+              pending = false;
               start(target, patch);
               res.statusCode = 202;
               res.setHeader("Content-Type", "application/json");

@@ -62,6 +62,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -77,7 +78,7 @@ const REPO_ROOT = resolve(HERE, "../..");
  * Bump when the patch logic below changes so previously-cached bundles are
  * invalidated even when the underlying _tsc.js is byte-identical.
  */
-export const PATCH_VERSION = 5;
+export const PATCH_VERSION = 6;
 
 /** Injected into the source so a patched bundle is recognisable + idempotent. */
 export const MARKER = "/*__DEPTH_PATCH__*/";
@@ -89,6 +90,10 @@ export const MARKER = "/*__DEPTH_PATCH__*/";
  * the records are reproducible across runs. See {@link EDITS} for the fields.
  */
 export const DEPTH_STEP_EVENT = "depthStep";
+
+/** Placeholders in {@link EDITS} text, replaced by the bundle's SyntaxKind values. */
+const CALL_KIND = "__DV_CALL_KIND__";
+const NEW_KIND = "__DV_NEW_KIND__";
 
 interface Edit {
   /** Human-readable id used in assertions, errors, and the `matched` map. */
@@ -212,8 +217,10 @@ const EDITS: Edit[] = [
   //    self-count to the parent's accumulator (so the child's instantiations are
   //    NOT folded into the parent's self-count — each frame's self-count is its
   //    own marginal), and for Call/New nodes that did real work emit a
-  //    deterministic `depthStep` instant. Node kinds: 214 = CallExpression,
-  //    215 = NewExpression (TS 5.9 SyntaxKind).
+  //    deterministic `depthStep` instant. The Call/New SyntaxKind numbers are
+  //    filled in at patch time from the bundle's own SyntaxKind enum (see
+  //    {@link syntaxKindOf}) — they shift between TS versions, and a stale
+  //    hard-coded number would silently emit nothing.
   {
     name: "checkexpr-exit",
     anchor:
@@ -221,10 +228,31 @@ const EDITS: Edit[] = [
     mode: "replace",
     text:
       "currentNode = saveCurrentNode;\n" +
-      `    ${MARKER} { const __dvNodeSpan = __dvSpanPeak, __dvNodeSelf = __dvSelfPeak, __dvNodeTailSpan = __dvTailSpan, __dvNodeTailSelf = __dvTailSelf, __dvNodeSelfCount = __dvSelfCount; __dvSpanPeak = __dvSaveSpan > __dvNodeSpan ? __dvSaveSpan : __dvNodeSpan; __dvSelfPeak = __dvSaveSelf; __dvTailSpan = __dvSaveTailSpan > __dvNodeTailSpan ? __dvSaveTailSpan : __dvNodeTailSpan; __dvTailSelf = __dvSaveTailSelf; __dvSelfCount = __dvSaveSelfCount; if (tracing && (node.kind === 214 || node.kind === 215) && (totalInstantiationCount > __dvEnterTotal || __dvNodeSpan > __dvEnterDepth)) { tracing.instant(tracing.Phase.Check, ${JSON.stringify(DEPTH_STEP_EVENT)}, { kind: node.kind, pos: node.pos, end: node.end, path: node.tracingPath, enterDepth: __dvEnterDepth, spanPeakDepth: __dvNodeSpan, selfPeakDepth: __dvNodeSelf, spanPeakTail: __dvNodeTailSpan, selfPeakTail: __dvNodeTailSelf, selfCount: __dvNodeSelfCount, enterTotalCount: __dvEnterTotal, exitTotalCount: totalInstantiationCount }); } }\n` +
+      `    ${MARKER} { const __dvNodeSpan = __dvSpanPeak, __dvNodeSelf = __dvSelfPeak, __dvNodeTailSpan = __dvTailSpan, __dvNodeTailSelf = __dvTailSelf, __dvNodeSelfCount = __dvSelfCount; __dvSpanPeak = __dvSaveSpan > __dvNodeSpan ? __dvSaveSpan : __dvNodeSpan; __dvSelfPeak = __dvSaveSelf; __dvTailSpan = __dvSaveTailSpan > __dvNodeTailSpan ? __dvSaveTailSpan : __dvNodeTailSpan; __dvTailSelf = __dvSaveTailSelf; __dvSelfCount = __dvSaveSelfCount; if (tracing && (node.kind === ${CALL_KIND} || node.kind === ${NEW_KIND}) && (totalInstantiationCount > __dvEnterTotal || __dvNodeSpan > __dvEnterDepth)) { tracing.instant(tracing.Phase.Check, ${JSON.stringify(DEPTH_STEP_EVENT)}, { kind: node.kind, pos: node.pos, end: node.end, path: node.tracingPath, enterDepth: __dvEnterDepth, spanPeakDepth: __dvNodeSpan, selfPeakDepth: __dvNodeSelf, spanPeakTail: __dvNodeTailSpan, selfPeakTail: __dvNodeTailSelf, selfCount: __dvNodeSelfCount, enterTotalCount: __dvEnterTotal, exitTotalCount: totalInstantiationCount }); } }\n` +
       "    (_b = tracing) == null ? void 0 : _b.pop();\n    return type;",
   },
 ];
+
+/**
+ * Read a SyntaxKind member's numeric value from the bundle's own enum
+ * initialiser (`SyntaxKindN[SyntaxKindN["CallExpression"] = 214]`), asserting
+ * it occurs exactly once like every other anchor.
+ */
+function syntaxKindOf(src: string, member: string): number {
+  const re = new RegExp(
+    `SyntaxKind\\d*\\[SyntaxKind\\d*\\["${member}"\\] = (\\d+)\\]`,
+    "g"
+  );
+  const matches = [...src.matchAll(re)];
+  if (matches.length !== 1 || matches[0]?.[1] === undefined) {
+    throw new AnchorError(
+      `syntax-kind:${member}`,
+      `SyntaxKind["${member}"] = <n>`,
+      matches.length
+    );
+  }
+  return Number(matches[0][1]);
+}
 
 /** Thrown when an anchor doesn't occur exactly once. */
 export class AnchorError extends Error {
@@ -282,10 +310,23 @@ export function patchTscSource(src: string): PatchResult {
 
     const start = src.indexOf(edit.anchor);
     const end = start + edit.anchor.length;
+    let text = edit.text;
+    if (text.includes(CALL_KIND)) {
+      text = text.replaceAll(
+        CALL_KIND,
+        String(syntaxKindOf(src, "CallExpression"))
+      );
+    }
+    if (text.includes(NEW_KIND)) {
+      text = text.replaceAll(
+        NEW_KIND,
+        String(syntaxKindOf(src, "NewExpression"))
+      );
+    }
     if (edit.mode === "replace") {
-      ms.overwrite(start, end, edit.text);
+      ms.overwrite(start, end, text);
     } else {
-      ms.appendLeft(end, edit.text);
+      ms.appendLeft(end, text);
     }
   }
 
@@ -355,7 +396,11 @@ export function materializePatchedTsc(
   }
 
   const { code } = patchTscSource(src);
-  writeFileSync(outPath, code);
+  // Write-then-rename so a run killed mid-write can't leave a truncated bundle
+  // in the cache that every later run would reuse.
+  const tmpPath = `${outPath}.${process.pid}.tmp`;
+  writeFileSync(tmpPath, code);
+  renameSync(tmpPath, outPath);
   return { path: outPath, sourcePath, cached: false };
 }
 
