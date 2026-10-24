@@ -55,15 +55,6 @@ export interface SystemVariableSpec<Schema extends Document> {
 }
 
 /**
- * `true` inside a `$let`/`$map`/`$filter` interior or `$lookup.let`
- * sub-pipeline. The validation kernel forks on this: registry operand
- * relations are Vars-blind, so they demote to fast-accepts with the
- * name/ref walk catching the leftovers.
- */
-export type HasUserBindings<Vars extends Document> =
-  [keyof Vars] extends [never] ? false : true;
-
-/**
  * The finite `$$` acceptance vocabulary of the USER environment (lookup-let
  * bindings): each entry's exact name plus dotted paths into its type
  * ("$$order.qty"). Unioned with SystemVariableReferences at top-level value

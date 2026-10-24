@@ -4,13 +4,13 @@ import {
   InferNestedFieldReference,
 } from "../elements/fieldReference";
 import {
-  ContainsVariableRef,
+  BoundVariableOperand,
   ValidateNestedValue,
+  ValidateOperandTree,
 } from "../elements/validation";
 import {
   AnyLiteral,
   ExpressionShaped,
-  HasUserBindings,
   LiteralOrFieldReferenceInferringTo,
   SystemVariableReferences,
   ValidateVariableReference,
@@ -340,22 +340,12 @@ type ValidateAccumulatorValue<
             never
           : { [K in Op & string]: Err }
         : never
-      : (
-        HasUserBindings<Vars> extends true ?
-          ContainsVariableRef<A>
-        : false
-      ) extends true ?
-        // A variable reference inside a binder/lookup-let interior: mirrors
-        // ValidateExpressionValue's forgiving branch — Vars-blind relation
-        // as fast-accept (and wide-shape cycle breaker), operand-tree walk
-        // for the leftovers.
-        [A] extends [AccumulatorFor<{}, Op>] ? never
-        : [A] extends [AccumulatorFor<Schema, Op>] ? never
-        : ValidateNestedValue<Schema, A[Op & keyof A], Vars> extends infer R ?
-          [R] extends [never] ?
-            never
-          : { [K in Op & string]: R }
-        : never
+      : BoundVariableOperand<Vars, A> extends true ?
+        // Vars-blind relation as fast-accept (and wide-shape cycle
+        // breaker), operand-tree walk for the leftovers.
+        [A] extends [AccumulatorFor<Schema, Op>] ?
+          never
+        : ValidateOperandTree<Schema, A, Op, Vars>
       : string extends keyof Schema ?
         never // operand checks are meaningless on a wide/index-signature schema
       : // $min/$max: ANY non-`$` string literal is a comparable. The union

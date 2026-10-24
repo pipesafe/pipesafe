@@ -61,11 +61,7 @@ import {
   UnimplementedExpressionOps,
 } from "./expressions";
 import { GetFieldTypeWithoutArrays } from "./fieldReference";
-import {
-  HasUserBindings,
-  InferVariableReference,
-  ValidateVariableReference,
-} from "./literals";
+import { InferVariableReference, ValidateVariableReference } from "./literals";
 import { WithoutDollar } from "../utils/strings";
 
 /**
@@ -100,8 +96,9 @@ export type ValidateExpressionValue<
       [OperatorKeyOf<V>] extends ["$concat"] ?
         ValidateConcatValue<Schema, V, Vars>
       : [OperatorKeyOf<V>] extends ["$let"] ? ValidateLetValue<Schema, V, Vars>
-      : [OperatorKeyOf<V>] extends ["$map"] ? ValidateMapValue<Schema, V, Vars>
-      : ValidateFilterValue<Schema, V, Vars>
+      : [OperatorKeyOf<V>] extends ["$map"] ?
+        ValidateBinderValue<Schema, V, "$map", Vars>
+      : ValidateBinderValue<Schema, V, "$filter", Vars>
     : [OperatorKeyOf<V>] extends [keyof ExpressionSpec<Schema>] ?
       // Schema-FREE fast-accept (mirrors group's ValidateAccumulatorValue):
       // an operand valid against the EMPTY schema is valid against any
@@ -122,22 +119,8 @@ export type ValidateExpressionValue<
       : // The relation is Vars-blind, so bound `$$vars` fail it: only an
       // operand that references a variable inside a binder/lookup-let
       // interior falls back to the ref/variable/operator-name walk.
-      // $literal interiors are verbatim values, never walked.
-      (
-        HasUserBindings<Vars> extends true ?
-          ContainsVariableRef<V>
-        : false
-      ) extends true ?
-        [OperatorKeyOf<V>] extends ["$literal"] ? never
-        : ValidateNestedValue<
-          Schema,
-          V[OperatorKeyOf<V> & keyof V],
-          Vars
-        > extends infer R ?
-          [R] extends [never] ?
-            never
-          : { [K in OperatorKeyOf<V> & string]: R }
-        : never
+      BoundVariableOperand<Vars, V> extends true ?
+        ValidateOperandTree<Schema, V, OperatorKeyOf<V>, Vars>
       : ExpressionFor<Schema, OperatorKeyOf<V>>
     : [OperatorKeyOf<V>] extends [UnimplementedExpressionOps] ?
       never // allow-listed: valid MongoDB the registry doesn't model yet
@@ -187,29 +170,44 @@ type ValidateConcatElement<
   E,
   Vars extends Document = {},
 > =
-  E extends `$$${string}` ?
-    ValidateVariableReference<Schema, E, Vars> extends infer Err ?
-      [Err] extends [never] ?
-        InferVariableReference<Schema, E, Vars> extends infer R ?
-          unknown extends R ?
-            never // unresolvable/opaque variable — nothing to check
-          : [NonNullable<R>] extends [string] ? never
-          : PipeSafeError<
-              RequiresMsg<"Operator", "$concat", "a string operand">
-            >
-        : never
-      : Err
-    : never
-  : E extends `$${string}` ?
-    string extends keyof Schema ?
-      never // ref resolution is meaningless on a wide/index-signature schema
-    : GetFieldTypeWithoutArrays<Schema, WithoutDollar<E>> extends infer R ?
-      IsPipeSafeError<R> extends true ? R
-      : [NonNullable<R>] extends [string] ? never
-      : PipeSafeError<RequiresMsg<"Operator", "$concat", "a string operand">>
-    : never
+  E extends `$${string}` ?
+    ValidateRefResolvesTo<Schema, E, string, ConcatErr, Vars>
   : E extends string ? never
-  : PipeSafeError<RequiresMsg<"Operator", "$concat", "a string operand">>;
+  : ConcatErr;
+
+type ConcatErr = PipeSafeError<
+  RequiresMsg<"Operator", "$concat", "a string operand">
+>;
+
+/**
+ * Kernel contract for a `$`-ref or `$$`-variable that must RESOLVE to `T`:
+ * unknown names/paths get their own brand, a resolved type outside `T` gets
+ * `Err`, and unresolvable/opaque types are skipped.
+ */
+type ValidateRefResolvesTo<
+  Schema extends Document,
+  Ref extends string,
+  T,
+  Err,
+  Vars extends Document,
+> =
+  Ref extends `$$${string}` ?
+    ValidateVariableReference<Schema, Ref, Vars> extends infer VarErr ?
+      [VarErr] extends [never] ?
+        InferVariableReference<Schema, Ref, Vars> extends infer R ?
+          unknown extends R ? never
+          : [NonNullable<R>] extends [T] ? never
+          : Err
+        : never
+      : VarErr
+    : never
+  : string extends keyof Schema ?
+    never // ref resolution is meaningless on a wide/index-signature schema
+  : GetFieldTypeWithoutArrays<Schema, WithoutDollar<Ref>> extends infer R ?
+    IsPipeSafeError<R> extends true ? R
+    : [NonNullable<R>] extends [T] ? never
+    : Err
+  : never;
 
 /**
  * `$let` interior walk: `vars` values check in the OUTER environment; `in`
@@ -258,25 +256,14 @@ type ValidateArrayInputValue<
   Op extends "$map" | "$filter",
   Vars extends Document = {},
 > =
-  Input extends `$$${string}` ?
-    ValidateVariableReference<Schema, Input, Vars> extends infer Err ?
-      [Err] extends [never] ?
-        InferVariableReference<Schema, Input, Vars> extends infer R ?
-          unknown extends R ?
-            never // unresolvable/opaque variable — nothing to check
-          : [NonNullable<R>] extends [readonly unknown[]] ? never
-          : PipeSafeError<RequiresMsg<"Operator", Op, "an array operand">>
-        : never
-      : Err
-    : never
-  : Input extends `$${string}` ?
-    string extends keyof Schema ?
-      never // ref resolution is meaningless on a wide/index-signature schema
-    : GetFieldTypeWithoutArrays<Schema, WithoutDollar<Input>> extends infer R ?
-      IsPipeSafeError<R> extends true ? R
-      : [NonNullable<R>] extends [readonly unknown[]] ? never
-      : PipeSafeError<RequiresMsg<"Operator", Op, "an array operand">>
-    : never
+  Input extends `$${string}` ?
+    ValidateRefResolvesTo<
+      Schema,
+      Input,
+      readonly unknown[],
+      PipeSafeError<RequiresMsg<"Operator", Op, "an array operand">>,
+      Vars
+    >
   : // Schema-FREE fast-accept (mirrors ValidateExpressionValue's): resolves
   // for generic-schema helpers and skips the Schema operand types for
   // literal inputs.
@@ -284,11 +271,7 @@ type ValidateArrayInputValue<
   : string extends keyof Schema ?
     never // operand checks are meaningless on a wide/index-signature schema
   : [Input] extends [RegistryArrayInputOperand<Schema, Op>] ? never
-  : (
-    HasUserBindings<Vars> extends true ?
-      ContainsVariableRef<Input>
-    : false
-  ) extends true ?
+  : BoundVariableOperand<Vars, Input> extends true ?
     never // the relation is Vars-blind; a bound variable fails it
   : PipeSafeError<RequiresMsg<"Operator", Op, "an array operand">>;
 
@@ -328,104 +311,81 @@ type BinderSiblingErr<
   : true;
 }[keyof Operand];
 
-/**
- * `$map` interior walk: `input` in the outer environment, `in` with the
- * element bound under the `as` name (default "this"). The replacement
- * keeps sibling operand keys so TS2322 lands on the offending member.
- */
-type ValidateMapValue<Schema extends Document, V, Vars extends Document = {}> =
-  V extends { $map: infer MapOperand } ?
-    MapOperand extends { input: infer Input; in: infer In } ?
-      ValidateArrayInputValue<Schema, Input, "$map", Vars> extends (
-        infer InputErr
-      ) ?
-        ValidateNestedValue<
-          Schema,
-          In,
-          BindVariable<
-            Vars,
-            BoundAsName<MapOperand>,
-            InferArrayElementType<Schema, Input, Vars>
-          >
-        > extends infer InErr ?
-          [
-            | InputErr
-            | InErr
-            | BinderSiblingErr<"$map", MapOperand, "input" | "in">,
-          ] extends [never] ?
-            never
-          : {
-              $map: {
-                [K in keyof MapOperand]: K extends "input" ?
-                  [InputErr] extends [never] ?
-                    MapOperand[K]
-                  : InputErr
-                : K extends "in" ?
-                  [InErr] extends [never] ?
-                    MapOperand[K]
-                  : InErr
-                : [ValidateBinderSiblingKey<"$map", K, MapOperand[K]>] extends (
-                  [never]
-                ) ?
-                  MapOperand[K]
-                : ValidateBinderSiblingKey<"$map", K, MapOperand[K]>;
-              };
-            }
-        : never
-      : never
-    : ExpressionFor<Schema, "$map"> // malformed operand → expected shape
-  : ExpressionFor<Schema, "$map">;
+/** The bound sub-expression of each binder operand. */
+type BinderBodyKey = { $map: "in"; $filter: "cond" };
 
 /**
- * `$filter` interior walk: `input` in the outer environment, `cond` with
- * the element bound under the `as` name (default "this").
+ * `$map`/`$filter` interior walk: `input` in the outer environment, the
+ * body (`in`/`cond`) with the element bound under the `as` name (default
+ * "this"). The replacement keeps sibling operand keys so TS2322 lands on
+ * the offending member.
  */
-type ValidateFilterValue<
+type ValidateBinderValue<
   Schema extends Document,
   V,
+  Op extends keyof BinderBodyKey,
   Vars extends Document = {},
+  Body extends string = BinderBodyKey[Op],
 > =
-  V extends { $filter: infer FilterOperand } ?
-    FilterOperand extends { input: infer Input; cond: infer Cond } ?
-      ValidateArrayInputValue<Schema, Input, "$filter", Vars> extends (
-        infer InputErr
-      ) ?
+  V extends Record<Op, infer Operand> ?
+    Operand extends { input: infer Input } & Record<Body, infer B> ?
+      ValidateArrayInputValue<Schema, Input, Op, Vars> extends infer InputErr ?
         ValidateNestedValue<
           Schema,
-          Cond,
+          B,
           BindVariable<
             Vars,
-            BoundAsName<FilterOperand>,
+            BoundAsName<Operand>,
             InferArrayElementType<Schema, Input, Vars>
           >
-        > extends infer CondErr ?
+        > extends infer BodyErr ?
           [
-            | InputErr
-            | CondErr
-            | BinderSiblingErr<"$filter", FilterOperand, "input" | "cond">,
+            InputErr | BodyErr | BinderSiblingErr<Op, Operand, "input" | Body>,
           ] extends [never] ?
             never
           : {
-              $filter: {
-                [K in keyof FilterOperand]: K extends "input" ?
+              [P in Op]: {
+                [K in keyof Operand]: K extends "input" ?
                   [InputErr] extends [never] ?
-                    FilterOperand[K]
+                    Operand[K]
                   : InputErr
-                : K extends "cond" ?
-                  [CondErr] extends [never] ?
-                    FilterOperand[K]
-                  : CondErr
-                : [
-                  ValidateBinderSiblingKey<"$filter", K, FilterOperand[K]>,
-                ] extends [never] ?
-                  FilterOperand[K]
-                : ValidateBinderSiblingKey<"$filter", K, FilterOperand[K]>;
+                : K extends Body ?
+                  [BodyErr] extends [never] ?
+                    Operand[K]
+                  : BodyErr
+                : [ValidateBinderSiblingKey<Op, K, Operand[K]>] extends (
+                  [never]
+                ) ?
+                  Operand[K]
+                : ValidateBinderSiblingKey<Op, K, Operand[K]>;
               };
             }
         : never
       : never
-    : ExpressionFor<Schema, "$filter"> // malformed operand → expected shape
-  : ExpressionFor<Schema, "$filter">;
+    : ExpressionFor<Schema, Op> // malformed operand → expected shape
+  : ExpressionFor<Schema, Op>;
+
+/**
+ * `true` for an operand that references a `$$`-variable inside a binder
+ * interior or `$lookup.let` sub-pipeline. The registry operand relations
+ * are Vars-blind, so such operands demote them to fast-accepts with the
+ * name/ref walk catching the leftovers.
+ */
+export type BoundVariableOperand<Vars extends Document, V> =
+  [keyof Vars] extends [never] ? false : ContainsVariableRef<V>;
+
+/** Walk an operator's operand tree; the replacement re-wraps it. */
+export type ValidateOperandTree<
+  Schema extends Document,
+  V,
+  Op,
+  Vars extends Document,
+> =
+  ValidateNestedValue<Schema, V[Op & keyof V], Vars> extends infer R ?
+    [R] extends [never] ?
+      never
+    : { [K in Op & string]: R }
+  : never;
 
 /** `true` when a literal value tree holds a `$$`-variable reference. */
 export type ContainsVariableRef<V> =
