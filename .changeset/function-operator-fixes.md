@@ -16,3 +16,6 @@ Fix and harden the `$function` operator following review:
 - Body argument typing: an optional field (`age?: number`) is now passed to the body as `number | null` — a missing field reaches the body as `null`, so the previous `number` typed bodies that threw on documents without the field
 - Purity check: the `__name` helper that tsx / esbuild `keepNames` inject into bodies with nested named functions, function-valued consts, or classes is shimmed instead of being rejected as a free variable
 - `MONGO_SERVER_GLOBALS` no longer lists `Promise` (bodies are synchronous; it was already documented as excluded)
+- Body argument typing: a dotted arg under an optional or nullable parent (`"$profile.level"`) is `T | null`, since the server passes `null` when the parent is missing
+- The `no-impure-function-body` rule no longer flags outer TYPE references in body annotations (`(o: Order): Money => …`)
+- `@pipesafe/function-bundler` resolves npm packages that only declare `main`; a failure to load the bundler keeps the underlying error as `cause`
