@@ -60,15 +60,31 @@ type DeepMutable<T> =
   : T;
 
 /**
- * The body param type for a `$field` arg of field type `T`. BSON has no
- * `undefined`: a `number | null` field reaches the body as `number | null`,
- * and a MISSING optional field evaluates to `null` inside the `args` array —
- * so an optional field's `undefined` becomes `null` rather than being
- * stripped (stripping it would type-check bodies that throw on documents
- * without the field).
+ * A `$field` arg reaches the body as `null` when the field — or any parent on
+ * its path — is missing or null (BSON has no `undefined`).
  */
-type ResolveFieldArg<T> =
-  undefined extends T ? ExcludeUndefined<T> | null : T;
+type ResolveFieldArg<Schema extends Document, Path extends string> =
+  GetFieldTypeWithoutArrays<Schema, Path> extends infer T ?
+    undefined extends T ? ExcludeUndefined<T> | null
+    : PathMayBeMissing<Schema, Path> extends true ? T | null
+    : T
+  : never;
+
+type PathMayBeMissing<
+  Schema extends Document,
+  Path extends string,
+  Prefix extends string = "",
+> =
+  Path extends `${infer Head}.${infer Rest}` ?
+    [
+      Extract<
+        GetFieldTypeWithoutArrays<Schema, `${Prefix}${Head}`>,
+        undefined | null
+      >,
+    ] extends [never] ?
+      PathMayBeMissing<Schema, Rest, `${Prefix}${Head}.`>
+    : true
+  : false;
 
 /**
  * Resolve a single $function arg to the runtime type the server passes to
@@ -95,8 +111,7 @@ type ResolveFunctionArg<Schema extends Document, Arg> =
   // loud, and fixed by annotating. (`never` would break unannotated
   // params cryptically; `unknown` would reject valid annotations.)
   [Arg] extends [`$$${string}`] ? any
-  : [Arg] extends [`$${infer Path}`] ?
-    ResolveFieldArg<GetFieldTypeWithoutArrays<Schema, Path>>
+  : [Arg] extends [`$${infer Path}`] ? ResolveFieldArg<Schema, Path>
   : [Arg] extends [object] ?
     InferExpression<Schema, DeepMutable<Arg>> extends infer R ?
       [R] extends [NotAnExpression] ?

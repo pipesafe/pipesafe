@@ -26,6 +26,8 @@ type User = {
   rating: number | null;
   tags: string[];
   joinedAt: Date;
+  profile?: { level: number };
+  address: { zip: string } | null;
 };
 
 // ============================================================================
@@ -101,6 +103,31 @@ const _optionalRejectsNarrow = new Pipeline<User>().set({
     },
   },
 });
+
+// Test 4a: a dotted arg under an optional or nullable parent is `null` when
+// the parent is missing
+const _optionalParentRejectsNarrow = new Pipeline<User>().set({
+  bad: {
+    $function: {
+      // @ts-expect-error  '$profile.level' is null when profile is missing
+      body: (l: number) => l,
+      args: ["$profile.level"],
+      lang: "js",
+    },
+  },
+});
+const fromNullableParent = new Pipeline<User>().set({
+  zip: {
+    $function: {
+      body: (z: string | null) => z ?? "",
+      args: ["$address.zip"],
+      lang: "js",
+    },
+  },
+});
+type FromNullableParentTest = Assert<
+  Equal<InferOutputType<typeof fromNullableParent>["zip"], string>
+>;
 
 // Test 4b: a NULLABLE field keeps its `null` — the server passes null through,
 // so the param type is `number | null`, and a body that handles null infers a
@@ -656,6 +683,8 @@ void _wrongAnnotation;
 void _wrongArity;
 void _nullableRejectsNarrow;
 void _optionalRejectsNarrow;
+void _optionalParentRejectsNarrow;
+void fromNullableParent;
 void _unannotatedBodyChecked;
 void _nestedUnannotated;
 void deepAnnotated;
@@ -674,6 +703,7 @@ export type {
   MixedArgsTest,
   TagCountTest,
   FromOptionalTest,
+  FromNullableParentTest,
   FromNullableTest,
   ObjectArgTest,
   WiderAnnotationTest,
