@@ -1,0 +1,51 @@
+{
+  "name": "@pipesafe/intake",
+  "version": "0.1.0",
+  "description": "PipeSafe Intake - idempotent replication of third-party data into MongoDB, wired into infrastructure you already manage",
+  "author": "Ryan Peggs & Tim Vyas",
+  "license": "Elastic-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pipesafe/pipesafe.git",
+    "directory": "packages/intake"
+  },
+  "keywords": [
+    "mongodb",
+    "ingestion",
+    "webhook",
+    "reconciliation",
+    "replication",
+    "serverless",
+    "etl",
+    "pipesafe"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "build:watch": "tsdown --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@pipesafe/core": ">=2.0.0 <3.0.0",
+    "mongodb": ">=6.0.0"
+  },
+  "devDependencies": {
+    "@pipesafe/core": "workspace:*",
+    "@pipesafe/manifold": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}

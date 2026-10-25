@@ -17,6 +17,12 @@ export default defineConfig([
     languageOptions: { globals: globals.browser },
   },
   {
+    // Package code runs in Node (drivers, handlers reading process.env),
+    // while still using web globals like fetch.
+    files: ["packages/**/*.{js,mjs,cjs,ts,mts,cts}"],
+    languageOptions: { globals: { ...globals.browser, ...globals.node } },
+  },
+  {
     ...tseslint.configs.strictTypeChecked[0],
     rules: {
       // Prevent cross-package relative imports - use package names instead
